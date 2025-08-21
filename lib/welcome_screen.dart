@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 
+import 'package:cropsync/auth/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,24 +16,24 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _navigateToHome();
+    _navigateToLogin();
   }
 
-  // Navigate to the main screen after a delay.
-  // This simulates loading or initial setup.
-  void _navigateToHome() {
-    Future.delayed(const Duration(milliseconds: 4000), () {
-      // For now, we don't have a home screen, so this does nothing.
-      // In the next step, we'll replace this with actual navigation.
-      // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
-      print("Splash screen finished.");
+  // Navigate to the login screen after a 3-second delay.
+  void _navigateToLogin() {
+    Future.delayed(const Duration(seconds: 3), () {
+      // Use pushReplacement to prevent the user from navigating back to the splash screen.
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // A dark background is common for kiosks to reduce glare.
       backgroundColor: Colors.white,
       body: Center(
         child: Column(
