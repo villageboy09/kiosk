@@ -14,6 +14,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.9.1
   flutter_dotenv: ^6.0.0
+  animated_text_kit: ^4.2.3
+  google_fonts: ^6.3.0
 
 
 dev_dependencies:
@@ -28,3 +30,4 @@ flutter:
   # Add assets so the .env file can be loaded
   assets:
     - .env
+    - assets/images/
