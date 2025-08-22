@@ -1,9 +1,11 @@
-// ignore_for_file: avoid_print
+import 'dart:async';
 
 import 'package:cropsync/auth/login_screen.dart';
+import 'package:cropsync/main.dart';
+import 'package:cropsync/screens/home_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -13,21 +15,45 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  late final StreamSubscription<AuthState> _authSubscription;
+
   @override
   void initState() {
     super.initState();
-    _navigateToLogin();
+    _redirect();
   }
 
-  // Navigate to the login screen after a 3-second delay.
-  void _navigateToLogin() {
-    Future.delayed(const Duration(seconds: 3), () {
-      // Use pushReplacement to prevent the user from navigating back to the splash screen.
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
+  @override
+  void dispose() {
+    _authSubscription.cancel();
+    super.dispose();
+  }
+
+  Future<void> _redirect() async {
+    await Future.delayed(Duration.zero);
+    final session = supabase.auth.currentSession;
+
+    if (!mounted) return;
+
+    if (session != null) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
+    }
+
+    _authSubscription = supabase.auth.onAuthStateChange.listen((data) {
+      final event = data.event;
+      if (event == AuthChangeEvent.signedOut) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+        }
+      }
     });
   }
 
@@ -39,12 +65,9 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Display the logo.
-            // Ensure you have 'logo.png' in 'assets/images/'.
             Image.asset(
               'assets/images/logo.png',
               width: 150,
-              // Add a fallback in case the image fails to load.
               errorBuilder: (context, error, stackTrace) {
                 return const Icon(
                   Icons.agriculture,
@@ -54,23 +77,17 @@ class _SplashScreenState extends State<SplashScreen> {
               },
             ),
             const SizedBox(height: 40),
-            // The animated text kit for the typewriter effect.
-            DefaultTextStyle(
-              // Use GoogleFonts.lexend() to apply the font.
+            Text(
+              'Cropsync Kiosk',
               style: GoogleFonts.lexend(
                 fontSize: 24.0,
                 color: Colors.black,
                 fontWeight: FontWeight.bold,
               ),
-              child: AnimatedTextKit(
-                isRepeatingAnimation: false,
-                animatedTexts: [
-                  TypewriterAnimatedText(
-                    'Welcome to Cropsync...',
-                    speed: const Duration(milliseconds: 100),
-                  ),
-                ],
-              ),
+            ),
+            const SizedBox(height: 20),
+            const CircularProgressIndicator(
+              color: Colors.green,
             ),
           ],
         ),

@@ -1,71 +1,60 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 
+console.log('Function starting up...')
+
 Deno.serve(async (req) => {
-  // This is needed for browser clients to call the function
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
     const { pin } = await req.json()
+    if (!pin) {
+      throw new Error('PIN is required in the request body.')
+    }
 
-    // Create a Supabase client with the service_role key to bypass RLS
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const projectUrl = Deno.env.get('PROJECT_URL')
+    const serviceKey = Deno.env.get('SERVICE_KEY')
 
-    // 1. Find the farmer by their login PIN
+    if (!projectUrl || !serviceKey) {
+      throw new Error('Server is missing required configuration (PROJECT_URL or SERVICE_KEY).')
+    }
+
+    const supabaseAdmin = createClient(projectUrl, serviceKey)
+
+    // Step 1: Find the farmer by their login PIN
     const { data: farmer, error: farmerError } = await supabaseAdmin
       .from('farmers')
-      .select('id, phone_number') // Select the phone_number to use as an identifier
+      .select('phone_number')
       .eq('login_pin', pin)
       .single()
 
     if (farmerError) {
-      throw new Error('Invalid PIN or database error')
+      console.error('Farmer lookup error:', farmerError.message)
+      throw new Error('Invalid PIN provided.')
     }
 
-    // This is a placeholder for a real user identifier.
-    // In a production system, you would likely have a user_id on the farmers table
-    // that links to the auth.users table. Here, we'll use the phone number
-    // as a unique identifier to find or create the auth user.
     const userIdentifier = `${farmer.phone_number}@cropsync.local`
 
-    // 2. Find or create the corresponding user in Supabase Auth
-    let { data: user, error: userError } = await supabaseAdmin.auth.admin.getUserByEmail(userIdentifier)
-
-    if (userError) {
-      // If user doesn't exist, create them
-      const { data: newUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
+    // Step 2: Generate a magic link for the user.
+    const { data, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'magiclink',
         email: userIdentifier,
-        // It's good practice to set a secure, random password on the server
-        password: crypto.randomUUID(), 
-        email_confirm: true, // Auto-confirm the email since we trust this flow
-      })
-
-      if (createUserError) throw createUserError
-      user = newUser.user
-    }
-    
-    // 3. Create a session for the user
-    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
-        email: userIdentifier,
-        // We need a password to sign in, but since we are the admin, we don't use the PIN.
-        // This uses the password we set during user creation.
-        // A more advanced flow might use passwordless sign-in.
-        password: user.password, // This is a simplification; a real app would handle this differently
     });
 
-    if (sessionError) throw sessionError;
+    if (linkError) {
+      console.error('Generate link error:', linkError.message)
+      throw new Error('Could not generate a user session.')
+    }
 
-    // Return the session data (including the JWT) to the client
-    return new Response(JSON.stringify(sessionData), {
+    // Step 3: Return the successful data object to the client.
+    return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
   } catch (error) {
+    console.error('Caught an error:', error.message)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,

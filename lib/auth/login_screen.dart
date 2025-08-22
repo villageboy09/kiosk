@@ -1,5 +1,6 @@
-import 'package:cropsync/main.dart'; // We need to import main.dart to access the 'supabase' client
+import 'package:cropsync/main.dart';
 import 'package:cropsync/screens/home_screen.dart';
+import 'package:cropsync/widgets/keyboard.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,9 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  /// Attempts to log the user in by verifying the PIN against the Supabase database.
   Future<void> _login() async {
-    // First, validate the form input.
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -36,34 +35,48 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final pin = _pinController.text.trim();
 
-      // Query the 'farmers' table to find a row where 'login_pin' matches the entered PIN.
-      // .select() fetches all columns for the matching row.
-      // .single() expects exactly one row to be returned. If zero or more than one are found, it throws an error.
-      await supabase.from('farmers').select().eq('login_pin', pin).single();
+      // 1. Call the function to get the secure token
+      final response = await supabase.functions.invoke(
+        'login-with-pin',
+        body: {'pin': pin},
+      );
 
-      // If the code reaches here, a matching farmer was found. Login is successful.
-      // We use pushReplacement to prevent the user from going back to the login screen.
+      if (response.status != 200) {
+        final errorMessage =
+            response.data?['error'] ?? 'An unknown error occurred.';
+        throw Exception(errorMessage);
+      }
+
+      // 2. Parse the full response from the function
+      final responseData = response.data as Map<String, dynamic>;
+      final properties = responseData['properties'] as Map<String, dynamic>?;
+      final user = responseData['user'] as Map<String, dynamic>?;
+
+      final email = user?['email'] as String?;
+      final token = properties?['email_otp'] as String?;
+
+      if (email == null || token == null) {
+        throw Exception(
+            'Invalid response from server. Token or email missing.');
+      }
+
+      // 3. Use the token to verify the OTP and create the session
+      await supabase.auth.verifyOTP(
+        type: OtpType.magiclink,
+        email: email,
+        token: token,
+      );
+
       if (mounted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
       }
-    } on PostgrestException catch (error) {
-      // This specific error (PGRST116) means no rows were found.
-      // It's a clean way to handle an invalid PIN.
-      if (error.code == 'PGRST116') {
-        _showErrorSnackbar('Invalid PIN. Please try again.');
-      } else {
-        // Handle other potential database errors (e.g., permission denied).
-        _showErrorSnackbar('Database error: ${error.message}');
-      }
     } catch (error) {
-      // Handle unexpected errors, like network issues.
       _showErrorSnackbar(
-          'An unexpected error occurred. Please check your connection.');
+          'Login failed: ${error.toString().replaceFirst("Exception: ", "")}');
     } finally {
-      // Ensure the loading indicator is turned off, even if an error occurs.
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -72,7 +85,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// Helper method to show a snackbar with an error message.
   void _showErrorSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -115,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 40),
                 TextFormField(
                   controller: _pinController,
-                  keyboardType: TextInputType.number,
+                  readOnly: true,
                   obscureText: true,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.lexend(fontSize: 24, letterSpacing: 8),
@@ -140,6 +152,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 40),
+                NumericKeypad(controller: _pinController),
                 const SizedBox(height: 40),
                 SizedBox(
                   width: double.infinity,
