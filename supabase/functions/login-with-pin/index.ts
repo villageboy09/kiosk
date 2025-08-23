@@ -1,32 +1,25 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 
-console.log('Function starting up...')
-
 Deno.serve(async (req) => {
+  // This is needed for browser clients to call the function
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
     const { pin } = await req.json()
-    if (!pin) {
-      throw new Error('PIN is required in the request body.')
-    }
+    if (!pin) throw new Error('PIN is required.')
 
-    const projectUrl = Deno.env.get('PROJECT_URL')
-    const serviceKey = Deno.env.get('SERVICE_KEY')
-
-    if (!projectUrl || !serviceKey) {
-      throw new Error('Server is missing required configuration (PROJECT_URL or SERVICE_KEY).')
-    }
-
-    const supabaseAdmin = createClient(projectUrl, serviceKey)
+    const supabaseAdmin = createClient(
+      Deno.env.get('PROJECT_URL') ?? '',
+      Deno.env.get('SERVICE_KEY') ?? ''
+    )
 
     // Step 1: Find the farmer by their login PIN
     const { data: farmer, error: farmerError } = await supabaseAdmin
       .from('farmers')
-      .select('phone_number')
+      .select('id, phone_number') // We now need the farmer's primary key 'id'
       .eq('login_pin', pin)
       .single()
 
@@ -37,8 +30,8 @@ Deno.serve(async (req) => {
 
     const userIdentifier = `${farmer.phone_number}@cropsync.local`
 
-    // Step 2: Generate a magic link for the user.
-    const { data, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    // Step 2: Find or create the corresponding user in Supabase Auth
+    const { data: authData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
         type: 'magiclink',
         email: userIdentifier,
     });
@@ -48,13 +41,29 @@ Deno.serve(async (req) => {
       throw new Error('Could not generate a user session.')
     }
 
-    // Step 3: Return the successful data object to the client.
-    return new Response(JSON.stringify(data), {
+    // Step 3: NEW - Link the auth user to the farmer profile
+    const userId = authData.user.id
+    const farmerId = farmer.id
+
+    // This update query creates the crucial link between the two tables.
+    const { error: updateError } = await supabaseAdmin
+      .from('farmers')
+      .update({ user_id: userId })
+      .eq('id', farmerId)
+
+    if (updateError) {
+      // Log the error but don't stop the login process.
+      // The link can be established on a subsequent login.
+      console.error('Failed to link farmer to auth user:', updateError.message)
+    }
+
+    // Step 4: Return the successful data object to the client.
+    return new Response(JSON.stringify(authData), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
   } catch (error) {
-    console.error('Caught an error:', error.message)
+    console.error('Caught an error in function:', error.message)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
