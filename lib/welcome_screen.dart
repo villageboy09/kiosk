@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:cropsync/auth/login_screen.dart';
 import 'package:cropsync/main.dart';
 import 'package:cropsync/screens/home_screen.dart';
@@ -15,7 +16,7 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  late final StreamSubscription<AuthState> _authSubscription;
+  StreamSubscription<AuthState>? _authSubscription;
 
   @override
   void initState() {
@@ -25,16 +26,26 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   void dispose() {
-    _authSubscription.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 
   Future<void> _redirect() async {
+    // Wait for the widget to be fully built before proceeding.
     await Future.delayed(Duration.zero);
-    final session = supabase.auth.currentSession;
+
+    // Create two futures: one for the minimum 2-second delay, and one
+    // to get the initial session state.
+    final delayFuture = Future.delayed(const Duration(seconds: 2));
+    final sessionFuture = Future(() => supabase.auth.currentSession);
+
+    // Wait for both the delay and the session check to complete.
+    final results = await Future.wait([sessionFuture, delayFuture]);
+    final session = results[0] as Session?;
 
     if (!mounted) return;
 
+    // Navigate based on whether a session was found.
     if (session != null) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -45,12 +56,13 @@ class _SplashScreenState extends State<SplashScreen> {
       );
     }
 
+    // After the initial check, listen for any future auth changes (like logout).
     _authSubscription = supabase.auth.onAuthStateChange.listen((data) {
-      final event = data.event;
-      if (event == AuthChangeEvent.signedOut) {
+      if (data.event == AuthChangeEvent.signedOut) {
         if (mounted) {
-          Navigator.of(context).pushReplacement(
+          Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (route) => false,
           );
         }
       }
@@ -77,17 +89,22 @@ class _SplashScreenState extends State<SplashScreen> {
               },
             ),
             const SizedBox(height: 40),
-            Text(
-              'Cropsync Kiosk',
+            DefaultTextStyle(
               style: GoogleFonts.lexend(
                 fontSize: 24.0,
                 color: Colors.black,
                 fontWeight: FontWeight.bold,
               ),
-            ),
-            const SizedBox(height: 20),
-            const CircularProgressIndicator(
-              color: Colors.green,
+              child: AnimatedTextKit(
+                isRepeatingAnimation: false,
+                totalRepeatCount: 1,
+                animatedTexts: [
+                  TypewriterAnimatedText(
+                    'Cropsync Kiosk',
+                    speed: const Duration(milliseconds: 100),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

@@ -1,8 +1,13 @@
+// lib/screens/home_screen.dart
+import 'package:cropsync/screens/advisory_screen.dart';
+import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/main.dart';
 import 'package:cropsync/screens/profile_screen.dart';
 import 'package:cropsync/screens/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shimmer/shimmer.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,18 +21,19 @@ class _HomeScreenState extends State<HomeScreen> {
   String _farmerName = 'Farmer';
   String _greeting = 'Welcome';
   bool _isLoading = true;
+  String? _profileImageUrl;
 
-  // UPDATED: The third widget is now the interactive SettingsScreen
-  static const List<Widget> _widgetOptions = <Widget>[
-    HomeTab(
-        greeting: '', farmerName: ''), // This will be updated with real data
-    Center(child: Text('Advisories Page', style: TextStyle(fontSize: 24))),
-    SettingsScreen(), // Correctly navigates to your new settings screen
-  ];
+  late final List<Widget> _widgetOptions;
 
   @override
   void initState() {
     super.initState();
+    // UPDATED: The second widget is now the new AdvisoriesScreen
+    _widgetOptions = <Widget>[
+      HomeTab(greeting: _greeting, farmerName: _farmerName),
+      const AdvisoriesScreen(), // Your new "news feed" screen
+      SettingsScreen(key: UniqueKey()),
+    ];
     _fetchFarmerDetails();
   }
 
@@ -43,21 +49,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchFarmerDetails() async {
-    setState(() {
-      _isLoading = true;
-    });
     try {
       final userId = supabase.auth.currentUser!.id;
       final response = await supabase
           .from('farmers')
-          .select('full_name')
+          .select('full_name, profile_image_url')
           .eq('user_id', userId)
           .single();
 
       if (mounted) {
         setState(() {
           _farmerName = response['full_name'] as String? ?? 'Farmer';
+          _profileImageUrl = response['profile_image_url'] as String?;
           _greeting = _getGreeting();
+          // Update the HomeTab with the fetched data
+          _widgetOptions[0] =
+              HomeTab(greeting: _greeting, farmerName: _farmerName);
           _isLoading = false;
         });
       }
@@ -66,6 +73,8 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _farmerName = 'Farmer';
           _greeting = 'Welcome';
+          _widgetOptions[0] =
+              HomeTab(greeting: _greeting, farmerName: _farmerName);
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
@@ -78,10 +87,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+  Widget _buildProfileAvatar() {
+    if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+      return CircleAvatar(
+        radius: 18,
+        backgroundColor: Colors.white24,
+        backgroundImage: CachedNetworkImageProvider(_profileImageUrl!),
+      );
+    } else {
+      return const Icon(Icons.account_circle, color: Colors.white, size: 32);
+    }
   }
 
   @override
@@ -106,55 +121,103 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           IconButton(
-            icon:
-                const Icon(Icons.account_circle, color: Colors.white, size: 32),
-            onPressed: () {
-              Navigator.of(context).push(
+            icon: _buildProfileAvatar(),
+            onPressed: () async {
+              await Navigator.of(context).push(
                 MaterialPageRoute(builder: (context) => const ProfileScreen()),
               );
+              _fetchFarmerDetails();
             },
           ),
           const SizedBox(width: 12),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.green))
+          ? _buildLoadingShimmer()
           : IndexedStack(
               index: _selectedIndex,
-              children: [
-                HomeTab(greeting: _greeting, farmerName: _farmerName),
-                _widgetOptions[1],
-                _widgetOptions[2],
-              ],
+              children: _widgetOptions,
             ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.library_books_outlined),
-            activeIcon: Icon(Icons.library_books),
-            label: 'Advisories',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            activeIcon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
+      bottomNavigationBar: SalomonBottomBar(
         currentIndex: _selectedIndex,
+        onTap: (i) => setState(() => _selectedIndex = i),
         selectedItemColor: Colors.green[800],
         unselectedItemColor: Colors.grey[600],
-        onTap: _onItemTapped,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        items: [
+          SalomonBottomBarItem(
+            icon: const Icon(Icons.home_outlined),
+            activeIcon: const Icon(Icons.home),
+            title: const Text("Home"),
+          ),
+          SalomonBottomBarItem(
+            icon: const Icon(Icons.library_books_outlined),
+            activeIcon: const Icon(Icons.library_books),
+            title: const Text("Advisories"),
+          ),
+          SalomonBottomBarItem(
+            icon: const Icon(Icons.settings_outlined),
+            activeIcon: const Icon(Icons.settings),
+            title: const Text("Settings"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingShimmer() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 150,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Container(
+              height: 24,
+              width: 150,
+              color: Colors.white,
+            ),
+            const SizedBox(height: 20),
+            LayoutBuilder(builder: (context, constraints) {
+              int crossAxisCount = 2;
+              if (constraints.maxWidth > 600) crossAxisCount = 3;
+              if (constraints.maxWidth > 900) crossAxisCount = 4;
+              return GridView.count(
+                crossAxisCount: crossAxisCount,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 0.85,
+                children: List.generate(
+                    6,
+                    (index) => Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        )),
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
 }
 
+// HomeTab Widget with your beautiful animations
 class HomeTab extends StatefulWidget {
   final String greeting;
   final String farmerName;
@@ -201,7 +264,9 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
     _greetingController.forward();
     Future.delayed(const Duration(milliseconds: 300), () {
-      _cardsController.forward();
+      if (mounted) {
+        _cardsController.forward();
+      }
     });
   }
 
@@ -309,7 +374,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   animation: _cardsAnimation,
                   builder: (context, child) {
                     return Opacity(
-                      opacity: _cardsAnimation.value,
+                      opacity: _cardsAnimation.value.clamp(0.0, 1.0),
                       child: Text(
                         'Quick Actions',
                         style: GoogleFonts.poppins(
@@ -329,17 +394,12 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   animation: _cardsAnimation,
                   builder: (context, child) {
                     return Transform.scale(
-                      scale: _cardsAnimation.value,
+                      scale: _cardsAnimation.value.clamp(0.0, 1.0),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          // Responsive grid based on screen width
                           int crossAxisCount = 2;
-                          if (constraints.maxWidth > 600) {
-                            crossAxisCount = 3;
-                          }
-                          if (constraints.maxWidth > 900) {
-                            crossAxisCount = 4;
-                          }
+                          if (constraints.maxWidth > 600) crossAxisCount = 3;
+                          if (constraints.maxWidth > 900) crossAxisCount = 4;
 
                           return GridView.count(
                             crossAxisCount: crossAxisCount,
@@ -355,7 +415,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                     );
                   },
                 ),
-
                 const SizedBox(height: 20),
               ],
             ),
@@ -372,124 +431,113 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         'subtitle': 'Live Updates',
         'icon': Icons.wb_cloudy,
         'gradient': [const Color(0xFF64B5F6), const Color(0xFF1976D2)],
-        'delay': 100,
+        'delay': 100
       },
       {
         'title': 'Crop Advisory',
         'subtitle': 'Expert Tips',
         'icon': Icons.agriculture,
         'gradient': [const Color(0xFF81C784), const Color(0xFF388E3C)],
-        'delay': 200,
+        'delay': 200
       },
       {
         'title': 'Market Prices',
         'subtitle': 'Real-time',
         'icon': Icons.trending_up,
         'gradient': [const Color(0xFFFFB74D), const Color(0xFFF57C00)],
-        'delay': 300,
+        'delay': 300
       },
       {
         'title': 'Drone Booking',
         'subtitle': 'Schedule Now',
         'icon': Icons.flight_takeoff,
         'gradient': [const Color(0xFFBA68C8), const Color(0xFF7B1FA2)],
-        'delay': 400,
+        'delay': 400
       },
       {
         'title': 'Agri Shop',
         'subtitle': 'Equipment',
         'icon': Icons.store,
         'gradient': [const Color(0xFFE57373), const Color(0xFFD32F2F)],
-        'delay': 500,
+        'delay': 500
       },
       {
         'title': 'Seed Varieties',
         'subtitle': 'Catalog',
         'icon': Icons.eco,
         'gradient': [const Color(0xFF4DB6AC), const Color(0xFF00695C)],
-        'delay': 600,
+        'delay': 600
       },
     ];
-
     return features.map((feature) => _buildFeatureCard(feature)).toList();
   }
 
   Widget _buildFeatureCard(Map<String, dynamic> feature) {
     return TweenAnimationBuilder(
-      duration: Duration(milliseconds: 800 + feature['delay'] as int),
+      duration: Duration(milliseconds: 500 + (feature['delay'] as int)),
+      curve: Curves.easeOutBack,
       tween: Tween<double>(begin: 0, end: 1),
       builder: (context, double value, child) {
         return Transform.translate(
           offset: Offset(0, 50 * (1 - value)),
-          child: Opacity(
-            opacity: value,
-            child: InkWell(
-              onTap: () {
-                // Add navigation logic here
-                _showFeatureDialog(feature['title'] as String);
-              },
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: feature['gradient'] as List<Color>,
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (feature['gradient'] as List<Color>)[0]
-                          .withValues(alpha: 0.4),
-                      blurRadius: 15,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Icon(
-                          feature['icon'] as IconData,
-                          size: 32,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        feature['title'] as String,
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        feature['subtitle'] as String,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.white70,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          child: Opacity(opacity: value, child: child),
         );
       },
+      child: InkWell(
+        onTap: () => _showFeatureDialog(feature['title'] as String),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: feature['gradient'] as List<Color>,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: (feature['gradient'] as List<Color>)[0]
+                    .withValues(alpha: 0.4),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(feature['icon'] as IconData,
+                      size: 32, color: Colors.white),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  feature['title'] as String,
+                  style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  feature['subtitle'] as String,
+                  style:
+                      GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -498,26 +546,21 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            '$featureName Feature',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('$featureName Feature',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
           content: Text(
-            'This will navigate to the $featureName screen. Implementation coming soon!',
-            style: GoogleFonts.poppins(),
-          ),
+              'This will navigate to the $featureName screen. Implementation coming soon!',
+              style: GoogleFonts.poppins()),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(
                 'OK',
                 style: GoogleFonts.poppins(
-                  color: const Color(0xFF2E7D32),
-                  fontWeight: FontWeight.bold,
-                ),
+                    color: const Color(0xFF2E7D32),
+                    fontWeight: FontWeight.bold),
               ),
             ),
           ],

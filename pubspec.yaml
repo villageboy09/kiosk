@@ -21,6 +21,7 @@ dependencies:
   cached_network_image: ^3.4.1
   easy_date_timeline: ^2.0.9
   intl: ^0.20.2
+  salomon_bottom_bar: ^3.3.2
 
 
 dev_dependencies:
