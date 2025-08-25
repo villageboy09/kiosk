@@ -12,12 +12,13 @@ class FarmerCropSelection {
   final String cropName;
   final String? cropImageUrl;
   final int cropId;
-  FarmerCropSelection(
-      {required this.id,
-      required this.fieldName,
-      required this.cropName,
-      this.cropImageUrl,
-      required this.cropId});
+  FarmerCropSelection({
+    required this.id,
+    required this.fieldName,
+    required this.cropName,
+    this.cropImageUrl,
+    required this.cropId,
+  });
 }
 
 class CropStage {
@@ -36,6 +37,7 @@ class AdvisoriesScreen extends StatefulWidget {
 class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     with TickerProviderStateMixin {
   bool _isLoading = true;
+  final ScrollController _scrollController = ScrollController();
 
   // Data
   List<FarmerCropSelection> _farmerCrops = [];
@@ -48,18 +50,27 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
 
   // Animation
   late AnimationController _feedAnimationController;
+  late AnimationController _filterAnimationController;
 
   @override
   void initState() {
     super.initState();
     _feedAnimationController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 500));
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _filterAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
     _fetchInitialData();
   }
 
   @override
   void dispose() {
     _feedAnimationController.dispose();
+    _filterAnimationController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -97,6 +108,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
           }
           _isLoading = false;
         });
+        _filterAnimationController.forward();
       }
     } catch (e) {
       _showErrorSnackbar('మీ పంటల వివరాలను లోడ్ చేయడంలో విఫలమైంది.');
@@ -173,8 +185,178 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
   void _showErrorSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(message, style: GoogleFonts.lexend()),
-          backgroundColor: Colors.redAccent),
+        content: Text(message, style: GoogleFonts.lexend()),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(25),
+            topRight: Radius.circular(25),
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                'పంట మరియు దశ ఎంచుకోండి',
+                style: GoogleFonts.lexend(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                children: [
+                  Text(
+                    'నా పంటలు',
+                    style: GoogleFonts.lexend(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._farmerCrops.map((crop) => _buildCropTile(crop)),
+                  const SizedBox(height: 24),
+                  if (_stages.isNotEmpty) ...[
+                    Text(
+                      'పంట దశ',
+                      style: GoogleFonts.lexend(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _stages.map((stage) {
+                        final isSelected = _selectedStage?.id == stage.id;
+                        return FilterChip(
+                          label: Text(stage.name),
+                          selected: isSelected,
+                          onSelected: (_) {
+                            _selectStage(stage);
+                            Navigator.pop(context);
+                          },
+                          selectedColor: Colors.green[100],
+                          checkmarkColor: Colors.green[700],
+                          labelStyle: GoogleFonts.lexend(
+                            color:
+                                isSelected ? Colors.green[700] : Colors.black87,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCropTile(FarmerCropSelection crop) {
+    final isSelected = _selectedFarmerCrop?.id == crop.id;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: isSelected ? Colors.green[50] : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: () {
+            _selectFarmerCrop(crop);
+            if (_stages.isEmpty) Navigator.pop(context);
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: isSelected ? Colors.green : Colors.grey[300]!,
+                width: isSelected ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: (crop.cropImageUrl != null &&
+                          crop.cropImageUrl!.isNotEmpty)
+                      ? CachedNetworkImage(
+                          imageUrl: crop.cropImageUrl!,
+                          width: 50,
+                          height: 50,
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          width: 50,
+                          height: 50,
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.grass, color: Colors.grey),
+                        ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        crop.fieldName,
+                        style: GoogleFonts.lexend(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        crop.cropName,
+                        style: GoogleFonts.lexend(
+                          color: Colors.grey[600],
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isSelected)
+                  Icon(Icons.check_circle, color: Colors.green[700], size: 24),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -186,13 +368,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         child: _isLoading
             ? _buildShimmerEffect()
             : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildHeader('నా పంటలు (My Crops)'),
-                  _buildFarmerCropFilter(),
-                  _buildHeader('పంట దశ (Crop Stage)'),
-                  _buildStageFilter(),
-                  const Divider(height: 1),
+                  _buildCompactHeader(),
                   Expanded(child: _buildProblemFeed()),
                 ],
               ),
@@ -200,176 +377,95 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     );
   }
 
-  // --- UI Builder Widgets ---
-
-  Widget _buildHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-      child: Text(title,
-          style: GoogleFonts.lexend(fontSize: 22, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  Widget _buildFarmerCropFilter() {
-    return SizedBox(
-      height: 120,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: _farmerCrops.length,
-        itemBuilder: (context, index) {
-          final crop = _farmerCrops[index];
-          final isSelected = _selectedFarmerCrop?.id == crop.id;
-          return _buildFilterCard(
-            title: crop.fieldName,
-            subtitle: crop.cropName,
-            imageUrl: crop.cropImageUrl,
-            isSelected: isSelected,
-            onTap: () => _selectFarmerCrop(crop),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildStageFilter() {
-    return SizedBox(
-      height: 60,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: _stages.length,
-        itemBuilder: (context, index) {
-          final stage = _stages[index];
-          final isSelected = _selectedStage?.id == stage.id;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4.0),
-            child: ChoiceChip(
-              label: Text(stage.name, style: GoogleFonts.lexend()),
-              selected: isSelected,
-              onSelected: (_) => _selectStage(stage),
-              selectedColor: Colors.green[100],
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildProblemFeed() {
-    if (_problems.isEmpty) {
-      return Center(
-          child: Text('ఈ దశకు సమస్యలు కనుగొనబడలేదు.',
-              style: GoogleFonts.lexend()));
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.all(20),
-      itemCount: _problems.length,
-      itemBuilder: (context, index) {
-        final problem = _problems[index];
-        return FadeTransition(
-          opacity: _feedAnimationController,
-          child: _buildProblemCard(problem),
-        );
-      },
-    );
-  }
-
-  Widget _buildFilterCard(
-      {required String title,
-      String? subtitle,
-      String? imageUrl,
-      required bool isSelected,
-      VoidCallback? onTap}) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      elevation: isSelected ? 6 : 2,
-      shadowColor: isSelected
-          ? Colors.green.withValues(alpha: 0.5)
-          : Colors.black.withValues(alpha: 0.1),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-            color: isSelected ? Colors.green : Colors.grey[300]!, width: 2.5),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: SizedBox(
-          width: 150,
-          child: Column(
-            children: [
-              Expanded(
-                flex: 2,
-                child: (imageUrl != null && imageUrl.isNotEmpty)
-                    ? CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        fit: BoxFit.cover,
-                        width: double.infinity)
-                    : Container(
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.grass,
-                            size: 40, color: Colors.grey)),
-              ),
-              Expanded(
-                flex: 1,
-                child: Center(
-                  child: Text(title,
-                      style: GoogleFonts.lexend(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center),
-                ),
-              ),
-            ],
+  Widget _buildCompactHeader() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildProblemCard(CropProblem problem) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 4,
       child: Column(
         children: [
-          if (problem.imageUrl1 != null && problem.imageUrl1!.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: problem.imageUrl1!,
-              height: 180,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              placeholder: (context, url) =>
-                  Container(height: 180, color: Colors.grey[200]),
-              errorWidget: (context, url, error) => Container(
-                  height: 180,
-                  color: Colors.grey[200],
-                  child: const Icon(Icons.error)),
-            ),
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(problem.name,
-                      style: GoogleFonts.lexend(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (context) =>
-                          AdvisoryDetailScreen(problem: problem),
-                    ));
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[700],
-                    foregroundColor: Colors.white,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'పంట సలహాలు',
+                        style: GoogleFonts.lexend(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[800],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      if (_selectedFarmerCrop != null && _selectedStage != null)
+                        FadeTransition(
+                          opacity: _filterAnimationController,
+                          child: Text(
+                            '${_selectedFarmerCrop!.cropName} • ${_selectedStage!.name}',
+                            style: GoogleFonts.lexend(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                  child: Text('సలహా చూడండి', style: GoogleFonts.lexend()),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.green[600]!, Colors.green[700]!],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _showFilterBottomSheet,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.filter_list,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'ఫిల్టర్',
+                              style: GoogleFonts.lexend(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -379,43 +475,332 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     );
   }
 
+  Widget _buildProblemFeed() {
+    if (_problems.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.agriculture,
+              size: 80,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'ఈ దశకు సమస్యలు కనుగొనబడలేదు',
+              style: GoogleFonts.lexend(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'మరొక దశను ఎంచుకోండి',
+              style: GoogleFonts.lexend(
+                fontSize: 14,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        if (_selectedStage != null) {
+          await _selectStage(_selectedStage!);
+        }
+      },
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(16),
+        itemCount: _problems.length,
+        itemBuilder: (context, index) {
+          final problem = _problems[index];
+          return FadeTransition(
+            opacity: _feedAnimationController,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: _feedAnimationController,
+                curve: Interval(
+                  index * 0.1,
+                  1.0,
+                  curve: Curves.easeOutCubic,
+                ),
+              )),
+              child: _buildEnhancedProblemCard(problem),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEnhancedProblemCard(CropProblem problem) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        elevation: 0,
+        child: InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => AdvisoryDetailScreen(problem: problem),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Image Gallery Section
+                if (problem.imageUrl1 != null && problem.imageUrl1!.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Stack(
+                        children: [
+                          CachedNetworkImage(
+                            imageUrl: problem.imageUrl1!,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey[200],
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.green[700],
+                                ),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.grey[200],
+                              child: const Icon(
+                                Icons.broken_image,
+                                size: 50,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                          // Gradient overlay for better text visibility
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              height: 80,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.bottomCenter,
+                                  end: Alignment.topCenter,
+                                  colors: [
+                                    Colors.black.withValues(alpha: 0.7),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Image indicators if multiple images exist
+                          if (problem.imageUrl2 != null ||
+                              problem.imageUrl3 != null)
+                            Positioned(
+                              top: 12,
+                              right: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.6),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.photo_library,
+                                      color: Colors.white,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${[
+                                        problem.imageUrl1,
+                                        problem.imageUrl2,
+                                        problem.imageUrl3
+                                      ].where((img) => img != null && img.isNotEmpty).length}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // Content Section
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        problem.name,
+                        style: GoogleFonts.lexend(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.orange[50],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.orange[200]!),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 16,
+                                    color: Colors.orange[700],
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'సమస్య గుర్తించబడింది',
+                                    style: GoogleFonts.lexend(
+                                      fontSize: 12,
+                                      color: Colors.orange[700],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.green[600]!,
+                                  Colors.green[700]!
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          AdvisoryDetailScreen(
+                                              problem: problem),
+                                    ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(10),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        'సలహా చూడండి',
+                                        style: GoogleFonts.lexend(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.arrow_forward,
+                                        color: Colors.white,
+                                        size: 16,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildShimmerEffect() {
     return Shimmer.fromColors(
       baseColor: Colors.grey[300]!,
       highlightColor: Colors.grey[100]!,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: Container(height: 24, width: 200, color: Colors.white),
+          Container(
+            height: 100,
+            color: Colors.white,
+            margin: const EdgeInsets.only(bottom: 16),
           ),
-          SizedBox(
-            height: 120,
+          Expanded(
             child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.all(16),
               itemCount: 3,
-              itemBuilder: (context, index) =>
-                  Card(child: Container(width: 150, color: Colors.white)),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: Container(height: 24, width: 150, color: Colors.white),
-          ),
-          SizedBox(
-            height: 60,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: 4,
               itemBuilder: (context, index) => Container(
-                  width: 100,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20))),
+                height: 280,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
             ),
           ),
         ],

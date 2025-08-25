@@ -1,4 +1,4 @@
-// lib/settings_screen_airbnb_style.dart
+// lib/screens/settings_screen_airbnb_style.dart
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -167,7 +167,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           return Transform.translate(
             offset: Offset(0, (1 - value) * -30),
             child: Opacity(
-              opacity: value,
+              opacity: value.clamp(0.0, 1.0), // FIXED
               child: Row(
                 children: [
                   Container(
@@ -1221,12 +1221,17 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
           .select('id')
           .single();
       final sowingDateId = sowingDateResponse['id'];
+
       await supabase.from('farmer_crop_selections').update({
         'crop_id': _selectedCrop!.id,
         'variety_id': _selectedVariety!.id,
         'sowing_date_id': sowingDateId,
         'field_name': _selectedFieldName,
       }).eq('id', widget.initialSelection.selectionId);
+
+      // FIXED: Add safety check
+      if (!mounted) return;
+
       Navigator.pop(context);
       widget.onCompleted();
     } catch (e) {
@@ -1256,6 +1261,10 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                       style: TextButton.styleFrom(foregroundColor: Colors.red),
                       child: Text('Delete', style: GoogleFonts.lexend()))
                 ]));
+
+    // FIXED: Add safety check
+    if (!mounted) return;
+
     if (confirmed == true) {
       setState(() => _isDeleting = true);
       try {
@@ -1263,6 +1272,10 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
             .from('farmer_crop_selections')
             .delete()
             .eq('id', widget.initialSelection.selectionId);
+
+        // FIXED: Add safety check
+        if (!mounted) return;
+
         Navigator.pop(context);
         widget.onCompleted();
       } catch (e) {

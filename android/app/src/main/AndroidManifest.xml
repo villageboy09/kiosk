@@ -2,9 +2,13 @@
 <!-- Permission to access the internet -->
 <uses-permission android:name="android.permission.INTERNET" />
 
+
 <!-- Permissions for location access -->
 <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:label="cropsync"

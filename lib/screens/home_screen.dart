@@ -1,5 +1,8 @@
 // lib/screens/home_screen.dart
 import 'package:cropsync/screens/advisory_screen.dart';
+import 'package:cropsync/screens/agri_shop.dart';
+import 'package:cropsync/screens/drone_booking.dart';
+import 'package:cropsync/screens/market_prices.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/main.dart';
@@ -28,10 +31,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // UPDATED: The second widget is now the new AdvisoriesScreen
     _widgetOptions = <Widget>[
       HomeTab(greeting: _greeting, farmerName: _farmerName),
-      const AdvisoriesScreen(), // Your new "news feed" screen
+      const AdvisoriesScreen(),
       SettingsScreen(key: UniqueKey()),
     ];
     _fetchFarmerDetails();
@@ -62,7 +64,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _farmerName = response['full_name'] as String? ?? 'Farmer';
           _profileImageUrl = response['profile_image_url'] as String?;
           _greeting = _getGreeting();
-          // Update the HomeTab with the fetched data
           _widgetOptions[0] =
               HomeTab(greeting: _greeting, farmerName: _farmerName);
           _isLoading = false;
@@ -302,7 +303,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                     return Transform.translate(
                       offset: Offset(0, 30 * (1 - _greetingAnimation.value)),
                       child: Opacity(
-                        opacity: _greetingAnimation.value,
+                        opacity:
+                            _greetingAnimation.value.clamp(0.0, 1.0), // ✅ Fixed
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(24),
@@ -374,7 +376,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   animation: _cardsAnimation,
                   builder: (context, child) {
                     return Opacity(
-                      opacity: _cardsAnimation.value.clamp(0.0, 1.0),
+                      opacity: _cardsAnimation.value.clamp(0.0, 1.0), // ✅ Fixed
                       child: Text(
                         'Quick Actions',
                         style: GoogleFonts.poppins(
@@ -394,7 +396,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   animation: _cardsAnimation,
                   builder: (context, child) {
                     return Transform.scale(
-                      scale: _cardsAnimation.value.clamp(0.0, 1.0),
+                      scale: _cardsAnimation.value.clamp(0.0, 1.0), // ✅ Fixed
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           int crossAxisCount = 2;
@@ -408,7 +410,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                             crossAxisSpacing: 16,
                             mainAxisSpacing: 16,
                             childAspectRatio: 0.85,
-                            children: _buildFeatureCards(),
+                            children: _buildFeatureCards(context),
                           );
                         },
                       ),
@@ -424,7 +426,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
-  List<Widget> _buildFeatureCards() {
+  List<Widget> _buildFeatureCards(BuildContext context) {
     final features = [
       {
         'title': 'Weather',
@@ -438,28 +440,32 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         'subtitle': 'Expert Tips',
         'icon': Icons.agriculture,
         'gradient': [const Color(0xFF81C784), const Color(0xFF388E3C)],
-        'delay': 200
+        'delay': 200,
+        'screen': const AdvisoriesScreen()
       },
       {
         'title': 'Market Prices',
         'subtitle': 'Real-time',
         'icon': Icons.trending_up,
         'gradient': [const Color(0xFFFFB74D), const Color(0xFFF57C00)],
-        'delay': 300
+        'delay': 300,
+        'screen': const MarketPricesScreen()
       },
       {
         'title': 'Drone Booking',
         'subtitle': 'Schedule Now',
         'icon': Icons.flight_takeoff,
         'gradient': [const Color(0xFFBA68C8), const Color(0xFF7B1FA2)],
-        'delay': 400
+        'delay': 400,
+        'drone': const DroneBookingScreen()
       },
       {
         'title': 'Agri Shop',
         'subtitle': 'Equipment',
         'icon': Icons.store,
         'gradient': [const Color(0xFFE57373), const Color(0xFFD32F2F)],
-        'delay': 500
+        'delay': 500,
+        'shop': const AgriShopScreen()
       },
       {
         'title': 'Seed Varieties',
@@ -469,10 +475,12 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         'delay': 600
       },
     ];
-    return features.map((feature) => _buildFeatureCard(feature)).toList();
+    return features
+        .map((feature) => _buildFeatureCard(context, feature))
+        .toList();
   }
 
-  Widget _buildFeatureCard(Map<String, dynamic> feature) {
+  Widget _buildFeatureCard(BuildContext context, Map<String, dynamic> feature) {
     return TweenAnimationBuilder(
       duration: Duration(milliseconds: 500 + (feature['delay'] as int)),
       curve: Curves.easeOutBack,
@@ -480,11 +488,34 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       builder: (context, double value, child) {
         return Transform.translate(
           offset: Offset(0, 50 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
+          child: Opacity(
+            opacity: value.clamp(0.0, 1.0), // ✅ Already fixed
+            child: child,
+          ),
         );
       },
       child: InkWell(
-        onTap: () => _showFeatureDialog(feature['title'] as String),
+        onTap: () {
+          if (feature['screen'] != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => feature['screen']),
+            );
+          }
+          // Navigate to DroneBookingScreen
+          else if (feature['drone'] != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => feature['drone']),
+            );
+          }
+          // Navigate to AgriShopScreen
+          else if (feature['shop'] != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => feature['shop']),
+            );
+          } else {
+            _showFeatureDialog(context, feature['title'] as String);
+          }
+        },
         borderRadius: BorderRadius.circular(20),
         child: Container(
           decoration: BoxDecoration(
@@ -541,7 +572,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
-  void _showFeatureDialog(String featureName) {
+  void _showFeatureDialog(BuildContext context, String featureName) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
