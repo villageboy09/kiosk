@@ -3,6 +3,7 @@ import 'package:cropsync/screens/advisory_screen.dart';
 import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/screens/drone_booking.dart';
 import 'package:cropsync/screens/market_prices.dart';
+import 'package:cropsync/screens/seed_varieties.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/main.dart';
@@ -472,7 +473,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         'subtitle': 'Catalog',
         'icon': Icons.eco,
         'gradient': [const Color(0xFF4DB6AC), const Color(0xFF00695C)],
-        'delay': 600
+        'delay': 600,
+        'seeds': const SeedVarietiesScreen()
       },
     ];
     return features
@@ -511,6 +513,10 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           else if (feature['shop'] != null) {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (context) => feature['shop']),
+            );
+          } else if (feature['seeds'] != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => feature['seeds']),
             );
           } else {
             _showFeatureDialog(context, feature['title'] as String);
