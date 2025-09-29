@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -81,6 +82,27 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   List<MarketPrice> _filteredPrices = [];
   // ✅ NEW: State to track which commodity filters are active
   late Set<String> _activeCommodities;
+
+  // ✅ NEW: Helper widget to display commodity image with fallback
+  // ignore: unused_element
+  Widget _buildCommodityAvatar(String commodity) {
+    return ClipOval(
+      child: Image.asset(
+        _getCommodityImagePath(commodity),
+        width: 36,
+        height: 36,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: 36,
+            height: 36,
+            color: Colors.grey[400],
+            child: const Icon(Icons.error, size: 18, color: Colors.white),
+          );
+        },
+      ),
+    );
+  }
 
   final String _apiKey =
       "579b464db66ec23bdd000001813d8610f33d417d764c680f21f25387";
@@ -189,6 +211,13 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       _isLoading = true;
       _statusMessage = 'Detecting your location...';
     });
+
+    // NEW: Early exit for web platform (geocoding not supported)
+    if (kIsWeb) {
+      _useDefaultLocation(
+          reason: 'Web platform detected. Using default location for prices.');
+      return;
+    }
 
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -365,15 +394,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                 ),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Colors.white.withValues(alpha: 0.9),
-                      // ✅ NEW: Image is displayed here
-                      backgroundImage:
-                          AssetImage(_getCommodityImagePath(commodity)),
-                      onBackgroundImageError:
-                          (_, __) {}, // Handles if image is not found
-                    ),
+                    _buildCommodityAvatar(commodity),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(

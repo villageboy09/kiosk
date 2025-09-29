@@ -1,9 +1,11 @@
 // lib/screens/home_screen.dart
+
 import 'package:cropsync/screens/advisory_screen.dart';
 import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/screens/drone_booking.dart';
 import 'package:cropsync/screens/market_prices.dart';
 import 'package:cropsync/screens/seed_varieties.dart';
+import 'package:cropsync/screens/weather.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/main.dart';
@@ -108,7 +110,9 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(
           'Cropsync',
           style: GoogleFonts.lexend(
-              fontWeight: FontWeight.bold, color: Colors.white),
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         backgroundColor: const Color(0xFF2E7D32),
         elevation: 0,
@@ -126,7 +130,9 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: _buildProfileAvatar(),
             onPressed: () async {
               await Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const ProfileScreen(),
+                ),
               );
               _fetchFarmerDetails();
             },
@@ -191,27 +197,30 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.white,
             ),
             const SizedBox(height: 20),
-            LayoutBuilder(builder: (context, constraints) {
-              int crossAxisCount = 2;
-              if (constraints.maxWidth > 600) crossAxisCount = 3;
-              if (constraints.maxWidth > 900) crossAxisCount = 4;
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.85,
-                children: List.generate(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                int crossAxisCount = 2;
+                if (constraints.maxWidth > 600) crossAxisCount = 3;
+                if (constraints.maxWidth > 900) crossAxisCount = 4;
+                return GridView.count(
+                  crossAxisCount: crossAxisCount,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 0.85,
+                  children: List.generate(
                     6,
                     (index) => Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        )),
-              );
-            }),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -304,8 +313,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                     return Transform.translate(
                       offset: Offset(0, 30 * (1 - _greetingAnimation.value)),
                       child: Opacity(
-                        opacity:
-                            _greetingAnimation.value.clamp(0.0, 1.0), // ✅ Fixed
+                        opacity: _greetingAnimation.value.clamp(0.0, 1.0),
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(24),
@@ -377,7 +385,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   animation: _cardsAnimation,
                   builder: (context, child) {
                     return Opacity(
-                      opacity: _cardsAnimation.value.clamp(0.0, 1.0), // ✅ Fixed
+                      opacity: _cardsAnimation.value.clamp(0.0, 1.0),
                       child: Text(
                         'Quick Actions',
                         style: GoogleFonts.poppins(
@@ -397,7 +405,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   animation: _cardsAnimation,
                   builder: (context, child) {
                     return Transform.scale(
-                      scale: _cardsAnimation.value.clamp(0.0, 1.0), // ✅ Fixed
+                      scale: _cardsAnimation.value.clamp(0.0, 1.0),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           int crossAxisCount = 2;
@@ -434,7 +442,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         'subtitle': 'Live Updates',
         'icon': Icons.wb_cloudy,
         'gradient': [const Color(0xFF64B5F6), const Color(0xFF1976D2)],
-        'delay': 100
+        'delay': 100,
+        'weather': const WeatherScreen()
       },
       {
         'title': 'Crop Advisory',
@@ -491,86 +500,113 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         return Transform.translate(
           offset: Offset(0, 50 * (1 - value)),
           child: Opacity(
-            opacity: value.clamp(0.0, 1.0), // ✅ Already fixed
+            opacity: value.clamp(0.0, 1.0),
             child: child,
           ),
         );
       },
-      child: InkWell(
-        onTap: () {
-          if (feature['screen'] != null) {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => feature['screen']),
-            );
-          }
-          // Navigate to DroneBookingScreen
-          else if (feature['drone'] != null) {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => feature['drone']),
-            );
-          }
-          // Navigate to AgriShopScreen
-          else if (feature['shop'] != null) {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => feature['shop']),
-            );
-          } else if (feature['seeds'] != null) {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => feature['seeds']),
-            );
-          } else {
-            _showFeatureDialog(context, feature['title'] as String);
-          }
-        },
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: feature['gradient'] as List<Color>,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: (feature['gradient'] as List<Color>)[0]
+                  .withValues(alpha: 0.4),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
             ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: (feature['gradient'] as List<Color>)[0]
-                    .withValues(alpha: 0.4),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(16),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            onTap: () {
+              if (feature['screen'] != null) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => feature['screen'],
                   ),
-                  child: Icon(feature['icon'] as IconData,
-                      size: 32, color: Colors.white),
+                );
+              }
+              // Navigate to DroneBookingScreen
+              else if (feature['drone'] != null) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => feature['drone'],
+                  ),
+                );
+              }
+              // Navigate to AgriShopScreen
+              else if (feature['shop'] != null) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => feature['shop'],
+                  ),
+                );
+              } else if (feature['seeds'] != null) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => feature['seeds'],
+                  ),
+                );
+              } else if (feature['weather'] != null) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => feature['weather'],
+                  ),
+                );
+              } else {
+                _showFeatureDialog(context, feature['title'] as String);
+              }
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: feature['gradient'] as List<Color>,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  feature['title'] as String,
-                  style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                  textAlign: TextAlign.center,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        feature['icon'] as IconData,
+                        size: 32,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      feature['title'] as String,
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      feature['subtitle'] as String,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.white70,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  feature['subtitle'] as String,
-                  style:
-                      GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -583,21 +619,26 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('$featureName Feature',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            '$featureName Feature',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
           content: Text(
-              'This will navigate to the $featureName screen. Implementation coming soon!',
-              style: GoogleFonts.poppins()),
+            'This will navigate to the $featureName screen. Implementation coming soon!',
+            style: GoogleFonts.poppins(),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(
                 'OK',
                 style: GoogleFonts.poppins(
-                    color: const Color(0xFF2E7D32),
-                    fontWeight: FontWeight.bold),
+                  color: const Color(0xFF2E7D32),
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
