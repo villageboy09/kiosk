@@ -1,8 +1,11 @@
 import 'package:cropsync/main.dart';
 import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/widgets/keyboard.dart';
+import 'package:cropsync/widgets/mosern_toast.dart';
+import 'package:cropsync/widgets/pin_input_field.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lottie/lottie.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -16,6 +19,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _pinController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  final GlobalKey<PinInputFieldState> _pinFieldKey =
+      GlobalKey<PinInputFieldState>();
 
   @override
   void dispose() {
@@ -24,7 +29,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) {
+    FocusScope.of(context).unfocus();
+
+    if (!(_pinFieldKey.currentState?.validate() ?? false)) {
       return;
     }
 
@@ -34,8 +41,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final pin = _pinController.text.trim();
-
-      // 1. Call the function to get the secure token
       final response = await supabase.functions.invoke(
         'login-with-pin',
         body: {'pin': pin},
@@ -47,7 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
         throw Exception(errorMessage);
       }
 
-      // 2. Parse the full response from the function
       final responseData = response.data as Map<String, dynamic>;
       final properties = responseData['properties'] as Map<String, dynamic>?;
       final user = responseData['user'] as Map<String, dynamic>?;
@@ -60,7 +64,6 @@ class _LoginScreenState extends State<LoginScreen> {
             'Invalid response from server. Token or email missing.');
       }
 
-      // 3. Use the token to verify the OTP and create the session
       await supabase.auth.verifyOTP(
         type: OtpType.magiclink,
         email: email,
@@ -68,14 +71,22 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
+        Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
       }
     } catch (error) {
-      _showErrorSnackbar(
-          'Login failed: ${error.toString().replaceFirst("Exception: ", "")}');
+      // --- THIS IS THE UPDATED PART ---
+      // Display a modern, top-aligned toast notification for errors.
+      String displayMessage = 'Login failed. Please try again later.';
+      if (error.toString().contains('Invalid PIN provided')) {
+        displayMessage = 'The PIN you entered is incorrect. Please try again.';
+      }
+      // Call the new modern toast
+      if (mounted) {
+        showModernErrorToast(context, displayMessage);
+      }
+      // --- END OF UPDATE ---
     } finally {
       if (mounted) {
         setState(() {
@@ -85,107 +96,119 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _showErrorSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: GoogleFonts.lexend()),
-        backgroundColor: Colors.redAccent,
-      ),
-    );
-  }
+  // The old _showErrorSnackbar method has been removed.
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  'Kiosk Login',
-                  style: GoogleFonts.lexend(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Please enter your unique PIN to continue.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.lexend(
-                    fontSize: 16,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 40),
-                TextFormField(
-                  controller: _pinController,
-                  readOnly: true,
-                  obscureText: true,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.lexend(fontSize: 24, letterSpacing: 8),
-                  decoration: InputDecoration(
-                    hintText: '••••••',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: ScrollConfiguration(
+            behavior: NoOverscrollGlowBehavior(),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Lottie.asset(
+                      'assets/lottie/farmer.json',
+                      height: 120,
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          const BorderSide(color: Colors.green, width: 2),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a PIN';
-                    }
-                    if (value.length != 6) {
-                      return 'PIN must be 6 digits';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 40),
-                NumericKeypad(controller: _pinController),
-                const SizedBox(height: 40),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _login,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green[700],
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Kiosk Login',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.lexend(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
                       ),
                     ),
-                    child: _isLoading
-                        ? const CircularProgressIndicator(
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          )
-                        : Text(
-                            'Login',
-                            style: GoogleFonts.lexend(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Please enter your unique PIN to continue.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.lexend(
+                        fontSize: 15,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 48),
+                    PinInputField(
+                      key: _pinFieldKey,
+                      controller: _pinController,
+                      filledColors: [
+                        Colors.teal.shade100,
+                        Colors.teal.shade200,
+                        Colors.green.shade200,
+                        Colors.green.shade300,
+                        Colors.lightGreen.shade300,
+                        Colors.lightGreen.shade400,
+                      ],
+                      emptyColor: Colors.grey.shade100,
+                      borderColor: Colors.grey.shade300,
+                      activeBorderColor: Colors.green.shade500,
+                      textColor: Colors.black54,
+                    ),
+                    const SizedBox(height: 32),
+                    // This now uses the animated keypad
+                    NumericKeypad(
+                      controller: _pinController,
+                      onEnter: _login,
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade600,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.green.shade300,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                  ),
+                          elevation: 0,
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
+                            : Text(
+                                'Login',
+                                style: GoogleFonts.lexend(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+class NoOverscrollGlowBehavior extends ScrollBehavior {
+  @override
+  Widget buildOverscrollIndicator(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
   }
 }
