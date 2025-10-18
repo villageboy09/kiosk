@@ -29,6 +29,7 @@ class PinInputField extends StatefulWidget {
     this.activeBorderColor = Colors.green,
     this.textColor = Colors.black87,
     this.borderRadius = 8.0,
+    required bool autofocus,
   });
 
   @override

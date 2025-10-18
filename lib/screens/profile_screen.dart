@@ -5,7 +5,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/main.dart';
-import 'package:cropsync/welcome_screen.dart'; // Assuming this is your splash screen
+import 'package:cropsync/welcome_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -14,6 +14,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  // How to use the new smooth navigation:
+  // Instead of MaterialPageRoute, push the route like this:
+  // Navigator.of(context).push(ProfileScreen.route());
+  static Route<void> route() {
+    return PageRouteBuilder(
+      pageBuilder: (context, animation, secondaryAnimation) =>
+          const ProfileScreen(),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+      transitionDuration: const Duration(milliseconds: 300),
+    );
+  }
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -64,7 +78,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final data =
         await supabase.from('farmers').select().eq('user_id', userId).single();
 
-    // Set controller and state variables from the fetched data
     _nameController.text = data['full_name'] ?? '';
     _phoneController.text = data['phone_number'] ?? '';
     _pincodeController.text = data['pincode'] ?? '';
@@ -72,7 +85,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _selectedDistrict = data['district'];
     _profileImageUrl = data['profile_image_url'];
 
-    // Also store the original values for the cancel functionality
     _originalName = _nameController.text;
     _originalPhone = _phoneController.text;
     _originalPincode = _pincodeController.text;
@@ -98,7 +110,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _isEditMode = !_isEditMode;
       if (!_isEditMode) {
-        // Restore original values if cancel is pressed
         _nameController.text = _originalName ?? '';
         _phoneController.text = _originalPhone ?? '';
         _pincodeController.text = _originalPincode ?? '';
@@ -159,12 +170,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             backgroundColor: Colors.green[700],
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
         );
 
-        // ** THE FIX **: Re-run the future to get fresh data and rebuild the UI
         setState(() {
           _farmerFuture = _fetchAndSetFarmerProfile();
           _isEditMode = false;
@@ -179,7 +189,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
         );
@@ -196,33 +206,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _logout() async {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Logout', style: GoogleFonts.lexend()),
-        content: Text('Are you sure you want to logout?',
-            style: GoogleFonts.lexend()),
+      builder: (context) => Dialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel',
-                style: GoogleFonts.lexend(color: Colors.grey[600])),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Logout',
+                style: GoogleFonts.poppins(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF282C3F),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Are you sure you want to logout?',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: const Color(0xFF7E808C),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF282C3F),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await supabase.auth.signOut();
+                        if (mounted) {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                                builder: (context) => const SplashScreen()),
+                            (route) => false,
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: const Color(0xFFFC8019),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        'Logout',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await supabase.auth.signOut();
-              if (mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const SplashScreen()),
-                  (route) => false,
-                );
-              }
-            },
-            child: Text('Logout', style: GoogleFonts.lexend(color: Colors.red)),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -232,21 +300,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => Scaffold(
+          backgroundColor: Colors.white,
           appBar: AppBar(
-            title: Text('Privacy Policy', style: GoogleFonts.lexend()),
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            title: Text(
+              'Privacy Policy',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF282C3F),
+              ),
+            ),
+            backgroundColor: Colors.white,
             elevation: 0,
+            foregroundColor: const Color(0xFF282C3F),
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              'Privacy Policy\n\nYour privacy is important to us...\n\n'
-              '1. Information We Collect\n'
-              '2. How We Use Your Information\n'
-              '3. Data Security\n'
-              '4. Contact Information\n\n'
-              'Last updated: 2025',
-              style: GoogleFonts.lexend(fontSize: 14, height: 1.6),
+          body: const SingleChildScrollView(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your privacy is important to us...',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF282C3F),
+                    height: 1.5,
+                  ),
+                ),
+                SizedBox(height: 24),
+                Text(
+                  '1. Information We Collect\n2. How We Use Your Information\n3. Data Security\n4. Contact Information',
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.8,
+                    color: Color(0xFF7E808C),
+                  ),
+                ),
+                SizedBox(height: 24),
+                Text(
+                  'Last updated: 2025',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF93959F),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -262,29 +360,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Contact Us',
-                style: GoogleFonts.lexend(
-                    fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: Icon(Icons.email, color: Colors.green[700]),
-              title: Text('support@cropsync.com', style: GoogleFonts.lexend()),
-              onTap: () {},
+            Row(
+              children: [
+                Text(
+                  'Contact Us',
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF282C3F),
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, color: Color(0xFF93959F)),
+                ),
+              ],
             ),
-            ListTile(
-              leading: Icon(Icons.phone, color: Colors.green[700]),
-              title: Text('+91 9876543210', style: GoogleFonts.lexend()),
-              onTap: () {},
+            const SizedBox(height: 24),
+            _buildContactTile(
+              icon: Icons.email_outlined,
+              title: 'support@cropsync.com',
+              subtitle: 'Send us an email',
             ),
-            ListTile(
-              leading: Icon(Icons.location_on, color: Colors.green[700]),
-              title: Text('Hyderabad, Telangana', style: GoogleFonts.lexend()),
-              onTap: () {},
+            const SizedBox(height: 12),
+            _buildContactTile(
+              icon: Icons.phone_outlined,
+              title: '+91 9876543210',
+              subtitle: 'Call us anytime',
+            ),
+            const SizedBox(height: 12),
+            _buildContactTile(
+              icon: Icons.location_on_outlined,
+              title: 'Hyderabad, Telangana',
+              subtitle: 'Our headquarters',
             ),
           ],
         ),
@@ -292,69 +406,159 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildContactTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: const Color(0xFF60B246), size: 22),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF282C3F),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: const Color(0xFF7E808C),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: Color(0xFF93959F), size: 20),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: Text('Profile',
-            style: GoogleFonts.lexend(
-                color: Colors.black87, fontWeight: FontWeight.w600)),
-        backgroundColor: Colors.grey[100],
-        elevation: 0,
-        actions: _buildAppBarActions(),
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
       ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _farmerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return _buildShimmerLoading();
-          }
-          if (snapshot.hasError) {
-            return Center(
-                child: Text('Error loading profile: ${snapshot.error}'));
-          }
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FA),
+        body: FutureBuilder<Map<String, dynamic>>(
+          future: _farmerFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return _buildShimmerLoading();
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        size: 64, color: Color(0xFF93959F)),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Error loading profile',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        color: const Color(0xFF7E808C),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${snapshot.error}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: const Color(0xFF93959F),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            }
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  _buildProfileHeader(),
-                  const SizedBox(height: 20),
-                  _buildInfoCard(
-                    title: 'Personal Information',
-                    children: _buildPersonalInfoWidgets(),
+            return CustomScrollView(
+              slivers: [
+                SliverAppBar(
+                  expandedHeight: 240,
+                  pinned: true,
+                  backgroundColor: const Color(0xFF60B246),
+                  elevation: 0,
+                  automaticallyImplyLeading: false,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(30),
+                      bottomRight: Radius.circular(30),
+                    ),
                   ),
-                  const SizedBox(height: 20),
-                  _buildInfoCard(
-                    title: 'Support',
-                    children: [
-                      _buildSettingsTile(
-                        icon: Icons.privacy_tip_outlined,
-                        title: 'Privacy Policy',
-                        onTap: _showPrivacyPolicy,
+                  leading: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                       ),
-                      _buildSettingsTile(
-                        icon: Icons.help_outline,
-                        title: 'Help & Support',
-                        onTap: _showContactUs,
-                      ),
-                      _buildSettingsTile(
-                        icon: Icons.info_outline,
-                        title: 'About',
-                        onTap: () {},
-                      ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 20),
-                  _buildLogoutCard(),
-                ],
-              ),
-            ),
-          );
-        },
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: _buildGradientHeader(),
+                  ),
+                  actions: _buildAppBarActions(),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          _buildPersonalInfoCard(),
+                          const SizedBox(height: 12),
+                          _buildMenuCard(),
+                          const SizedBox(height: 12),
+                          _buildLogoutCard(),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -364,19 +568,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return [
         TextButton(
           onPressed: _toggleEditMode,
-          child: Text('Cancel',
-              style: GoogleFonts.lexend(color: Colors.grey[600])),
+          child: Text(
+            'Cancel',
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Colors.white,
+            ),
+          ),
         ),
         TextButton(
           onPressed: _isLoading ? null : _updateProfile,
+          style: TextButton.styleFrom(
+            backgroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
           child: _isLoading
               ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : Text('Save',
-                  style: GoogleFonts.lexend(
-                      color: Colors.green[700], fontWeight: FontWeight.bold)),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Color(0xFF60B246)),
+                  ),
+                )
+              : Text(
+                  'Save',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF60B246),
+                  ),
+                ),
         ),
         const SizedBox(width: 8),
       ];
@@ -384,161 +611,276 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return [
         IconButton(
           onPressed: _toggleEditMode,
-          icon: const Icon(Icons.edit_outlined, color: Colors.black87),
-        )
+          icon: const Icon(Icons.edit_outlined, color: Colors.white),
+          tooltip: 'Edit Profile',
+        ),
+        const SizedBox(width: 4),
       ];
     }
   }
 
-  Widget _buildProfileHeader() {
-    return Column(
-      children: [
-        _buildProfileImage(),
-        if (!_isEditMode) ...[
-          const SizedBox(height: 16),
-          Text(
-            _nameController.text.isEmpty ? 'Your Name' : _nameController.text,
-            style: GoogleFonts.lexend(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
+  Widget _buildGradientHeader() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF60B246),
+            Color(0xFF4A9635),
+          ],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // REMOVED: const SizedBox(height: kToolbarHeight),
+              _buildProfileImage(),
+              const SizedBox(height: 16),
+              Text(
+                _nameController.text.isEmpty
+                    ? 'Your Name'
+                    : _nameController.text,
+                style: GoogleFonts.poppins(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                supabase.auth.currentUser?.email ?? '',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  color: Colors.white70,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            supabase.auth.currentUser?.email ?? '',
-            style: GoogleFonts.lexend(fontSize: 14, color: Colors.grey[600]),
-          ),
-        ]
-      ],
+        ),
+      ),
     );
   }
 
-  List<Widget> _buildPersonalInfoWidgets() {
-    if (_isEditMode) {
-      return [
-        _buildEditableField(
-          controller: _nameController,
-          label: 'Full Name',
-          icon: Icons.person_outline,
-        ),
-        _buildEditableField(
-          controller: _phoneController,
-          label: 'Phone Number',
-          icon: Icons.phone_outlined,
-          keyboardType: TextInputType.phone,
-        ),
-        _buildDropdownField(
-          value: _selectedDistrict,
-          label: 'District',
-          icon: Icons.location_city_outlined,
-          items: _districts,
-          onChanged: (val) => setState(() => _selectedDistrict = val),
-        ),
-        _buildDropdownField(
-          value: _selectedVillage,
-          label: 'Village',
-          icon: Icons.home_outlined,
-          items: _villages,
-          onChanged: (val) => setState(() => _selectedVillage = val),
-        ),
-        _buildEditableField(
-          controller: _pincodeController,
-          label: 'Pincode',
-          icon: Icons.pin_drop_outlined,
-          keyboardType: TextInputType.number,
-        ),
-      ];
-    } else {
-      return [
-        _buildReadOnlyInfoTile(
-          icon: Icons.phone_outlined,
-          title: 'Phone Number',
-          value:
-              _phoneController.text.isEmpty ? 'Not set' : _phoneController.text,
-        ),
-        _buildReadOnlyInfoTile(
-          icon: Icons.location_city_outlined,
-          title: 'District',
-          value: _selectedDistrict ?? 'Not set',
-        ),
-        _buildReadOnlyInfoTile(
-          icon: Icons.home_outlined,
-          title: 'Village',
-          value: _selectedVillage ?? 'Not set',
-        ),
-        _buildReadOnlyInfoTile(
-          icon: Icons.pin_drop_outlined,
-          title: 'Pincode',
-          value: _pincodeController.text.isEmpty
-              ? 'Not set'
-              : _pincodeController.text,
-        ),
-      ];
-    }
-  }
-
-  Widget _buildInfoCard(
-      {required String title, required List<Widget> children}) {
+  Widget _buildPersonalInfoCard() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 8), // Adjusted padding
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.1),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              title,
-              style: GoogleFonts.lexend(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
+          if (_isEditMode)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Column(
+                children: [
+                  _buildEditableField(
+                    controller: _nameController,
+                    label: 'Full Name',
+                    icon: Icons.person_outline,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildEditableField(
+                    controller: _phoneController,
+                    label: 'Phone Number',
+                    icon: Icons.phone_outlined,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDropdownField(
+                    value: _selectedDistrict,
+                    label: 'District',
+                    icon: Icons.location_city_outlined,
+                    items: _districts,
+                    onChanged: (val) => setState(() => _selectedDistrict = val),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDropdownField(
+                    value: _selectedVillage,
+                    label: 'Village',
+                    icon: Icons.home_outlined,
+                    items: _villages,
+                    onChanged: (val) => setState(() => _selectedVillage = val),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildEditableField(
+                    controller: _pincodeController,
+                    label: 'Pincode',
+                    icon: Icons.pin_drop_outlined,
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
               ),
+            )
+          else ...[
+            _buildInfoRow(
+              icon: Icons.phone_outlined,
+              label: 'Phone',
+              value: _phoneController.text.isEmpty
+                  ? 'Not set'
+                  : _phoneController.text,
             ),
-          ),
-          ...children,
+            const DashedDivider(indent: 20, endIndent: 20),
+            _buildInfoRow(
+              icon: Icons.location_city_outlined,
+              label: 'District',
+              value: _selectedDistrict ?? 'Not set',
+            ),
+            const DashedDivider(indent: 20, endIndent: 20),
+            _buildInfoRow(
+              icon: Icons.home_outlined,
+              label: 'Village',
+              value: _selectedVillage ?? 'Not set',
+            ),
+            const DashedDivider(indent: 20, endIndent: 20),
+            _buildInfoRow(
+              icon: Icons.pin_drop_outlined,
+              label: 'Pincode',
+              value: _pincodeController.text.isEmpty
+                  ? 'Not set'
+                  : _pincodeController.text,
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildLogoutCard() {
+  Widget _buildMenuCard() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.1),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: ListTile(
-        leading: const Icon(Icons.logout, color: Colors.red),
-        title: Text(
-          'Logout',
-          style: GoogleFonts.lexend(
-            color: Colors.red,
-            fontWeight: FontWeight.w500,
+      child: Column(
+        children: [
+          _buildMenuItem(
+            icon: Icons.credit_card_outlined,
+            title: 'Payment Methods',
+            onTap: () {},
           ),
+          const DashedDivider(indent: 20, endIndent: 20),
+          _buildMenuItem(
+            icon: Icons.privacy_tip_outlined,
+            title: 'Privacy Policy',
+            onTap: _showPrivacyPolicy,
+          ),
+          const DashedDivider(indent: 20, endIndent: 20),
+          _buildMenuItem(
+            icon: Icons.help_outline,
+            title: 'Help & Support',
+            onTap: _showContactUs,
+          ),
+          const DashedDivider(indent: 20, endIndent: 20),
+          _buildMenuItem(
+            icon: Icons.info_outline,
+            title: 'About',
+            onTap: () {},
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFF282C3F), size: 22),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: const Color(0xFF282C3F),
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Color(0xFF93959F), size: 20),
+          ],
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        onTap: _logout,
+      ),
+    );
+  }
+
+  Widget _buildLogoutCard() {
+    return InkWell(
+      onTap: _logout,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3E0),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child:
+                  const Icon(Icons.logout, color: Color(0xFFFC8019), size: 22),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                'Logout',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF282C3F),
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Color(0xFF93959F), size: 20),
+          ],
+        ),
       ),
     );
   }
@@ -550,8 +892,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       imageWidget = ClipOval(
         child: Image.file(
           File(_selectedImage!.path),
-          width: 120,
-          height: 120,
+          width: 100,
+          height: 100,
           fit: BoxFit.cover,
         ),
       );
@@ -559,32 +901,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
       imageWidget = ClipOval(
         child: CachedNetworkImage(
           imageUrl: _profileImageUrl!,
-          width: 120,
-          height: 120,
+          width: 100,
+          height: 100,
           fit: BoxFit.cover,
           placeholder: (context, url) => Container(
-            width: 120,
-            height: 120,
-            color: Colors.grey[200],
-            child:
-                const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            width: 100,
+            height: 100,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8F9FA),
+              shape: BoxShape.circle,
+            ),
+            child: const CircularProgressIndicator(strokeWidth: 2),
           ),
           errorWidget: (context, url, error) => Container(
-            width: 120,
-            height: 120,
-            decoration:
-                BoxDecoration(color: Colors.grey[200], shape: BoxShape.circle),
-            child: Icon(Icons.person, size: 60, color: Colors.grey[400]),
+            width: 100,
+            height: 100,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8F9FA),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.person, size: 50, color: Color(0xFF93959F)),
           ),
         ),
       );
     } else {
       imageWidget = Container(
-        width: 120,
-        height: 120,
-        decoration:
-            BoxDecoration(color: Colors.grey[200], shape: BoxShape.circle),
-        child: Icon(Icons.person, size: 60, color: Colors.grey[400]),
+        width: 100,
+        height: 100,
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8F9FA),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.person, size: 50, color: Color(0xFF93959F)),
       );
     }
 
@@ -599,13 +947,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: _pickImage,
               child: Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.green[700],
+                decoration: const BoxDecoration(
+                  color: Color(0xFF60B246),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child:
-                    const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                    const Icon(Icons.camera_alt, color: Colors.white, size: 16),
               ),
             ),
           ),
@@ -619,29 +973,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: TextFormField(
-        controller: controller,
-        style: GoogleFonts.lexend(),
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: GoogleFonts.lexend(color: Colors.grey[600]),
-          prefixIcon: Icon(icon, color: Colors.grey[600]),
-          filled: true,
-          fillColor: Colors.grey[50],
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.green[700]!, width: 2),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF7E808C),
           ),
         ),
-        validator: (value) =>
-            value == null || value.isEmpty ? 'Please enter $label' : null,
-      ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+            color: const Color(0xFF282C3F),
+          ),
+          keyboardType: keyboardType,
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, color: const Color(0xFF93959F), size: 20),
+            filled: true,
+            fillColor: const Color(0xFFF8F9FA),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE9EBED), width: 1),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide:
+                  const BorderSide(color: Color(0xFF60B246), width: 1.5),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE9EBED), width: 1),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            isDense: true,
+          ),
+          validator: (value) =>
+              value == null || value.isEmpty ? 'Please enter $label' : null,
+        ),
+      ],
     );
   }
 
@@ -652,101 +1030,329 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required List<String> items,
     required ValueChanged<String?> onChanged,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: DropdownButtonFormField<String>(
-        initialValue: value != null && items.contains(value) ? value : null,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: GoogleFonts.lexend(color: Colors.grey[600]),
-          prefixIcon: Icon(icon, color: Colors.grey[600]),
-          filled: true,
-          fillColor: Colors.grey[50],
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.green[700]!, width: 2),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF7E808C),
           ),
         ),
-        items: items
-            .map((item) => DropdownMenuItem(
-                  value: item,
-                  child: Text(item, style: GoogleFonts.lexend()),
-                ))
-            .toList(),
-        onChanged: onChanged,
-        validator: (val) => val == null ? 'Please select $label' : null,
-      ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: value != null && items.contains(value) ? value : null,
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+            color: const Color(0xFF282C3F),
+          ),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, color: const Color(0xFF93959F), size: 20),
+            filled: true,
+            fillColor: const Color(0xFFF8F9FA),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE9EBED), width: 1),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide:
+                  const BorderSide(color: Color(0xFF60B246), width: 1.5),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE9EBED), width: 1),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            isDense: true,
+          ),
+          items: items
+              .map((item) => DropdownMenuItem(
+                    value: item,
+                    child: Text(item),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+          validator: (val) => val == null ? 'Please select $label' : null,
+          dropdownColor: Colors.white,
+          icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF93959F)),
+          elevation: 2,
+        ),
+      ],
     );
   }
 
-  Widget _buildReadOnlyInfoTile({
+  Widget _buildInfoRow({
     required IconData icon,
-    required String title,
+    required String label,
     required String value,
   }) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.grey[600]),
-      title: Text(title,
-          style: GoogleFonts.lexend(fontSize: 14, color: Colors.grey[600])),
-      subtitle: Text(value,
-          style: GoogleFonts.lexend(
-              fontSize: 16,
-              color: Colors.black87,
-              fontWeight: FontWeight.w500)),
-    );
-  }
-
-  Widget _buildSettingsTile({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.grey[600]),
-      title: Text(
-        title,
-        style: GoogleFonts.lexend(
-            color: Colors.black87, fontWeight: FontWeight.w400),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF93959F), size: 20),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    color: const Color(0xFF7E808C),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF282C3F),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-      onTap: onTap,
     );
   }
 
   Widget _buildShimmerLoading() {
     return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          children: [
-            const CircleAvatar(radius: 60),
-            const SizedBox(height: 16),
-            Container(
-                height: 24,
-                width: 150,
-                color: Colors.white,
-                margin: const EdgeInsets.only(bottom: 8)),
-            Container(height: 16, width: 200, color: Colors.white),
-            const SizedBox(height: 24),
-            Container(
-              height: 200,
-              decoration: BoxDecoration(
-                  color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      baseColor: const Color(0xFFE9EBED),
+      highlightColor: Colors.white,
+      child: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 240,
+            pinned: true,
+            backgroundColor: const Color(0xFF60B246),
+            automaticallyImplyLeading: false,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(30),
+                bottomRight: Radius.circular(30),
+              ),
             ),
-            const SizedBox(height: 20),
-            Container(
-              height: 150,
-              decoration: BoxDecoration(
-                  color: Colors.white, borderRadius: BorderRadius.circular(16)),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF60B246),
+                      Color(0xFF4A9635),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30),
+                  ),
+                ),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: const BoxDecoration(
+                            color: Colors.white24,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          height: 28,
+                          width: 200,
+                          decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          height: 15,
+                          width: 150,
+                          decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: List.generate(
+                        4,
+                        (index) => Padding(
+                          padding: EdgeInsets.only(bottom: index == 3 ? 0 : 16),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                    color: const Color(0xFFF8F9FA),
+                                    borderRadius: BorderRadius.circular(4)),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      height: 13,
+                                      width: 80,
+                                      decoration: BoxDecoration(
+                                          color: const Color(0xFFF8F9FA),
+                                          borderRadius:
+                                              BorderRadius.circular(4)),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      height: 15,
+                                      width: 120,
+                                      decoration: BoxDecoration(
+                                          color: const Color(0xFFF8F9FA),
+                                          borderRadius:
+                                              BorderRadius.circular(4)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: List.generate(
+                        4,
+                        (index) => Padding(
+                          padding: EdgeInsets.symmetric(
+                              vertical: index == 0 ? 0 : 16),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                    color: const Color(0xFFF8F9FA),
+                                    borderRadius: BorderRadius.circular(4)),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Container(
+                                  height: 15,
+                                  decoration: BoxDecoration(
+                                      color: const Color(0xFFF8F9FA),
+                                      borderRadius: BorderRadius.circular(4)),
+                                ),
+                              ),
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                    color: const Color(0xFFF8F9FA),
+                                    borderRadius: BorderRadius.circular(4)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+class DashedDivider extends StatelessWidget {
+  const DashedDivider({
+    super.key,
+    this.height = 1,
+    this.color,
+    this.indent = 0,
+    this.endIndent = 0,
+  });
+
+  final double height;
+  final Color? color;
+  final double indent;
+  final double endIndent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: indent, right: endIndent),
+      child: CustomPaint(
+        painter: _DashedLinePainter(
+          color: color ?? Colors.grey.shade200,
+        ),
+        size: Size(double.infinity, height),
+      ),
+    );
+  }
+}
+
+class _DashedLinePainter extends CustomPainter {
+  _DashedLinePainter({required this.color});
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    double dashWidth = 4, dashSpace = 4, startX = 0;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+    while (startX < size.width) {
+      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
