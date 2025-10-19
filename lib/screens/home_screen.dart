@@ -1,7 +1,11 @@
 // lib/screens/home_screen.dart
 
 import 'package:cropsync/screens/advisory_screen.dart';
-
+import 'package:cropsync/screens/agri_shop.dart';
+import 'package:cropsync/screens/drone_booking.dart';
+import 'package:cropsync/screens/market_prices.dart';
+import 'package:cropsync/screens/seed_varieties.dart';
+import 'package:cropsync/screens/weather.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/main.dart';
@@ -57,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
       HomeTab(
         greeting: _greeting,
         farmerName: _farmerName,
-        profileImageUrl: _profileImageUrl, // Pass initial null value
+        profileImageUrl: _profileImageUrl,
       ),
       const AdvisoriesScreen(),
       SettingsScreen(key: UniqueKey()),
@@ -77,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchFarmerDetails() async {
+    // Simulate network delay to see the shimmer effect
     await Future.delayed(const Duration(seconds: 2));
 
     try {
@@ -92,7 +97,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _farmerName = response['full_name'] as String? ?? 'Farmer';
           _profileImageUrl = response['profile_image_url'] as String?;
           _greeting = _getGreeting();
-          // UPDATED: Pass profileImageUrl to HomeTab
           _widgetOptions[0] = HomeTab(
             greeting: _greeting,
             farmerName: _farmerName,
@@ -106,7 +110,6 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _farmerName = 'Farmer';
           _greeting = 'Welcome';
-          // UPDATED: Pass profileImageUrl to HomeTab even on error
           _widgetOptions[0] = HomeTab(
             greeting: _greeting,
             farmerName: _farmerName,
@@ -114,12 +117,14 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not fetch farmer details.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not fetch farmer details.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
       }
     }
   }
@@ -192,17 +197,32 @@ class _HomeScreenState extends State<HomeScreen> {
           SalomonBottomBarItem(
             icon: const Icon(Icons.home_outlined),
             activeIcon: const Icon(Icons.home),
-            title: const Text("Home"),
+            title: Text(
+              "Home",
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           SalomonBottomBarItem(
             icon: const Icon(Icons.library_books_outlined),
             activeIcon: const Icon(Icons.library_books),
-            title: const Text("Advisories"),
+            title: Text(
+              "Advisories",
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           SalomonBottomBarItem(
             icon: const Icon(Icons.settings_outlined),
             activeIcon: const Icon(Icons.settings),
-            title: const Text("Settings"),
+            title: Text(
+              "Settings",
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
@@ -268,14 +288,60 @@ class HomeTabShimmer extends StatelessWidget {
 class HomeTab extends StatelessWidget {
   final String greeting;
   final String farmerName;
-  final String? profileImageUrl; // Added property
+  final String? profileImageUrl;
 
   const HomeTab({
     super.key,
     required this.greeting,
     required this.farmerName,
-    this.profileImageUrl, // Added to constructor
+    this.profileImageUrl,
   });
+
+  // Feature list defined within the class for better organization
+  static final List<Map<String, dynamic>> features = [
+    {
+      'title': 'Weather',
+      'subtitle': 'Live Updates',
+      'icon': Icons.wb_cloudy_outlined,
+      'color': const Color(0xFF1976D2),
+      'page': const WeatherScreen()
+    },
+    {
+      'title': 'Crop Advisory',
+      'subtitle': 'Expert Tips',
+      'icon': Icons.agriculture_outlined,
+      'color': const Color(0xFF388E3C),
+      'page': const AdvisoriesScreen()
+    },
+    {
+      'title': 'Market Prices',
+      'subtitle': 'Real-time',
+      'icon': Icons.trending_up_rounded,
+      'color': const Color(0xFFF57C00),
+      'page': const MarketPricesScreen()
+    },
+    {
+      'title': 'Drone Booking',
+      'subtitle': 'Schedule Now',
+      'icon': Icons.flight_takeoff_rounded,
+      'color': const Color(0xFF7B1FA2),
+      'page': const DroneBookingScreen()
+    },
+    {
+      'title': 'Agri Shop',
+      'subtitle': 'Equipment',
+      'icon': Icons.store_outlined,
+      'color': const Color(0xFFD32F2F),
+      'page': const AgriShopScreen()
+    },
+    {
+      'title': 'Seed Varieties',
+      'subtitle': 'Catalog',
+      'icon': Icons.eco_outlined,
+      'color': const Color(0xFF00695C),
+      'page': const SeedVarietiesScreen()
+    },
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -379,30 +445,22 @@ class HomeTab extends StatelessWidget {
     );
   }
 
-  static final List<Map<String, dynamic>> features = [
-    // ... (feature list remains the same)
-  ];
-
-  // #### ENTIRELY UPDATED WIDGET ####
   Widget _buildFeatureCard(BuildContext context, Map<String, dynamic> feature) {
     Widget iconOrAvatar;
 
-    // Conditional logic for the "Crop Advisory" card
     if (feature['title'] == 'Crop Advisory' &&
         profileImageUrl != null &&
         profileImageUrl!.isNotEmpty) {
-      // If it's the advisory card and a profile image exists, show the avatar
       iconOrAvatar = CircleAvatar(
         radius: 22,
         backgroundColor: Colors.grey[200],
         backgroundImage: CachedNetworkImageProvider(profileImageUrl!),
       );
     } else {
-      // For all other cards, or if no profile image, show the default decorated icon
       iconOrAvatar = Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: (feature['color'] as Color).withAlpha(38), // ~15% opacity
+          color: (feature['color'] as Color).withAlpha(38),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
@@ -415,7 +473,7 @@ class HomeTab extends StatelessWidget {
 
     return Card(
       elevation: 2,
-      shadowColor: Colors.black.withAlpha(26), // ~10% opacity
+      shadowColor: Colors.black.withAlpha(26),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: () {
@@ -435,14 +493,13 @@ class HomeTab extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              iconOrAvatar, // Use the conditionally built widget here
+              iconOrAvatar,
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Full-width dashed line
                   CustomPaint(
                     painter: DashPainter(),
-                    child: Container(height: 1), // Provides canvas for painter
+                    child: Container(height: 1),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -471,6 +528,35 @@ class HomeTab extends StatelessWidget {
   }
 
   void _showFeatureDialog(BuildContext context, String featureName) {
-    // ... (This function remains unchanged)
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            '$featureName Feature',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'This feature is coming soon!',
+            style: GoogleFonts.poppins(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'OK',
+                style: GoogleFonts.poppins(
+                  color: const Color(0xFF2E7D32),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

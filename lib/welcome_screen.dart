@@ -1,6 +1,7 @@
+// lib/auth/splash_screen.dart
+
 import 'dart:async';
 
-import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:cropsync/auth/login_screen.dart';
 import 'package:cropsync/main.dart';
 import 'package:cropsync/screens/home_screen.dart';
@@ -15,37 +16,62 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
   StreamSubscription<AuthState>? _authSubscription;
+
+  late final AnimationController _controller;
+  late final Animation<double> _logoScaleAnimation;
+  late final Animation<double> _taglineFadeAnimation;
+  late final Animation<double> _indicatorFadeAnimation;
 
   @override
   void initState() {
     super.initState();
+
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    _logoScaleAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutBack,
+    );
+
+    _taglineFadeAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.4, 1.0, curve: Curves.easeIn),
+    );
+
+    // UPDATED: Animation for the new indicator
+    _indicatorFadeAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.6, 1.0, curve: Curves.easeIn), // Fades in last
+    );
+
+    _controller.forward();
     _redirect();
   }
 
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _controller.dispose();
     super.dispose();
   }
 
   Future<void> _redirect() async {
-    // Wait for the widget to be fully built before proceeding.
     await Future.delayed(Duration.zero);
 
-    // Create two futures: one for the minimum 2-second delay, and one
-    // to get the initial session state.
-    final delayFuture = Future.delayed(const Duration(seconds: 2));
+    final delayFuture = Future.delayed(const Duration(seconds: 3));
     final sessionFuture = Future(() => supabase.auth.currentSession);
 
-    // Wait for both the delay and the session check to complete.
     final results = await Future.wait([sessionFuture, delayFuture]);
     final session = results[0] as Session?;
 
     if (!mounted) return;
 
-    // Navigate based on whether a session was found.
     if (session != null) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -56,7 +82,6 @@ class _SplashScreenState extends State<SplashScreen> {
       );
     }
 
-    // After the initial check, listen for any future auth changes (like logout).
     _authSubscription = supabase.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.signedOut) {
         if (mounted) {
@@ -71,43 +96,72 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // UPDATED: White background
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset(
-              'assets/images/logo.png',
-              width: 150,
-              errorBuilder: (context, error, stackTrace) {
-                return const Icon(
-                  Icons.agriculture,
-                  size: 150,
-                  color: Colors.black,
-                );
-              },
-            ),
-            const SizedBox(height: 40),
-            DefaultTextStyle(
-              style: GoogleFonts.lexend(
-                fontSize: 24.0,
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-              ),
-              child: AnimatedTextKit(
-                isRepeatingAnimation: false,
-                totalRepeatCount: 1,
-                animatedTexts: [
-                  TypewriterAnimatedText(
-                    'Cropsync Kiosk',
-                    speed: const Duration(milliseconds: 100),
+      body: Stack(
+        children: [
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ScaleTransition(
+                  scale: _logoScaleAnimation,
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    // UPDATED: Bigger logo
+                    width: 160,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        Icons.agriculture,
+                        size: 160,
+                        // UPDATED: Darker color for white background
+                        color: Colors.grey[800],
+                      );
+                    },
                   ),
-                ],
+                ),
+                const SizedBox(height: 24),
+                FadeTransition(
+                  opacity: _taglineFadeAnimation,
+                  child: Text(
+                    'Smart Farming, Simplified.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18.0,
+                      // UPDATED: Darker color for white background
+                      color: Colors.black54,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // UPDATED: New "Connecting..." indicator instead of CircularProgressIndicator
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 80.0),
+              child: FadeTransition(
+                opacity: _indicatorFadeAnimation,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Text(
+                    "Connecting...",
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

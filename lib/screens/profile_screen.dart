@@ -9,6 +9,7 @@ import 'package:cropsync/welcome_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -35,6 +36,9 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<Map<String, dynamic>> _farmerFuture;
+  late Future<List<Map<String, dynamic>>> _problemsFuture;
+  late Future<List<Map<String, dynamic>>> _bookingsFuture;
+  String? farmerId;
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _isEditMode = false;
@@ -91,7 +95,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _originalVillage = _selectedVillage;
     _originalDistrict = _selectedDistrict;
 
+    farmerId = data['id'];
+    _problemsFuture = _fetchProblems();
+    _bookingsFuture = _fetchBookings();
+
     return data;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchProblems() async {
+    final userId = supabase.auth.currentUser!.id;
+    return await supabase
+        .from('farmer_identified_problems')
+        .select()
+        .eq('farmer_id', userId)
+        .order('identified_at', ascending: false);
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchBookings() async {
+    if (farmerId == null) return [];
+    return await supabase
+        .from('drone_service_bookings')
+        .select()
+        .eq('farmer_id', farmerId!)
+        .order('created_at', ascending: false);
   }
 
   Future<void> _pickImage() async {
@@ -406,6 +432,176 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // This method is no longer called from the UI but is kept for reference.
+
+  Widget _buildProblemCard(Map<String, dynamic> problem) {
+    final identifiedAt = DateTime.parse(problem['identified_at']);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.warning_amber_outlined,
+                  color: Color(0xFFF57C00),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Problem #${problem['problem_id']}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF282C3F),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('MMM dd, yyyy').format(identifiedAt),
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: const Color(0xFF7E808C),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBookingCard(Map<String, dynamic> booking) {
+    final serviceDate = DateTime.parse('${booking['service_date']}T00:00:00');
+    final cost = booking['total_cost']?.toString() ?? '0';
+    final bookingIdText = booking['booking_id_text'] ?? 'N/A';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E8),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.airport_shuttle,
+                  color: Color(0xFF60B246),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      bookingIdText,
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF282C3F),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${booking['crop_type']} - ${booking['acres']} acres',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: const Color(0xFF7E808C),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Text(
+                          '₹$cost',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF60B246),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _getStatusColor(booking['booking_status']),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            booking['booking_status'] ?? 'Pending',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Service Date: ${DateFormat('MMM dd, yyyy').format(serviceDate)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: const Color(0xFF7E808C),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getStatusColor(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+        return const Color(0xFF4CAF50);
+      case 'cancelled':
+        return const Color(0xFFF44336);
+      default:
+        return const Color(0xFFFF9800);
+    }
+  }
+
   Widget _buildContactTile({
     required IconData icon,
     required String title,
@@ -546,6 +742,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           _buildPersonalInfoCard(),
                           const SizedBox(height: 12),
+                          _buildActivityHistoryCard(), // New Activity Card
+                          const SizedBox(height: 12),
                           _buildMenuCard(),
                           const SizedBox(height: 12),
                           _buildLogoutCard(),
@@ -619,6 +817,161 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// New widget to display farmer's activity history in expandable cards.
+  Widget _buildActivityHistoryCard() {
+    return Container(
+      clipBehavior: Clip.antiAlias, // Ensures content respects rounded corners
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              iconColor: const Color(0xFF282C3F),
+              collapsedIconColor: const Color(0xFF282C3F),
+              leading: const Icon(Icons.bug_report_outlined,
+                  color: Color(0xFFF57C00)),
+              title: Text(
+                'Identified Problems',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF282C3F),
+                ),
+              ),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _problemsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const SizedBox(
+                          height: 100,
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (snapshot.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Text(
+                            'Error: ${snapshot.error}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: const Color(0xFF93959F),
+                            ),
+                          ),
+                        );
+                      }
+                      final problems = snapshot.data ?? [];
+                      if (problems.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Text(
+                            'No problems identified.',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: const Color(0xFF7E808C),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        );
+                      }
+                      return Column(
+                        children: problems
+                            .map((problem) => _buildProblemCard(problem))
+                            .toList(),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const DashedDivider(indent: 20, endIndent: 20),
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              iconColor: const Color(0xFF282C3F),
+              collapsedIconColor: const Color(0xFF282C3F),
+              leading: const Icon(Icons.rocket_launch_outlined,
+                  color: Color(0xFF60B246)),
+              title: Text(
+                'Drone Bookings',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF282C3F),
+                ),
+              ),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _bookingsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const SizedBox(
+                          height: 100,
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (snapshot.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Text(
+                            'Error: ${snapshot.error}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: const Color(0xFF93959F),
+                            ),
+                          ),
+                        );
+                      }
+                      final bookings = snapshot.data ?? [];
+                      if (bookings.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Text(
+                            'No bookings found.',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: const Color(0xFF7E808C),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        );
+                      }
+                      return Column(
+                        children: bookings
+                            .map((booking) => _buildBookingCard(booking))
+                            .toList(),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGradientHeader() {
     return Container(
       decoration: const BoxDecoration(
@@ -642,7 +995,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // REMOVED: const SizedBox(height: kToolbarHeight),
               _buildProfileImage(),
               const SizedBox(height: 16),
               Text(

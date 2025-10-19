@@ -1,6 +1,7 @@
 import 'package:cropsync/welcome_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
@@ -23,11 +24,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
+      theme: ThemeData(
+        textTheme: GoogleFonts.poppinsTextTheme(),
+      ),
       debugShowCheckedModeBanner: false, // Hides the debug banner in the corner
       title: 'Cropsync Kiosk',
       // Set the splash screen as the initial route.
-      home: SplashScreen(),
+      home: const SplashScreen(),
     );
   }
 }

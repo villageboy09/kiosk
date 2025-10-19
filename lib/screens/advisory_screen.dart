@@ -1,5 +1,8 @@
+// ignore_for_file: avoid_print
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/main.dart';
+import 'package:cropsync/models/crop_problem.dart';
 import 'package:cropsync/screens/advisory_details.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,12 +15,17 @@ class FarmerCropSelection {
   final String cropName;
   final String? cropImageUrl;
   final int cropId;
+  final int varietyId; // Added
+  final DateTime sowingDate; // Added
+
   FarmerCropSelection({
     required this.id,
     required this.fieldName,
     required this.cropName,
     this.cropImageUrl,
     required this.cropId,
+    required this.varietyId, // Added
+    required this.sowingDate, // Added
   });
 }
 
@@ -76,29 +84,78 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
 
   Future<void> _fetchInitialData() async {
     try {
+      print('1. Starting _fetchInitialData...');
+
+      if (supabase.auth.currentUser == null) {
+        print('ERROR: User is not logged in. Aborting.');
+        _showErrorSnackbar('You are not logged in.');
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+      final userId = supabase.auth.currentUser!.id;
+      print('2. Current User ID: $userId');
+
       final farmerResponse = await supabase
           .from('farmers')
           .select('id')
-          .eq('user_id', supabase.auth.currentUser!.id)
+          .eq('user_id', userId)
           .single();
       final farmerId = farmerResponse['id'];
+      print('3. Found Farmer ID: $farmerId');
 
+      // MODIFICATION 1: Change the select query to join the sowing_dates table
       final selectionsData = await supabase
           .from('farmer_crop_selections')
-          .select('id, field_name, crops(id, name_te, image_url)')
+          .select(
+              'id, field_name, variety_id, sowing_dates(sowing_date), crops(id, name_te, image_url)') // <-- Corrected query
           .eq('farmer_id', farmerId);
 
-      final List<FarmerCropSelection> loadedCrops =
-          (selectionsData as List).map((s) {
-        final cropData = s['crops'];
-        return FarmerCropSelection(
-          id: s['id'],
-          fieldName: s['field_name'],
-          cropName: cropData['name_te'],
-          cropImageUrl: cropData['image_url'],
-          cropId: cropData['id'],
-        );
-      }).toList();
+      print(
+          '4. Fetched Selections Data: Found ${selectionsData.length} crop(s).');
+
+      if (selectionsData.isEmpty) {
+        print(
+            'WARNING: No crop selections found for this farmer in the database.');
+        if (mounted) {
+          setState(() {
+            _farmerCrops = [];
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      final List<FarmerCropSelection> loadedCrops = (selectionsData as List)
+          .map((s) {
+            final cropData = s['crops'];
+            // MODIFICATION 2: Access the nested sowing_date value
+            final sowingDateData = s['sowing_dates'];
+
+            if (sowingDateData == null ||
+                sowingDateData['sowing_date'] == null ||
+                s['variety_id'] == null ||
+                cropData == null) {
+              print(
+                  'ERROR: Found null data for a crop selection. ID: ${s['id']}');
+              return null;
+            }
+
+            return FarmerCropSelection(
+              id: s['id'],
+              fieldName: s['field_name'],
+              cropName: cropData['name_te'],
+              cropImageUrl: cropData['image_url'],
+              cropId: cropData['id'],
+              varietyId: s['variety_id'],
+              sowingDate: DateTime.parse(
+                  sowingDateData['sowing_date']), // <-- Corrected parsing
+            );
+          })
+          .where((crop) => crop != null)
+          .cast<FarmerCropSelection>()
+          .toList();
+
+      print('5. Successfully parsed ${loadedCrops.length} crops.');
 
       if (mounted) {
         setState(() {
@@ -109,13 +166,20 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
           _isLoading = false;
         });
         _filterAnimationController.forward();
+        print('6. State updated successfully.');
       }
-    } catch (e) {
+    } catch (e, st) {
+      print('--- AN ERROR OCCURRED ---');
+      print('Error Type: ${e.runtimeType}');
+      print('Error Message: $e');
+      print('Stack Trace: $st');
+      print('-------------------------');
       _showErrorSnackbar('మీ పంటల వివరాలను లోడ్ చేయడంలో విఫలమైంది.');
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // REPLACED: This method contains the new logic for auto-selecting the stage
   Future<void> _selectFarmerCrop(FarmerCropSelection farmerCrop) async {
     setState(() {
       _selectedFarmerCrop = farmerCrop;
@@ -126,6 +190,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     _feedAnimationController.reverse();
 
     try {
+      // 1. Fetch ALL stages for the selected crop first
       final stagesData = await supabase
           .from('crop_stages')
           .select('id, stage_name_te')
@@ -134,11 +199,37 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
           .map((s) => CropStage(id: s['id'], name: s['stage_name_te']))
           .toList();
 
+      // 2. Calculate days since sowing to find the current stage
+      final daysSinceSowing =
+          DateTime.now().difference(farmerCrop.sowingDate).inDays;
+
+      CropStage? currentStage;
+      try {
+        // 3. Query crop_stage_durations to get the current stage's ID
+        final durationData = await supabase
+            .from('crop_stage_durations')
+            .select('stage_id')
+            .eq('variety_id', farmerCrop.varietyId)
+            .lte('start_day_from_sowing', daysSinceSowing)
+            .gte('end_day_from_sowing', daysSinceSowing)
+            .single(); // Use single() as only one stage should be active
+
+        final currentStageId = durationData['stage_id'];
+        // Find the full stage object from the list we already fetched
+        currentStage = loadedStages.firstWhere((s) => s.id == currentStageId);
+      } catch (e) {
+        // This error is expected if no stage matches the current date
+        // (e.g., crop has been harvested). We can safely ignore it.
+        debugPrint(
+            'Could not determine current stage automatically. Defaulting to first stage.');
+      }
+
       if (mounted) {
         setState(() {
           _stages = loadedStages;
+          // 4. Automatically select the current stage, or fallback to the first stage
           if (_stages.isNotEmpty) {
-            _selectStage(_stages.first);
+            _selectStage(currentStage ?? _stages.first);
           }
         });
       }
@@ -183,6 +274,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
   }
 
   void _showErrorSnackbar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message, style: GoogleFonts.lexend()),
