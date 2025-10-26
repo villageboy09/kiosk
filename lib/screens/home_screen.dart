@@ -1,11 +1,10 @@
-// lib/screens/home_screen.dart
-
 import 'package:cropsync/screens/advisory_screen.dart';
 import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/screens/drone_booking.dart';
 import 'package:cropsync/screens/market_prices.dart';
 import 'package:cropsync/screens/seed_varieties.dart';
 import 'package:cropsync/screens/weather.dart';
+import 'package:easy_localization/easy_localization.dart'; // Import
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/main.dart';
@@ -13,8 +12,8 @@ import 'package:cropsync/screens/profile_screen.dart';
 import 'package:cropsync/screens/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:lottie/lottie.dart';
 
 // Helper class to draw a dashed line
 class DashPainter extends CustomPainter {
@@ -48,7 +47,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   String _farmerName = 'Farmer';
-  String _greeting = 'Welcome';
+  // UPDATED: Use translation key for default
+  String _greeting = 'home_greeting_welcome'.tr();
   bool _isLoading = true;
   String? _profileImageUrl;
 
@@ -72,11 +72,12 @@ class _HomeScreenState extends State<HomeScreen> {
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) {
-      return 'Good Morning';
+      // UPDATED: Use translation keys
+      return 'home_greeting_morning'.tr();
     } else if (hour < 17) {
-      return 'Good Afternoon';
+      return 'home_greeting_afternoon'.tr();
     } else {
-      return 'Good Evening';
+      return 'home_greeting_evening'.tr();
     }
   }
 
@@ -109,7 +110,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() {
           _farmerName = 'Farmer';
-          _greeting = 'Welcome';
+          // UPDATED: Use translation key
+          _greeting = 'home_greeting_welcome'.tr();
           _widgetOptions[0] = HomeTab(
             greeting: _greeting,
             farmerName: _farmerName,
@@ -119,8 +121,9 @@ class _HomeScreenState extends State<HomeScreen> {
         });
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not fetch farmer details.'),
+            SnackBar(
+              // UPDATED: Use translation key
+              content: Text('home_fetch_error'.tr()),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -146,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Cropsync',
+          'Cropsync', // Brand name, usually not translated
           style: GoogleFonts.lexend(
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -198,7 +201,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.home_outlined),
             activeIcon: const Icon(Icons.home),
             title: Text(
-              "Home",
+              // UPDATED: Use translation key
+              "home_bottom_nav_home".tr(),
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w500,
               ),
@@ -208,7 +212,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.library_books_outlined),
             activeIcon: const Icon(Icons.library_books),
             title: Text(
-              "Advisories",
+              // UPDATED: Use translation key
+              "home_bottom_nav_advisories".tr(),
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w500,
               ),
@@ -218,7 +223,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.settings_outlined),
             activeIcon: const Icon(Icons.settings),
             title: Text(
-              "Settings",
+              // UPDATED: Use translation key
+              "home_bottom_nav_settings".tr(),
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w500,
               ),
@@ -297,46 +303,49 @@ class HomeTab extends StatelessWidget {
     this.profileImageUrl,
   });
 
-  // Feature list defined within the class for better organization
+  // UPDATED: Changed 'title' and 'subtitle' to 'title_key' and 'subtitle_key'
   static final List<Map<String, dynamic>> features = [
     {
-      'title': 'Weather',
-      'subtitle': 'Live Updates',
+      'title_key': 'home_feature_weather_title',
+      'subtitle_key': 'home_feature_weather_subtitle',
       'icon': Icons.wb_cloudy_outlined,
-      'color': const Color(0xFF1976D2),
+      'lottiePath': 'assets/lottie/Showers.json',
+      'color': const Color(0xFF00695C),
       'page': const WeatherScreen()
     },
     {
-      'title': 'Crop Advisory',
-      'subtitle': 'Expert Tips',
+      'title_key': 'home_feature_advisory_title',
+      'subtitle_key': 'home_feature_advisory_subtitle',
       'icon': Icons.agriculture_outlined,
       'color': const Color(0xFF388E3C),
       'page': const AdvisoriesScreen()
     },
     {
-      'title': 'Market Prices',
-      'subtitle': 'Real-time',
+      'title_key': 'home_feature_market_title',
+      'subtitle_key': 'home_feature_market_subtitle',
       'icon': Icons.trending_up_rounded,
       'color': const Color(0xFFF57C00),
       'page': const MarketPricesScreen()
     },
     {
-      'title': 'Drone Booking',
-      'subtitle': 'Schedule Now',
+      'title_key': 'home_feature_drone_title',
+      'subtitle_key': 'home_feature_drone_subtitle',
       'icon': Icons.flight_takeoff_rounded,
+      'lottiePath': 'assets/lottie/drone.json',
       'color': const Color(0xFF7B1FA2),
       'page': const DroneBookingScreen()
     },
     {
-      'title': 'Agri Shop',
-      'subtitle': 'Equipment',
+      'title_key': 'home_feature_shop_title',
+      'subtitle_key': 'home_feature_shop_subtitle',
       'icon': Icons.store_outlined,
+      'lottiePath': 'assets/lottie/shop.json',
       'color': const Color(0xFFD32F2F),
       'page': const AgriShopScreen()
     },
     {
-      'title': 'Seed Varieties',
-      'subtitle': 'Catalog',
+      'title_key': 'home_feature_seeds_title',
+      'subtitle_key': 'home_feature_seeds_subtitle',
       'icon': Icons.eco_outlined,
       'color': const Color(0xFF00695C),
       'page': const SeedVarietiesScreen()
@@ -345,8 +354,11 @@ class HomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // UPDATED: Use context.locale to format the date correctly
     final String currentDate =
-        DateFormat('EEEE, d MMMM').format(DateTime.now());
+        DateFormat('EEEE, d MMMM', context.locale.toString())
+            .format(DateTime.now());
+
     return Container(
       color: const Color(0xFFF1F8E9),
       child: SafeArea(
@@ -375,7 +387,7 @@ class HomeTab extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        greeting,
+                        greeting, // This is already translated from the parent
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           color: Colors.white70,
@@ -400,7 +412,7 @@ class HomeTab extends StatelessWidget {
                               color: Colors.white70, size: 16),
                           const SizedBox(width: 8),
                           Text(
-                            currentDate,
+                            currentDate, // Now localized
                             style: GoogleFonts.poppins(
                               fontSize: 14,
                               color: Colors.white70,
@@ -413,7 +425,8 @@ class HomeTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
                 Text(
-                  'Quick Actions',
+                  // UPDATED: Use translation key
+                  'home_quick_actions'.tr(),
                   style: GoogleFonts.poppins(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -448,27 +461,52 @@ class HomeTab extends StatelessWidget {
   Widget _buildFeatureCard(BuildContext context, Map<String, dynamic> feature) {
     Widget iconOrAvatar;
 
-    if (feature['title'] == 'Crop Advisory' &&
+    // UPDATED: Get the translated title first
+    final String title = feature['title_key'].toString().tr();
+
+    if (feature['title_key'] == 'home_feature_advisory_title' &&
         profileImageUrl != null &&
         profileImageUrl!.isNotEmpty) {
       iconOrAvatar = CircleAvatar(
-        radius: 22,
+        radius: 30,
         backgroundColor: Colors.grey[200],
         backgroundImage: CachedNetworkImageProvider(profileImageUrl!),
       );
     } else {
-      iconOrAvatar = Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: (feature['color'] as Color).withAlpha(38),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(
-          feature['icon'] as IconData,
-          size: 28,
-          color: feature['color'] as Color,
-        ),
-      );
+      final String? lottiePath = feature['lottiePath'] as String?;
+      if (lottiePath != null) {
+        iconOrAvatar = Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (feature['color'] as Color).withAlpha(38),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Lottie.asset(
+            lottiePath,
+            width: 40,
+            height: 40,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => Icon(
+              feature['icon'] as IconData,
+              size: 40,
+              color: feature['color'] as Color,
+            ),
+          ),
+        );
+      } else {
+        iconOrAvatar = Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (feature['color'] as Color).withAlpha(38),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            feature['icon'] as IconData,
+            size: 40,
+            color: feature['color'] as Color,
+          ),
+        );
+      }
     }
 
     return Card(
@@ -483,7 +521,8 @@ class HomeTab extends StatelessWidget {
               MaterialPageRoute(builder: (context) => page),
             );
           } else {
-            _showFeatureDialog(context, feature['title'] as String);
+            // UPDATED: Pass the translated title to the dialog
+            _showFeatureDialog(context, title);
           }
         },
         borderRadius: BorderRadius.circular(16),
@@ -503,7 +542,7 @@ class HomeTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    feature['title'] as String,
+                    title, // Use the translated title
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -512,7 +551,8 @@ class HomeTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    feature['subtitle'] as String,
+                    // UPDATED: Get subtitle key and translate
+                    feature['subtitle_key'].toString().tr(),
                     style: GoogleFonts.poppins(
                       fontSize: 13,
                       color: Colors.grey[600],
@@ -535,19 +575,22 @@ class HomeTab extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
+          // UPDATED: Title is now just the feature name
           title: Text(
-            '$featureName Feature',
+            featureName,
             style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
           ),
           content: Text(
-            'This feature is coming soon!',
+            // UPDATED: Use translation key
+            'home_dialog_coming_soon'.tr(),
             style: GoogleFonts.poppins(),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(
-                'OK',
+                // UPDATED: Use translation key
+                'dialog_ok'.tr(),
                 style: GoogleFonts.poppins(
                   color: const Color(0xFF2E7D32),
                   fontWeight: FontWeight.bold,

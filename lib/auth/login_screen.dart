@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'package:easy_localization/easy_localization.dart'; // Import Easy Localization
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -87,7 +88,8 @@ class _LoginScreenState extends State<LoginScreen>
     final pin = _pinController.text.trim();
 
     if (pin.length != 6) {
-      _showErrorFeedback('PIN must be 6 digits');
+      // UPDATED: Using translation key
+      _showErrorFeedback('login_pin_length_error'.tr());
       return;
     }
 
@@ -101,7 +103,8 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (response.status != 200) {
         final errorMessage =
-            response.data?['error'] ?? 'An unknown error occurred.';
+            // UPDATED: Using translation key
+            response.data?['error'] ?? 'login_unknown_error'.tr();
         throw Exception(errorMessage);
       }
 
@@ -114,7 +117,8 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (email == null || token == null) {
         throw Exception(
-            'Invalid response from server. Token or email missing.');
+            // UPDATED: Using translation key
+            'login_server_response_error'.tr());
       }
 
       await supabase.auth.verifyOTP(
@@ -129,9 +133,13 @@ class _LoginScreenState extends State<LoginScreen>
         );
       }
     } catch (error) {
-      String displayMessage = 'Login failed. Please try again later.';
+      String displayMessage;
       if (error.toString().contains('Invalid PIN provided')) {
-        displayMessage = 'The PIN you entered is incorrect. Please try again.';
+        // UPDATED: Using translation key
+        displayMessage = 'login_invalid_pin'.tr();
+      } else {
+        // UPDATED: Using translation key
+        displayMessage = 'login_failed_generic'.tr();
       }
       _showErrorFeedback(displayMessage);
     } finally {
@@ -262,7 +270,8 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           const SizedBox(height: 32),
           Text(
-            'Welcome Back',
+            // UPDATED: Using translation key
+            'login_welcome_back'.tr(),
             style: GoogleFonts.lexend(
               fontSize: 32,
               fontWeight: FontWeight.w700,
@@ -272,7 +281,8 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            'Enter your secure PIN to continue',
+            // UPDATED: Using translation key
+            'login_prompt'.tr(),
             style: GoogleFonts.lexend(
               fontSize: 15,
               fontWeight: FontWeight.w400,
@@ -516,7 +526,8 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   )
                 : Text(
-                    'Continue',
+                    // UPDATED: Using translation key
+                    'continue'.tr(),
                     style: GoogleFonts.lexend(
                       fontSize: 17,
                       fontWeight: FontWeight.w600,

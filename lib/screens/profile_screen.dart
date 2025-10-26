@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -340,36 +341,113 @@ class _ProfileScreenState extends State<ProfileScreen> {
             elevation: 0,
             foregroundColor: const Color(0xFF282C3F),
           ),
-          body: const SingleChildScrollView(
-            padding: EdgeInsets.all(20),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Your privacy is important to us...',
+                const Text(
+                  'Your privacy is important to us at CropSync. We are committed to protecting your personal information and ensuring that it is handled responsibly. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and services.',
                   style: TextStyle(
                     fontSize: 16,
                     color: Color(0xFF282C3F),
                     height: 1.5,
                   ),
                 ),
-                SizedBox(height: 24),
-                Text(
-                  '1. Information We Collect\n2. How We Use Your Information\n3. Data Security\n4. Contact Information',
+                const SizedBox(height: 24),
+                const Text(
+                  '1. Information We Collect\n\nWe collect the following types of information:\n\n• Personal Information: Such as your name, phone number, email address, location (district, village, pincode), and profile image when you register or update your profile.\n\n• Usage Data: Information about how you interact with our app, including identified crop problems, drone service bookings, and timestamps of activities.\n\n• Device Information: Such as your device type, OS version, and unique identifiers for app functionality and analytics.\n\nWe do not collect sensitive information like financial details unless necessary for specific services like payments.',
                   style: TextStyle(
                     fontSize: 14,
-                    height: 1.8,
+                    height: 1.6,
                     color: Color(0xFF7E808C),
                   ),
                 ),
-                SizedBox(height: 24),
-                Text(
-                  'Last updated: 2025',
+                const SizedBox(height: 20),
+                const Text(
+                  '2. How We Use Your Information\n\nWe use your information to:\n\n• Provide and improve our services, such as matching farmers with drone services and identifying crop issues.\n\n• Communicate with you about bookings, updates, and support.\n\n• Analyze usage to enhance app features and user experience.\n\n• Comply with legal obligations and prevent fraud.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.6,
+                    color: Color(0xFF7E808C),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '3. Data Security\n\nWe implement reasonable security measures to protect your information from unauthorized access, alteration, or disclosure. This includes encryption for data in transit and at rest. However, no system is completely secure, and we cannot guarantee absolute security.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.6,
+                    color: Color(0xFF7E808C),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '4. Sharing Your Information\n\nWe do not sell your personal information. We may share it with:\n\n• Service providers (e.g., cloud storage like Supabase) under strict confidentiality.\n\n• Legal authorities if required by law.\n\n• Business partners for service delivery, such as drone operators for bookings.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.6,
+                    color: Color(0xFF7E808C),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '5. Your Rights\n\nYou have the right to access, update, or delete your information. Contact us to exercise these rights. You can also opt-out of communications at any time.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.6,
+                    color: Color(0xFF7E808C),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Last updated: October 2025',
                   style: TextStyle(
                     fontSize: 12,
                     color: Color(0xFF93959F),
                   ),
                 ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final Uri url =
+                          Uri.parse('https://cropsync.in/privacy.html');
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url,
+                            mode: LaunchMode.externalApplication);
+                      } else {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Could not launch the privacy policy page.'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: const Color(0xFF60B246),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      'View Full Privacy Policy',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
               ],
             ),
           ),

@@ -1,5 +1,3 @@
-// lib/auth/splash_screen.dart
-
 import 'dart:async';
 
 import 'package:cropsync/auth/login_screen.dart';
@@ -8,6 +6,7 @@ import 'package:cropsync/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart'; // Import for translations
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -62,7 +61,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _redirect() async {
-    await Future.delayed(Duration.zero);
+    await Future.delayed(const Duration(seconds: 2));
 
     final delayFuture = Future.delayed(const Duration(seconds: 3));
     final sessionFuture = Future(() => supabase.auth.currentSession);
@@ -109,12 +108,13 @@ class _SplashScreenState extends State<SplashScreen>
                   scale: _logoScaleAnimation,
                   child: Image.asset(
                     'assets/images/logo.png',
-                    // UPDATED: Bigger logo
-                    width: 160,
+                    // UPDATED: Made logo even bigger
+                    width: 240,
                     errorBuilder: (context, error, stackTrace) {
                       return Icon(
                         Icons.agriculture,
-                        size: 160,
+                        // UPDATED: Matched icon size to new logo size
+                        size: 240,
                         // UPDATED: Darker color for white background
                         color: Colors.grey[800],
                       );
@@ -125,7 +125,8 @@ class _SplashScreenState extends State<SplashScreen>
                 FadeTransition(
                   opacity: _taglineFadeAnimation,
                   child: Text(
-                    'Smart Farming, Simplified.',
+                    // UPDATED: Using translation key
+                    'splash_tagline'.tr(),
                     style: GoogleFonts.poppins(
                       fontSize: 18.0,
                       // UPDATED: Darker color for white background
@@ -151,7 +152,8 @@ class _SplashScreenState extends State<SplashScreen>
                     borderRadius: BorderRadius.circular(30),
                   ),
                   child: Text(
-                    "Connecting...",
+                    // UPDATED: Using translation key
+                    "splash_connecting".tr(),
                     style: GoogleFonts.poppins(
                       fontSize: 14,
                       color: Colors.grey[600],

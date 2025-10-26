@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.cropsync.cropsync">
 <!-- Permission to access the internet -->
 <uses-permission android:name="android.permission.INTERNET" />
 
@@ -12,7 +13,7 @@
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
-        android:label="cropsync"
+        android:label="CropSync"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity
