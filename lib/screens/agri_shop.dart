@@ -56,7 +56,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   late Future<List<Product>> _productsFuture;
   late Future<List<String>> _categoriesFuture;
   String _searchQuery = '';
-  String _selectedCategory = 'All';
+  String _selectedCategory = ''; // Initialize as empty
   String _sortOrder = 'default'; // 'price_asc', 'price_desc'
   final TextEditingController _searchController = TextEditingController();
   bool _isInit = true; // Flag for didChangeDependencies
@@ -69,12 +69,17 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
 
   // FIX 1: Use didChangeDependencies to safely initialize
   // futures that depend on 'context'.
+  // lib/screens/agri_shop.dart
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_isInit) {
+      // FIX: Set the default selected category using the localized string
+      _selectedCategory = context.tr('all_category');
+
       _categoriesFuture = _fetchCategories();
-      _loadProducts(); // This will also use the correct locale
+      _loadProducts(); // Now this will correctly load "All" products
       _isInit = false;
     }
   }
@@ -106,7 +111,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     try {
       // FIX 3: Localized category fetching
       final locale = _getLocaleField(context.locale.languageCode);
-      // Assumes 'category' is Telugu, as per your schema
+      // 'category' is the Telugu column name from your schema
       final categoryField = locale == 'en'
           ? 'category_en'
           : (locale == 'hi' ? 'category_hi' : 'category');
@@ -129,6 +134,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   }
 
   // FIX 4: Fully localized query building
+  // FIX 4: Fully localized query building
   Future<List<Product>> _fetchProducts(
       {String? category, String? search, String? sort}) async {
     // Get localized field names
@@ -139,6 +145,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
         ? 'category_en'
         : (locale == 'hi' ? 'category_hi' : 'category');
 
+    // Select all localized fields + fallbacks for safety
     PostgrestFilterBuilder query = supabase.from('products').select(
         'id, advertiser_id, product_code, '
         '$categoryField, category_en, category, ' // Select localized category + fallbacks
@@ -150,8 +157,12 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
 
     // Apply FILTERS
     if (category != null && category != context.tr('all_category')) {
-      // Filter on the same localized field we fetched
-      query = query.eq(categoryField, category.toLowerCase());
+      //
+      // !!! THIS IS THE FIX !!!
+      // Removed .toLowerCase()
+      // We now filter using the exact string from the chip (e.g., "Seeds")
+      //
+      query = query.eq(categoryField, category);
     }
     if (search != null && search.isNotEmpty) {
       // Search on the localized name and description
@@ -215,7 +226,6 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   // No changes needed in build, _buildSearchAndFilters, _buildCategoryTabs,
   // _buildProductsList, _buildProductCard, _buildShimmerGrid,
   // _buildEmptyState, _buildErrorState, or _showFilterBottomSheet.
-  // ... (The rest of your UI code for AgriShopScreen remains the same...)
   @override
   Widget build(BuildContext context) {
     return Scaffold(

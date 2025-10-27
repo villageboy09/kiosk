@@ -3,10 +3,10 @@
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_date_timeline/easy_date_timeline.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cropsync/main.dart';
-import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'dart:math' as math;
 
@@ -192,7 +192,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
-                      'Crop Details',
+                      'crop_details'.tr(), // LOCALIZED
                       style: GoogleFonts.lexend(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -218,12 +218,14 @@ class _SettingsScreenState extends State<SettingsScreen>
           segments: [
             ButtonSegment<int>(
               value: 0,
-              label: Text('Add Crop', style: GoogleFonts.lexend(fontSize: 15)),
+              label: Text('add_crop'.tr(), // LOCALIZED
+                  style: GoogleFonts.lexend(fontSize: 15)),
               icon: const Icon(Icons.add_circle_outline, size: 22),
             ),
             ButtonSegment<int>(
               value: 1,
-              label: Text('My Fields', style: GoogleFonts.lexend(fontSize: 15)),
+              label: Text('my_fields'.tr(), // LOCALIZED
+                  style: GoogleFonts.lexend(fontSize: 15)),
               icon: Icon(
                 _selectedIndex == 1
                     ? Icons.check_circle
@@ -275,6 +277,9 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
   String? _selectedFieldName;
   late AnimationController _sectionEntranceController;
   late AnimationController _saveButtonController;
+
+  bool _didFetchInitialData = false; // <-- FIX: ADD THIS FLAG
+
   @override
   void initState() {
     super.initState();
@@ -282,7 +287,18 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
         vsync: this, duration: const Duration(milliseconds: 1200));
     _saveButtonController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 600));
-    _fetchInitialData();
+    // _fetchInitialData(); // <-- FIX: REMOVE THIS CALL
+  }
+
+  // <-- FIX: ADD didChangeDependencies -->
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // This method is the correct place to access context.locale
+    if (!_didFetchInitialData) {
+      _fetchInitialData();
+      _didFetchInitialData = true;
+    }
   }
 
   @override
@@ -292,15 +308,27 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
     super.dispose();
   }
 
+  // DYNAMIC: Fetches localized crop name
   Future<void> _fetchInitialData() async {
     try {
+      if (!mounted) return;
+      // Get localized column name
+      final langCode = context.locale.languageCode;
+      final nameColumn =
+          ['en', 'te', 'hi'].contains(langCode) ? 'name_$langCode' : 'name_en';
+
       await Future.delayed(const Duration(milliseconds: 600));
+
+      // Use dynamic column in query
       final cropsData =
-          await supabase.from('crops').select('id, name_te, image_url');
+          await supabase.from('crops').select('id, $nameColumn, image_url');
+
+      // Use dynamic column in mapping
       final List<Crop> loadedCrops = (cropsData as List)
           .map((c) =>
-              Crop(id: c['id'], name: c['name_te'], imageUrl: c['image_url']))
+              Crop(id: c['id'], name: c[nameColumn], imageUrl: c['image_url']))
           .toList();
+
       final farmerResponse = await supabase
           .from('farmers')
           .select('id')
@@ -324,7 +352,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
         _sectionEntranceController.forward();
       }
     } catch (e) {
-      _showFeedbackSnackbar('Failed to load initial data.', false);
+      _showFeedbackSnackbar('load_initial_error'.tr(), false); // LOCALIZED
       if (mounted) {
         setState(() {
           _isFetchingInitialData = false;
@@ -355,7 +383,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
         });
       }
     } catch (e) {
-      _showFeedbackSnackbar('Failed to load varieties.', false);
+      _showFeedbackSnackbar('load_varieties_error'.tr(), false); // LOCALIZED
     }
   }
 
@@ -363,18 +391,19 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
     if (_selectedCrop == null ||
         _selectedVariety == null ||
         _selectedFieldName == null) {
-      _showFeedbackSnackbar('Please select all details.', false);
+      _showFeedbackSnackbar('select_all_details'.tr(), false); // LOCALIZED
       return;
     }
     if (_usedFieldNames.contains(_selectedFieldName)) {
-      _showFeedbackSnackbar(
-          'This field is already in use. Please select another field.', false);
+      _showFeedbackSnackbar('field_in_use'.tr(), false); // LOCALIZED
       return;
     }
     _saveButtonController.forward();
     setState(() => _isSaving = true);
     try {
+      // Database date format - DO NOT LOCALIZE
       final formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
       final sowingDateResponse = await supabase
           .from('sowing_dates')
           .upsert({'sowing_date': formattedDate}, onConflict: 'sowing_date')
@@ -395,7 +424,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
         'field_name': _selectedFieldName,
       });
       if (mounted) {
-        _showFeedbackSnackbar('Crop selection saved successfully!', true);
+        _showFeedbackSnackbar('save_success'.tr(), true); // LOCALIZED
         setState(() {
           _usedFieldNames.add(_selectedFieldName!);
           _selectedCrop = null;
@@ -406,7 +435,9 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
         await _saveButtonController.reverse();
       }
     } catch (e) {
-      _showFeedbackSnackbar('Failed to save selection: ${e.toString()}', false);
+      // LOCALIZED with named args
+      _showFeedbackSnackbar(
+          'save_error'.tr(namedArgs: {'error': e.toString()}), false);
       _saveButtonController.reverse();
     } finally {
       if (mounted) {
@@ -443,7 +474,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _buildSection(
               index: 0,
-              title: 'Select Crop',
+              title: 'select_crop'.tr(), // LOCALIZED
               icon: Icons.eco_outlined,
               child: _buildCropGrid()),
           AnimatedSize(
@@ -451,18 +482,18 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
               child: _selectedCrop != null
                   ? _buildSection(
                       index: 1,
-                      title: 'Select Variety',
+                      title: 'select_variety'.tr(), // LOCALIZED
                       icon: Icons.grain_outlined,
                       child: _buildVarietyGrid())
                   : const SizedBox.shrink()),
           _buildSection(
               index: 2,
-              title: 'Select Field',
+              title: 'select_field'.tr(), // LOCALIZED
               icon: Icons.landscape_outlined,
               child: _buildFieldGrid()),
           _buildSection(
               index: 3,
-              title: 'Select Sowing Date',
+              title: 'select_sowing_date'.tr(), // LOCALIZED
               icon: Icons.calendar_today_outlined,
               child: _buildSimpleDateSelector()),
           const SizedBox(height: 20),
@@ -595,7 +626,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
                                 decoration: BoxDecoration(
                                     color: Colors.black.withOpacity(0.4),
                                     borderRadius: BorderRadius.circular(15)),
-                                child: Text('In Use',
+                                child: Text('in_use'.tr(), // LOCALIZED
                                     style: GoogleFonts.lexend(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold)))
@@ -608,7 +639,8 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
         animation: _saveButtonController,
         builder: (context, child) {
           return SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+              position: Tween<Offset>(
+                      begin: const Offset(0, 0.2), end: Offset.zero)
                   .animate(CurvedAnimation(
                       parent: _sectionEntranceController,
                       curve:
@@ -636,9 +668,18 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
                                   child: _isSaving
                                       ? const CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation(Colors.white))
-                                      : Text(allFieldsUsed ? 'All Fields In Use' : 'Save Selection', style: GoogleFonts.lexend(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white))))))));
+                                          valueColor: AlwaysStoppedAnimation(
+                                              Colors.white))
+                                      : Text(
+                                          allFieldsUsed
+                                              ? 'all_fields_in_use'
+                                                  .tr() // LOCALIZED
+                                              : 'save_selection'
+                                                  .tr(), // LOCALIZED
+                                          style: GoogleFonts.lexend(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white))))))));
         });
   }
 
@@ -744,6 +785,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
                   offset: const Offset(0, 2))
             ]),
         child: EasyDateTimeLine(
+            locale: context.locale.toString(), // LOCALIZED
             initialDate: _selectedDate,
             onDateChange: (date) => setState(() => _selectedDate = date),
             activeColor: Colors.green[600],
@@ -802,12 +844,25 @@ class _MyFieldsViewState extends State<MyFieldsView>
   bool _isLoading = true;
   String? _error;
   late AnimationController _listEntranceController;
+
+  bool _didFetchSelections = false; // <-- FIX: ADD THIS FLAG
+
   @override
   void initState() {
     super.initState();
     _listEntranceController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 1000));
-    _fetchSelections();
+    // _fetchSelections(); // <-- FIX: REMOVE THIS CALL
+  }
+
+  // <-- FIX: ADD didChangeDependencies -->
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didFetchSelections) {
+      _fetchSelections();
+      _didFetchSelections = true;
+    }
   }
 
   @override
@@ -816,29 +871,40 @@ class _MyFieldsViewState extends State<MyFieldsView>
     super.dispose();
   }
 
+  // DYNAMIC: Fetches localized crop name
   Future<void> _fetchSelections() async {
     if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
     });
+
     try {
+      // Get localized column name
+      final langCode = context.locale.languageCode;
+      final nameColumn =
+          ['en', 'te', 'hi'].contains(langCode) ? 'name_$langCode' : 'name_en';
+
       final farmerResponse = await supabase
           .from('farmers')
           .select('id')
           .eq('user_id', supabase.auth.currentUser!.id)
           .single();
       final farmerId = farmerResponse['id'];
+
+      // Use dynamic column in query
       final response = await supabase
           .from('farmer_crop_selections')
           .select(
-              'id, field_name, crops(name_te, image_url), crop_varieties(variety_name), sowing_dates(sowing_date)')
+              'id, field_name, crops($nameColumn, image_url), crop_varieties(variety_name), sowing_dates(sowing_date)')
           .eq('farmer_id', farmerId);
+
+      // Use dynamic column in mapping
       final selections = (response as List)
           .map((item) => FarmerSelection(
                 selectionId: item['id'],
                 fieldName: item['field_name'],
-                cropName: item['crops']['name_te'],
+                cropName: item['crops'][nameColumn], // Dynamic key
                 cropImageUrl: item['crops']['image_url'],
                 varietyName: item['crop_varieties']['variety_name'],
                 sowingDate: DateTime.parse(item['sowing_dates']['sowing_date']),
@@ -920,6 +986,11 @@ class _MyFieldsViewState extends State<MyFieldsView>
   }
 
   Widget _buildSimpleFieldCard(FarmerSelection selection) {
+    // LOCALIZED: Make DateFormat locale-aware
+    final formattedSownDate =
+        DateFormat('dd MMM yyyy', context.locale.toString())
+            .format(selection.sowingDate);
+
     return Container(
         margin: const EdgeInsets.only(bottom: 20),
         child: Material(
@@ -975,7 +1046,10 @@ class _MyFieldsViewState extends State<MyFieldsView>
                                           color: Colors.white)),
                                   const SizedBox(height: 2),
                                   Text(
-                                      'Sown on ${DateFormat('dd MMM yyyy').format(selection.sowingDate)}',
+                                      // LOCALIZED: Use translated string with args
+                                      'sown_on'.tr(namedArgs: {
+                                        'date': formattedSownDate
+                                      }),
                                       style: GoogleFonts.lexend(
                                           fontSize: 12,
                                           color: Colors.white.withOpacity(0.9)))
@@ -995,16 +1069,24 @@ class _MyFieldsViewState extends State<MyFieldsView>
                       Container(
                           padding: const EdgeInsets.all(16),
                           child: Column(children: [
-                            _buildSimpleInfoRow(Icons.eco_rounded, 'Crop',
-                                selection.cropName, Colors.green[600]!),
+                            _buildSimpleInfoRow(
+                                Icons.eco_rounded,
+                                'crop_label'.tr(), // LOCALIZED
+                                selection.cropName,
+                                Colors.green[600]!),
                             const SizedBox(height: 10),
-                            _buildSimpleInfoRow(Icons.grain_rounded, 'Variety',
-                                selection.varietyName, Colors.orange[600]!),
+                            _buildSimpleInfoRow(
+                                Icons.grain_rounded,
+                                'variety_label'.tr(), // LOCALIZED
+                                selection.varietyName,
+                                Colors.orange[600]!),
                             const SizedBox(height: 10),
                             _buildSimpleInfoRow(
                                 Icons.calendar_today_rounded,
-                                'Sowing Date',
-                                DateFormat('dd MMMM yyyy')
+                                'sowing_date_label'.tr(), // LOCALIZED
+                                // LOCALIZED: Make DateFormat locale-aware
+                                DateFormat('dd MMMM yyyy',
+                                        context.locale.toString())
                                     .format(selection.sowingDate),
                                 Colors.blue[600]!)
                           ]))
@@ -1062,13 +1144,13 @@ class _MyFieldsViewState extends State<MyFieldsView>
                             child: const Icon(Icons.agriculture,
                                 size: 50, color: Colors.green)),
                         const SizedBox(height: 20),
-                        Text('No fields added yet',
+                        Text('no_fields_added'.tr(), // LOCALIZED
                             style: GoogleFonts.lexend(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.grey[700])),
                         const SizedBox(height: 8),
-                        Text('Add your first crop in the first tab',
+                        Text('add_first_crop'.tr(), // LOCALIZED
                             style: GoogleFonts.lexend(
                                 fontSize: 13, color: Colors.grey[600]),
                             textAlign: TextAlign.center)
@@ -1088,7 +1170,7 @@ class _MyFieldsViewState extends State<MyFieldsView>
               border: Border.all(color: Colors.red[200]!, width: 1)),
           child: const Icon(Icons.error_outline, size: 40, color: Colors.red)),
       const SizedBox(height: 20),
-      Text('Error loading details',
+      Text('error_loading_details'.tr(), // LOCALIZED
           style: GoogleFonts.lexend(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -1144,31 +1226,60 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
   CropVariety? _selectedVariety;
   DateTime? _selectedDate;
   String? _selectedFieldName;
+
+  bool _didLoadSheetData = false; // <-- FIX: ADD THIS FLAG
+
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
+    // _loadInitialData(); // <-- FIX: REMOVE THIS CALL
   }
 
+  // <-- FIX: ADD didChangeDependencies -->
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didLoadSheetData) {
+      _loadInitialData();
+      _didLoadSheetData = true;
+    }
+  }
+
+  // DYNAMIC: Fetches localized crop name
   Future<void> _loadInitialData() async {
     _selectedFieldName = widget.initialSelection.fieldName;
     _selectedDate = widget.initialSelection.sowingDate;
+
     try {
+      if (!mounted) return;
+      // Get localized column name
+      final langCode = context.locale.languageCode;
+      final nameColumn =
+          ['en', 'te', 'hi'].contains(langCode) ? 'name_$langCode' : 'name_en';
+
+      // Use dynamic column in query
       final cropsData =
-          await supabase.from('crops').select('id, name_te, image_url');
+          await supabase.from('crops').select('id, $nameColumn, image_url');
+
+      // Use dynamic column in mapping
       _crops = (cropsData as List)
           .map((c) =>
-              Crop(id: c['id'], name: c['name_te'], imageUrl: c['image_url']))
+              Crop(id: c['id'], name: c[nameColumn], imageUrl: c['image_url']))
           .toList();
+
       _selectedCrop = _crops.firstWhere(
           (c) => c.name == widget.initialSelection.cropName,
           orElse: () => _crops.first);
+
       await _fetchVarietiesForCrop(_selectedCrop!.id, initialLoad: true);
+
       _selectedVariety = _varieties.firstWhere(
           (v) => v.name == widget.initialSelection.varietyName,
           orElse: () => _varieties.first);
     } catch (e) {
-      _showFeedbackSnackbar("Error loading data: ${e.toString()}", false);
+      _showFeedbackSnackbar(
+          'load_data_error'.tr(namedArgs: {'error': e.toString()}), // LOCALIZED
+          false);
     }
     if (mounted) {
       setState(() {
@@ -1197,7 +1308,10 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
               imageUrl: v['packet_image_url']))
           .toList();
     } catch (e) {
-      _showFeedbackSnackbar("Error fetching varieties: ${e.toString()}", false);
+      _showFeedbackSnackbar(
+          'fetch_varieties_error' // LOCALIZED
+              .tr(namedArgs: {'error': e.toString()}),
+          false);
     }
     if (mounted && !initialLoad) {
       setState(() {});
@@ -1209,12 +1323,14 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
         _selectedVariety == null ||
         _selectedFieldName == null ||
         _selectedDate == null) {
-      _showFeedbackSnackbar('Please ensure all details are selected.', false);
+      _showFeedbackSnackbar('ensure_all_selected'.tr(), false); // LOCALIZED
       return;
     }
     setState(() => _isUpdating = true);
     try {
+      // Database date format - DO NOT LOCALIZE
       final formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate!);
+
       final sowingDateResponse = await supabase
           .from('sowing_dates')
           .upsert({'sowing_date': formattedDate}, onConflict: 'sowing_date')
@@ -1236,7 +1352,8 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
       widget.onCompleted();
     } catch (e) {
       _showFeedbackSnackbar(
-          'Failed to update selection: ${e.toString()}', false);
+          'update_error'.tr(namedArgs: {'error': e.toString()}), // LOCALIZED
+          false);
     } finally {
       if (mounted) {
         setState(() => _isUpdating = false);
@@ -1248,18 +1365,20 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
     final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-                title: Text('Confirm Deletion', style: GoogleFonts.lexend()),
-                content: Text(
-                    'Are you sure you want to delete this field entry? This action cannot be undone.',
+                title: Text('confirm_deletion'.tr(), // LOCALIZED
+                    style: GoogleFonts.lexend()),
+                content: Text('delete_warning'.tr(), // LOCALIZED
                     style: GoogleFonts.lexend()),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(context, false),
-                      child: Text('Cancel', style: GoogleFonts.lexend())),
+                      child: Text('cancel'.tr(), // LOCALIZED
+                          style: GoogleFonts.lexend())),
                   TextButton(
                       onPressed: () => Navigator.pop(context, true),
                       style: TextButton.styleFrom(foregroundColor: Colors.red),
-                      child: Text('Delete', style: GoogleFonts.lexend()))
+                      child: Text('delete'.tr(), // LOCALIZED
+                          style: GoogleFonts.lexend()))
                 ]));
 
     // FIXED: Add safety check
@@ -1279,7 +1398,9 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
         Navigator.pop(context);
         widget.onCompleted();
       } catch (e) {
-        _showFeedbackSnackbar('Failed to delete entry: ${e.toString()}', false);
+        _showFeedbackSnackbar(
+            'delete_error'.tr(namedArgs: {'error': e.toString()}), // LOCALIZED
+            false);
       } finally {
         if (mounted) {
           setState(() => _isDeleting = false);
@@ -1296,7 +1417,8 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         child: Scaffold(
           appBar: AppBar(
-            title: Text('Edit Field Selection', style: GoogleFonts.lexend()),
+            title: Text('edit_field_selection'.tr(), // LOCALIZED
+                style: GoogleFonts.lexend()),
             automaticallyImplyLeading: false,
             actions: [
               IconButton(
@@ -1311,22 +1433,25 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildSectionHeader('Crop', Icons.eco_outlined),
+                        _buildSectionHeader(
+                            'crop_label'.tr(), Icons.eco_outlined), // LOCALIZED
                         const SizedBox(height: 12),
                         _buildCropGrid(),
                         const SizedBox(height: 24),
                         if (_selectedCrop != null) ...[
-                          _buildSectionHeader('Variety', Icons.grain_outlined),
+                          _buildSectionHeader('variety_label'.tr(),
+                              Icons.grain_outlined), // LOCALIZED
                           const SizedBox(height: 12),
                           _buildVarietyGrid(),
                           const SizedBox(height: 24)
                         ],
-                        _buildSectionHeader('Field', Icons.landscape_outlined),
+                        _buildSectionHeader('select_field'.tr(),
+                            Icons.landscape_outlined), // LOCALIZED
                         const SizedBox(height: 12),
                         _buildFieldGrid(),
                         const SizedBox(height: 24),
-                        _buildSectionHeader(
-                            'Sowing Date', Icons.calendar_today_outlined),
+                        _buildSectionHeader('sowing_date_label'.tr(),
+                            Icons.calendar_today_outlined), // LOCALIZED
                         const SizedBox(height: 12),
                         _buildSimpleDateSelector(),
                         const SizedBox(height: 40),
@@ -1341,7 +1466,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                                     child: const CircularProgressIndicator(
                                         color: Colors.white, strokeWidth: 3))
                                 : const Icon(Icons.update),
-                            label: Text('Update Selection',
+                            label: Text('update_selection'.tr(), // LOCALIZED
                                 style: GoogleFonts.lexend(fontSize: 16)),
                             style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green[600],
@@ -1360,7 +1485,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                                     child: const CircularProgressIndicator(
                                         color: Colors.red, strokeWidth: 3))
                                 : const Icon(Icons.delete_outline),
-                            label: Text('Delete Entry',
+                            label: Text('delete_entry'.tr(), // LOCALIZED
                                 style: GoogleFonts.lexend(fontSize: 16)),
                             style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.red,
@@ -1414,8 +1539,13 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
 
   Widget _buildVarietyGrid() {
     if (_varieties.isEmpty) {
-      return const SizedBox(
-          height: 120, child: Center(child: Text("No varieties found.")));
+      return SizedBox(
+          height: 120,
+          child: Center(
+              child: Text(
+                  "no_varieties_found"
+                      .tr(), // LOCALIZED (Assumes key exists, add to your JSON if not)
+                  style: GoogleFonts.lexend())));
     }
     return SizedBox(
         height: 120,
@@ -1450,6 +1580,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
 
   Widget _buildSimpleDateSelector() {
     return EasyDateTimeLine(
+        locale: context.locale.toString(), // LOCALIZED
         initialDate: _selectedDate ?? DateTime.now(),
         onDateChange: (date) => setState(() => _selectedDate = date),
         activeColor: Colors.green[600]);
