@@ -1,5 +1,7 @@
 // lib/screens/agri_shop.dart
 
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,6 +9,7 @@ import 'package:cropsync/main.dart'; // Assuming supabase here
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'product_details_screen.dart'; // Your redesigned details screen
 
 // Same Product model as before...
@@ -56,85 +59,146 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   String _selectedCategory = 'All';
   String _sortOrder = 'default'; // 'price_asc', 'price_desc'
   final TextEditingController _searchController = TextEditingController();
+  bool _isInit = true; // Flag for didChangeDependencies
 
   @override
   void initState() {
     super.initState();
-    _categoriesFuture = _fetchCategories();
-    _loadProducts();
+    // Data fetching moved to didChangeDependencies
+  }
+
+  // FIX 1: Use didChangeDependencies to safely initialize
+  // futures that depend on 'context'.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_isInit) {
+      _categoriesFuture = _fetchCategories();
+      _loadProducts(); // This will also use the correct locale
+      _isInit = false;
+    }
   }
 
   void _loadProducts() {
-    setState(() {
-      _productsFuture = _fetchProducts(
-          category: _selectedCategory, search: _searchQuery, sort: _sortOrder);
-    });
+    if (mounted) {
+      setState(() {
+        _productsFuture = _fetchProducts(
+            category: _selectedCategory,
+            search: _searchQuery,
+            sort: _sortOrder);
+      });
+    }
+  }
+
+  // FIX 2: Added helper to get locale code
+  String _getLocaleField(String locale) {
+    switch (locale) {
+      case 'hi':
+        return 'hi';
+      case 'te':
+        return 'te';
+      default:
+        return 'en';
+    }
   }
 
   Future<List<String>> _fetchCategories() async {
     try {
+      // FIX 3: Localized category fetching
+      final locale = _getLocaleField(context.locale.languageCode);
+      // Assumes 'category' is Telugu, as per your schema
+      final categoryField = locale == 'en'
+          ? 'category_en'
+          : (locale == 'hi' ? 'category_hi' : 'category');
+
       final response = await supabase
           .from('products')
-          .select('category')
-          .not('category', 'is', null);
+          .select(categoryField) // Fetch localized category
+          .not(categoryField, 'is', null);
+
       final Set<String> unique =
-          response.map((p) => (p['category'] as String).trim()).toSet();
+          response.map((p) => (p[categoryField] as String).trim()).toSet();
       return [
-        'All',
+        context.tr('all_category'),
         ...unique.map((c) => c.replaceAllMapped(
             RegExp(r'\b\w'), (m) => m.group(0)!.toUpperCase()))
       ];
     } catch (e) {
-      return ['All'];
+      return [context.tr('all_category')];
     }
   }
 
-  // FIX: Restructured the query building logic
+  // FIX 4: Fully localized query building
   Future<List<Product>> _fetchProducts(
       {String? category, String? search, String? sort}) async {
-    // REASON: Start with a dynamic type that can be a FilterBuilder or TransformBuilder.
-    PostgrestFilterBuilder query = supabase.from('products').select(
-        'id, advertiser_id, product_code, category, product_name_te, price, description_te, video_url, image_url_1, image_url_2, image_url_3, advertisers(advertiser_name)');
+    // Get localized field names
+    final locale = _getLocaleField(context.locale.languageCode);
+    final nameField = 'product_name_$locale';
+    final descField = 'description_$locale';
+    final categoryField = locale == 'en'
+        ? 'category_en'
+        : (locale == 'hi' ? 'category_hi' : 'category');
 
-    // REASON: Apply all FILTERS first.
-    if (category != null && category != 'All') {
-      query = query.eq('category', category.toLowerCase());
+    PostgrestFilterBuilder query = supabase.from('products').select(
+        'id, advertiser_id, product_code, '
+        '$categoryField, category_en, category, ' // Select localized category + fallbacks
+        '$nameField, product_name_en, ' // Select localized name + fallback
+        'price, '
+        '$descField, description_en, ' // Select localized desc + fallback
+        'video_url, image_url_1, image_url_2, image_url_3, '
+        'advertisers(advertiser_name)');
+
+    // Apply FILTERS
+    if (category != null && category != context.tr('all_category')) {
+      // Filter on the same localized field we fetched
+      query = query.eq(categoryField, category.toLowerCase());
     }
     if (search != null && search.isNotEmpty) {
-      query = query
-          .or('product_name_te.ilike.%$search%,description_te.ilike.%$search%');
+      // Search on the localized name and description
+      query = query.or('$nameField.ilike.%$search%,$descField.ilike.%$search%');
     }
 
-    // REASON: Apply TRANSFORMS like .order() at the very end.
+    // Apply TRANSFORMS (Sorting)
     if (sort != null && sort != 'default') {
       final ascending = sort == 'price_asc';
-      // Now we create a new variable for the transformed query
       final transformedQuery = query.order('price', ascending: ascending);
       final response = await transformedQuery;
-      return _mapResponseToProducts(response);
+      return _mapResponseToProducts(response, locale); // Pass locale
     } else {
-      // If no sort, execute the original query
       final response = await query;
-      return _mapResponseToProducts(response);
+      return _mapResponseToProducts(response, locale); // Pass locale
     }
   }
 
-  List<Product> _mapResponseToProducts(List<dynamic> response) {
+  // FIX 5: Localized mapping with fallbacks
+  List<Product> _mapResponseToProducts(List<dynamic> response, String locale) {
+    // Get field names again for parsing
+    final nameField = 'product_name_$locale';
+    final descField = 'description_$locale';
+    final categoryField = locale == 'en'
+        ? 'category_en'
+        : (locale == 'hi' ? 'category_hi' : 'category');
+
     return response.map((p) {
       final priceValue = p['price'] as num? ?? 0;
       return Product(
         id: p['id'],
         advertiserId: p['advertiser_id'],
-        name: p['product_name_te'] ?? 'N/A',
-        category: p['category'] ?? 'General',
+        // Use localized name, fallback to English, then to 'N/A'
+        name: p[nameField] ?? p['product_name_en'] ?? 'N/A',
+        // Use localized category, fallback to English, then to Telugu, then 'General'
+        category:
+            p[categoryField] ?? p['category_en'] ?? p['category'] ?? 'General',
         price: priceValue.toStringAsFixed(0),
-        description: p['description_te'] ?? 'No description available.',
+        // Use localized description, fallback to English, then to default text
+        description:
+            p[descField] ?? p['description_en'] ?? context.tr('no_description'),
         imageUrl1: p['image_url_1'],
         imageUrl2: p['image_url_2'],
         imageUrl3: p['image_url_3'],
         videoUrl: p['video_url'],
-        advertiserName:
-            p['advertisers']?['advertiser_name'] ?? 'Unknown Seller',
+        advertiserName: p['advertisers']?['advertiser_name'] ??
+            context.tr('unknown_seller'),
         isPopular: priceValue > 500,
         unit: 'unit',
       );
@@ -147,7 +211,11 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     super.dispose();
   }
 
-  // The rest of your UI code for AgriShopScreen remains the same...
+  // ... (Rest of your UI code remains exactly the same) ...
+  // No changes needed in build, _buildSearchAndFilters, _buildCategoryTabs,
+  // _buildProductsList, _buildProductCard, _buildShimmerGrid,
+  // _buildEmptyState, _buildErrorState, or _showFilterBottomSheet.
+  // ... (The rest of your UI code for AgriShopScreen remains the same...)
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -157,7 +225,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
         elevation: 0,
         centerTitle: true,
         title: Text(
-          'CropSync Market',
+          context.tr('crop_sync_market'),
           style: GoogleFonts.lexend(
             color: Colors.black87,
             fontWeight: FontWeight.w600,
@@ -190,7 +258,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search for products...',
+                hintText: context.tr('search_products'),
                 hintStyle: GoogleFonts.lexend(color: Colors.grey[500]),
                 prefixIcon:
                     Icon(Icons.search, color: Colors.grey[500], size: 20),
@@ -368,7 +436,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'per ${product.unit}',
+                    context.tr('per_unit', namedArgs: {'unit': product.unit}),
                     style: GoogleFonts.lexend(
                         fontSize: 12, color: Colors.grey.shade500),
                   ),
@@ -414,11 +482,12 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(child: Text("No Products Found"));
+    return Center(child: Text(context.tr('no_products_found')));
   }
 
   Widget _buildErrorState(String error) {
-    return Center(child: Text("Error: $error"));
+    return Center(
+        child: Text(context.tr('error_message', namedArgs: {'error': error})));
   }
 
   void _showFilterBottomSheet() {
@@ -446,7 +515,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text('Sort By',
+                  Text(context.tr('sort_by'),
                       style: GoogleFonts.lexend(
                           fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
@@ -462,18 +531,19 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                     child: Column(
                       children: [
                         RadioListTile<String>(
-                          title: Text('Relevance', style: GoogleFonts.lexend()),
+                          title: Text(context.tr('relevance'),
+                              style: GoogleFonts.lexend()),
                           value: 'default',
                           activeColor: Colors.green.shade600,
                         ),
                         RadioListTile<String>(
-                          title: Text('Price: Low to High',
+                          title: Text(context.tr('price_low_to_high'),
                               style: GoogleFonts.lexend()),
                           value: 'price_asc',
                           activeColor: Colors.green.shade600,
                         ),
                         RadioListTile<String>(
-                          title: Text('Price: High to Low',
+                          title: Text(context.tr('price_high_to_low'),
                               style: GoogleFonts.lexend()),
                           value: 'price_desc',
                           activeColor: Colors.green.shade600,
@@ -495,7 +565,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: Text('Apply Filters',
+                      child: Text(context.tr('apply_filters'),
                           style: GoogleFonts.lexend(
                               color: Colors.white,
                               fontSize: 16,

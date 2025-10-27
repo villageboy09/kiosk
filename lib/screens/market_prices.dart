@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_print
+// ignore_for_file: deprecated_member_use
 
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shimmer/shimmer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 // 💡 PRO-TIP: How to get the slide-back animation
 // To achieve the slide-back gesture you wanted, you need to use
@@ -71,19 +72,20 @@ class MarketPricesScreen extends StatefulWidget {
 
 class _MarketPricesScreenState extends State<MarketPricesScreen> {
   bool _isLoading = true;
-  String _statusMessage = 'Detecting your location...';
+  String _statusMessage = '';
   String _currentDistrict = '';
   String _currentState = '';
+  bool _isInit = true; // Flag to run didChangeDependencies once
 
   final List<String> _allCommodities = [
-    'Rice',
-    'Cotton',
-    'Groundnut',
-    'Chilli',
-    'Maize',
-    'Jowar',
-    'Paddy',
-    'Wheat'
+    'rice',
+    'cotton',
+    'groundnut',
+    'chilli',
+    'maize',
+    'jowar',
+    'paddy',
+    'wheat'
   ];
 
   List<MarketPrice> _allPrices = [];
@@ -99,7 +101,19 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   void initState() {
     super.initState();
     _activeCommodities = Set.from(_allCommodities);
-    _getCurrentLocation();
+    // Do NOT use context or call _getCurrentLocation() here
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // This method is called after initState and can safely use context
+    // We use a flag to make sure this logic runs only once
+    if (_isInit) {
+      _statusMessage = context.tr('detecting_location');
+      _getCurrentLocation();
+      _isInit = false; // Set flag to false so it doesn't run again
+    }
   }
 
   String _getCommodityImagePath(String commodity) {
@@ -121,8 +135,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     setState(() {
       _filteredPrices = filtered;
       if (filtered.isEmpty) {
-        _statusMessage =
-            'No prices found for selected crops in $_currentDistrict.';
+        _statusMessage = context
+            .tr('no_prices_found', namedArgs: {'district': _currentDistrict});
       }
     });
   }
@@ -132,7 +146,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
 
     setState(() {
       _isLoading = true;
-      _statusMessage = 'Fetching prices for $_currentDistrict...';
+      _statusMessage = context
+          .tr('fetching_prices', namedArgs: {'district': _currentDistrict});
       _allPrices = [];
       _filteredPrices = [];
     });
@@ -143,6 +158,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
           '$_apiUrl?api-key=$_apiKey&format=json&filters[district]=$encodedDistrict&limit=1000');
 
       final response = await http.get(url);
+
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -172,50 +189,55 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
         throw Exception('API Error: ${response.statusCode}');
       }
     } catch (e) {
-      setState(() {
-        _statusMessage = 'Failed to fetch market prices. Please try again.';
-        _allPrices = [];
-        _filteredPrices = [];
-      });
+      if (mounted) {
+        setState(() {
+          _statusMessage = context.tr('failed_fetch');
+          _allPrices = [];
+          _filteredPrices = [];
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _getCurrentLocation() async {
+    // We can safely use context here because it's called from didChangeDependencies
     setState(() {
       _isLoading = true;
-      _statusMessage = 'Detecting your location...';
+      _statusMessage = context.tr('detecting_location');
     });
 
     if (kIsWeb) {
-      _useDefaultLocation(
-          reason: 'Web platform detected. Using default location for prices.');
+      _useDefaultLocation(reason: context.tr('web_default'));
       return;
     }
 
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!mounted) return;
       if (!serviceEnabled) {
-        _useDefaultLocation(reason: 'Please enable location services.');
+        _useDefaultLocation(reason: context.tr('enable_location'));
         return;
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+        if (!mounted) return;
         if (permission == LocationPermission.denied) {
-          _useDefaultLocation(reason: 'Location permission was denied.');
+          _useDefaultLocation(reason: context.tr('permission_denied'));
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        _useDefaultLocation(
-            reason:
-                'Location permission is permanently denied. You can change this in your device settings.');
+        // ignore: use_build_context_synchronously
+        _useDefaultLocation(reason: context.tr('permission_permanent'));
         return;
       }
 
@@ -224,10 +246,14 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
             const LocationSettings(accuracy: LocationAccuracy.high),
       );
 
+      if (!mounted) return;
+
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
+
+      if (!mounted) return;
 
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
@@ -235,22 +261,25 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
           _currentDistrict =
               (place.subAdministrativeArea ?? 'Hyderabad').trim();
           _currentState = (place.administrativeArea ?? 'Telangana').trim();
-          _statusMessage = 'Location: $_currentDistrict, $_currentState';
+          _statusMessage = context.tr('location_detected', namedArgs: {
+            'district': _currentDistrict,
+            'state': _currentState
+          });
         });
         await _fetchPrices();
       } else {
-        _useDefaultLocation(
-            reason: 'Could not determine location from coordinates.');
+        _useDefaultLocation(reason: context.tr('no_placemark'));
       }
     } catch (e) {
-      print('Error getting location: $e');
-      _useDefaultLocation(reason: 'An error occurred while fetching location.');
+      if (mounted) {
+        _useDefaultLocation(reason: context.tr('location_error'));
+      }
     }
   }
 
   void _useDefaultLocation({required String reason}) {
     setState(() {
-      _statusMessage = '$reason Using default location.';
+      _statusMessage = '$reason ${context.tr('using_default')}.';
       _currentDistrict = 'Hyderabad';
       _currentState = 'Telangana';
     });
@@ -264,13 +293,13 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        shadowColor: Colors.grey.withValues(alpha: 0.1),
+        shadowColor: Colors.grey.withOpacity(0.1),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Market Prices',
+              context.tr('market_prices_title'),
               style: GoogleFonts.poppins(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -306,7 +335,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                           padding: const EdgeInsets.only(right: 8),
                           child: FilterChip(
                             label: Text(
-                              commodity,
+                              context.tr(commodity),
                               style: GoogleFonts.poppins(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
@@ -369,7 +398,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
 
         return Card(
           elevation: 2,
-          shadowColor: Colors.grey.withValues(alpha: 0.1),
+          shadowColor: Colors.grey.withOpacity(0.1),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           color: Colors.white,
@@ -390,7 +419,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            commodity,
+                            context.tr(commodity),
                             style: GoogleFonts.poppins(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -411,11 +440,12 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.1),
+                        color: Colors.green.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        '${prices.length} Records',
+                        context.tr('records_count',
+                            namedArgs: {'count': prices.length.toString()}),
                         style: GoogleFonts.poppins(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -435,7 +465,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 color: Colors.white,
                 child: Text(
-                  'Last updated: ${prices.first.arrivalDate}',
+                  context.tr('last_updated',
+                      namedArgs: {'date': prices.first.arrivalDate}),
                   style: GoogleFonts.poppins(
                       fontSize: 12, color: Colors.grey[500]),
                 ),
@@ -462,22 +493,25 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
           ),
           const SizedBox(height: 2),
           Text(
-            'Variety: ${price.variety}',
+            '${context.tr('variety_label')} ${price.variety}',
             style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[600]),
           ),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: _buildPriceColumn('Min', price.minPrice,
+                child: _buildPriceColumn(
+                    context.tr('min_price'), price.minPrice,
                     color: Colors.orange[800]!),
               ),
               Expanded(
-                child: _buildPriceColumn('Max', price.maxPrice,
+                child: _buildPriceColumn(
+                    context.tr('max_price'), price.maxPrice,
                     color: Colors.red[700]!),
               ),
               Expanded(
-                child: _buildPriceColumn('Modal', price.modalPrice,
+                child: _buildPriceColumn(
+                    context.tr('modal_price'), price.modalPrice,
                     isModal: true, color: Colors.green[700]!),
               ),
             ],
@@ -525,7 +559,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
         ),
         const SizedBox(height: 2),
         Text(
-          '₹$value /qt',
+          '₹$value ${context.tr('per_quintal')}',
           style: GoogleFonts.poppins(
             fontSize: isModal ? 15 : 14,
             fontWeight: FontWeight.bold,
@@ -553,7 +587,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'No market prices available',
+              context.tr('no_market_prices'),
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                   fontSize: 18,

@@ -7,8 +7,8 @@ import 'package:geocoding/geocoding.dart'; // Import the new package
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
-import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 // --- Data Models (Updated) ---
 class WeatherData {
@@ -58,17 +58,19 @@ class HourlyForecast {
 }
 
 class FarmingRecommendation {
-  final String category;
-  final String title;
-  final String description;
+  final String categoryKey;
+  final String titleKey;
+  final String descKey;
+  final Map<String, String> descArgs;
   final IconData icon;
   final Color color;
   final String priority; // High, Medium, Low
 
   FarmingRecommendation({
-    required this.category,
-    required this.title,
-    required this.description,
+    required this.categoryKey,
+    required this.titleKey,
+    required this.descKey,
+    this.descArgs = const {},
     required this.icon,
     required this.color,
     required this.priority,
@@ -216,20 +218,20 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
     if (current.precipprob > 60) {
       recommendations.add(FarmingRecommendation(
-        category: 'Irrigation',
-        title: 'Postpone Irrigation',
-        description:
-            'High chance of precipitation (${current.precipprob.round()}%) today. No need to irrigate; conserve water.',
+        categoryKey: 'category_irrigation',
+        titleKey: 'postpone_irrigation_title',
+        descKey: 'postpone_irrigation_desc',
+        descArgs: {'precip_prob': current.precipprob.round().toString()},
         icon: Icons.water_drop_outlined,
         color: Colors.blue,
         priority: 'High',
       ));
     } else if (current.precipprob < 20 && current.humidity < 50) {
       recommendations.add(FarmingRecommendation(
-        category: 'Irrigation',
-        title: 'Irrigation Needed',
-        description:
-            'Low humidity (${current.humidity.round()}%) and no rain expected. Irrigate crops in the morning or evening for best results.',
+        categoryKey: 'category_irrigation',
+        titleKey: 'irrigation_needed_title',
+        descKey: 'irrigation_needed_desc',
+        descArgs: {'humidity': current.humidity.round().toString()},
         icon: Icons.water,
         color: Colors.orange,
         priority: 'High',
@@ -238,10 +240,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
     if (current.tempmax > 35) {
       recommendations.add(FarmingRecommendation(
-        category: 'Temperature',
-        title: 'High Temperature Alert',
-        description:
-            'Max temperature today is ${current.tempmax.round()}°C. Provide shade, use mulch to retain soil moisture, and avoid midday irrigation.',
+        categoryKey: 'category_temperature',
+        titleKey: 'high_temp_title',
+        descKey: 'high_temp_desc',
+        descArgs: {'temp': current.tempmax.round().toString()},
         icon: Icons.thermostat,
         color: Colors.red,
         priority: 'High',
@@ -250,10 +252,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
     if (current.windspeed > 20) {
       recommendations.add(FarmingRecommendation(
-        category: 'Wind',
-        title: 'Avoid Spraying',
-        description:
-            'High wind speed of ${current.windspeed.round()} km/h. Avoid spraying pesticides or fertilizers to prevent drift. Check for crop damage.',
+        categoryKey: 'category_wind',
+        titleKey: 'avoid_spraying_title',
+        descKey: 'avoid_spraying_desc',
+        descArgs: {'wind': current.windspeed.round().toString()},
         icon: Icons.air,
         color: Colors.teal,
         priority: 'Medium',
@@ -264,10 +266,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
         forecast.take(3).where((day) => day.precipprob > 50).length;
     if (rainyDaysAhead >= 2) {
       recommendations.add(FarmingRecommendation(
-        category: 'Harvesting',
-        title: 'Harvest Before Rain',
-        description:
-            'Rain is expected on $rainyDaysAhead of the next 3 days. Prioritize harvesting mature crops to prevent quality loss.',
+        categoryKey: 'category_harvesting',
+        titleKey: 'harvest_before_rain_title',
+        descKey: 'harvest_before_rain_desc',
+        descArgs: {'days': rainyDaysAhead.toString()},
         icon: Icons.cloud_done_sharp,
         color: Colors.green,
         priority: 'High',
@@ -276,10 +278,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
     if (current.humidity > 70 && current.temp > 20 && current.temp < 30) {
       recommendations.add(FarmingRecommendation(
-        category: 'Pest Management',
-        title: 'Pest & Disease Alert',
-        description:
-            'High humidity (${current.humidity.round()}%) and warm temperatures create ideal conditions for pests and fungal diseases. Scout your fields regularly.',
+        categoryKey: 'category_pest_management',
+        titleKey: 'pest_alert_title',
+        descKey: 'pest_alert_desc',
+        descArgs: {'humidity': current.humidity.round().toString()},
         icon: Icons.bug_report,
         color: Colors.deepOrange,
         priority: 'Medium',
@@ -325,7 +327,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
     return Scaffold(
       backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: Text('Farming Advisory',
+        title: Text(context.tr('app_bar_title'),
             style: GoogleFonts.lexend(
                 color: _textColorPrimary, fontWeight: FontWeight.bold)),
         backgroundColor: _backgroundColor,
@@ -370,14 +372,14 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 children: [
                   const Icon(Icons.error_outline, size: 64, color: Colors.red),
                   const SizedBox(height: 16),
-                  Text('Error: ${snapshot.error}',
+                  Text(context.tr('error_prefix') + snapshot.error.toString(),
                       textAlign: TextAlign.center, style: GoogleFonts.lexend()),
                 ],
               ),
             ));
           }
           if (!snapshot.hasData) {
-            return const Center(child: Text('No weather data available.'));
+            return Center(child: Text(context.tr('no_data_message')));
           }
           final weather = snapshot.data!;
           return RefreshIndicator(
@@ -412,13 +414,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
       children: [
         _buildLocationCard(weather.locationName), // Updated
         const SizedBox(height: 24),
-        Text('Today\'s Farming Advice',
+        Text(context.tr('today_advice_title'),
             style: GoogleFonts.lexend(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: _textColorPrimary)),
         const SizedBox(height: 8),
-        Text('Plan your activities based on weather conditions.',
+        Text(context.tr('today_advice_subtitle'),
             style:
                 GoogleFonts.lexend(fontSize: 15, color: _textColorSecondary)),
         const SizedBox(height: 20),
@@ -437,7 +439,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
         const SizedBox(height: 24),
         _buildWeatherDetailsGrid(current),
         const SizedBox(height: 24),
-        Text('Today\'s Hourly Forecast',
+        Text(context.tr('hourly_forecast_title'),
             style: GoogleFonts.lexend(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -454,7 +456,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       children: [
         const SizedBox(height: 12),
-        Text('7-Day Weather Forecast',
+        Text(context.tr('seven_day_forecast_title'),
             style: GoogleFonts.lexend(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -546,13 +548,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(rec.title,
+                    Text(context.tr(rec.titleKey),
                         style: GoogleFonts.lexend(
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
                             color: _textColorPrimary)),
                     const SizedBox(height: 4),
-                    Text(rec.category,
+                    Text(context.tr(rec.categoryKey),
                         style: GoogleFonts.lexend(
                             fontSize: 14,
                             color: _textColorSecondary,
@@ -582,7 +584,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             padding: EdgeInsets.symmetric(vertical: 12.0),
             child: Divider(height: 1),
           ),
-          Text(rec.description,
+          Text(context.tr(rec.descKey, namedArgs: rec.descArgs),
               style: GoogleFonts.lexend(
                   fontSize: 15, color: _textColorSecondary, height: 1.5)),
           const SizedBox(height: 8),
@@ -592,7 +594,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               TextButton(
                   onPressed: () {},
                   child: Text(
-                    "Details",
+                    context.tr('details_button'),
                     style: GoogleFonts.lexend(
                         fontWeight: FontWeight.bold, color: _accentColor),
                   ))
@@ -674,13 +676,19 @@ class _WeatherScreenState extends State<WeatherScreen> {
       mainAxisSpacing: 16,
       crossAxisSpacing: 16,
       children: [
-        _buildDetailCard('Humidity', '${current.humidity.round()}%',
-            Icons.water_drop_outlined, Colors.blue),
-        _buildDetailCard('Rain Chance', '${current.precipprob.round()}%',
-            Icons.beach_access_outlined, Colors.indigo),
-        _buildDetailCard('Wind Speed', '${current.windspeed.round()} km/h',
-            Icons.air, Colors.teal),
-        _buildDetailCard('Conditions', current.conditions,
+        _buildDetailCard(
+            context.tr('humidity_label'),
+            '${current.humidity.round()}%',
+            Icons.water_drop_outlined,
+            Colors.blue),
+        _buildDetailCard(
+            context.tr('rain_chance_label'),
+            '${current.precipprob.round()}%',
+            Icons.beach_access_outlined,
+            Colors.indigo),
+        _buildDetailCard(context.tr('wind_speed_label'),
+            '${current.windspeed.round()} km/h', Icons.air, Colors.teal),
+        _buildDetailCard(context.tr('conditions_label'), current.conditions,
             _getWeatherIcon(current.icon), Colors.orange),
       ],
     );
@@ -770,6 +778,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
   }
 
   Widget _buildDailyForecast(List<DailyForecast> days) {
+    final locale = context.locale.languageCode;
     return Column(
       children: days.map((day) {
         return Container(
@@ -794,7 +803,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(DateFormat('EEEE').format(day.datetime),
+                    Text(DateFormat('EEEE', locale).format(day.datetime),
                         style: GoogleFonts.lexend(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -882,9 +891,9 @@ class _SlidingPillNavigationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final navItems = [
-      {'icon': Icons.lightbulb_outline, 'label': 'Advice'},
-      {'icon': Icons.wb_sunny_outlined, 'label': 'Weather'},
-      {'icon': Icons.calendar_today_outlined, 'label': 'Forecast'},
+      {'icon': Icons.lightbulb_outline, 'label': 'nav_advice'},
+      {'icon': Icons.wb_sunny_outlined, 'label': 'nav_weather'},
+      {'icon': Icons.calendar_today_outlined, 'label': 'nav_forecast'},
     ];
 
     return Container(
@@ -941,7 +950,7 @@ class _SlidingPillNavigationBar extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              item['label'] as String,
+                              context.tr(item['label'] as String),
                               style: GoogleFonts.lexend(
                                 fontSize: 12,
                                 fontWeight: isSelected

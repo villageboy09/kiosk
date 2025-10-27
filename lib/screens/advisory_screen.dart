@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_print
+// ignore_for_file: avoid_print, use_build_context_synchronously
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/main.dart';
@@ -7,6 +7,7 @@ import 'package:cropsync/screens/advisory_details.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 // Data Models
 class FarmerCropSelection {
@@ -15,8 +16,8 @@ class FarmerCropSelection {
   final String cropName;
   final String? cropImageUrl;
   final int cropId;
-  final int varietyId; // Added
-  final DateTime sowingDate; // Added
+  final int varietyId;
+  final DateTime sowingDate;
 
   FarmerCropSelection({
     required this.id,
@@ -24,8 +25,8 @@ class FarmerCropSelection {
     required this.cropName,
     this.cropImageUrl,
     required this.cropId,
-    required this.varietyId, // Added
-    required this.sowingDate, // Added
+    required this.varietyId,
+    required this.sowingDate,
   });
 }
 
@@ -82,13 +83,24 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     super.dispose();
   }
 
+  String _getLocaleField(String locale) {
+    switch (locale) {
+      case 'hi':
+        return 'hi';
+      case 'te':
+        return 'te';
+      default:
+        return 'en';
+    }
+  }
+
   Future<void> _fetchInitialData() async {
     try {
       print('1. Starting _fetchInitialData...');
 
       if (supabase.auth.currentUser == null) {
         print('ERROR: User is not logged in. Aborting.');
-        _showErrorSnackbar('You are not logged in.');
+        _showErrorSnackbar(context.tr('login_required'));
         if (mounted) setState(() => _isLoading = false);
         return;
       }
@@ -103,11 +115,17 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       final farmerId = farmerResponse['id'];
       print('3. Found Farmer ID: $farmerId');
 
-      // MODIFICATION 1: Change the select query to join the sowing_dates table
+      final locale = _getLocaleField(context.locale.languageCode);
+      List<String> cropFields = ['id', 'image_url', 'name_en'];
+      if (locale == 'te') cropFields.add('name_te');
+      if (locale == 'hi') cropFields.add('name_hi');
+      String cropSelectStr = cropFields.join(', ');
+
+      // FIX 1: Dynamic select for crops to avoid missing column errors
       final selectionsData = await supabase
           .from('farmer_crop_selections')
           .select(
-              'id, field_name, variety_id, sowing_dates(sowing_date), crops(id, name_te, image_url)') // <-- Corrected query
+              'id, field_name, variety_id, sowing_dates(sowing_date), crops($cropSelectStr)')
           .eq('farmer_id', farmerId);
 
       print(
@@ -128,7 +146,6 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       final List<FarmerCropSelection> loadedCrops = (selectionsData as List)
           .map((s) {
             final cropData = s['crops'];
-            // MODIFICATION 2: Access the nested sowing_date value
             final sowingDateData = s['sowing_dates'];
 
             if (sowingDateData == null ||
@@ -140,15 +157,22 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
               return null;
             }
 
+            // FIX 2: Get the correct localized name based on current locale with fallback
+            String cropName = cropData['name_en'] ?? 'Unknown';
+            if (locale == 'hi' && cropData.containsKey('name_hi')) {
+              cropName = cropData['name_hi'] ?? cropName;
+            } else if (locale == 'te' && cropData.containsKey('name_te')) {
+              cropName = cropData['name_te'] ?? cropName;
+            }
+
             return FarmerCropSelection(
               id: s['id'],
               fieldName: s['field_name'],
-              cropName: cropData['name_te'],
+              cropName: cropName,
               cropImageUrl: cropData['image_url'],
               cropId: cropData['id'],
               varietyId: s['variety_id'],
-              sowingDate: DateTime.parse(
-                  sowingDateData['sowing_date']), // <-- Corrected parsing
+              sowingDate: DateTime.parse(sowingDateData['sowing_date']),
             );
           })
           .where((crop) => crop != null)
@@ -174,12 +198,11 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       print('Error Message: $e');
       print('Stack Trace: $st');
       print('-------------------------');
-      _showErrorSnackbar('మీ పంటల వివరాలను లోడ్ చేయడంలో విఫలమైంది.');
+      _showErrorSnackbar(context.tr('load_crops_error'));
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // REPLACED: This method contains the new logic for auto-selecting the stage
   Future<void> _selectFarmerCrop(FarmerCropSelection farmerCrop) async {
     setState(() {
       _selectedFarmerCrop = farmerCrop;
@@ -190,36 +213,48 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     _feedAnimationController.reverse();
 
     try {
-      // 1. Fetch ALL stages for the selected crop first
+      final locale = _getLocaleField(context.locale.languageCode);
+      List<String> stageFields = ['id', 'stage_name_en'];
+      if (locale == 'te') stageFields.add('stage_name_te');
+      if (locale == 'hi') stageFields.add('stage_name_hi');
+      String stageSelectStr = stageFields.join(', ');
+
+      // FIX 3: Dynamic select for stages
       final stagesData = await supabase
           .from('crop_stages')
-          .select('id, stage_name_te')
+          .select(stageSelectStr)
           .eq('crop_id', farmerCrop.cropId);
-      final List<CropStage> loadedStages = (stagesData as List)
-          .map((s) => CropStage(id: s['id'], name: s['stage_name_te']))
-          .toList();
 
-      // 2. Calculate days since sowing to find the current stage
+      final List<CropStage> loadedStages = (stagesData as List).map((s) {
+        // Get the correct localized stage name with fallback
+        String stageName = s['stage_name_en'] ?? 'Unknown';
+        if (locale == 'hi' && s.containsKey('stage_name_hi')) {
+          stageName = s['stage_name_hi'] ?? stageName;
+        } else if (locale == 'te' && s.containsKey('stage_name_te')) {
+          stageName = s['stage_name_te'] ?? stageName;
+        }
+
+        return CropStage(id: s['id'], name: stageName);
+      }).toList();
+
+      // Calculate days since sowing to find the current stage
       final daysSinceSowing =
           DateTime.now().difference(farmerCrop.sowingDate).inDays;
 
       CropStage? currentStage;
       try {
-        // 3. Query crop_stage_durations to get the current stage's ID
+        // Query crop_stage_durations to get the current stage's ID
         final durationData = await supabase
             .from('crop_stage_durations')
             .select('stage_id')
             .eq('variety_id', farmerCrop.varietyId)
             .lte('start_day_from_sowing', daysSinceSowing)
             .gte('end_day_from_sowing', daysSinceSowing)
-            .single(); // Use single() as only one stage should be active
+            .single();
 
         final currentStageId = durationData['stage_id'];
-        // Find the full stage object from the list we already fetched
         currentStage = loadedStages.firstWhere((s) => s.id == currentStageId);
       } catch (e) {
-        // This error is expected if no stage matches the current date
-        // (e.g., crop has been harvested). We can safely ignore it.
         debugPrint(
             'Could not determine current stage automatically. Defaulting to first stage.');
       }
@@ -227,14 +262,13 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       if (mounted) {
         setState(() {
           _stages = loadedStages;
-          // 4. Automatically select the current stage, or fallback to the first stage
           if (_stages.isNotEmpty) {
             _selectStage(currentStage ?? _stages.first);
           }
         });
       }
     } catch (e) {
-      _showErrorSnackbar('పంట దశలను లోడ్ చేయడంలో విఫలమైంది.');
+      _showErrorSnackbar(context.tr('load_stages_error'));
     }
   }
 
@@ -246,16 +280,37 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     _feedAnimationController.reverse();
 
     try {
+      final locale = _getLocaleField(context.locale.languageCode);
+      List<String> problemFields = [
+        'id',
+        'image_url1',
+        'image_url2',
+        'image_url3',
+        'problem_name_en'
+      ];
+      if (locale == 'te') problemFields.add('problem_name_te');
+      if (locale == 'hi') problemFields.add('problem_name_hi');
+      String problemSelectStr = problemFields.join(', ');
+
+      // FIX 4: Dynamic select for problems
       final problemsData = await supabase
           .from('crop_problems')
-          .select('id, problem_name_te, image_url1, image_url2, image_url3')
+          .select(problemSelectStr)
           .eq('crop_id', _selectedFarmerCrop!.cropId)
           .eq('stage_id', stage.id);
 
       final List<CropProblem> loadedProblems = (problemsData as List).map((p) {
+        // Get the correct localized problem name with fallback
+        String problemName = p['problem_name_en'] ?? 'Unknown';
+        if (locale == 'hi' && p.containsKey('problem_name_hi')) {
+          problemName = p['problem_name_hi'] ?? problemName;
+        } else if (locale == 'te' && p.containsKey('problem_name_te')) {
+          problemName = p['problem_name_te'] ?? problemName;
+        }
+
         return CropProblem(
           id: p['id'],
-          name: p['problem_name_te'],
+          name: problemName,
           imageUrl1: p['image_url1'],
           imageUrl2: p['image_url2'],
           imageUrl3: p['image_url3'],
@@ -269,7 +324,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         _feedAnimationController.forward();
       }
     } catch (e) {
-      _showErrorSnackbar('సమస్యలను లోడ్ చేయడంలో విఫలమైంది.');
+      _showErrorSnackbar(context.tr('load_problems_error'));
     }
   }
 
@@ -313,7 +368,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
             Padding(
               padding: const EdgeInsets.all(20),
               child: Text(
-                'పంట మరియు దశ ఎంచుకోండి',
+                context.tr('filter_title'),
                 style: GoogleFonts.lexend(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -325,7 +380,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
                   Text(
-                    'నా పంటలు',
+                    context.tr('my_crops'),
                     style: GoogleFonts.lexend(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -337,7 +392,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                   const SizedBox(height: 24),
                   if (_stages.isNotEmpty) ...[
                     Text(
-                      'పంట దశ',
+                      context.tr('crop_stage'),
                       style: GoogleFonts.lexend(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -492,7 +547,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'పంట సలహాలు',
+                        context.tr('advisories_title'),
                         style: GoogleFonts.lexend(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -547,7 +602,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              'ఫిల్టర్',
+                              context.tr('filter_button'),
                               style: GoogleFonts.lexend(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
@@ -580,7 +635,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              'ఈ దశకు సమస్యలు కనుగొనబడలేదు',
+              context.tr('no_problems_found'),
               style: GoogleFonts.lexend(
                 fontSize: 16,
                 color: Colors.grey[600],
@@ -588,7 +643,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              'మరొక దశను ఎంచుకోండి',
+              context.tr('select_another_stage'),
               style: GoogleFonts.lexend(
                 fontSize: 14,
                 color: Colors.grey[500],
@@ -788,7 +843,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    'సమస్య గుర్తించబడింది',
+                                    context.tr('problem_detected'),
                                     style: GoogleFonts.lexend(
                                       fontSize: 12,
                                       color: Colors.orange[700],
@@ -838,7 +893,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                   child: Row(
                                     children: [
                                       Text(
-                                        'సలహా చూడండి',
+                                        context.tr('view_advice'),
                                         style: GoogleFonts.lexend(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w600,

@@ -1,10 +1,10 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 // Design System
 class AppTheme {
@@ -31,11 +31,13 @@ class AppTheme {
 class CropOption {
   final String id;
   final String nameEn;
+  final String nameHi;
   final String nameTe;
   final IconData icon;
   final Color color;
 
-  const CropOption(this.id, this.nameEn, this.nameTe, this.icon, this.color);
+  const CropOption(
+      this.id, this.nameEn, this.nameHi, this.nameTe, this.icon, this.color);
 }
 
 class BookingState {
@@ -82,17 +84,17 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
   bool _isSubmitting = false;
 
   static const _crops = [
-    CropOption('rice', 'Rice', 'వరి', Icons.grass, Color(0xFF10B981)),
-    CropOption(
-        'corn', 'Corn', 'మొక్కజొన్న', Icons.agriculture, Color(0xFFF59E0B)),
-    CropOption(
-        'cotton', 'Cotton', 'పత్తి', Icons.spa_outlined, Color(0xFF8B5CF6)),
-    CropOption(
-        'tomato', 'Tomato', 'టమాటో', Icons.local_florist, Color(0xFFEF4444)),
-    CropOption(
-        'groundnut', 'Groundnut', 'వేరుశెనగ', Icons.eco, Color(0xFF78716C)),
-    CropOption('chilli', 'Chilli', 'మిర్చి', Icons.local_fire_department,
-        Color(0xFFDC2626)),
+    CropOption('rice', 'Rice', 'चावल', 'వరి', Icons.grass, Color(0xFF10B981)),
+    CropOption('corn', 'Corn', 'मक्का', 'మొక్కజొన్న', Icons.agriculture,
+        Color(0xFFF59E0B)),
+    CropOption('cotton', 'Cotton', 'कपास', 'పత్తి', Icons.spa_outlined,
+        Color(0xFF8B5CF6)),
+    CropOption('tomato', 'Tomato', 'टमाटर', 'టమాటో', Icons.local_florist,
+        Color(0xFFEF4444)),
+    CropOption('groundnut', 'Groundnut', 'मूंगफली', 'వేరుశెనగ', Icons.eco,
+        Color(0xFF78716C)),
+    CropOption('chilli', 'Chilli', 'मिर्च', 'మిర్చి',
+        Icons.local_fire_department, Color(0xFFDC2626)),
   ];
 
   @override
@@ -102,6 +104,15 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
         BookingState(serviceDate: DateTime.now().add(const Duration(days: 1)));
   }
 
+  String _getCropName(CropOption crop) {
+    final locale = context.locale.languageCode;
+    return switch (locale) {
+      'hi' => crop.nameHi,
+      'te' => crop.nameTe,
+      _ => crop.nameEn,
+    };
+  }
+
   void _updateState(BookingState newState) {
     setState(() => _state = newState);
     HapticFeedback.lightImpact();
@@ -109,7 +120,7 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
 
   Future<void> _submitBooking() async {
     if (!_state.isValid) {
-      _showSnackBar('దయచేసి అన్ని వివరాలను నింపండి', isError: true);
+      _showSnackBar(context.tr('validation_message'), isError: true);
       return;
     }
 
@@ -131,7 +142,7 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
             serviceDate: DateTime.now().add(const Duration(days: 1)));
       });
     } catch (e) {
-      _showSnackBar('బుకింగ్ విఫలమైంది. మళ్లీ ప్రయత్నించండి', isError: true);
+      _showSnackBar(context.tr('error_booking'), isError: true);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -151,6 +162,12 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
 
   Future<void> _showSuccessDialog(String bookingId) async {
     HapticFeedback.heavyImpact();
+
+    final locale = context.locale.languageCode;
+    final cropName = _getCropName(_state.crop!);
+    final formattedDate =
+        DateFormat('dd MMM yyyy', locale).format(_state.serviceDate);
+    final totalValue = '₹${_state.totalCost.toStringAsFixed(0)}';
 
     return showDialog(
       context: context,
@@ -174,7 +191,7 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
               ),
               const SizedBox(height: 24),
               Text(
-                'బుకింగ్ విజయవంతమైంది!',
+                context.tr('success_title'),
                 style: GoogleFonts.inter(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -182,9 +199,10 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              const Text(
-                'మీ డ్రోన్ సేవ నిర్ధారించబడింది',
-                style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+              Text(
+                context.tr('success_subtitle'),
+                style: const TextStyle(
+                    fontSize: 14, color: AppTheme.textSecondary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -196,17 +214,16 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
                 ),
                 child: Column(
                   children: [
-                    _DetailRow('బుకింగ్ ID', bookingId),
+                    _DetailRow(context.tr('detail_booking_id'), bookingId),
                     const Divider(height: 20),
-                    _DetailRow('పంట', _state.crop!.nameTe),
+                    _DetailRow(context.tr('detail_crop'), cropName),
                     const Divider(height: 20),
-                    _DetailRow('ఎకరాలు', _state.acres.toStringAsFixed(1)),
+                    _DetailRow(context.tr('detail_acres'),
+                        _state.acres.toStringAsFixed(1)),
                     const Divider(height: 20),
-                    _DetailRow('తేదీ',
-                        DateFormat('dd MMM yyyy').format(_state.serviceDate)),
+                    _DetailRow(context.tr('detail_date'), formattedDate),
                     const Divider(height: 20),
-                    _DetailRow(
-                        'మొత్తం', '₹${_state.totalCost.toStringAsFixed(0)}'),
+                    _DetailRow(context.tr('detail_total'), totalValue),
                   ],
                 ),
               ),
@@ -221,8 +238,8 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),
-                  child:
-                      const Text('పూర్తయింది', style: TextStyle(fontSize: 16)),
+                  child: Text(context.tr('done_button'),
+                      style: const TextStyle(fontSize: 16)),
                 ),
               ),
             ],
@@ -244,7 +261,7 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'డ్రోన్ సేవ బుకింగ్',
+          context.tr('app_bar_drone_title'),
           style: GoogleFonts.inter(fontWeight: FontWeight.w600),
         ),
       ),
@@ -256,7 +273,7 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    const _SectionHeader('పంట రకం ఎంచుకోండి'),
+                    _SectionHeader(context.tr('section_crop')),
                     const SizedBox(height: 16),
                     _CropSelector(
                       crops: _crops,
@@ -265,7 +282,7 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
                           _updateState(_state.copyWith(crop: crop)),
                     ),
                     const SizedBox(height: 32),
-                    const _SectionHeader('విస్తీర్ణం (ఎకరాలు)'),
+                    _SectionHeader(context.tr('section_acres')),
                     const SizedBox(height: 16),
                     _AcreSlider(
                       value: _state.acres,
@@ -273,7 +290,7 @@ class _DroneBookingScreenState extends State<DroneBookingScreen> {
                           _updateState(_state.copyWith(acres: acres)),
                     ),
                     const SizedBox(height: 32),
-                    const _SectionHeader('సేవ తేదీ'),
+                    _SectionHeader(context.tr('section_date')),
                     const SizedBox(height: 16),
                     _DateSelector(
                       selected: _state.serviceDate,
@@ -365,6 +382,17 @@ class _CropCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locale = context.locale.languageCode;
+    String cropName = crop.nameEn;
+    switch (locale) {
+      case 'hi':
+        cropName = crop.nameHi;
+        break;
+      case 'te':
+        cropName = crop.nameTe;
+        break;
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -399,7 +427,7 @@ class _CropCard extends StatelessWidget {
                 color: isSelected ? crop.color : AppTheme.textSecondary),
             const SizedBox(height: 8),
             Text(
-              crop.nameTe,
+              cropName,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -437,7 +465,7 @@ class _AcreSlider extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${value.toStringAsFixed(1)} ఎకరాలు',
+                '${value.toStringAsFixed(1)} ${context.tr('acres')}',
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -506,6 +534,7 @@ class _DateSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locale = context.locale.languageCode;
     final dates =
         List.generate(14, (i) => DateTime.now().add(Duration(days: i + 1)));
 
@@ -524,6 +553,7 @@ class _DateSelector extends StatelessWidget {
         itemCount: dates.length,
         itemBuilder: (ctx, i) => _DateCard(
           date: dates[i],
+          locale: locale,
           isSelected: DateUtils.isSameDay(dates[i], selected),
           onTap: () => onSelect(dates[i]),
         ),
@@ -534,11 +564,13 @@ class _DateSelector extends StatelessWidget {
 
 class _DateCard extends StatelessWidget {
   final DateTime date;
+  final String locale;
   final bool isSelected;
   final VoidCallback onTap;
 
   const _DateCard({
     required this.date,
+    required this.locale,
     required this.isSelected,
     required this.onTap,
   });
@@ -559,7 +591,7 @@ class _DateCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              DateFormat('EEE').format(date),
+              DateFormat('EEE', locale).format(date),
               style: TextStyle(
                 fontSize: 12,
                 color: isSelected ? Colors.white70 : AppTheme.textSecondary,
@@ -575,7 +607,7 @@ class _DateCard extends StatelessWidget {
               ),
             ),
             Text(
-              DateFormat('MMM').format(date),
+              DateFormat('MMM', locale).format(date),
               style: TextStyle(
                 fontSize: 11,
                 color: isSelected ? Colors.white70 : AppTheme.textSecondary,
@@ -630,9 +662,9 @@ class _BottomBar extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'మొత్తం ఖర్చు',
-                          style: TextStyle(
+                        Text(
+                          context.tr('total_cost_label'),
+                          style: const TextStyle(
                               fontSize: 13, color: AppTheme.textSecondary),
                         ),
                         const SizedBox(height: 4),
@@ -669,13 +701,13 @@ class _BottomBar extends StatelessWidget {
                                 strokeWidth: 2.5,
                               ),
                             )
-                          : const Row(
+                          : Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.check, size: 20),
-                                SizedBox(width: 8),
-                                Text('బుక్ చేయండి',
-                                    style: TextStyle(fontSize: 16)),
+                                const Icon(Icons.check, size: 20),
+                                const SizedBox(width: 8),
+                                Text(context.tr('book_button'),
+                                    style: const TextStyle(fontSize: 16)),
                               ],
                             ),
                     ),

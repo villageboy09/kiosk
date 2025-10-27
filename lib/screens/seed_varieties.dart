@@ -1,27 +1,28 @@
-// lib/screens/seed_varieties_screen.dart
+// ignore_for_file: avoid_print
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cropsync/main.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class SeedVariety {
   final String cropName;
-  final String varietyNameTe;
-  final String? varietyNameEn;
+  final String varietyName;
+  final String? varietyNameSecondary;
   final String? imageUrl;
-  final String? detailsTe;
+  final String? details;
   final String? region;
   final String? sowingPeriod;
   final String? price;
 
   SeedVariety({
     required this.cropName,
-    required this.varietyNameTe,
-    this.varietyNameEn,
+    required this.varietyName,
+    this.varietyNameSecondary,
     this.imageUrl,
-    this.detailsTe,
+    this.details,
     this.region,
     this.sowingPeriod,
     this.price,
@@ -40,41 +41,126 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
   List<SeedVariety> _allVarieties = [];
   List<SeedVariety> _filteredVarieties = [];
   String? _selectedCropFilter;
+  bool _isInit = true; // Flag for didChangeDependencies
 
   @override
   void initState() {
     super.initState();
-    _varietiesFuture = _fetchVarieties();
+    // Do not fetch here, context is not ready
+  }
+
+  // FIX 1: Use didChangeDependencies to safely access context
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_isInit) {
+      _varietiesFuture = _fetchVarieties();
+      _isInit = false;
+    }
+  }
+
+  String _getLocaleField(String locale) {
+    switch (locale) {
+      case 'hi':
+        return 'hi';
+      case 'te':
+        return 'te';
+      default:
+        return 'en';
+    }
   }
 
   Future<List<SeedVariety>> _fetchVarieties() async {
-    final response = await supabase.from('seed_varieties').select();
-    _allVarieties = (response as List).map((v) {
-      return SeedVariety(
-        cropName: v['crop_name'],
-        varietyNameTe: v['variety_name_te'],
-        varietyNameEn: v['variety_name_en'],
-        imageUrl: v['image_url'],
-        detailsTe: v['details_te'],
-        region: v['region'],
-        sowingPeriod: v['sowing_period'],
-        price: v['price']?.toString(),
-      );
-    }).toList();
-    _filteredVarieties = _allVarieties;
-    return _filteredVarieties;
+    try {
+      final locale = _getLocaleField(context.locale.languageCode);
+      final varietyNameField = 'variety_name_$locale';
+      final detailsField = 'details_$locale';
+
+      // --- FIX: We must use two queries ---
+
+      // 1. Fetch all crops and put them in a Map for easy lookup.
+      // We assume the join key is the English name.
+      final cropsResponse =
+          await supabase.from('crops').select('name_te, name_en, name_hi');
+
+      final Map<String, dynamic> cropDataMap = {
+        for (var crop in cropsResponse as List)
+          // Key: 'Rice', Value: {name_te: 'వరి', name_en: 'Rice', ...}
+          (crop['name_en'] as String): crop,
+      };
+
+      // 2. Fetch all seed varieties
+      final response = await supabase.from('seed_varieties').select(
+          '$varietyNameField, variety_name_en, variety_name_hi, image_url, $detailsField, details_en, details_hi, region, sowing_period, price, crop_name'); // We must select 'crop_name' to use as our key
+
+      _allVarieties = (response as List).map((v) {
+        // 3. Manually "join" the data using our Map
+        final cropData =
+            cropDataMap[v['crop_name']]; // e.g., cropDataMap['Rice']
+
+        String cropName = 'Unknown'; // Default
+
+        if (cropData != null) {
+          cropName = cropData['name_en'] ?? 'Unknown';
+          if (locale == 'hi' && cropData['name_hi'] != null) {
+            cropName = cropData['name_hi'];
+          } else if (locale == 'te' && cropData['name_te'] != null) {
+            cropName = cropData['name_te'];
+          }
+        }
+
+        // Get localized variety name, with secondary as fallback
+        String varietyName =
+            v[varietyNameField] ?? v['variety_name_en'] ?? 'Unknown';
+        String? varietyNameSecondary;
+        if (locale == 'te' && v['variety_name_en'] != null) {
+          varietyNameSecondary = v['variety_name_en'];
+        } else if (locale == 'hi' && v['variety_name_en'] != null) {
+          varietyNameSecondary = v['variety_name_en'];
+        }
+
+        return SeedVariety(
+          cropName: cropName, // The localized name
+          varietyName: varietyName,
+          varietyNameSecondary: varietyNameSecondary,
+          imageUrl: v['image_url'],
+          details: v[detailsField] ?? v['details_en'],
+          region: v['region'],
+          sowingPeriod: v['sowing_period'],
+          price: v['price']?.toString(),
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _filteredVarieties = _allVarieties;
+        });
+      }
+      return _filteredVarieties;
+    } catch (e) {
+      // Add a print here to see the actual error in your console
+      print('Error fetching varieties: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('load_error'))),
+        );
+      }
+      rethrow;
+    }
   }
 
   void _filterVarieties(String? cropName) {
-    setState(() {
-      _selectedCropFilter = cropName;
-      if (cropName == null) {
-        _filteredVarieties = _allVarieties;
-      } else {
-        _filteredVarieties =
-            _allVarieties.where((v) => v.cropName == cropName).toList();
-      }
-    });
+    if (mounted) {
+      setState(() {
+        _selectedCropFilter = cropName;
+        if (cropName == null) {
+          _filteredVarieties = _allVarieties;
+        } else {
+          _filteredVarieties =
+              _allVarieties.where((v) => v.cropName == cropName).toList();
+        }
+      });
+    }
   }
 
   @override
@@ -87,7 +173,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
         backgroundColor: Colors.grey[100],
         centerTitle: true,
         title: Text(
-          'Seed Varieties',
+          context.tr('seed_varieties_title'),
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
             color: Colors.black87,
@@ -121,8 +207,14 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             return _buildShimmerEffect();
           }
           if (snapshot.hasError) {
-            return const Center(
-              child: Text('విత్తన రకాలను లోడ్ చేయడంలో విఫలమైంది.'),
+            // Log the error to console for debugging
+            print('Error in FutureBuilder: ${snapshot.error}');
+            return Center(
+              child: Text(
+                context.tr('load_error'),
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(fontSize: 16, color: Colors.red),
+              ),
             );
           }
 
@@ -147,7 +239,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
 
   // ### REDESIGNED FILTER SECTION ###
   Widget _buildFilterChips(List<String> cropTypes) {
-    List<String> allFilters = ['అన్నీ', ...cropTypes];
+    List<String> allFilters = [context.tr('all_filter'), ...cropTypes];
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16.0),
       child: SizedBox(
@@ -157,13 +249,14 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
           itemCount: allFilters.length,
           itemBuilder: (context, index) {
             final crop = allFilters[index];
-            final isSelected =
-                (_selectedCropFilter == null && crop == 'అన్నీ') ||
-                    _selectedCropFilter == crop;
+            final isSelected = (_selectedCropFilter == null &&
+                    crop == context.tr('all_filter')) ||
+                _selectedCropFilter == crop;
             return Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: GestureDetector(
-                onTap: () => _filterVarieties(crop == 'అన్నీ' ? null : crop),
+                onTap: () => _filterVarieties(
+                    crop == context.tr('all_filter') ? null : crop),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -228,18 +321,18 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  variety.varietyNameTe,
+                  variety.varietyName,
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
                 ),
-                if (variety.varietyNameEn != null)
+                if (variety.varietyNameSecondary != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 2.0),
                     child: Text(
-                      variety.varietyNameEn!,
+                      variety.varietyNameSecondary!,
                       style: GoogleFonts.poppins(
                         color: Colors.grey[600],
                         fontSize: 13,
@@ -250,7 +343,8 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
-                      '₹${variety.price}',
+                      context.tr('price_label',
+                          namedArgs: {'price': variety.price!}),
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,

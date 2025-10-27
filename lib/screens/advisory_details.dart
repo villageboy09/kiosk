@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cropsync/main.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 // Enum to manage the state of the identification button
 enum IdentificationState { initial, loading, success, error }
@@ -29,6 +30,8 @@ class AdvisoryDetailScreen extends StatefulWidget {
   State<AdvisoryDetailScreen> createState() => _AdvisoryDetailScreenState();
 }
 
+// Replace your initState and add didChangeDependencies method:
+
 class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
   late Future<Advisory> _advisoryFuture;
   final PageController _pageController = PageController();
@@ -36,12 +39,15 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
 
   // State variables for the button
   var _identificationState = IdentificationState.initial;
-  bool _isButtonPressed = false; // For the press-down visual effect
+  bool _isButtonPressed = false;
+
+  // Add this flag to prevent multiple calls
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _advisoryFuture = _fetchAdvisoryDetailsAndCheckIdentified();
+    // Only initialize the PageController here
     _pageController.addListener(() {
       setState(() {
         _currentPage = _pageController.page?.round() ?? 0;
@@ -50,66 +56,110 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Call the API fetch here instead, and only once
+    if (!_isInitialized) {
+      _advisoryFuture = _fetchAdvisoryDetailsAndCheckIdentified();
+      _isInitialized = true;
+    }
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
   }
 
-  Future<Advisory> _fetchAdvisoryDetailsAndCheckIdentified() async {
-    final advisoryData = await supabase
-        .from('crop_advisories')
-        .select()
-        .eq('problem_id', widget.problem.id)
-        .single();
-
-    final recommendationsData = await supabase
-        .from('advisory_recommendations')
-        .select()
-        .eq('advisory_id', advisoryData['id']);
-
-    final List<AdvisoryRecommendation> recommendations =
-        (recommendationsData as List).map((r) {
-      return AdvisoryRecommendation(
-        type: r['component_type'] ?? 'General',
-        name: r['component_name_te'] ?? 'N/A',
-        dose: r['dose_te'],
-        method: r['application_method_te'],
-        notes: r['notes_te'],
-      );
-    }).toList();
-
-    final Advisory advisory = Advisory(
-      title: advisoryData['advisory_title_te'],
-      symptoms: advisoryData['symptoms_te'],
-      notes: advisoryData['general_notes_te'],
-      recommendations: recommendations,
-    );
-
-    // Check if already identified
-    final user = supabase.auth.currentUser;
-    if (user != null && mounted) {
-      final response = await supabase
-          .from('farmer_identified_problems')
-          .select()
-          .eq('farmer_id', user.id)
-          .eq('problem_id', widget.problem.id);
-      if (response.isNotEmpty) {
-        setState(() => _identificationState = IdentificationState.success);
-      }
+  String _getLocaleField(String locale) {
+    switch (locale) {
+      case 'hi':
+        return 'hi';
+      case 'te':
+        return 'te';
+      default:
+        return 'en';
     }
+  }
 
-    return advisory;
+  Future<Advisory> _fetchAdvisoryDetailsAndCheckIdentified() async {
+    try {
+      final locale = _getLocaleField(context.locale.languageCode);
+
+      final titleField = 'advisory_title_$locale';
+      final symptomsField = 'symptoms_$locale';
+      final notesField = 'general_notes_$locale';
+
+      final advisoryData = await supabase
+          .from('crop_advisories')
+          .select()
+          .eq('problem_id', widget.problem.id)
+          .single();
+
+      final recommendationsData = await supabase
+          .from('advisory_recommendations')
+          .select()
+          .eq('advisory_id', advisoryData['id']);
+
+      final List<AdvisoryRecommendation> recommendations =
+          (recommendationsData as List).map((r) {
+        final nameField = 'component_name_$locale';
+        final doseField = 'dose_$locale';
+        final methodField = 'application_method_$locale';
+        final notesFieldRec = 'notes_$locale';
+
+        return AdvisoryRecommendation(
+          type: r['component_type'] ?? 'General',
+          name: r[nameField] ?? r['component_name_en'] ?? 'N/A',
+          dose: r[doseField] ?? r['dose_en'],
+          method: r[methodField] ?? r['application_method_en'],
+          notes: r[notesFieldRec] ?? r['notes_en'],
+        );
+      }).where((rec) {
+        return rec.name != 'N/A';
+      }).toList();
+
+      final Advisory advisory = Advisory(
+        title: advisoryData[titleField] ??
+            advisoryData['advisory_title_en'] ??
+            'N/A',
+        symptoms:
+            advisoryData[symptomsField] ?? advisoryData['symptoms_en'] ?? 'N/A',
+        notes: advisoryData[notesField] ?? advisoryData['general_notes_en'],
+        recommendations: recommendations,
+      );
+
+      final user = supabase.auth.currentUser;
+
+      if (user != null && mounted) {
+        final response = await supabase
+            .from('farmer_identified_problems')
+            .select()
+            .eq('farmer_id', user.id)
+            .eq('problem_id', widget.problem.id);
+
+        if (response.isNotEmpty) {
+          setState(() => _identificationState = IdentificationState.success);
+        }
+      }
+
+      return advisory;
+    } catch (e) {
+      // You might want to keep this one for debugging, or log to a service
+      // print('\n❌❌❌ ERROR IN _fetchAdvisoryDetailsAndCheckIdentified ❌❌❌');
+      // print('Error Type: ${e.runtimeType}');
+      // print('Error Message: $e');
+      // print('==========================================\n');
+      rethrow;
+    }
   }
 
   Future<void> _markAsIdentified() async {
-    print('Starting _markAsIdentified for problem_id: ${widget.problem.id}');
     setState(() => _identificationState = IdentificationState.loading);
 
     try {
       final user = supabase.auth.currentUser;
-      print('Current user: ${user?.id ?? "null"}');
       if (user == null) {
-        print('Error: User is not authenticated.');
         throw Exception('User is not authenticated.');
       }
 
@@ -130,26 +180,20 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
         'problem_id': widget.problem.id,
         'farmer_id': user.id,
       };
-      print('Inserting data into farmer_identified_problems: $insertData');
 
-      final response =
-          await supabase.from('farmer_identified_problems').insert(insertData);
-      print('Insert response: ${response.toString()}');
-      print('Insert successful.');
+      await supabase.from('farmer_identified_problems').insert(insertData);
 
       if (mounted) {
         setState(() => _identificationState = IdentificationState.success);
       }
     } catch (error) {
-      print('Error in _markAsIdentified: $error');
-      print('Error type: ${error.runtimeType}');
-      if (error is Error) {
-        print('Stack trace: ${error.stackTrace}');
-      }
+      // You might want to keep this one for debugging, or log to a service
+      // print('Error in _markAsIdentified: $error');
+      // print('Error type: ${error.runtimeType}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to mark problem. Please try again.',
+            content: Text(context.tr('mark_problem_error'),
                 style: GoogleFonts.poppins()),
             backgroundColor: Colors.red,
           ),
@@ -190,20 +234,20 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
                         _buildSectionCard(
-                          title: 'లక్షణాలు (Symptoms)',
+                          title: context.tr('symptoms_title'),
                           content: advisory.symptoms,
                           icon: Icons.visibility_outlined,
                         ),
                         if (advisory.notes != null)
                           _buildSectionCard(
-                            title: 'గమనికలు (General Notes)',
+                            title: context.tr('notes_title'),
                             content: advisory.notes!,
                             icon: Icons.edit_note_outlined,
                           ),
                         Padding(
                           padding:
                               const EdgeInsets.only(top: 24.0, bottom: 8.0),
-                          child: Text('యాజమాన్య పద్ధతులు (Management)',
+                          child: Text(context.tr('management_title'),
                               style: GoogleFonts.poppins(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
@@ -411,13 +455,14 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
           ),
           const SizedBox(height: 16),
           if (rec.dose != null)
-            _buildDetailRow(Icons.science_outlined, 'మోతాదు (Dose)', rec.dose!),
+            _buildDetailRow(
+                Icons.science_outlined, context.tr('dose_title'), rec.dose!),
           if (rec.method != null)
-            _buildDetailRow(
-                Icons.water_drop_outlined, 'విధానం (Method)', rec.method!),
+            _buildDetailRow(Icons.water_drop_outlined,
+                context.tr('method_title'), rec.method!),
           if (rec.notes != null)
-            _buildDetailRow(
-                Icons.notes_outlined, 'గమనికలు (Notes)', rec.notes!),
+            _buildDetailRow(Icons.notes_outlined, context.tr('notes_row_title'),
+                rec.notes!),
         ],
       ),
     );
@@ -482,7 +527,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
           children: [
             const Icon(Icons.check_circle_outline, color: Colors.white),
             const SizedBox(width: 8),
-            Text('Marked as Identified',
+            Text(context.tr('marked_identified'),
                 style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -496,7 +541,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
           children: [
             const Icon(Icons.flag_outlined, color: Colors.white),
             const SizedBox(width: 8),
-            Text('I have this problem',
+            Text(context.tr('i_have_this_problem'),
                 style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -552,7 +597,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
           const Icon(Icons.error_outline, color: Colors.red, size: 60),
           const SizedBox(height: 16),
           Text(
-            'సలహా వివరాలను లోడ్ చేయడంలో విఫలమైంది.',
+            context.tr('load_advisory_error'),
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
                 fontSize: 18, color: _UIColors.secondaryText),
