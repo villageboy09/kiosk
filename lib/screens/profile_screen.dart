@@ -6,13 +6,15 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/main.dart';
 import 'package:cropsync/welcome_screen.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -39,6 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late Future<Map<String, dynamic>> _farmerFuture;
   late Future<List<Map<String, dynamic>>> _problemsFuture;
   late Future<List<Map<String, dynamic>>> _bookingsFuture;
+  // Removed 'late' and made _appConfigFuture a getter to avoid LateInitializationError
   String? farmerId;
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
@@ -48,8 +51,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _pincodeController = TextEditingController();
-  String? _selectedVillage;
-  String? _selectedDistrict;
   XFile? _selectedImage;
   String? _profileImageUrl;
 
@@ -57,12 +58,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _originalName;
   String? _originalPhone;
   String? _originalPincode;
-  String? _originalVillage;
-  String? _originalDistrict;
 
-  // Dummy data for dropdowns
-  final List<String> _districts = ['Wanaparthy', 'Nagarkurnool', 'Mahbubnagar'];
-  final List<String> _villages = ['Pami Reddy Pally', 'Kothakota', 'Madanapur'];
+  // Getter for app config to avoid late initialization issues
+  Future<Map<String, String>> get _appConfigFuture => _fetchAppConfig();
 
   @override
   void initState() {
@@ -78,6 +76,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  Future<Map<String, String>> _fetchAppConfig() async {
+    final response = await supabase.from('app_config').select('key, value');
+    return {
+      for (var item in response) item['key'] as String: item['value'] as String
+    };
+  }
+
   Future<Map<String, dynamic>> _fetchAndSetFarmerProfile() async {
     final userId = supabase.auth.currentUser!.id;
     final data =
@@ -86,29 +91,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _nameController.text = data['full_name'] ?? '';
     _phoneController.text = data['phone_number'] ?? '';
     _pincodeController.text = data['pincode'] ?? '';
-    _selectedVillage = data['village'];
-    _selectedDistrict = data['district'];
     _profileImageUrl = data['profile_image_url'];
 
     _originalName = _nameController.text;
     _originalPhone = _phoneController.text;
     _originalPincode = _pincodeController.text;
-    _originalVillage = _selectedVillage;
-    _originalDistrict = _selectedDistrict;
 
     farmerId = data['id'];
-    _problemsFuture = _fetchProblems();
+    // Fixed: Use correct farmerId for queries
+    _problemsFuture = _fetchProblems(farmerId!);
     _bookingsFuture = _fetchBookings();
 
     return data;
   }
 
-  Future<List<Map<String, dynamic>>> _fetchProblems() async {
-    final userId = supabase.auth.currentUser!.id;
+  Future<List<Map<String, dynamic>>> _fetchProblems(String farmerId) async {
     return await supabase
         .from('farmer_identified_problems')
         .select()
-        .eq('farmer_id', userId)
+        .eq('farmer_id', farmerId)
         .order('identified_at', ascending: false);
   }
 
@@ -127,33 +128,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final XFile? image =
         await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
     if (image != null) {
-      setState(() {
-        _selectedImage = image;
-      });
+      if (mounted) {
+        setState(() {
+          _selectedImage = image;
+        });
+      }
     }
   }
 
   void _toggleEditMode() {
-    setState(() {
-      _isEditMode = !_isEditMode;
-      if (!_isEditMode) {
-        _nameController.text = _originalName ?? '';
-        _phoneController.text = _originalPhone ?? '';
-        _pincodeController.text = _originalPincode ?? '';
-        _selectedVillage = _originalVillage;
-        _selectedDistrict = _originalDistrict;
-        _selectedImage = null;
-      }
-    });
+    if (mounted) {
+      setState(() {
+        _isEditMode = !_isEditMode;
+        if (!_isEditMode) {
+          _nameController.text = _originalName ?? '';
+          _phoneController.text = _originalPhone ?? '';
+          _pincodeController.text = _originalPincode ?? '';
+          _selectedImage = null;
+        }
+      });
+    }
   }
 
   Future<void> _updateProfile() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    setState(() {
-      _isLoading = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
       String? newImageUrl;
@@ -180,8 +185,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'full_name': _nameController.text.trim(),
         'phone_number': _phoneController.text.trim(),
         'pincode': _pincodeController.text.trim(),
-        'village': _selectedVillage,
-        'district': _selectedDistrict,
         if (newImageUrl != null) 'profile_image_url': newImageUrl,
       };
 
@@ -193,7 +196,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Profile updated successfully!'),
+            content: Text(context.tr('profile_updated')),
             backgroundColor: Colors.green[700],
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -212,7 +215,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error updating profile: ${error.toString()}'),
+            content: Text(context.tr('update_profile_error',
+                namedArgs: {'error': error.toString()})),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -243,7 +247,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Logout',
+                context.tr('logout_title'),
                 style: GoogleFonts.poppins(
                   fontSize: 22,
                   fontWeight: FontWeight.w600,
@@ -252,7 +256,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Are you sure you want to logout?',
+                context.tr('logout_message'),
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   color: const Color(0xFF7E808C),
@@ -272,7 +276,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       child: Text(
-                        'Cancel',
+                        context.tr('cancel'),
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -305,7 +309,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       child: Text(
-                        'Logout',
+                        context.tr('logout'),
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -322,112 +326,92 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showPrivacyPolicy() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => Scaffold(
-          backgroundColor: Colors.white,
-          appBar: AppBar(
-            title: Text(
-              'Privacy Policy',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF282C3F),
-              ),
-            ),
-            backgroundColor: Colors.white,
-            elevation: 0,
-            foregroundColor: const Color(0xFF282C3F),
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+  Future<void> _showPrivacyPolicy() async {
+    final config = await _appConfigFuture;
+    final url =
+        config['privacyPolicyUrl'] ?? 'https://cropsync.in/privacy.html';
+    if (mounted) {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) => Container(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+          child: SingleChildScrollView(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Your privacy is important to us at CropSync. We are committed to protecting your personal information and ensuring that it is handled responsibly. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and services.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF282C3F),
-                    height: 1.5,
+                Row(
+                  children: [
+                    Text(
+                      context.tr('privacy_policy_title'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF282C3F),
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close, color: Color(0xFF93959F)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8F9FA),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.tr('privacy_matters_title'),
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF282C3F),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        context.tr('privacy_description'),
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: const Color(0xFF7E808C),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        context.tr('full_policy_teaser'),
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF60B246),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  '1. Information We Collect\n\nWe collect the following types of information:\n\n• Personal Information: Such as your name, phone number, email address, location (district, village, pincode), and profile image when you register or update your profile.\n\n• Usage Data: Information about how you interact with our app, including identified crop problems, drone service bookings, and timestamps of activities.\n\n• Device Information: Such as your device type, OS version, and unique identifiers for app functionality and analytics.\n\nWe do not collect sensitive information like financial details unless necessary for specific services like payments.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.6,
-                    color: Color(0xFF7E808C),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  '2. How We Use Your Information\n\nWe use your information to:\n\n• Provide and improve our services, such as matching farmers with drone services and identifying crop issues.\n\n• Communicate with you about bookings, updates, and support.\n\n• Analyze usage to enhance app features and user experience.\n\n• Comply with legal obligations and prevent fraud.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.6,
-                    color: Color(0xFF7E808C),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  '3. Data Security\n\nWe implement reasonable security measures to protect your information from unauthorized access, alteration, or disclosure. This includes encryption for data in transit and at rest. However, no system is completely secure, and we cannot guarantee absolute security.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.6,
-                    color: Color(0xFF7E808C),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  '4. Sharing Your Information\n\nWe do not sell your personal information. We may share it with:\n\n• Service providers (e.g., cloud storage like Supabase) under strict confidentiality.\n\n• Legal authorities if required by law.\n\n• Business partners for service delivery, such as drone operators for bookings.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.6,
-                    color: Color(0xFF7E808C),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  '5. Your Rights\n\nYou have the right to access, update, or delete your information. Contact us to exercise these rights. You can also opt-out of communications at any time.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.6,
-                    color: Color(0xFF7E808C),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Last updated: October 2025',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF93959F),
-                  ),
-                ),
-                const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () async {
-                      final Uri url =
-                          Uri.parse('https://cropsync.in/privacy.html');
-                      if (await canLaunchUrl(url)) {
-                        await launchUrl(url,
-                            mode: LaunchMode.externalApplication);
-                      } else {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Could not launch the privacy policy page.'),
-                              backgroundColor: Colors.redAccent,
-                            ),
-                          );
-                        }
-                      }
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PrivacyPolicyScreen(url: url),
+                        ),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -439,7 +423,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     child: Text(
-                      'View Full Privacy Policy',
+                      context.tr('view_full_policy'),
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -447,13 +431,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
               ],
             ),
           ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   void _showContactUs() {
@@ -463,49 +446,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Contact Us',
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF282C3F),
+      builder: (context) => FutureBuilder<Map<String, String>>(
+        future: _appConfigFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Container(
+              height: 200,
+              padding: const EdgeInsets.all(20),
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+          final config = snapshot.data ?? {};
+          final email = config['supportEmail'] ?? 'support@cropsync.com';
+          final phone = config['supportPhone'] ?? '+91 9876543210';
+          final location =
+              config['headquartersAddress'] ?? 'Hyderabad, Telangana';
+          return Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        context.tr('contact_us_title'),
+                        style: GoogleFonts.poppins(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF282C3F),
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: Color(0xFF93959F)),
+                      ),
+                    ],
                   ),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, color: Color(0xFF93959F)),
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  _buildContactTile(
+                    icon: Icons.email_outlined,
+                    title: email,
+                    subtitle: context.tr('send_email'),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildContactTile(
+                    icon: Icons.phone_outlined,
+                    title: phone,
+                    subtitle: context.tr('call_us'),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildContactTile(
+                    icon: Icons.location_on_outlined,
+                    title: location,
+                    subtitle: context.tr('headquarters'),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 24),
-            _buildContactTile(
-              icon: Icons.email_outlined,
-              title: 'support@cropsync.com',
-              subtitle: 'Send us an email',
-            ),
-            const SizedBox(height: 12),
-            _buildContactTile(
-              icon: Icons.phone_outlined,
-              title: '+91 9876543210',
-              subtitle: 'Call us anytime',
-            ),
-            const SizedBox(height: 12),
-            _buildContactTile(
-              icon: Icons.location_on_outlined,
-              title: 'Hyderabad, Telangana',
-              subtitle: 'Our headquarters',
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -545,7 +549,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Problem #${problem['problem_id']}',
+                      context.tr('problem_id',
+                          namedArgs: {'id': problem['problem_id'].toString()}),
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
@@ -614,7 +619,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${booking['crop_type']} - ${booking['acres']} acres',
+                      context.tr('booking_details', namedArgs: {
+                        'crop': booking['crop_type'],
+                        'acres': booking['acres'].toString()
+                      }),
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         color: const Color(0xFF7E808C),
@@ -624,7 +632,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Row(
                       children: [
                         Text(
-                          '₹$cost',
+                          context.tr('total_cost', namedArgs: {'cost': cost}),
                           style: GoogleFonts.poppins(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -642,7 +650,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            booking['booking_status'] ?? 'Pending',
+                            booking['booking_status'] ?? context.tr('pending'),
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               color: Colors.white,
@@ -653,7 +661,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Service Date: ${DateFormat('MMM dd, yyyy').format(serviceDate)}',
+                      context.tr('service_date', namedArgs: {
+                        'date': DateFormat('MMM dd, yyyy').format(serviceDate)
+                      }),
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         color: const Color(0xFF7E808C),
@@ -754,7 +764,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         size: 64, color: Color(0xFF93959F)),
                     const SizedBox(height: 16),
                     Text(
-                      'Error loading profile',
+                      context.tr('error_loading_profile'),
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         color: const Color(0xFF7E808C),
@@ -845,7 +855,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         TextButton(
           onPressed: _toggleEditMode,
           child: Text(
-            'Cancel',
+            context.tr('cancel'),
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w500,
@@ -873,7 +883,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 )
               : Text(
-                  'Save',
+                  context.tr('save'),
                   style: GoogleFonts.poppins(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -888,7 +898,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         IconButton(
           onPressed: _toggleEditMode,
           icon: const Icon(Icons.edit_outlined, color: Colors.white),
-          tooltip: 'Edit Profile',
+          tooltip: context.tr('edit_profile'),
         ),
         const SizedBox(width: 4),
       ];
@@ -922,7 +932,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               leading: const Icon(Icons.bug_report_outlined,
                   color: Color(0xFFF57C00)),
               title: Text(
-                'Identified Problems',
+                context.tr('identified_problems'),
                 style: GoogleFonts.poppins(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
@@ -945,7 +955,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 20),
                           child: Text(
-                            'Error: ${snapshot.error}',
+                            context.tr('error', namedArgs: {
+                              'error': snapshot.error.toString()
+                            }),
                             style: GoogleFonts.poppins(
                               fontSize: 14,
                               color: const Color(0xFF93959F),
@@ -958,7 +970,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 20),
                           child: Text(
-                            'No problems identified.',
+                            context.tr('no_problems'),
                             style: GoogleFonts.poppins(
                               fontSize: 16,
                               color: const Color(0xFF7E808C),
@@ -989,7 +1001,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               leading: const Icon(Icons.rocket_launch_outlined,
                   color: Color(0xFF60B246)),
               title: Text(
-                'Drone Bookings',
+                context.tr('drone_bookings'),
                 style: GoogleFonts.poppins(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
@@ -1012,7 +1024,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 20),
                           child: Text(
-                            'Error: ${snapshot.error}',
+                            context.tr('error', namedArgs: {
+                              'error': snapshot.error.toString()
+                            }),
                             style: GoogleFonts.poppins(
                               fontSize: 14,
                               color: const Color(0xFF93959F),
@@ -1025,7 +1039,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 20),
                           child: Text(
-                            'No bookings found.',
+                            context.tr('no_bookings'),
                             style: GoogleFonts.poppins(
                               fontSize: 16,
                               color: const Color(0xFF7E808C),
@@ -1077,7 +1091,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
               Text(
                 _nameController.text.isEmpty
-                    ? 'Your Name'
+                    ? context.tr('your_name')
                     : _nameController.text,
                 style: GoogleFonts.poppins(
                   fontSize: 28,
@@ -1126,36 +1140,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   _buildEditableField(
                     controller: _nameController,
-                    label: 'Full Name',
+                    label: context.tr('full_name'),
                     icon: Icons.person_outline,
                   ),
                   const SizedBox(height: 16),
                   _buildEditableField(
                     controller: _phoneController,
-                    label: 'Phone Number',
+                    label: context.tr('phone_number'),
                     icon: Icons.phone_outlined,
                     keyboardType: TextInputType.phone,
                   ),
                   const SizedBox(height: 16),
-                  _buildDropdownField(
-                    value: _selectedDistrict,
-                    label: 'District',
-                    icon: Icons.location_city_outlined,
-                    items: _districts,
-                    onChanged: (val) => setState(() => _selectedDistrict = val),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDropdownField(
-                    value: _selectedVillage,
-                    label: 'Village',
-                    icon: Icons.home_outlined,
-                    items: _villages,
-                    onChanged: (val) => setState(() => _selectedVillage = val),
-                  ),
-                  const SizedBox(height: 16),
                   _buildEditableField(
                     controller: _pincodeController,
-                    label: 'Pincode',
+                    label: context.tr('pincode'),
                     icon: Icons.pin_drop_outlined,
                     keyboardType: TextInputType.number,
                   ),
@@ -1165,29 +1163,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           else ...[
             _buildInfoRow(
               icon: Icons.phone_outlined,
-              label: 'Phone',
+              label: context.tr('phone'),
               value: _phoneController.text.isEmpty
-                  ? 'Not set'
+                  ? context.tr('not_set')
                   : _phoneController.text,
             ),
             const DashedDivider(indent: 20, endIndent: 20),
             _buildInfoRow(
-              icon: Icons.location_city_outlined,
-              label: 'District',
-              value: _selectedDistrict ?? 'Not set',
-            ),
-            const DashedDivider(indent: 20, endIndent: 20),
-            _buildInfoRow(
-              icon: Icons.home_outlined,
-              label: 'Village',
-              value: _selectedVillage ?? 'Not set',
-            ),
-            const DashedDivider(indent: 20, endIndent: 20),
-            _buildInfoRow(
               icon: Icons.pin_drop_outlined,
-              label: 'Pincode',
+              label: context.tr('pincode'),
               value: _pincodeController.text.isEmpty
-                  ? 'Not set'
+                  ? context.tr('not_set')
                   : _pincodeController.text,
             ),
           ],
@@ -1213,25 +1199,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           _buildMenuItem(
             icon: Icons.credit_card_outlined,
-            title: 'Payment Methods',
+            title: context.tr('payment_methods'),
             onTap: () {},
           ),
           const DashedDivider(indent: 20, endIndent: 20),
           _buildMenuItem(
             icon: Icons.privacy_tip_outlined,
-            title: 'Privacy Policy',
+            title: context.tr('privacy_policy'),
             onTap: _showPrivacyPolicy,
           ),
           const DashedDivider(indent: 20, endIndent: 20),
           _buildMenuItem(
             icon: Icons.help_outline,
-            title: 'Help & Support',
+            title: context.tr('help_support'),
             onTap: _showContactUs,
           ),
           const DashedDivider(indent: 20, endIndent: 20),
           _buildMenuItem(
             icon: Icons.info_outline,
-            title: 'About',
+            title: context.tr('about'),
             onTap: () {},
           ),
         ],
@@ -1300,7 +1286,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(width: 16),
             Expanded(
               child: Text(
-                'Logout',
+                context.tr('logout'),
                 style: GoogleFonts.poppins(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
@@ -1446,73 +1432,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             isDense: true,
           ),
-          validator: (value) =>
-              value == null || value.isEmpty ? 'Please enter $label' : null,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDropdownField({
-    required String? value,
-    required String label,
-    required IconData icon,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: const Color(0xFF7E808C),
-          ),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          initialValue: value != null && items.contains(value) ? value : null,
-          style: GoogleFonts.poppins(
-            fontSize: 15,
-            fontWeight: FontWeight.w400,
-            color: const Color(0xFF282C3F),
-          ),
-          decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: const Color(0xFF93959F), size: 20),
-            filled: true,
-            fillColor: const Color(0xFFF8F9FA),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFE9EBED), width: 1),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide:
-                  const BorderSide(color: Color(0xFF60B246), width: 1.5),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFE9EBED), width: 1),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-            isDense: true,
-          ),
-          items: items
-              .map((item) => DropdownMenuItem(
-                    value: item,
-                    child: Text(item),
-                  ))
-              .toList(),
-          onChanged: onChanged,
-          validator: (val) => val == null ? 'Please select $label' : null,
-          dropdownColor: Colors.white,
-          icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF93959F)),
-          elevation: 2,
+          validator: (value) => value == null || value.isEmpty
+              ? context
+                  .tr('enter_field', namedArgs: {'field': label.toLowerCase()})
+              : null,
         ),
       ],
     );
@@ -1642,9 +1565,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     child: Column(
                       children: List.generate(
-                        4,
+                        2,
                         (index) => Padding(
-                          padding: EdgeInsets.only(bottom: index == 3 ? 0 : 16),
+                          padding: EdgeInsets.only(bottom: index == 1 ? 0 : 16),
                           child: Row(
                             children: [
                               Container(
@@ -1734,6 +1657,122 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class PrivacyPolicyScreen extends StatefulWidget {
+  final String url;
+  const PrivacyPolicyScreen(
+      {super.key, this.url = 'https://cropsync.in/privacy.html'});
+
+  @override
+  State<PrivacyPolicyScreen> createState() => _PrivacyPolicyScreenState();
+}
+
+class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
+  late final WebViewController controller;
+  bool _supportsWebView = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Only initialize WebViewController if on supported platform to avoid assertion error
+    _supportsWebView = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    if (_supportsWebView) {
+      controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onProgress: (int progress) {
+              // Update loading bar.
+            },
+            onPageStarted: (String url) {},
+            onPageFinished: (String url) {},
+            onWebResourceError: (WebResourceError error) {},
+          ),
+        )
+        ..loadRequest(Uri.parse(widget.url));
+    }
+  }
+
+  Future<void> _launchPrivacyPolicy() async {
+    final url = Uri.parse(widget.url);
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
+      ),
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            context.tr('privacy_policy_title'),
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF282C3F),
+            ),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          foregroundColor: const Color(0xFF282C3F),
+        ),
+        body: _supportsWebView
+            ? WebViewWidget(controller: controller)
+            : Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        context.tr('privacy_policy_title'),
+                        style: GoogleFonts.poppins(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF282C3F),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        context.tr('visit_in_browser'),
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          color: const Color(0xFF7E808C),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: _launchPrivacyPolicy,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF60B246),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          context.tr('open_privacy_policy'),
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
       ),
     );
   }
