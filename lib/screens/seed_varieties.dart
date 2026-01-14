@@ -1,8 +1,8 @@
-// ignore_for_file: avoid_print
+// lib/screens/seed_varieties.dart
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:cropsync/main.dart';
+import 'package:cropsync/services/api_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -41,15 +41,13 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
   List<SeedVariety> _allVarieties = [];
   List<SeedVariety> _filteredVarieties = [];
   String? _selectedCropFilter;
-  bool _isInit = true; // Flag for didChangeDependencies
+  bool _isInit = true;
 
   @override
   void initState() {
     super.initState();
-    // Do not fetch here, context is not ready
   }
 
-  // FIX 1: Use didChangeDependencies to safely access context
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -73,60 +71,19 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
   Future<List<SeedVariety>> _fetchVarieties() async {
     try {
       final locale = _getLocaleField(context.locale.languageCode);
-      final varietyNameField = 'variety_name_$locale';
-      final detailsField = 'details_$locale';
 
-      // --- FIX: We must use two queries ---
+      // Fetch seed varieties from MySQL API
+      final response = await ApiService.getSeedVarieties(lang: locale);
 
-      // 1. Fetch all crops and put them in a Map for easy lookup.
-      // We assume the join key is the English name.
-      final cropsResponse =
-          await supabase.from('crops').select('name_te, name_en, name_hi');
-
-      final Map<String, dynamic> cropDataMap = {
-        for (var crop in cropsResponse as List)
-          // Key: 'Rice', Value: {name_te: 'వరి', name_en: 'Rice', ...}
-          (crop['name_en'] as String): crop,
-      };
-
-      // 2. Fetch all seed varieties
-      final response = await supabase.from('seed_varieties').select(
-          '$varietyNameField, variety_name_en, variety_name_hi, image_url, $detailsField, details_en, details_hi, region, sowing_period, price, crop_name'); // We must select 'crop_name' to use as our key
-
-      _allVarieties = (response as List).map((v) {
-        // 3. Manually "join" the data using our Map
-        final cropData =
-            cropDataMap[v['crop_name']]; // e.g., cropDataMap['Rice']
-
-        String cropName = 'Unknown'; // Default
-
-        if (cropData != null) {
-          cropName = cropData['name_en'] ?? 'Unknown';
-          if (locale == 'hi' && cropData['name_hi'] != null) {
-            cropName = cropData['name_hi'];
-          } else if (locale == 'te' && cropData['name_te'] != null) {
-            cropName = cropData['name_te'];
-          }
-        }
-
-        // Get localized variety name, with secondary as fallback
-        String varietyName =
-            v[varietyNameField] ?? v['variety_name_en'] ?? 'Unknown';
-        String? varietyNameSecondary;
-        if (locale == 'te' && v['variety_name_en'] != null) {
-          varietyNameSecondary = v['variety_name_en'];
-        } else if (locale == 'hi' && v['variety_name_en'] != null) {
-          varietyNameSecondary = v['variety_name_en'];
-        }
-
+      _allVarieties = response.map((v) {
         return SeedVariety(
-          cropName: cropName, // The localized name
-          varietyName: varietyName,
-          varietyNameSecondary: varietyNameSecondary,
-          imageUrl: v['image_url'],
-          details: v[detailsField] ?? v['details_en'],
-          region: v['region'],
-          sowingPeriod: v['sowing_period'],
+          cropName: v['crop_name'] as String? ?? 'Unknown',
+          varietyName: v['variety_name'] as String? ?? 'Unknown',
+          varietyNameSecondary: v['variety_name_secondary'] as String?,
+          imageUrl: v['image_url'] as String?,
+          details: v['details'] as String?,
+          region: v['region'] as String?,
+          sowingPeriod: v['sowing_period'] as String?,
           price: v['price']?.toString(),
         );
       }).toList();
@@ -138,7 +95,6 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
       }
       return _filteredVarieties;
     } catch (e) {
-      // Add a print here to see the actual error in your console
       print('Error fetching varieties: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -166,9 +122,8 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100], // A slightly off-white background
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        // ### REDESIGNED APPBAR ###
         elevation: 0,
         backgroundColor: Colors.grey[100],
         centerTitle: true,
@@ -179,7 +134,6 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             color: Colors.black87,
           ),
         ),
-        // ### CUSTOM BACK BUTTON ###
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
           child: InkWell(
@@ -207,7 +161,6 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             return _buildShimmerEffect();
           }
           if (snapshot.hasError) {
-            // Log the error to console for debugging
             print('Error in FutureBuilder: ${snapshot.error}');
             return Center(
               child: Text(
@@ -218,12 +171,11 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             );
           }
 
-          final cropTypes =
-              _allVarieties.map((v) => v.cropName).toSet().toList();
+          final cropTypes = _allVarieties.map((v) => v.cropName).toSet().toList();
 
           return ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _filteredVarieties.length + 1, // +1 for the filter bar
+            itemCount: _filteredVarieties.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
                 return _buildFilterChips(cropTypes);
@@ -237,7 +189,6 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
     );
   }
 
-  // ### REDESIGNED FILTER SECTION ###
   Widget _buildFilterChips(List<String> cropTypes) {
     List<String> allFilters = [context.tr('all_filter'), ...cropTypes];
     return Padding(
@@ -255,16 +206,15 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             return Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: GestureDetector(
-                onTap: () => _filterVarieties(
-                    crop == context.tr('all_filter') ? null : crop),
+                onTap: () =>
+                    _filterVarieties(crop == context.tr('all_filter') ? null : crop),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: isSelected ? Colors.black87 : Colors.white,
-                    borderRadius:
-                        BorderRadius.circular(12), // Consistent rounding
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isSelected ? Colors.black87 : Colors.grey[300]!,
                     ),
@@ -285,14 +235,13 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
     );
   }
 
-  // ### REDESIGNED FLAT CARD ###
   Widget _buildVarietyCard(SeedVariety variety) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16), // Consistent rounding
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey[200]!),
       ),
       child: Row(
@@ -343,8 +292,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
-                      context.tr('price_label',
-                          namedArgs: {'price': variety.price!}),
+                      context.tr('price_label', namedArgs: {'price': variety.price!}),
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -360,19 +308,17 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
     );
   }
 
-  // ### UPDATED SHIMMER EFFECT ###
   Widget _buildShimmerEffect() {
     return Shimmer.fromColors(
       baseColor: Colors.grey[300]!,
       highlightColor: Colors.grey[100]!,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: 6, // Show more shimmer items
+        itemCount: 6,
         itemBuilder: (context, index) {
-          // Shimmer for filter chips
           if (index == 0) {
             return SizedBox(
-              height: 72, // Approximates padding + chip height
+              height: 72,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: 4,
@@ -388,7 +334,6 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
               ),
             );
           }
-          // Shimmer for cards
           return Container(
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(12),
@@ -412,10 +357,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                          width: double.infinity,
-                          height: 18,
-                          color: Colors.white),
+                      Container(width: double.infinity, height: 18, color: Colors.white),
                       const SizedBox(height: 8),
                       Container(width: 120, height: 14, color: Colors.white),
                       const SizedBox(height: 10),

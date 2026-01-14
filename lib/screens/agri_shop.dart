@@ -5,12 +5,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:cropsync/main.dart'; // Assuming supabase here
+import 'package:cropsync/services/api_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'product_details_screen.dart'; // Your redesigned details screen
+import 'product_details_screen.dart';
 
 // Same Product model as before...
 class Product {
@@ -25,8 +24,8 @@ class Product {
   final String advertiserName;
   final bool isPopular;
   final String unit;
-  final int id; // Add for navigation
-  final int advertiserId; // Add for purchase requests
+  final int id;
+  final int advertiserId;
 
   Product({
     required this.id,
@@ -56,30 +55,23 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   late Future<List<Product>> _productsFuture;
   late Future<List<String>> _categoriesFuture;
   String _searchQuery = '';
-  String _selectedCategory = ''; // Initialize as empty
+  String _selectedCategory = '';
   String _sortOrder = 'default'; // 'price_asc', 'price_desc'
   final TextEditingController _searchController = TextEditingController();
-  bool _isInit = true; // Flag for didChangeDependencies
+  bool _isInit = true;
 
   @override
   void initState() {
     super.initState();
-    // Data fetching moved to didChangeDependencies
   }
-
-  // FIX 1: Use didChangeDependencies to safely initialize
-  // futures that depend on 'context'.
-  // lib/screens/agri_shop.dart
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_isInit) {
-      // FIX: Set the default selected category using the localized string
       _selectedCategory = context.tr('all_category');
-
       _categoriesFuture = _fetchCategories();
-      _loadProducts(); // Now this will correctly load "All" products
+      _loadProducts();
       _isInit = false;
     }
   }
@@ -95,7 +87,6 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     }
   }
 
-  // FIX 2: Added helper to get locale code
   String _getLocaleField(String locale) {
     switch (locale) {
       case 'hi':
@@ -109,23 +100,11 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
 
   Future<List<String>> _fetchCategories() async {
     try {
-      // FIX 3: Localized category fetching
       final locale = _getLocaleField(context.locale.languageCode);
-      // 'category' is the Telugu column name from your schema
-      final categoryField = locale == 'en'
-          ? 'category_en'
-          : (locale == 'hi' ? 'category_hi' : 'category');
-
-      final response = await supabase
-          .from('products')
-          .select(categoryField) // Fetch localized category
-          .not(categoryField, 'is', null);
-
-      final Set<String> unique =
-          response.map((p) => (p[categoryField] as String).trim()).toSet();
+      final categories = await ApiService.getProductCategories(lang: locale);
       return [
         context.tr('all_category'),
-        ...unique.map((c) => c.replaceAllMapped(
+        ...categories.map((c) => c.replaceAllMapped(
             RegExp(r'\b\w'), (m) => m.group(0)!.toUpperCase()))
       ];
     } catch (e) {
@@ -133,83 +112,46 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     }
   }
 
-  // FIX 4: Fully localized query building
-  // FIX 4: Fully localized query building
   Future<List<Product>> _fetchProducts(
       {String? category, String? search, String? sort}) async {
-    // Get localized field names
-    final locale = _getLocaleField(context.locale.languageCode);
-    final nameField = 'product_name_$locale';
-    final descField = 'description_$locale';
-    final categoryField = locale == 'en'
-        ? 'category_en'
-        : (locale == 'hi' ? 'category_hi' : 'category');
+    try {
+      final locale = _getLocaleField(context.locale.languageCode);
+      
+      // Determine category filter
+      String? categoryFilter;
+      if (category != null && category != context.tr('all_category')) {
+        categoryFilter = category;
+      }
 
-    // Select all localized fields + fallbacks for safety
-    PostgrestFilterBuilder query = supabase.from('products').select(
-        'id, advertiser_id, product_code, '
-        '$categoryField, category_en, category, ' // Select localized category + fallbacks
-        '$nameField, product_name_en, ' // Select localized name + fallback
-        'price, '
-        '$descField, description_en, ' // Select localized desc + fallback
-        'video_url, image_url_1, image_url_2, image_url_3, '
-        'advertisers(advertiser_name)');
+      final response = await ApiService.getProducts(
+        lang: locale,
+        category: categoryFilter,
+        search: search,
+        sort: sort,
+      );
 
-    // Apply FILTERS
-    if (category != null && category != context.tr('all_category')) {
-      //
-      // !!! THIS IS THE FIX !!!
-      // Removed .toLowerCase()
-      // We now filter using the exact string from the chip (e.g., "Seeds")
-      //
-      query = query.eq(categoryField, category);
-    }
-    if (search != null && search.isNotEmpty) {
-      // Search on the localized name and description
-      query = query.or('$nameField.ilike.%$search%,$descField.ilike.%$search%');
-    }
-
-    // Apply TRANSFORMS (Sorting)
-    if (sort != null && sort != 'default') {
-      final ascending = sort == 'price_asc';
-      final transformedQuery = query.order('price', ascending: ascending);
-      final response = await transformedQuery;
-      return _mapResponseToProducts(response, locale); // Pass locale
-    } else {
-      final response = await query;
-      return _mapResponseToProducts(response, locale); // Pass locale
+      return _mapResponseToProducts(response, locale);
+    } catch (e) {
+      debugPrint('Error fetching products: $e');
+      return [];
     }
   }
 
-  // FIX 5: Localized mapping with fallbacks
   List<Product> _mapResponseToProducts(List<dynamic> response, String locale) {
-    // Get field names again for parsing
-    final nameField = 'product_name_$locale';
-    final descField = 'description_$locale';
-    final categoryField = locale == 'en'
-        ? 'category_en'
-        : (locale == 'hi' ? 'category_hi' : 'category');
-
     return response.map((p) {
-      final priceValue = p['price'] as num? ?? 0;
+      final priceValue = (p['price'] as num?) ?? 0;
       return Product(
-        id: p['id'],
-        advertiserId: p['advertiser_id'],
-        // Use localized name, fallback to English, then to 'N/A'
-        name: p[nameField] ?? p['product_name_en'] ?? 'N/A',
-        // Use localized category, fallback to English, then to Telugu, then 'General'
-        category:
-            p[categoryField] ?? p['category_en'] ?? p['category'] ?? 'General',
+        id: p['id'] as int? ?? 0,
+        advertiserId: p['advertiser_id'] as int? ?? 0,
+        name: p['name'] as String? ?? 'N/A',
+        category: p['category'] as String? ?? 'General',
         price: priceValue.toStringAsFixed(0),
-        // Use localized description, fallback to English, then to default text
-        description:
-            p[descField] ?? p['description_en'] ?? context.tr('no_description'),
-        imageUrl1: p['image_url_1'],
-        imageUrl2: p['image_url_2'],
-        imageUrl3: p['image_url_3'],
-        videoUrl: p['video_url'],
-        advertiserName: p['advertisers']?['advertiser_name'] ??
-            context.tr('unknown_seller'),
+        description: p['description'] as String? ?? context.tr('no_description'),
+        imageUrl1: p['image_url_1'] as String?,
+        imageUrl2: p['image_url_2'] as String?,
+        imageUrl3: p['image_url_3'] as String?,
+        videoUrl: p['video_url'] as String?,
+        advertiserName: p['advertiser_name'] as String? ?? context.tr('unknown_seller'),
         isPopular: priceValue > 500,
         unit: 'unit',
       );
@@ -222,14 +164,10 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     super.dispose();
   }
 
-  // ... (Rest of your UI code remains exactly the same) ...
-  // No changes needed in build, _buildSearchAndFilters, _buildCategoryTabs,
-  // _buildProductsList, _buildProductCard, _buildShimmerGrid,
-  // _buildEmptyState, _buildErrorState, or _showFilterBottomSheet.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7), // Apple-like background
+      backgroundColor: const Color(0xFFF5F5F7),
       appBar: AppBar(
         backgroundColor: const Color(0xFFF5F5F7),
         elevation: 0,
@@ -270,8 +208,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
               decoration: InputDecoration(
                 hintText: context.tr('search_products'),
                 hintStyle: GoogleFonts.lexend(color: Colors.grey[500]),
-                prefixIcon:
-                    Icon(Icons.search, color: Colors.grey[500], size: 20),
+                prefixIcon: Icon(Icons.search, color: Colors.grey[500], size: 20),
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -329,8 +266,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   label: Text(category),
                   labelStyle: GoogleFonts.lexend(
                     color: isSelected ? Colors.white : Colors.black87,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                   ),
                   selected: isSelected,
                   selectedColor: Colors.green.shade600,
@@ -371,13 +307,12 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.7, // Adjusted for new design
+              childAspectRatio: 0.7,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
             ),
             itemCount: products.length,
-            itemBuilder: (context, index) =>
-                AnimationConfiguration.staggeredGrid(
+            itemBuilder: (context, index) => AnimationConfiguration.staggeredGrid(
               position: index,
               duration: const Duration(milliseconds: 375),
               columnCount: 2,
@@ -397,8 +332,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(
-            builder: (_) => ProductDetailsScreen(product: product)),
+        MaterialPageRoute(builder: (_) => ProductDetailsScreen(product: product)),
       ),
       child: Container(
         decoration: BoxDecoration(
@@ -412,18 +346,15 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
               child: Hero(
                 tag: 'product_image_${product.id}',
                 child: ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   child: CachedNetworkImage(
                     imageUrl: product.imageUrl1 ?? '',
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) =>
-                        Container(color: Colors.grey.shade100),
+                    placeholder: (context, url) => Container(color: Colors.grey.shade100),
                     errorWidget: (context, url, error) => Container(
                       color: Colors.grey.shade100,
-                      child: Icon(Icons.eco_outlined,
-                          color: Colors.grey.shade300, size: 40),
+                      child: Icon(Icons.eco_outlined, color: Colors.grey.shade300, size: 40),
                     ),
                   ),
                 ),
@@ -447,8 +378,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   const SizedBox(height: 4),
                   Text(
                     context.tr('per_unit', namedArgs: {'unit': product.unit}),
-                    style: GoogleFonts.lexend(
-                        fontSize: 12, color: Colors.grey.shade500),
+                    style: GoogleFonts.lexend(fontSize: 12, color: Colors.grey.shade500),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -496,8 +426,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   }
 
   Widget _buildErrorState(String error) {
-    return Center(
-        child: Text(context.tr('error_message', namedArgs: {'error': error})));
+    return Center(child: Text(context.tr('error_message', namedArgs: {'error': error})));
   }
 
   void _showFilterBottomSheet() {
@@ -526,11 +455,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   ),
                   const SizedBox(height: 24),
                   Text(context.tr('sort_by'),
-                      style: GoogleFonts.lexend(
-                          fontSize: 20, fontWeight: FontWeight.bold)),
+                      style: GoogleFonts.lexend(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
-                  // NOTE: The RadioListTile deprecation warning is for a future version.
-                  // This implementation is the current standard and correct way to use it.
                   RadioGroup<String>(
                     groupValue: _sortOrder,
                     onChanged: (String? value) {
@@ -541,20 +467,17 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                     child: Column(
                       children: [
                         RadioListTile<String>(
-                          title: Text(context.tr('relevance'),
-                              style: GoogleFonts.lexend()),
+                          title: Text(context.tr('relevance'), style: GoogleFonts.lexend()),
                           value: 'default',
                           activeColor: Colors.green.shade600,
                         ),
                         RadioListTile<String>(
-                          title: Text(context.tr('price_low_to_high'),
-                              style: GoogleFonts.lexend()),
+                          title: Text(context.tr('price_low_to_high'), style: GoogleFonts.lexend()),
                           value: 'price_asc',
                           activeColor: Colors.green.shade600,
                         ),
                         RadioListTile<String>(
-                          title: Text(context.tr('price_high_to_low'),
-                              style: GoogleFonts.lexend()),
+                          title: Text(context.tr('price_high_to_low'), style: GoogleFonts.lexend()),
                           value: 'price_desc',
                           activeColor: Colors.green.shade600,
                         ),
@@ -567,19 +490,16 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.pop(context);
-                        _loadProducts(); // Apply the sort
+                        _loadProducts();
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green.shade600,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(context.tr('apply_filters'),
                           style: GoogleFonts.lexend(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold)),
+                              color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

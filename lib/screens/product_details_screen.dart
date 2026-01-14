@@ -1,7 +1,8 @@
 // lib/screens/product_details_screen.dart
 
-import 'package:cropsync/main.dart';
-import 'package:cropsync/screens/agri_shop.dart'; // Import the Product model
+import 'package:cropsync/screens/agri_shop.dart';
+import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -94,12 +95,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              // FIX: Replaced deprecated withOpacity
               color: Colors.white.withAlpha(180),
               shape: BoxShape.circle,
             ),
-            child:
-                const Icon(Icons.arrow_back, color: Colors.black87, size: 20),
+            child: const Icon(Icons.arrow_back, color: Colors.black87, size: 20),
           ),
         ),
       ),
@@ -182,8 +181,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'Sold by: ${widget.product.advertiserName}',
-                  style: GoogleFonts.lexend(
-                      fontSize: 14, color: Colors.grey.shade600),
+                  style: GoogleFonts.lexend(fontSize: 14, color: Colors.grey.shade600),
                 ),
               ],
             ),
@@ -235,13 +233,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Price',
-                    style: GoogleFonts.lexend(
-                        color: Colors.grey.shade500, fontSize: 12)),
+                    style: GoogleFonts.lexend(color: Colors.grey.shade500, fontSize: 12)),
                 Text('₹${widget.product.price}',
                     style: GoogleFonts.lexend(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87)),
+                        fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87)),
               ],
             ),
             const SizedBox(width: 16),
@@ -296,35 +291,33 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               });
             }
 
-            // FIX: Refactored to handle BuildContext across async gaps safely
             Future<void> submitRequest() async {
               if (isLoading) return;
 
-              // REASON: Capture Navigator and ScaffoldMessenger BEFORE the async gap.
               final navigator = Navigator.of(context);
               final scaffoldMessenger = ScaffoldMessenger.of(context);
 
               setSheetState(() => isLoading = true);
 
               try {
-                final user = supabase.auth.currentUser;
-                if (user == null) throw Exception('User not logged in');
+                final currentUser = AuthService.currentUser;
+                if (currentUser == null) throw Exception('User not logged in');
 
-                // This is the async gap
-                await supabase.from('purchase_requests').insert({
-                  'user_id': user.id,
-                  'product_id': widget.product.id,
-                  'advertiser_id': widget.product.advertiserId,
-                  'quantity': quantity,
-                  'total_price': totalPrice,
-                  'message': messageController.text.isEmpty
-                      ? null
-                      : messageController.text,
-                });
+                final result = await ApiService.createPurchaseRequest(
+                  userId: currentUser.oderId,
+                  productId: widget.product.id,
+                  advertiserId: widget.product.advertiserId,
+                  quantity: quantity,
+                  totalPrice: totalPrice,
+                  message: messageController.text.isEmpty ? null : messageController.text,
+                );
 
-                // REASON: Now we use the captured variables safely after checking 'mounted'.
+                if (result['success'] != true) {
+                  throw Exception(result['error'] ?? 'Failed to send request');
+                }
+
                 if (!mounted) return;
-                navigator.pop(); // Close bottom sheet
+                navigator.pop();
                 scaffoldMessenger.showSnackBar(
                   const SnackBar(
                       content: Text('Request sent successfully!'),
@@ -345,8 +338,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             }
 
             return Padding(
-              padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom),
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Container(
                 padding: const EdgeInsets.all(20),
                 child: Form(
@@ -366,15 +358,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       ),
                       const SizedBox(height: 24),
                       Text('Send Purchase Request',
-                          style: GoogleFonts.lexend(
-                              fontSize: 20, fontWeight: FontWeight.bold)),
+                          style: GoogleFonts.lexend(fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('Quantity (${widget.product.unit})',
-                              style: GoogleFonts.lexend(
-                                  fontSize: 16, fontWeight: FontWeight.w500)),
+                              style: GoogleFonts.lexend(fontSize: 16, fontWeight: FontWeight.w500)),
                           Container(
                             decoration: BoxDecoration(
                                 color: Colors.grey.shade100,
@@ -382,19 +372,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             child: Row(
                               children: [
                                 IconButton(
-                                    icon: const Icon(Icons.remove,
-                                        color: Colors.red),
-                                    onPressed: () =>
-                                        updateQuantity(quantity - 1)),
+                                    icon: const Icon(Icons.remove, color: Colors.red),
+                                    onPressed: () => updateQuantity(quantity - 1)),
                                 Text(quantity.toString(),
                                     style: GoogleFonts.lexend(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold)),
+                                        fontSize: 16, fontWeight: FontWeight.bold)),
                                 IconButton(
-                                    icon: const Icon(Icons.add,
-                                        color: Colors.green),
-                                    onPressed: () =>
-                                        updateQuantity(quantity + 1)),
+                                    icon: const Icon(Icons.add, color: Colors.green),
+                                    onPressed: () => updateQuantity(quantity + 1)),
                               ],
                             ),
                           )

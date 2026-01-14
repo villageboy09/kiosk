@@ -1,9 +1,10 @@
-// ignore_for_file: avoid_print, use_build_context_synchronously
+// lib/screens/advisory_screen.dart
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cropsync/main.dart';
 import 'package:cropsync/models/crop_problem.dart';
 import 'package:cropsync/screens/advisory_details.dart';
+import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
@@ -98,42 +99,25 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     try {
       print('1. Starting _fetchInitialData...');
 
-      if (supabase.auth.currentUser == null) {
+      final currentUser = AuthService.currentUser;
+      if (currentUser == null) {
         print('ERROR: User is not logged in. Aborting.');
         _showErrorSnackbar(context.tr('login_required'));
         if (mounted) setState(() => _isLoading = false);
         return;
       }
-      final userId = supabase.auth.currentUser!.id;
+      final userId = currentUser.userId;
       print('2. Current User ID: $userId');
 
-      final farmerResponse = await supabase
-          .from('farmers')
-          .select('id')
-          .eq('user_id', userId)
-          .single();
-      final farmerId = farmerResponse['id'];
-      print('3. Found Farmer ID: $farmerId');
-
       final locale = _getLocaleField(context.locale.languageCode);
-      List<String> cropFields = ['id', 'image_url', 'name_en'];
-      if (locale == 'te') cropFields.add('name_te');
-      if (locale == 'hi') cropFields.add('name_hi');
-      String cropSelectStr = cropFields.join(', ');
 
-      // FIX 1: Dynamic select for crops to avoid missing column errors
-      final selectionsData = await supabase
-          .from('farmer_crop_selections')
-          .select(
-              'id, field_name, variety_id, sowing_dates(sowing_date), crops($cropSelectStr)')
-          .eq('farmer_id', farmerId);
+      // Fetch user's crop selections from MySQL API
+      final selectionsData = await ApiService.getUserSelections(userId, lang: locale);
 
-      print(
-          '4. Fetched Selections Data: Found ${selectionsData.length} crop(s).');
+      print('4. Fetched Selections Data: Found ${selectionsData.length} crop(s).');
 
       if (selectionsData.isEmpty) {
-        print(
-            'WARNING: No crop selections found for this farmer in the database.');
+        print('WARNING: No crop selections found for this farmer in the database.');
         if (mounted) {
           setState(() {
             _farmerCrops = [];
@@ -143,41 +127,17 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         return;
       }
 
-      final List<FarmerCropSelection> loadedCrops = (selectionsData as List)
-          .map((s) {
-            final cropData = s['crops'];
-            final sowingDateData = s['sowing_dates'];
-
-            if (sowingDateData == null ||
-                sowingDateData['sowing_date'] == null ||
-                s['variety_id'] == null ||
-                cropData == null) {
-              print(
-                  'ERROR: Found null data for a crop selection. ID: ${s['id']}');
-              return null;
-            }
-
-            // FIX 2: Get the correct localized name based on current locale with fallback
-            String cropName = cropData['name_en'] ?? 'Unknown';
-            if (locale == 'hi' && cropData.containsKey('name_hi')) {
-              cropName = cropData['name_hi'] ?? cropName;
-            } else if (locale == 'te' && cropData.containsKey('name_te')) {
-              cropName = cropData['name_te'] ?? cropName;
-            }
-
-            return FarmerCropSelection(
-              id: s['id'],
-              fieldName: s['field_name'],
-              cropName: cropName,
-              cropImageUrl: cropData['image_url'],
-              cropId: cropData['id'],
-              varietyId: s['variety_id'],
-              sowingDate: DateTime.parse(sowingDateData['sowing_date']),
-            );
-          })
-          .where((crop) => crop != null)
-          .cast<FarmerCropSelection>()
-          .toList();
+      final List<FarmerCropSelection> loadedCrops = selectionsData.map((s) {
+        return FarmerCropSelection(
+          id: s['selection_id'] as int,
+          fieldName: s['field_name'] as String,
+          cropName: s['crop_name'] as String,
+          cropImageUrl: s['crop_image_url'] as String?,
+          cropId: s['crop_id'] as int? ?? 1,
+          varietyId: s['variety_id'] as int? ?? 1,
+          sowingDate: DateTime.parse(s['sowing_date'] as String),
+        );
+      }).toList();
 
       print('5. Successfully parsed ${loadedCrops.length} crops.');
 
@@ -214,49 +174,42 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
 
     try {
       final locale = _getLocaleField(context.locale.languageCode);
-      List<String> stageFields = ['id', 'stage_name_en'];
-      if (locale == 'te') stageFields.add('stage_name_te');
-      if (locale == 'hi') stageFields.add('stage_name_hi');
-      String stageSelectStr = stageFields.join(', ');
 
-      // FIX 3: Dynamic select for stages
-      final stagesData = await supabase
-          .from('crop_stages')
-          .select(stageSelectStr)
-          .eq('crop_id', farmerCrop.cropId);
+      // Fetch crop stages from MySQL API
+      final stagesData = await ApiService.getCropStages(farmerCrop.cropId, lang: locale);
 
-      final List<CropStage> loadedStages = (stagesData as List).map((s) {
-        // Get the correct localized stage name with fallback
-        String stageName = s['stage_name_en'] ?? 'Unknown';
-        if (locale == 'hi' && s.containsKey('stage_name_hi')) {
-          stageName = s['stage_name_hi'] ?? stageName;
-        } else if (locale == 'te' && s.containsKey('stage_name_te')) {
-          stageName = s['stage_name_te'] ?? stageName;
-        }
-
-        return CropStage(id: s['id'], name: stageName);
+      final List<CropStage> loadedStages = stagesData.map((s) {
+        return CropStage(
+          id: s['id'] as int,
+          name: s['name'] as String? ?? 'Unknown',
+        );
       }).toList();
 
       // Calculate days since sowing to find the current stage
-      final daysSinceSowing =
-          DateTime.now().difference(farmerCrop.sowingDate).inDays;
+      final daysSinceSowing = DateTime.now().difference(farmerCrop.sowingDate).inDays;
 
       CropStage? currentStage;
       try {
         // Query crop_stage_durations to get the current stage's ID
-        final durationData = await supabase
-            .from('crop_stage_durations')
-            .select('stage_id')
-            .eq('variety_id', farmerCrop.varietyId)
-            .lte('start_day_from_sowing', daysSinceSowing)
-            .gte('end_day_from_sowing', daysSinceSowing)
-            .single();
+        final durationData = await ApiService.getStageDuration(
+          farmerCrop.cropId,
+          varietyId: farmerCrop.varietyId,
+        );
 
-        final currentStageId = durationData['stage_id'];
-        currentStage = loadedStages.firstWhere((s) => s.id == currentStageId);
+        for (var duration in durationData) {
+          final startDay = duration['start_day_from_sowing'] as int? ?? 0;
+          final endDay = duration['end_day_from_sowing'] as int? ?? 999;
+          if (daysSinceSowing >= startDay && daysSinceSowing <= endDay) {
+            final stageId = duration['stage_id'] as int;
+            currentStage = loadedStages.firstWhere(
+              (s) => s.id == stageId,
+              orElse: () => loadedStages.first,
+            );
+            break;
+          }
+        }
       } catch (e) {
-        debugPrint(
-            'Could not determine current stage automatically. Defaulting to first stage.');
+        debugPrint('Could not determine current stage automatically. Defaulting to first stage.');
       }
 
       if (mounted) {
@@ -281,39 +234,21 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
 
     try {
       final locale = _getLocaleField(context.locale.languageCode);
-      List<String> problemFields = [
-        'id',
-        'image_url1',
-        'image_url2',
-        'image_url3',
-        'problem_name_en'
-      ];
-      if (locale == 'te') problemFields.add('problem_name_te');
-      if (locale == 'hi') problemFields.add('problem_name_hi');
-      String problemSelectStr = problemFields.join(', ');
 
-      // FIX 4: Dynamic select for problems
-      final problemsData = await supabase
-          .from('crop_problems')
-          .select(problemSelectStr)
-          .eq('crop_id', _selectedFarmerCrop!.cropId)
-          .eq('stage_id', stage.id);
+      // Fetch problems from MySQL API
+      final problemsData = await ApiService.getProblems(
+        cropId: _selectedFarmerCrop!.cropId,
+        stageId: stage.id,
+        lang: locale,
+      );
 
-      final List<CropProblem> loadedProblems = (problemsData as List).map((p) {
-        // Get the correct localized problem name with fallback
-        String problemName = p['problem_name_en'] ?? 'Unknown';
-        if (locale == 'hi' && p.containsKey('problem_name_hi')) {
-          problemName = p['problem_name_hi'] ?? problemName;
-        } else if (locale == 'te' && p.containsKey('problem_name_te')) {
-          problemName = p['problem_name_te'] ?? problemName;
-        }
-
+      final List<CropProblem> loadedProblems = problemsData.map((p) {
         return CropProblem(
-          id: p['id'],
-          name: problemName,
-          imageUrl1: p['image_url1'],
-          imageUrl2: p['image_url2'],
-          imageUrl3: p['image_url3'],
+          id: p['id'] as int,
+          name: p['name'] as String? ?? 'Unknown',
+          imageUrl1: p['image_url1'] as String?,
+          imageUrl2: p['image_url2'] as String?,
+          imageUrl3: p['image_url3'] as String?,
         );
       }).toList();
 
@@ -415,11 +350,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                           selectedColor: Colors.green[100],
                           checkmarkColor: Colors.green[700],
                           labelStyle: GoogleFonts.lexend(
-                            color:
-                                isSelected ? Colors.green[700] : Colors.black87,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
+                            color: isSelected ? Colors.green[700] : Colors.black87,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                           ),
                         );
                       }).toList(),
@@ -460,8 +392,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: (crop.cropImageUrl != null &&
-                          crop.cropImageUrl!.isNotEmpty)
+                  child: (crop.cropImageUrl != null && crop.cropImageUrl!.isNotEmpty)
                       ? CachedNetworkImage(
                           imageUrl: crop.cropImageUrl!,
                           width: 50,
@@ -763,8 +694,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                             ),
                           ),
                           // Image indicators if multiple images exist
-                          if (problem.imageUrl2 != null ||
-                              problem.imageUrl3 != null)
+                          if (problem.imageUrl2 != null || problem.imageUrl3 != null)
                             Positioned(
                               top: 12,
                               right: 12,
@@ -858,10 +788,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                           Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [
-                                  Colors.green[600]!,
-                                  Colors.green[700]!
-                                ],
+                                colors: [Colors.green[600]!, Colors.green[700]!],
                               ),
                               borderRadius: BorderRadius.circular(10),
                               boxShadow: [
@@ -879,8 +806,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (context) =>
-                                          AdvisoryDetailScreen(
-                                              problem: problem),
+                                          AdvisoryDetailScreen(problem: problem),
                                     ),
                                   );
                                 },
