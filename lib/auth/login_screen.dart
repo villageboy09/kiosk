@@ -1,11 +1,10 @@
-import 'package:cropsync/main.dart';
 import 'package:cropsync/screens/home_screen.dart';
+import 'package:cropsync/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
-import 'package:easy_localization/easy_localization.dart'; // Import Easy Localization
+import 'package:easy_localization/easy_localization.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -88,7 +87,6 @@ class _LoginScreenState extends State<LoginScreen>
     final pin = _pinController.text.trim();
 
     if (pin.length != 6) {
-      // UPDATED: Using translation key
       _showErrorFeedback('login_pin_length_error'.tr());
       return;
     }
@@ -96,36 +94,8 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      final response = await supabase.functions.invoke(
-        'login-with-pin',
-        body: {'pin': pin},
-      );
-
-      if (response.status != 200) {
-        final errorMessage =
-            // UPDATED: Using translation key
-            response.data?['error'] ?? 'login_unknown_error'.tr();
-        throw Exception(errorMessage);
-      }
-
-      final responseData = response.data as Map<String, dynamic>;
-      final properties = responseData['properties'] as Map<String, dynamic>?;
-      final user = responseData['user'] as Map<String, dynamic>?;
-
-      final email = user?['email'] as String?;
-      final token = properties?['email_otp'] as String?;
-
-      if (email == null || token == null) {
-        throw Exception(
-            // UPDATED: Using translation key
-            'login_server_response_error'.tr());
-      }
-
-      await supabase.auth.verifyOTP(
-        type: OtpType.magiclink,
-        email: email,
-        token: token,
-      );
+      // Use the new AuthService to login with user ID
+      await AuthService.login(pin);
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -134,11 +104,15 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } catch (error) {
       String displayMessage;
-      if (error.toString().contains('Invalid PIN provided')) {
-        // UPDATED: Using translation key
+      final errorString = error.toString();
+      
+      if (errorString.contains('User not found') || 
+          errorString.contains('Invalid') ||
+          errorString.contains('not found')) {
         displayMessage = 'login_invalid_pin'.tr();
+      } else if (errorString.contains('Network error')) {
+        displayMessage = 'login_network_error'.tr();
       } else {
-        // UPDATED: Using translation key
         displayMessage = 'login_failed_generic'.tr();
       }
       _showErrorFeedback(displayMessage);
@@ -156,7 +130,6 @@ class _LoginScreenState extends State<LoginScreen>
       _errorMessage = message;
     });
 
-    // Hide the error chip after 3 seconds
     Timer(const Duration(seconds: 3), () {
       if (mounted) {
         setState(() {
@@ -270,7 +243,6 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           const SizedBox(height: 32),
           Text(
-            // UPDATED: Using translation key
             'login_welcome_back'.tr(),
             style: GoogleFonts.lexend(
               fontSize: 32,
@@ -281,7 +253,6 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            // UPDATED: Using translation key
             'login_prompt'.tr(),
             style: GoogleFonts.lexend(
               fontSize: 15,
@@ -300,7 +271,6 @@ class _LoginScreenState extends State<LoginScreen>
       animation: Listenable.merge([_pinController, _shakeController]),
       builder: (context, child) {
         final pinLength = _pinController.text.length;
-        // Calculate shake offset
         final shakeOffset = Matrix4.translationValues(
             12 * (0.5 - (0.5 - _shakeAnimation.value).abs()) * 2, 0, 0);
 
@@ -337,75 +307,62 @@ class _LoginScreenState extends State<LoginScreen>
 
   Widget _buildSeparator() {
     return Container(
-      width: 8,
-      alignment: Alignment.center,
-      child: const Text(
-        '•',
-        style: TextStyle(
-          color: Color(0xFFE0E0E0), // Colors.grey.shade300
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
+      width: 2,
+      height: 32,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade300,
+        borderRadius: BorderRadius.circular(1),
       ),
     );
   }
 
   Widget _buildPinDot(int index, bool isFilled, bool isActive) {
-    final colors = [
-      Colors.green.shade300,
-      Colors.green.shade400,
-      Colors.green.shade500,
-      Colors.green.shade600,
-      Colors.green.shade700,
-      Colors.green.shade800,
-    ];
-
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
       width: 48,
-      height: 68,
+      height: 56,
       decoration: BoxDecoration(
-        color: isFilled
-            ? colors[index].withValues(alpha: 0.12)
-            : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(20),
+        color: isFilled ? Colors.green.shade50 : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isActive
-              ? Colors.green.shade500
-              : isFilled
-                  ? colors[index].withValues(alpha: 0.3)
+          color: isFilled
+              ? Colors.green.shade400
+              : isActive
+                  ? Colors.green.shade200
                   : Colors.grey.shade200,
-          width: isActive ? 2.5 : 2,
+          width: isFilled || isActive ? 2 : 1.5,
         ),
-        boxShadow: isActive
+        boxShadow: isFilled
             ? [
                 BoxShadow(
-                  color: Colors.green.shade300.withValues(alpha: 0.4),
-                  blurRadius: 16,
+                  color: Colors.green.shade100.withValues(alpha: 0.5),
+                  blurRadius: 8,
                   spreadRadius: 0,
-                  offset: const Offset(0, 4),
                 ),
               ]
             : [],
       ),
       child: Center(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          transitionBuilder: (child, animation) {
-            return ScaleTransition(
-              scale: animation,
-              child: child,
-            );
-          },
-          child: isFilled
-              ? Icon(
-                  Icons.circle,
-                  key: ValueKey(index),
-                  size: 16,
-                  color: colors[index],
-                )
-              : const SizedBox.shrink(),
+        child: AnimatedScale(
+          scale: isFilled ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutBack,
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: Colors.green.shade600,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.green.shade300.withValues(alpha: 0.5),
+                  blurRadius: 4,
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -414,91 +371,97 @@ class _LoginScreenState extends State<LoginScreen>
   Widget _buildKeypad() {
     return Column(
       children: [
-        _buildKeypadRow(['1', '2', '3']),
-        const SizedBox(height: 12),
-        _buildKeypadRow(['4', '5', '6']),
-        const SizedBox(height: 12),
-        _buildKeypadRow(['7', '8', '9']),
-        const SizedBox(height: 12),
         Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Expanded(
-              child: _buildKeypadButton(
-                onTap: _login,
-                child: Icon(Icons.check_rounded,
-                    color: Colors.green.shade600, size: 28),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildKeypadButton(
-                onTap: () => _onNumberPressed('0'),
-                child: Text(
-                  '0',
-                  style: GoogleFonts.lexend(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildKeypadButton(
-                onTap: _onBackspacePressed,
-                child: Icon(Icons.backspace_outlined,
-                    color: Colors.grey.shade600, size: 24),
-              ),
-            ),
+            _buildKeypadButton('1'),
+            const SizedBox(width: 16),
+            _buildKeypadButton('2'),
+            const SizedBox(width: 16),
+            _buildKeypadButton('3'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildKeypadButton('4'),
+            const SizedBox(width: 16),
+            _buildKeypadButton('5'),
+            const SizedBox(width: 16),
+            _buildKeypadButton('6'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildKeypadButton('7'),
+            const SizedBox(width: 16),
+            _buildKeypadButton('8'),
+            const SizedBox(width: 16),
+            _buildKeypadButton('9'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(width: 88),
+            _buildKeypadButton('0'),
+            const SizedBox(width: 16),
+            _buildBackspaceButton(),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildKeypadRow(List<String> numbers) {
-    return Row(
-      children: numbers.map((number) {
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: _buildKeypadButton(
-              onTap: () => _onNumberPressed(number),
-              child: Text(
-                number,
-                style: GoogleFonts.lexend(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
+  Widget _buildKeypadButton(String value) {
+    return SizedBox(
+      width: 72,
+      child: FluidKeypadButton(
+        onTap: () => _onNumberPressed(value),
+        child: Text(
+          value,
+          style: GoogleFonts.lexend(
+            fontSize: 28,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
           ),
-        );
-      }).toList(),
+        ),
+      ),
     );
   }
 
-  Widget _buildKeypadButton(
-      {required VoidCallback onTap, required Widget child}) {
-    return FluidKeypadButton(onTap: onTap, child: child);
+  Widget _buildBackspaceButton() {
+    return SizedBox(
+      width: 72,
+      child: FluidKeypadButton(
+        onTap: _onBackspacePressed,
+        child: Icon(
+          Icons.backspace_outlined,
+          color: Colors.grey.shade600,
+          size: 26,
+        ),
+      ),
+    );
   }
 
   Widget _buildLoginButton() {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-      height: 62,
+      width: double.infinity,
+      height: 60,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
         gradient: LinearGradient(
           colors: _isLoading
-              ? [Colors.grey.shade300, Colors.grey.shade400]
-              : [Colors.green.shade500, Colors.green.shade700],
+              ? [Colors.grey.shade400, Colors.grey.shade500]
+              : [Colors.green.shade500, Colors.green.shade600],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: _isLoading
             ? []
             : [
@@ -526,7 +489,6 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   )
                 : Text(
-                    // UPDATED: Using translation key
                     'continue'.tr(),
                     style: GoogleFonts.lexend(
                       fontSize: 17,

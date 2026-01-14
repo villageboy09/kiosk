@@ -2,7 +2,7 @@ name: cropsync
 description: "A new Flutter project."
 publish_to: 'none' 
 
-version: 1.0.0+3
+version: 1.0.0+4
 
 environment:
   sdk: '>=3.4.3 <4.0.0'
@@ -12,7 +12,7 @@ dependencies:
     sdk: flutter
   
   cupertino_icons: ^1.0.8
-  supabase_flutter: ^2.9.1
+  # Removed supabase_flutter - now using MySQL backend via HTTP API
   flutter_dotenv: ^6.0.0
   google_fonts: ^6.3.0
   image_picker: ^1.2.0
@@ -32,6 +32,8 @@ dependencies:
   easy_localization: ^3.0.8
   webview_flutter: ^4.13.0
   flutter_animate: ^4.5.2
+  # Added for local session management
+  shared_preferences: ^2.2.2
 
 
 dev_dependencies:

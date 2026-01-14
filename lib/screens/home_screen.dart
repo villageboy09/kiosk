@@ -4,10 +4,11 @@ import 'package:cropsync/screens/drone_booking.dart';
 import 'package:cropsync/screens/market_prices.dart';
 import 'package:cropsync/screens/seed_varieties.dart';
 import 'package:cropsync/screens/weather.dart';
-import 'package:easy_localization/easy_localization.dart'; // Import
+import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/models/user.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cropsync/main.dart';
 import 'package:cropsync/screens/profile_screen.dart';
 import 'package:cropsync/screens/settings_screen.dart';
 import 'package:flutter/material.dart';
@@ -47,7 +48,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   String _farmerName = 'Farmer';
-  // UPDATED: Use translation key for default
   String _greeting = 'home_greeting_welcome'.tr();
   bool _isLoading = true;
   String? _profileImageUrl;
@@ -72,7 +72,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) {
-      // UPDATED: Use translation keys
       return 'home_greeting_morning'.tr();
     } else if (hour < 17) {
       return 'home_greeting_afternoon'.tr();
@@ -83,20 +82,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchFarmerDetails() async {
     // Simulate network delay to see the shimmer effect
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 1));
 
     try {
-      final userId = supabase.auth.currentUser!.id;
-      final response = await supabase
-          .from('farmers')
-          .select('full_name, profile_image_url')
-          .eq('user_id', userId)
-          .single();
+      // Get user from AuthService instead of Supabase
+      User? user = await AuthService.getCurrentUser();
+      
+      // Optionally refresh user data from server
+      user = await AuthService.refreshUserData();
 
-      if (mounted) {
+      if (mounted && user != null) {
         setState(() {
-          _farmerName = response['full_name'] as String? ?? 'Farmer';
-          _profileImageUrl = response['profile_image_url'] as String?;
+          _farmerName = user!.name;
+          _profileImageUrl = user.profileImageUrl;
           _greeting = _getGreeting();
           _widgetOptions[0] = HomeTab(
             greeting: _greeting,
@@ -105,12 +103,22 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           _isLoading = false;
         });
+      } else if (mounted) {
+        setState(() {
+          _farmerName = 'Farmer';
+          _greeting = 'home_greeting_welcome'.tr();
+          _widgetOptions[0] = HomeTab(
+            greeting: _greeting,
+            farmerName: _farmerName,
+            profileImageUrl: null,
+          );
+          _isLoading = false;
+        });
       }
     } catch (error) {
       if (mounted) {
         setState(() {
           _farmerName = 'Farmer';
-          // UPDATED: Use translation key
           _greeting = 'home_greeting_welcome'.tr();
           _widgetOptions[0] = HomeTab(
             greeting: _greeting,
@@ -122,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              // UPDATED: Use translation key
               content: Text('home_fetch_error'.tr()),
               backgroundColor: Colors.redAccent,
             ),
@@ -149,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Cropsync', // Brand name, usually not translated
+          'Cropsync',
           style: GoogleFonts.lexend(
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -201,7 +208,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.home_outlined),
             activeIcon: const Icon(Icons.home),
             title: Text(
-              // UPDATED: Use translation key
               "home_bottom_nav_home".tr(),
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w500,
@@ -212,7 +218,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.library_books_outlined),
             activeIcon: const Icon(Icons.library_books),
             title: Text(
-              // UPDATED: Use translation key
               "home_bottom_nav_advisories".tr(),
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w500,
@@ -223,7 +228,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.settings_outlined),
             activeIcon: const Icon(Icons.settings),
             title: Text(
-              // UPDATED: Use translation key
               "home_bottom_nav_settings".tr(),
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w500,
@@ -303,7 +307,6 @@ class HomeTab extends StatelessWidget {
     this.profileImageUrl,
   });
 
-  // UPDATED: Changed 'title' and 'subtitle' to 'title_key' and 'subtitle_key'
   static final List<Map<String, dynamic>> features = [
     {
       'title_key': 'home_feature_weather_title',
@@ -323,283 +326,225 @@ class HomeTab extends StatelessWidget {
     {
       'title_key': 'home_feature_market_title',
       'subtitle_key': 'home_feature_market_subtitle',
-      'icon': Icons.trending_up_rounded,
-      'color': const Color(0xFFF57C00),
+      'icon': Icons.trending_up_outlined,
+      'color': const Color(0xFFE65100),
       'page': const MarketPricesScreen()
-    },
-    {
-      'title_key': 'home_feature_drone_title',
-      'subtitle_key': 'home_feature_drone_subtitle',
-      'icon': Icons.flight_takeoff_rounded,
-      'lottiePath': 'assets/lottie/drone.json',
-      'color': const Color(0xFF7B1FA2),
-      'page': const DroneBookingScreen()
     },
     {
       'title_key': 'home_feature_shop_title',
       'subtitle_key': 'home_feature_shop_subtitle',
-      'icon': Icons.store_outlined,
-      'lottiePath': 'assets/lottie/shop.json',
-      'color': const Color(0xFFD32F2F),
+      'icon': Icons.storefront_outlined,
+      'color': const Color(0xFF5D4037),
       'page': const AgriShopScreen()
     },
     {
       'title_key': 'home_feature_seeds_title',
       'subtitle_key': 'home_feature_seeds_subtitle',
-      'icon': Icons.eco_outlined,
-      'color': const Color(0xFF00695C),
+      'icon': Icons.grass_outlined,
+      'color': const Color(0xFF1565C0),
       'page': const SeedVarietiesScreen()
+    },
+    {
+      'title_key': 'home_feature_drone_title',
+      'subtitle_key': 'home_feature_drone_subtitle',
+      'icon': Icons.flight_outlined,
+      'color': const Color(0xFF6A1B9A),
+      'page': const DroneBookingScreen()
     },
   ];
 
   @override
   Widget build(BuildContext context) {
-    // UPDATED: Use context.locale to format the date correctly
-    final String currentDate =
-        DateFormat('EEEE, d MMMM', context.locale.toString())
-            .format(DateTime.now());
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildGreetingCard(context),
+            const SizedBox(height: 32),
+            Text(
+              'home_services_title'.tr(),
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 20),
+            _buildFeaturesGrid(context),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
 
+  Widget _buildGreetingCard(BuildContext context) {
     return Container(
-      color: const Color(0xFFF1F8E9),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.green.withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2E7D32),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.green.withAlpha(77),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        greeting, // This is already translated from the parent
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        farmerName,
-                        style: GoogleFonts.poppins(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Divider(color: Colors.white24),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(Icons.calendar_today_outlined,
-                              color: Colors.white70, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            currentDate, // Now localized
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
                 Text(
-                  // UPDATED: Use translation key
-                  'home_quick_actions'.tr(),
+                  greeting,
                   style: GoogleFonts.poppins(
-                    fontSize: 22,
+                    fontSize: 16,
+                    color: Colors.white70,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  farmerName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: const Color(0xFF2E7D32),
+                    color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 20),
-                GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 1.1,
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  itemCount: features.length,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemBuilder: (context, index) {
-                    final feature = features[index];
-                    return _buildFeatureCard(context, feature);
-                  },
+                  child: Text(
+                    'home_welcome_message'.tr(),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 20),
               ],
             ),
           ),
-        ),
+          Lottie.asset(
+            'assets/lottie/farmer.json',
+            width: 100,
+            height: 100,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildFeatureCard(BuildContext context, Map<String, dynamic> feature) {
-    Widget iconOrAvatar;
-
-    // UPDATED: Get the translated title first
-    final String title = feature['title_key'].toString().tr();
-
-    if (feature['title_key'] == 'home_feature_advisory_title' &&
-        profileImageUrl != null &&
-        profileImageUrl!.isNotEmpty) {
-      iconOrAvatar = CircleAvatar(
-        radius: 30,
-        backgroundColor: Colors.grey[200],
-        backgroundImage: CachedNetworkImageProvider(profileImageUrl!),
-      );
-    } else {
-      final String? lottiePath = feature['lottiePath'] as String?;
-      if (lottiePath != null) {
-        iconOrAvatar = Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: (feature['color'] as Color).withAlpha(38),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Lottie.asset(
-            lottiePath,
-            width: 40,
-            height: 40,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => Icon(
-              feature['icon'] as IconData,
-              size: 40,
-              color: feature['color'] as Color,
-            ),
-          ),
-        );
-      } else {
-        iconOrAvatar = Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: (feature['color'] as Color).withAlpha(38),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            feature['icon'] as IconData,
-            size: 40,
-            color: feature['color'] as Color,
-          ),
-        );
-      }
-    }
-
-    return Card(
-      elevation: 2,
-      shadowColor: Colors.black.withAlpha(26),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () {
-          final page = feature['page'] as Widget?;
-          if (page != null) {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => page),
-            );
-          } else {
-            // UPDATED: Pass the translated title to the dialog
-            _showFeatureDialog(context, title);
-          }
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              iconOrAvatar,
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CustomPaint(
-                    painter: DashPainter(),
-                    child: Container(height: 1),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    title, // Use the translated title
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    // UPDATED: Get subtitle key and translate
-                    feature['subtitle_key'].toString().tr(),
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+  Widget _buildFeaturesGrid(BuildContext context) {
+    return GridView.builder(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 1.1,
       ),
-    );
-  }
-
-  void _showFeatureDialog(BuildContext context, String featureName) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          // UPDATED: Title is now just the feature name
-          title: Text(
-            featureName,
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            // UPDATED: Use translation key
-            'home_dialog_coming_soon'.tr(),
-            style: GoogleFonts.poppins(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                // UPDATED: Use translation key
-                'dialog_ok'.tr(),
-                style: GoogleFonts.poppins(
-                  color: const Color(0xFF2E7D32),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
+      itemCount: features.length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemBuilder: (context, index) {
+        final feature = features[index];
+        return _buildFeatureCard(
+          context,
+          feature['title_key'].toString().tr(),
+          feature['subtitle_key'].toString().tr(),
+          feature['icon'] as IconData,
+          feature['color'] as Color,
+          feature['page'] as Widget,
+          lottiePath: feature['lottiePath'] as String?,
         );
       },
+    );
+  }
+
+  Widget _buildFeatureCard(
+    BuildContext context,
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+    Widget page, {
+    String? lottiePath,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => page),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: lottiePath != null
+                  ? SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: Lottie.asset(lottiePath, fit: BoxFit.contain),
+                    )
+                  : Icon(icon, color: color, size: 28),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
