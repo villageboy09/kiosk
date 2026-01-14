@@ -64,7 +64,8 @@ class ApiService {
   // ===================== CROP FUNCTIONS =====================
 
   /// Get all crops
-  static Future<List<Map<String, dynamic>>> getCrops({String lang = 'te'}) async {
+  static Future<List<Map<String, dynamic>>> getCrops(
+      {String lang = 'te'}) async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/api.php?action=get_crops&lang=$lang'),
@@ -104,10 +105,12 @@ class ApiService {
   // ===================== USER CROP SELECTIONS =====================
 
   /// Get user's crop selections
-  static Future<List<Map<String, dynamic>>> getUserSelections(String userId, {String lang = 'te'}) async {
+  static Future<List<Map<String, dynamic>>> getUserSelections(String userId,
+      {String lang = 'te'}) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=get_user_selections&user_id=$userId&lang=$lang'),
+        Uri.parse(
+            '$baseUrl/api.php?action=get_user_selections&user_id=$userId&lang=$lang'),
       );
 
       if (response.statusCode == 200) {
@@ -218,10 +221,12 @@ class ApiService {
   // ===================== ADVISORY FUNCTIONS =====================
 
   /// Get crop stages
-  static Future<List<Map<String, dynamic>>> getCropStages(int cropId, {String lang = 'te'}) async {
+  static Future<List<Map<String, dynamic>>> getCropStages(int cropId,
+      {String lang = 'te'}) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=get_crop_stages&crop_id=$cropId&lang=$lang'),
+        Uri.parse(
+            '$baseUrl/api.php?action=get_crop_stages&crop_id=$cropId&lang=$lang'),
       );
 
       if (response.statusCode == 200) {
@@ -237,13 +242,14 @@ class ApiService {
   }
 
   /// Get stage durations
-  static Future<List<Map<String, dynamic>>> getStageDuration(int cropId, {int? varietyId}) async {
+  static Future<List<Map<String, dynamic>>> getStageDuration(int cropId,
+      {int? varietyId}) async {
     try {
       String url = '$baseUrl/api.php?action=get_stage_duration&crop_id=$cropId';
       if (varietyId != null) {
         url += '&variety_id=$varietyId';
       }
-      
+
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
@@ -259,12 +265,13 @@ class ApiService {
   }
 
   /// Get problems for a crop/stage
-  static Future<List<Map<String, dynamic>>> getProblems({int? cropId, int? stageId, String lang = 'te'}) async {
+  static Future<List<Map<String, dynamic>>> getProblems(
+      {int? cropId, int? stageId, String lang = 'te'}) async {
     try {
       String url = '$baseUrl/api.php?action=get_problems&lang=$lang';
       if (cropId != null) url += '&crop_id=$cropId';
       if (stageId != null) url += '&stage_id=$stageId';
-      
+
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
@@ -280,10 +287,12 @@ class ApiService {
   }
 
   /// Get advisories for a problem
-  static Future<Map<String, dynamic>?> getAdvisories(int problemId, {String lang = 'te'}) async {
+  static Future<Map<String, dynamic>?> getAdvisories(int problemId,
+      {String lang = 'te'}) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=get_advisories&problem_id=$problemId&lang=$lang'),
+        Uri.parse(
+            '$baseUrl/api.php?action=get_advisories&problem_id=$problemId&lang=$lang'),
       );
 
       if (response.statusCode == 200) {
@@ -299,10 +308,13 @@ class ApiService {
   }
 
   /// Get advisory components/recommendations
-  static Future<List<Map<String, dynamic>>> getAdvisoryComponents(int advisoryId, {String lang = 'te'}) async {
+  static Future<List<Map<String, dynamic>>> getAdvisoryComponents(
+      int advisoryId,
+      {String lang = 'te'}) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=get_advisory_components&advisory_id=$advisoryId&lang=$lang'),
+        Uri.parse(
+            '$baseUrl/api.php?action=get_advisory_components&advisory_id=$advisoryId&lang=$lang'),
       );
 
       if (response.statusCode == 200) {
@@ -355,9 +367,11 @@ class ApiService {
     try {
       String url = '$baseUrl/api.php?action=get_products&lang=$lang';
       if (category != null) url += '&category=${Uri.encodeComponent(category)}';
-      if (search != null && search.isNotEmpty) url += '&search=${Uri.encodeComponent(search)}';
+      if (search != null && search.isNotEmpty) {
+        url += '&search=${Uri.encodeComponent(search)}';
+      }
       if (sort != null && sort != 'default') url += '&sort=$sort';
-      
+
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
@@ -417,9 +431,8 @@ class ApiService {
     }
   }
 
-  /// Create a purchase request with full details
   static Future<Map<String, dynamic>> createPurchaseRequest({
-    required int oderId,
+    required String userId,
     required int productId,
     required int advertiserId,
     required int quantity,
@@ -431,7 +444,7 @@ class ApiService {
         Uri.parse('$baseUrl/api.php?action=create_purchase_request'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'user_id': oderId,
+          'user_id': userId,
           'product_id': productId,
           'advertiser_id': advertiserId,
           'quantity': quantity,
@@ -452,11 +465,14 @@ class ApiService {
   // ===================== SEED VARIETIES FUNCTIONS =====================
 
   /// Get seed varieties
-  static Future<List<Map<String, dynamic>>> getSeedVarieties({String? cropName, String lang = 'te'}) async {
+  static Future<List<Map<String, dynamic>>> getSeedVarieties(
+      {String? cropName, String lang = 'te'}) async {
     try {
       String url = '$baseUrl/api.php?action=get_seed_varieties&lang=$lang';
-      if (cropName != null) url += '&crop_name=${Uri.encodeComponent(cropName)}';
-      
+      if (cropName != null) {
+        url += '&crop_name=${Uri.encodeComponent(cropName)}';
+      }
+
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {

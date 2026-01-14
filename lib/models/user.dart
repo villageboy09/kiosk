@@ -27,16 +27,16 @@ class User {
   /// Create a User from JSON response
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      userId: json['user_id'] as String,
-      name: json['name'] as String,
-      phoneNumber: json['phone_number'] as String?,
-      district: json['district'] as String?,
-      village: json['village'] as String?,
-      mandal: json['mandal'] as String?,
-      region: json['region'] as String?,
-      clientCode: json['client_code'] as String?,
-      cardUid: json['card_uid'] as String?,
-      profileImageUrl: json['profile_image_url'] as String?,
+      userId: json['user_id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Unknown',
+      phoneNumber: json['phone_number']?.toString(),
+      district: json['district']?.toString(),
+      village: json['village']?.toString(),
+      mandal: json['mandal']?.toString(),
+      region: json['region']?.toString(),
+      clientCode: json['client_code']?.toString(),
+      cardUid: json['card_uid']?.toString(),
+      profileImageUrl: json['profile_image_url']?.toString(),
     );
   }
 

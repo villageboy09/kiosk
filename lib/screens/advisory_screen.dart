@@ -1,5 +1,7 @@
 // lib/screens/advisory_screen.dart
 
+// ignore_for_file: avoid_print, use_build_context_synchronously
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/crop_problem.dart';
 import 'package:cropsync/screens/advisory_details.dart';
@@ -54,9 +56,11 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
   List<CropStage> _stages = [];
   List<CropProblem> _problems = [];
 
-  // Selections
   FarmerCropSelection? _selectedFarmerCrop;
   CropStage? _selectedStage;
+
+  // Initialization state
+  bool _isInit = true;
 
   // Animation
   late AnimationController _feedAnimationController;
@@ -73,7 +77,15 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _fetchInitialData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_isInit) {
+      _fetchInitialData();
+      _isInit = false;
+    }
   }
 
   @override
@@ -112,12 +124,15 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       final locale = _getLocaleField(context.locale.languageCode);
 
       // Fetch user's crop selections from MySQL API
-      final selectionsData = await ApiService.getUserSelections(userId, lang: locale);
+      final selectionsData =
+          await ApiService.getUserSelections(userId, lang: locale);
 
-      print('4. Fetched Selections Data: Found ${selectionsData.length} crop(s).');
+      print(
+          '4. Fetched Selections Data: Found ${selectionsData.length} crop(s).');
 
       if (selectionsData.isEmpty) {
-        print('WARNING: No crop selections found for this farmer in the database.');
+        print(
+            'WARNING: No crop selections found for this farmer in the database.');
         if (mounted) {
           setState(() {
             _farmerCrops = [];
@@ -129,13 +144,14 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
 
       final List<FarmerCropSelection> loadedCrops = selectionsData.map((s) {
         return FarmerCropSelection(
-          id: s['selection_id'] as int,
-          fieldName: s['field_name'] as String,
-          cropName: s['crop_name'] as String,
-          cropImageUrl: s['crop_image_url'] as String?,
-          cropId: s['crop_id'] as int? ?? 1,
-          varietyId: s['variety_id'] as int? ?? 1,
-          sowingDate: DateTime.parse(s['sowing_date'] as String),
+          id: int.tryParse(s['selection_id'].toString()) ?? 0,
+          fieldName: s['field_name']?.toString() ?? 'Unknown Field',
+          cropName: s['crop_name']?.toString() ?? 'Unknown Crop',
+          cropImageUrl: s['crop_image_url']?.toString(),
+          cropId: int.tryParse(s['crop_id'].toString()) ?? 1,
+          varietyId: int.tryParse(s['variety_id'].toString()) ?? 1,
+          sowingDate:
+              DateTime.tryParse(s['sowing_date'].toString()) ?? DateTime.now(),
         );
       }).toList();
 
@@ -176,7 +192,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       final locale = _getLocaleField(context.locale.languageCode);
 
       // Fetch crop stages from MySQL API
-      final stagesData = await ApiService.getCropStages(farmerCrop.cropId, lang: locale);
+      final stagesData =
+          await ApiService.getCropStages(farmerCrop.cropId, lang: locale);
 
       final List<CropStage> loadedStages = stagesData.map((s) {
         return CropStage(
@@ -186,7 +203,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       }).toList();
 
       // Calculate days since sowing to find the current stage
-      final daysSinceSowing = DateTime.now().difference(farmerCrop.sowingDate).inDays;
+      final daysSinceSowing =
+          DateTime.now().difference(farmerCrop.sowingDate).inDays;
 
       CropStage? currentStage;
       try {
@@ -209,7 +227,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
           }
         }
       } catch (e) {
-        debugPrint('Could not determine current stage automatically. Defaulting to first stage.');
+        debugPrint(
+            'Could not determine current stage automatically. Defaulting to first stage.');
       }
 
       if (mounted) {
@@ -350,8 +369,11 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                           selectedColor: Colors.green[100],
                           checkmarkColor: Colors.green[700],
                           labelStyle: GoogleFonts.lexend(
-                            color: isSelected ? Colors.green[700] : Colors.black87,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            color:
+                                isSelected ? Colors.green[700] : Colors.black87,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
                         );
                       }).toList(),
@@ -392,12 +414,23 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: (crop.cropImageUrl != null && crop.cropImageUrl!.isNotEmpty)
+                  child: (crop.cropImageUrl != null &&
+                          crop.cropImageUrl!.isNotEmpty &&
+                          (crop.cropImageUrl!.startsWith('http') ||
+                              crop.cropImageUrl!.startsWith('https')))
                       ? CachedNetworkImage(
                           imageUrl: crop.cropImageUrl!,
                           width: 50,
                           height: 50,
                           fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.grass, color: Colors.grey),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.grass, color: Colors.grey),
+                          ),
                         )
                       : Container(
                           width: 50,
@@ -653,27 +686,29 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                       aspectRatio: 16 / 9,
                       child: Stack(
                         children: [
-                          CachedNetworkImage(
-                            imageUrl: problem.imageUrl1!,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              color: Colors.grey[200],
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: Colors.green[700],
+                          if (problem.imageUrl1!.startsWith('http') ||
+                              problem.imageUrl1!.startsWith('https'))
+                            CachedNetworkImage(
+                              imageUrl: problem.imageUrl1!,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: Colors.grey[200],
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    color: Colors.green[700],
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: Colors.grey[200],
+                                child: const Icon(
+                                  Icons.broken_image,
+                                  size: 50,
+                                  color: Colors.grey,
                                 ),
                               ),
                             ),
-                            errorWidget: (context, url, error) => Container(
-                              color: Colors.grey[200],
-                              child: const Icon(
-                                Icons.broken_image,
-                                size: 50,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
                           // Gradient overlay for better text visibility
                           Positioned(
                             bottom: 0,
@@ -694,7 +729,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                             ),
                           ),
                           // Image indicators if multiple images exist
-                          if (problem.imageUrl2 != null || problem.imageUrl3 != null)
+                          if (problem.imageUrl2 != null ||
+                              problem.imageUrl3 != null)
                             Positioned(
                               top: 12,
                               right: 12,
@@ -788,7 +824,10 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                           Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [Colors.green[600]!, Colors.green[700]!],
+                                colors: [
+                                  Colors.green[600]!,
+                                  Colors.green[700]!
+                                ],
                               ),
                               borderRadius: BorderRadius.circular(10),
                               boxShadow: [
@@ -806,7 +845,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (context) =>
-                                          AdvisoryDetailScreen(problem: problem),
+                                          AdvisoryDetailScreen(
+                                              problem: problem),
                                     ),
                                   );
                                 },

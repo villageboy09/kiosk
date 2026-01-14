@@ -34,16 +34,10 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<User?> _userFuture;
   final _formKey = GlobalKey<FormState>();
-  bool _isLoading = false;
 
   // Controllers for editable fields
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  String? _profileImageUrl;
-
-  // Store original values to restore on cancel
-  String? _originalName;
-  String? _originalPhone;
 
   @override
   void initState() {
@@ -61,17 +55,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<User?> _fetchAndSetUserProfile() async {
     // Get user from AuthService
     User? user = await AuthService.getCurrentUser();
-    
+
     // Try to refresh from server
     user = await AuthService.refreshUserData();
 
     if (user != null) {
       _nameController.text = user.name;
       _phoneController.text = user.phoneNumber ?? '';
-      _profileImageUrl = user.profileImageUrl;
-
-      _originalName = _nameController.text;
-      _originalPhone = _phoneController.text;
     }
 
     return user;
@@ -241,7 +231,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => PrivacyPolicyScreen(url: url),
+                        builder: (context) =>
+                            const PrivacyPolicyScreen(url: url),
                       ),
                     );
                   },
@@ -522,10 +513,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
               child: ClipOval(
-                child: user.profileImageUrl != null &&
-                        user.profileImageUrl!.isNotEmpty
+                child: (user.profileImageUrl != null &&
+                        user.profileImageUrl!.isNotEmpty &&
+                        (user.profileImageUrl!.startsWith('http') ||
+                            user.profileImageUrl!.startsWith('https')))
                     ? CachedNetworkImage(
                         imageUrl: user.profileImageUrl!,
+                        width: 100,
+                        height: 100,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Container(
                           color: Colors.grey[300],

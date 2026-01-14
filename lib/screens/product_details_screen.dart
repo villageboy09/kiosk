@@ -98,7 +98,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               color: Colors.white.withAlpha(180),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.arrow_back, color: Colors.black87, size: 20),
+            child:
+                const Icon(Icons.arrow_back, color: Colors.black87, size: 20),
           ),
         ),
       ),
@@ -181,7 +182,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'Sold by: ${widget.product.advertiserName}',
-                  style: GoogleFonts.lexend(fontSize: 14, color: Colors.grey.shade600),
+                  style: GoogleFonts.lexend(
+                      fontSize: 14, color: Colors.grey.shade600),
                 ),
               ],
             ),
@@ -233,10 +235,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Price',
-                    style: GoogleFonts.lexend(color: Colors.grey.shade500, fontSize: 12)),
+                    style: GoogleFonts.lexend(
+                        color: Colors.grey.shade500, fontSize: 12)),
                 Text('₹${widget.product.price}',
                     style: GoogleFonts.lexend(
-                        fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87)),
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87)),
               ],
             ),
             const SizedBox(width: 16),
@@ -304,12 +309,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 if (currentUser == null) throw Exception('User not logged in');
 
                 final result = await ApiService.createPurchaseRequest(
-                  userId: currentUser.oderId,
+                  userId: currentUser.userId,
                   productId: widget.product.id,
                   advertiserId: widget.product.advertiserId,
                   quantity: quantity,
                   totalPrice: totalPrice,
-                  message: messageController.text.isEmpty ? null : messageController.text,
+                  message: messageController.text.isEmpty
+                      ? null
+                      : messageController.text,
                 );
 
                 if (result['success'] != true) {
@@ -338,7 +345,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             }
 
             return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Container(
                 padding: const EdgeInsets.all(20),
                 child: Form(
@@ -358,13 +366,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       ),
                       const SizedBox(height: 24),
                       Text('Send Purchase Request',
-                          style: GoogleFonts.lexend(fontSize: 20, fontWeight: FontWeight.bold)),
+                          style: GoogleFonts.lexend(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('Quantity (${widget.product.unit})',
-                              style: GoogleFonts.lexend(fontSize: 16, fontWeight: FontWeight.w500)),
+                              style: GoogleFonts.lexend(
+                                  fontSize: 16, fontWeight: FontWeight.w500)),
                           Container(
                             decoration: BoxDecoration(
                                 color: Colors.grey.shade100,
@@ -372,14 +382,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             child: Row(
                               children: [
                                 IconButton(
-                                    icon: const Icon(Icons.remove, color: Colors.red),
-                                    onPressed: () => updateQuantity(quantity - 1)),
+                                    icon: const Icon(Icons.remove,
+                                        color: Colors.red),
+                                    onPressed: () =>
+                                        updateQuantity(quantity - 1)),
                                 Text(quantity.toString(),
                                     style: GoogleFonts.lexend(
-                                        fontSize: 16, fontWeight: FontWeight.bold)),
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold)),
                                 IconButton(
-                                    icon: const Icon(Icons.add, color: Colors.green),
-                                    onPressed: () => updateQuantity(quantity + 1)),
+                                    icon: const Icon(Icons.add,
+                                        color: Colors.green),
+                                    onPressed: () =>
+                                        updateQuantity(quantity + 1)),
                               ],
                             ),
                           )

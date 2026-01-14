@@ -1,6 +1,14 @@
 {
-      "welcome_title": "क्रॉपसिंक में आपका स्वागत है",
-      
+  "welcome_title": "क्रॉपसिंक में आपका स्वागत है",
+  "home_welcome_message": "आपके खेती डैशबोर्ड में आपका स्वागत है",
+  "home_services_title": "हमारी सेवाएँ",
+  "personal_info": "व्यक्तिगत जानकारी",
+  "user_id": "उपयोगकर्ता आईडी",
+  "name": "नाम",
+  "district": "जिला",
+  "village": "गांव",
+  "region": "क्षेत्र",
+  "contact_us": "संपर्क करें",
   "splash_tagline": "स्मार्ट फार्मिंग, सरलीकृत।",
   "splash_connecting": "कनेक्ट हो रहा है...",
   "login_welcome_back": "वापसी पर स्वागत है",
@@ -226,4 +234,4 @@
   "service_date": "सेवा तिथि: {date}",
   "profile_updated": "प्रोफ़ाइल सफलतापूर्वक अपडेट की गई!",
   "update_profile_error": "प्रोफ़ाइल अपडेट करने में त्रुटि: {error}"
-    }
+}

@@ -1,5 +1,7 @@
 // lib/screens/seed_varieties.dart
 
+// ignore_for_file: avoid_print
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cropsync/services/api_service.dart';
@@ -171,7 +173,8 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             );
           }
 
-          final cropTypes = _allVarieties.map((v) => v.cropName).toSet().toList();
+          final cropTypes =
+              _allVarieties.map((v) => v.cropName).toSet().toList();
 
           return ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -206,8 +209,8 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             return Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: GestureDetector(
-                onTap: () =>
-                    _filterVarieties(crop == context.tr('all_filter') ? null : crop),
+                onTap: () => _filterVarieties(
+                    crop == context.tr('all_filter') ? null : crop),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -292,7 +295,8 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
-                      context.tr('price_label', namedArgs: {'price': variety.price!}),
+                      context.tr('price_label',
+                          namedArgs: {'price': variety.price!}),
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -357,7 +361,10 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(width: double.infinity, height: 18, color: Colors.white),
+                      Container(
+                          width: double.infinity,
+                          height: 18,
+                          color: Colors.white),
                       const SizedBox(height: 8),
                       Container(width: 120, height: 14, color: Colors.white),
                       const SizedBox(height: 10),

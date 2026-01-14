@@ -1,5 +1,14 @@
 {
-      "welcome_title": "Welcome to CropSync",
+  "welcome_title": "Welcome to CropSync",
+  "home_welcome_message": "Welcome to your farming dashboard",
+  "home_services_title": "Our Services",
+  "personal_info": "Personal Information",
+  "user_id": "User ID",
+  "name": "Name",
+  "district": "District",
+  "village": "Village",
+  "region": "Region",
+  "contact_us": "Contact Us",
   "splash_tagline": "Smart Farming, Simplified.",
   "splash_connecting": "Connecting...",
   "login_welcome_back": "Welcome Back",
@@ -225,7 +234,4 @@
   "service_date": "Service Date: {date}",
   "profile_updated": "Profile updated successfully!",
   "update_profile_error": "Error updating profile: {error}"
-
-    }
-
-    
+}

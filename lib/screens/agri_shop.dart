@@ -116,7 +116,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
       {String? category, String? search, String? sort}) async {
     try {
       final locale = _getLocaleField(context.locale.languageCode);
-      
+
       // Determine category filter
       String? categoryFilter;
       if (category != null && category != context.tr('all_category')) {
@@ -139,19 +139,30 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
 
   List<Product> _mapResponseToProducts(List<dynamic> response, String locale) {
     return response.map((p) {
-      final priceValue = (p['price'] as num?) ?? 0;
+      // Safely parse price, handling both String ("60000.00") and num (60000)
+      final priceString = p['price']?.toString() ?? '0';
+      final priceValue = double.tryParse(priceString) ?? 0.0;
+
       return Product(
-        id: p['id'] as int? ?? 0,
-        advertiserId: p['advertiser_id'] as int? ?? 0,
-        name: p['name'] as String? ?? 'N/A',
-        category: p['category'] as String? ?? 'General',
+        id: int.tryParse(
+                p['product_id']?.toString() ?? p['id']?.toString() ?? '0') ??
+            0,
+        advertiserId: int.tryParse(p['advertiser_id']?.toString() ?? '0') ?? 0,
+        name: p['product_name']?.toString() ??
+            p['name']?.toString() ??
+            'N/A', // Handle schema diffs
+        category: p['category']?.toString() ?? 'General',
         price: priceValue.toStringAsFixed(0),
-        description: p['description'] as String? ?? context.tr('no_description'),
-        imageUrl1: p['image_url_1'] as String?,
-        imageUrl2: p['image_url_2'] as String?,
-        imageUrl3: p['image_url_3'] as String?,
-        videoUrl: p['video_url'] as String?,
-        advertiserName: p['advertiser_name'] as String? ?? context.tr('unknown_seller'),
+        description: p['product_description']?.toString() ??
+            p['description']?.toString() ??
+            context.tr('no_description'),
+        imageUrl1: p['image_url_1']?.toString(),
+        imageUrl2: p['image_url_2']?.toString(),
+        imageUrl3: p['image_url_3']?.toString(),
+        videoUrl:
+            p['product_video_url']?.toString() ?? p['video_url']?.toString(),
+        advertiserName:
+            p['advertiser_name']?.toString() ?? context.tr('unknown_seller'),
         isPopular: priceValue > 500,
         unit: 'unit',
       );
@@ -208,7 +219,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
               decoration: InputDecoration(
                 hintText: context.tr('search_products'),
                 hintStyle: GoogleFonts.lexend(color: Colors.grey[500]),
-                prefixIcon: Icon(Icons.search, color: Colors.grey[500], size: 20),
+                prefixIcon:
+                    Icon(Icons.search, color: Colors.grey[500], size: 20),
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -266,7 +278,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   label: Text(category),
                   labelStyle: GoogleFonts.lexend(
                     color: isSelected ? Colors.white : Colors.black87,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
                   ),
                   selected: isSelected,
                   selectedColor: Colors.green.shade600,
@@ -312,7 +325,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
               mainAxisSpacing: 16,
             ),
             itemCount: products.length,
-            itemBuilder: (context, index) => AnimationConfiguration.staggeredGrid(
+            itemBuilder: (context, index) =>
+                AnimationConfiguration.staggeredGrid(
               position: index,
               duration: const Duration(milliseconds: 375),
               columnCount: 2,
@@ -332,7 +346,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => ProductDetailsScreen(product: product)),
+        MaterialPageRoute(
+            builder: (_) => ProductDetailsScreen(product: product)),
       ),
       child: Container(
         decoration: BoxDecoration(
@@ -346,15 +361,18 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
               child: Hero(
                 tag: 'product_image_${product.id}',
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(16)),
                   child: CachedNetworkImage(
                     imageUrl: product.imageUrl1 ?? '',
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(color: Colors.grey.shade100),
+                    placeholder: (context, url) =>
+                        Container(color: Colors.grey.shade100),
                     errorWidget: (context, url, error) => Container(
                       color: Colors.grey.shade100,
-                      child: Icon(Icons.eco_outlined, color: Colors.grey.shade300, size: 40),
+                      child: Icon(Icons.eco_outlined,
+                          color: Colors.grey.shade300, size: 40),
                     ),
                   ),
                 ),
@@ -378,7 +396,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   const SizedBox(height: 4),
                   Text(
                     context.tr('per_unit', namedArgs: {'unit': product.unit}),
-                    style: GoogleFonts.lexend(fontSize: 12, color: Colors.grey.shade500),
+                    style: GoogleFonts.lexend(
+                        fontSize: 12, color: Colors.grey.shade500),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -426,7 +445,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   }
 
   Widget _buildErrorState(String error) {
-    return Center(child: Text(context.tr('error_message', namedArgs: {'error': error})));
+    return Center(
+        child: Text(context.tr('error_message', namedArgs: {'error': error})));
   }
 
   void _showFilterBottomSheet() {
@@ -455,7 +475,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   ),
                   const SizedBox(height: 24),
                   Text(context.tr('sort_by'),
-                      style: GoogleFonts.lexend(fontSize: 20, fontWeight: FontWeight.bold)),
+                      style: GoogleFonts.lexend(
+                          fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   RadioGroup<String>(
                     groupValue: _sortOrder,
@@ -467,17 +488,20 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                     child: Column(
                       children: [
                         RadioListTile<String>(
-                          title: Text(context.tr('relevance'), style: GoogleFonts.lexend()),
+                          title: Text(context.tr('relevance'),
+                              style: GoogleFonts.lexend()),
                           value: 'default',
                           activeColor: Colors.green.shade600,
                         ),
                         RadioListTile<String>(
-                          title: Text(context.tr('price_low_to_high'), style: GoogleFonts.lexend()),
+                          title: Text(context.tr('price_low_to_high'),
+                              style: GoogleFonts.lexend()),
                           value: 'price_asc',
                           activeColor: Colors.green.shade600,
                         ),
                         RadioListTile<String>(
-                          title: Text(context.tr('price_high_to_low'), style: GoogleFonts.lexend()),
+                          title: Text(context.tr('price_high_to_low'),
+                              style: GoogleFonts.lexend()),
                           value: 'price_desc',
                           activeColor: Colors.green.shade600,
                         ),
@@ -495,11 +519,14 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green.shade600,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(context.tr('apply_filters'),
                           style: GoogleFonts.lexend(
-                              color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

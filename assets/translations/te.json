@@ -1,5 +1,14 @@
 {
-      "welcome_title": "క్రాప్‌సింక్‌కి స్వాగతం",
+  "welcome_title": "క్రాప్‌సింక్‌కి స్వాగతం",
+  "home_welcome_message": "మీ వ్యవసాయ డాష్‌బోర్డ్‌కు స్వాగతం",
+  "home_services_title": "మా సేవలు",
+  "personal_info": "వ్యక్తిగత సమాచారం",
+  "user_id": "యూజర్ ఐడి",
+  "name": "పేరు",
+  "district": "జిల్లా",
+  "village": "గ్రామం",
+  "region": "ప్రాంతం",
+  "contact_us": "మమ్మల్ని సంప్రదించండి",
   "splash_tagline": "స్మార్ట్ ఫార్మింగ్, సరళీకృతం.",
   "splash_connecting": "కనెక్ట్ అవుతోంది...",
   "login_welcome_back": " తిరిగి స్వాగతం",
@@ -186,7 +195,6 @@
   "load_data_error": "డేటాను లోడ్ చేయడంలో తప్పు: {error}",
   "fetch_varieties_error": "రకాలను పొందడంలో తప్పు: {error}",
   "in_use": "ఉపయోగంలో",
-  
   "your_name": "మీ పేరు",
   "save": "సేవ్ చేయండి",
   "edit_profile": "ప్రొఫైల్‌ను సవరించండి",
@@ -226,6 +234,4 @@
   "service_date": "సర్వీస్ తేదీ: {date}",
   "profile_updated": "ప్రొఫైల్ విజయవంతంగా అప్‌డేట్ చేయబడింది!",
   "update_profile_error": "ప్రొఫైల్ అప్‌డేట్ చేయడంలో తప్పు: {error}"
-
-
-    }
+}
