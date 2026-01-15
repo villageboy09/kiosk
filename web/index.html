@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="CropSync - Smart Farming Assistant">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -31,8 +31,21 @@
 
   <title>cropsync</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- ElevenLabs Voice Assistant Widget Styles -->
+  <style>
+    /* Custom styling for the ElevenLabs widget to match CropSync branding */
+    elevenlabs-convai {
+      --elevenlabs-convai-primary-color: #2E7D32;
+      --elevenlabs-convai-accent-color: #4CAF50;
+    }
+  </style>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+  
+  <!-- ElevenLabs CropSync Farmer Assistant Voice Widget -->
+  <elevenlabs-convai agent-id="agent_7201kezwqz7zftwasq3byzxhpdaj"></elevenlabs-convai>
+  <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
 </body>
 </html>
