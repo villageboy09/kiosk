@@ -16,22 +16,22 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.cropsync.cropsync"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
         applicationId = "com.cropsync.cropsync"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = 24
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -68,11 +68,14 @@ flutter {
 }
 
 dependencies {
-    implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22"))
+    implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.0"))
     
     // ✅ FIX for Missing SplitCompat / SplitInstall classes
-    // Updated to new split libraries compatible with SDK 34 (Android 14)
+    // Updated to new split libraries compatible with SDK 35 (Android 15)
     implementation("com.google.android.play:app-update:2.1.0")
-    implementation("com.google.android.play:review:2.0.1")
+    implementation("com.google.android.play:review:2.0.2")
     implementation("com.google.android.play:feature-delivery:2.1.0")
+    
+    // Core KTX for Android 15 compatibility
+    implementation("androidx.core:core-ktx:1.15.0")
 }
