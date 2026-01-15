@@ -260,5 +260,9 @@
   "chc_success_title": "Booking Confirmed!",
   "chc_success_subtitle": "Your equipment booking has been submitted successfully.",
   "chc_book_now": "Book Now",
-  "login_required": "Please login to continue"
+  "login_required": "Please login to continue",
+  "biological_treatments": "Biological Treatments",
+  "chemical_treatments": "Chemical Treatments",
+  "open_in_browser": "Open in Browser",
+  "webview_not_supported": "WebView is not supported on this platform"
 }
