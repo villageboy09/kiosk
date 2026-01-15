@@ -36,7 +36,15 @@ class FarmerCropSelection {
 class CropStage {
   final int id;
   final String name;
-  CropStage({required this.id, required this.name});
+  final String? imageUrl;
+  final String? description;
+  
+  CropStage({
+    required this.id, 
+    required this.name,
+    this.imageUrl,
+    this.description,
+  });
 }
 
 class AdvisoriesScreen extends StatefulWidget {
@@ -199,6 +207,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         return CropStage(
           id: s['id'] as int,
           name: s['name'] as String? ?? 'Unknown',
+          imageUrl: s['image_url'] as String?,
+          description: s['description'] as String?,
         );
       }).toList();
 
@@ -254,7 +264,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     try {
       final locale = _getLocaleField(context.locale.languageCode);
 
-      // Fetch problems from MySQL API
+      // Fetch problems from MySQL API using the problem_stages junction table
       final problemsData = await ApiService.getProblems(
         cropId: _selectedFarmerCrop!.cropId,
         stageId: stage.id,
@@ -262,13 +272,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       );
 
       final List<CropProblem> loadedProblems = problemsData.map((p) {
-        return CropProblem(
-          id: p['id'] as int,
-          name: p['name'] as String? ?? 'Unknown',
-          imageUrl1: p['image_url1'] as String?,
-          imageUrl2: p['image_url2'] as String?,
-          imageUrl3: p['image_url3'] as String?,
-        );
+        return CropProblem.fromJson(p);
       }).toList();
 
       if (mounted) {
@@ -354,35 +358,85 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _stages.map((stage) {
-                        final isSelected = _selectedStage?.id == stage.id;
-                        return FilterChip(
-                          label: Text(stage.name),
-                          selected: isSelected,
-                          onSelected: (_) {
-                            _selectStage(stage);
-                            Navigator.pop(context);
-                          },
-                          selectedColor: Colors.green[100],
-                          checkmarkColor: Colors.green[700],
-                          labelStyle: GoogleFonts.lexend(
-                            color:
-                                isSelected ? Colors.green[700] : Colors.black87,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                    ..._stages.map((stage) => _buildStageTile(stage)),
                   ],
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStageTile(CropStage stage) {
+    final isSelected = _selectedStage?.id == stage.id;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: isSelected ? Colors.green[50] : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: () {
+            _selectStage(stage);
+            Navigator.pop(context);
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: isSelected ? Colors.green : Colors.grey[300]!,
+                width: isSelected ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                if (stage.imageUrl != null && stage.imageUrl!.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: CachedNetworkImage(
+                      imageUrl: stage.imageUrl!,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.eco, color: Colors.grey),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.eco, color: Colors.grey),
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.green[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.eco, color: Colors.green[700]),
+                  ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    stage.name,
+                    style: GoogleFonts.lexend(
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontSize: 15,
+                      color: isSelected ? Colors.green[700] : Colors.grey[800],
+                    ),
+                  ),
+                ),
+                if (isSelected)
+                  Icon(Icons.check_circle, color: Colors.green[700], size: 24),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -481,9 +535,92 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
             : Column(
                 children: [
                   _buildCompactHeader(),
+                  // Stage selector horizontal list
+                  if (_stages.isNotEmpty) _buildStageSelector(),
                   Expanded(child: _buildProblemFeed()),
                 ],
               ),
+      ),
+    );
+  }
+
+  Widget _buildStageSelector() {
+    return Container(
+      height: 100,
+      margin: const EdgeInsets.only(top: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _stages.length,
+        itemBuilder: (context, index) {
+          final stage = _stages[index];
+          final isSelected = _selectedStage?.id == stage.id;
+          return GestureDetector(
+            onTap: () => _selectStage(stage),
+            child: Container(
+              width: 80,
+              margin: const EdgeInsets.only(right: 12),
+              child: Column(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected ? Colors.green[700]! : Colors.grey[300]!,
+                        width: isSelected ? 3 : 2,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: Colors.green.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: ClipOval(
+                      child: stage.imageUrl != null && stage.imageUrl!.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: stage.imageUrl!,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: Colors.green[50],
+                                child: Icon(Icons.eco, color: Colors.green[300]),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: Colors.green[50],
+                                child: Icon(Icons.eco, color: Colors.green[300]),
+                              ),
+                            )
+                          : Container(
+                              color: isSelected ? Colors.green[100] : Colors.grey[100],
+                              child: Icon(
+                                Icons.eco,
+                                color: isSelected ? Colors.green[700] : Colors.grey[400],
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    stage.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.lexend(
+                      fontSize: 10,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      color: isSelected ? Colors.green[700] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -519,11 +656,11 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                         ),
                       ),
                       const SizedBox(height: 4),
-                      if (_selectedFarmerCrop != null && _selectedStage != null)
+                      if (_selectedFarmerCrop != null)
                         FadeTransition(
                           opacity: _filterAnimationController,
                           child: Text(
-                            '${_selectedFarmerCrop!.cropName} • ${_selectedStage!.name}',
+                            '${_selectedFarmerCrop!.cropName} • ${_selectedFarmerCrop!.fieldName}',
                             style: GoogleFonts.lexend(
                               fontSize: 14,
                               color: Colors.grey[600],
@@ -618,6 +755,16 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       );
     }
 
+    // Group problems by category
+    final Map<String, List<CropProblem>> groupedProblems = {};
+    for (var problem in _problems) {
+      final category = problem.category ?? 'Other';
+      if (!groupedProblems.containsKey(category)) {
+        groupedProblems[category] = [];
+      }
+      groupedProblems[category]!.add(problem);
+    }
+
     return RefreshIndicator(
       onRefresh: () async {
         if (_selectedStage != null) {
@@ -650,6 +797,31 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         },
       ),
     );
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'fungal disease':
+        return Colors.brown;
+      case 'insect pest':
+        return Colors.orange;
+      case 'bacterial disease':
+        return Colors.red;
+      case 'viral disease':
+        return Colors.purple;
+      case 'nutrient deficiency':
+        return Colors.amber;
+      case 'abiotic disorder':
+        return Colors.blue;
+      case 'nematode':
+        return Colors.teal;
+      case 'pest':
+        return Colors.orange;
+      case 'disease':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   Widget _buildEnhancedProblemCard(CropProblem problem) {
@@ -728,6 +900,30 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                               ),
                             ),
                           ),
+                          // Category badge
+                          if (problem.category != null)
+                            Positioned(
+                              top: 12,
+                              left: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _getCategoryColor(problem.category!),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  problem.category!,
+                                  style: GoogleFonts.lexend(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
                           // Image indicators if multiple images exist
                           if (problem.imageUrl2 != null ||
                               problem.imageUrl3 != null)

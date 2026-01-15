@@ -20,6 +20,8 @@ class _UIColors {
   static const Color primaryText = Color(0xFF212121);
   static const Color secondaryText = Color(0xFF757575);
   static const Color accent = Color(0xFF27AE60); // A green accent for agriculture
+  static const Color chemical = Color(0xFF3498DB); // Blue for chemical
+  static const Color biological = Color(0xFF27AE60); // Green for biological
 }
 
 class AdvisoryDetailScreen extends StatefulWidget {
@@ -98,14 +100,8 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       if (advisoryId != null) {
         final componentsData = await ApiService.getAdvisoryComponents(advisoryId, lang: locale);
         recommendations = componentsData.map((r) {
-          return AdvisoryRecommendation(
-            type: r['component_type'] as String? ?? 'General',
-            name: r['component_name'] as String? ?? 'N/A',
-            dose: r['dose'] as String?,
-            method: r['application_method'] as String?,
-            notes: r['notes'] as String?,
-          );
-        }).where((rec) => rec.name != 'N/A').toList();
+          return AdvisoryRecommendation.fromJson(r);
+        }).where((rec) => rec.name != 'N/A' && rec.name.isNotEmpty).toList();
       }
 
       final Advisory advisory = Advisory(
@@ -114,10 +110,6 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
         notes: advisoryData['notes'] as String?,
         recommendations: recommendations,
       );
-
-      // Check if problem is already identified by user
-      // Note: This would require an API endpoint to check
-      // For now, we'll skip this check as it's not critical
 
       return advisory;
     } catch (e) {
@@ -180,6 +172,14 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             widget.problem.imageUrl3
           ].where((url) => url != null && url.isNotEmpty).toList();
 
+          // Group recommendations by type
+          final chemicalRecs = advisory.recommendations
+              .where((r) => r.type.toLowerCase() == 'chemical')
+              .toList();
+          final biologicalRecs = advisory.recommendations
+              .where((r) => r.type.toLowerCase() == 'biological')
+              .toList();
+
           return Stack(
             children: [
               CustomScrollView(
@@ -189,26 +189,95 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                     padding: const EdgeInsets.all(16.0),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
+                        // Category badge if available
+                        if (widget.problem.category != null)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            child: Wrap(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _getCategoryColor(widget.problem.category!).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: _getCategoryColor(widget.problem.category!).withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    widget.problem.category!,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: _getCategoryColor(widget.problem.category!),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        
+                        // Symptoms section
                         _buildSectionCard(
                           title: context.tr('symptoms_title'),
                           content: advisory.symptoms,
                           icon: Icons.visibility_outlined,
                         ),
+                        
                         if (advisory.notes != null)
                           _buildSectionCard(
                             title: context.tr('notes_title'),
                             content: advisory.notes!,
                             icon: Icons.edit_note_outlined,
                           ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
-                          child: Text(context.tr('management_title'),
-                              style: GoogleFonts.poppins(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  color: _UIColors.primaryText)),
-                        ),
-                        ...advisory.recommendations.map((rec) => _buildRecommendationCard(rec)),
+                        
+                        // Management/Remedies section
+                        if (advisory.recommendations.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 24.0, bottom: 16.0),
+                            child: Row(
+                              children: [
+                                Icon(Icons.medical_services_outlined, 
+                                    color: _UIColors.accent, size: 28),
+                                const SizedBox(width: 12),
+                                Text(
+                                  context.tr('management_title'),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: _UIColors.primaryText,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          // Chemical treatments section
+                          if (chemicalRecs.isNotEmpty) ...[
+                            _buildTreatmentTypeHeader(
+                              context.tr('chemical_treatments'),
+                              Icons.biotech_outlined,
+                              _UIColors.chemical,
+                              chemicalRecs.length,
+                            ),
+                            ...chemicalRecs.map((rec) => _buildRecommendationCard(rec)),
+                          ],
+                          
+                          // Biological treatments section
+                          if (biologicalRecs.isNotEmpty) ...[
+                            _buildTreatmentTypeHeader(
+                              context.tr('biological_treatments'),
+                              Icons.eco_outlined,
+                              _UIColors.biological,
+                              biologicalRecs.length,
+                            ),
+                            ...biologicalRecs.map((rec) => _buildRecommendationCard(rec)),
+                          ],
+                        ],
+                        
                         // Invisible spacer for the floating button
                         const SizedBox(height: 100),
                       ]),
@@ -226,6 +295,70 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'fungal disease':
+        return Colors.brown;
+      case 'insect pest':
+        return Colors.orange;
+      case 'bacterial disease':
+        return Colors.red;
+      case 'viral disease':
+        return Colors.purple;
+      case 'nutrient deficiency':
+        return Colors.amber;
+      case 'abiotic disorder':
+        return Colors.blue;
+      case 'nematode':
+        return Colors.teal;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _buildTreatmentTypeHeader(String title, IconData icon, Color color, int count) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12, top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$count',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -355,6 +488,9 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
   }
 
   Widget _buildRecommendationCard(AdvisoryRecommendation rec) {
+    final isChemical = rec.type.toLowerCase() == 'chemical';
+    final typeColor = isChemical ? _UIColors.chemical : _UIColors.biological;
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 16.0),
       padding: const EdgeInsets.all(20.0),
@@ -368,20 +504,25 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             offset: const Offset(0, 4),
           )
         ],
+        border: Border.all(
+          color: typeColor.withValues(alpha: 0.2),
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                    color: _UIColors.accent.withValues(alpha: 0.1),
+                    color: typeColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16)),
                 child: Icon(
                   _getIconForType(rec.type),
-                  color: _UIColors.accent,
+                  color: typeColor,
                   size: 24,
                 ),
               ),
@@ -395,22 +536,66 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
                             color: _UIColors.primaryText)),
-                    Text(rec.type,
-                        style: GoogleFonts.poppins(
-                            fontSize: 14,
+                    if (rec.altName != null && rec.altName!.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          rec.altName!,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
                             color: _UIColors.secondaryText,
-                            fontWeight: FontWeight.w500)),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
             ],
           ),
+          
+          // Stage scope badge
+          if (rec.stageScope != null && rec.stageScope != 'All Stages')
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.schedule, size: 14, color: Colors.orange[700]),
+                  const SizedBox(width: 4),
+                  Text(
+                    rec.stageScope!,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.orange[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          
           const SizedBox(height: 16),
-          if (rec.dose != null)
+          
+          if (rec.dose != null && rec.dose!.isNotEmpty)
             _buildDetailRow(Icons.science_outlined, context.tr('dose_title'), rec.dose!),
-          if (rec.method != null)
+          if (rec.method != null && rec.method!.isNotEmpty)
             _buildDetailRow(Icons.water_drop_outlined, context.tr('method_title'), rec.method!),
-          if (rec.notes != null)
+          if (rec.notes != null && rec.notes!.isNotEmpty)
             _buildDetailRow(Icons.notes_outlined, context.tr('notes_row_title'), rec.notes!),
         ],
       ),
@@ -497,6 +682,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
 
   IconData _getIconForType(String type) {
     if (type.toLowerCase().contains('chemical')) return Icons.biotech_outlined;
+    if (type.toLowerCase().contains('biological')) return Icons.eco_outlined;
     if (type.toLowerCase().contains('organic')) return Icons.eco_outlined;
     if (type.toLowerCase().contains('cultural')) return Icons.grass_outlined;
     return Icons.settings_outlined;
