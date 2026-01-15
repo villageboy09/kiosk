@@ -115,6 +115,177 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     }
   }
 
+  Future<void> _fetchInitialData() async {
+    try {
+      print('1. Starting _fetchInitialData...');
+
+      final currentUser = AuthService.currentUser;
+      if (currentUser == null) {
+        print('ERROR: User is not logged in. Aborting.');
+        _showErrorSnackbar(context.tr('login_required'));
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+      final userId = currentUser.userId;
+      print('2. Current User ID: $userId');
+
+      final locale = _getLocaleField(context.locale.languageCode);
+
+      // Fetch user's crop selections from MySQL API
+      final selectionsData =
+          await ApiService.getUserSelections(userId, lang: locale);
+
+      print(
+          '4. Fetched Selections Data: Found ${selectionsData.length} crop(s).');
+
+      if (selectionsData.isEmpty) {
+        print(
+            'WARNING: No crop selections found for this farmer in the database.');
+        if (mounted) {
+          setState(() {
+            _farmerCrops = [];
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      final List<FarmerCropSelection> loadedCrops = selectionsData.map((s) {
+        return FarmerCropSelection(
+          id: int.tryParse(s['selection_id'].toString()) ?? 0,
+          fieldName: s['field_name']?.toString() ?? 'Unknown Field',
+          cropName: s['crop_name']?.toString() ?? 'Unknown Crop',
+          cropImageUrl: s['crop_image_url']?.toString(),
+          cropId: int.tryParse(s['crop_id'].toString()) ?? 1,
+          varietyId: int.tryParse(s['variety_id'].toString()) ?? 1,
+          sowingDate:
+              DateTime.tryParse(s['sowing_date'].toString()) ?? DateTime.now(),
+        );
+      }).toList();
+
+      print('5. Successfully parsed ${loadedCrops.length} crops.');
+
+      if (mounted) {
+        setState(() {
+          _farmerCrops = loadedCrops;
+          if (_farmerCrops.isNotEmpty) {
+            _selectFarmerCrop(_farmerCrops.first);
+          }
+          _isLoading = false;
+        });
+        _filterAnimationController.forward();
+        print('6. State updated successfully.');
+      }
+    } catch (e, st) {
+      print('--- AN ERROR OCCURRED ---');
+      print('Error Type: ${e.runtimeType}');
+      print('Error Message: $e');
+      print('Stack Trace: $st');
+      print('-------------------------');
+      _showErrorSnackbar(context.tr('load_crops_error'));
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _selectFarmerCrop(FarmerCropSelection farmerCrop) async {
+    setState(() {
+      _selectedFarmerCrop = farmerCrop;
+      _stages = [];
+      _problems = [];
+      _selectedStage = null;
+    });
+    _feedAnimationController.reverse();
+
+    try {
+      final locale = _getLocaleField(context.locale.languageCode);
+
+      // Fetch crop stages from MySQL API
+      final stagesData =
+          await ApiService.getCropStages(farmerCrop.cropId, lang: locale);
+
+      final List<CropStage> loadedStages = stagesData.map((s) {
+        return CropStage(
+          id: s['id'] as int,
+          name: s['name'] as String? ?? 'Unknown',
+          imageUrl: s['image_url'] as String?,
+          description: s['description'] as String?,
+        );
+      }).toList();
+
+      // Calculate days since sowing to find the current stage
+      final daysSinceSowing =
+          DateTime.now().difference(farmerCrop.sowingDate).inDays;
+
+      CropStage? currentStage;
+      try {
+        // Query crop_stage_durations to get the current stage's ID
+        final durationData = await ApiService.getStageDuration(
+          farmerCrop.cropId,
+          varietyId: farmerCrop.varietyId,
+        );
+
+        for (var duration in durationData) {
+          final startDay = duration['start_day_from_sowing'] as int? ?? 0;
+          final endDay = duration['end_day_from_sowing'] as int? ?? 999;
+          if (daysSinceSowing >= startDay && daysSinceSowing <= endDay) {
+            final stageId = duration['stage_id'] as int;
+            currentStage = loadedStages.firstWhere(
+              (s) => s.id == stageId,
+              orElse: () => loadedStages.first,
+            );
+            break;
+          }
+        }
+      } catch (e) {
+        debugPrint(
+            'Could not determine current stage automatically. Defaulting to first stage.');
+      }
+
+      if (mounted) {
+        setState(() {
+          _stages = loadedStages;
+          if (_stages.isNotEmpty) {
+            _selectStage(currentStage ?? _stages.first);
+          }
+        });
+      }
+    } catch (e) {
+      _showErrorSnackbar(context.tr('load_stages_error'));
+    }
+  }
+
+  Future<void> _selectStage(CropStage stage) async {
+    setState(() {
+      _selectedStage = stage;
+      _problems = [];
+    });
+    _feedAnimationController.reverse();
+
+    try {
+      final locale = _getLocaleField(context.locale.languageCode);
+
+      // Fetch problems from MySQL API using the problem_stages junction table
+      final problemsData = await ApiService.getProblems(
+        cropId: _selectedFarmerCrop!.cropId,
+        stageId: stage.id,
+        lang: locale,
+      );
+
+      final List<CropProblem> loadedProblems = problemsData.map((p) {
+        return CropProblem.fromJson(p);
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _problems = loadedProblems;
+        });
+        _feedAnimationController.forward();
+      }
+    } catch (e) {
+      _showErrorSnackbar(context.tr('load_problems_error'));
+    }
+  }
+
   void _showErrorSnackbar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -175,8 +346,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ..._advisoryState.farmerCrops
-                      .map((crop) => _buildCropTile(crop)),
+                  ..._farmerCrops.map((crop) => _buildCropTile(crop)),
                   const SizedBox(height: 24),
                   if (_stages.isNotEmpty) ...[
                     Text(
@@ -188,8 +358,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ..._advisoryState.stages
-                        .map((stage) => _buildStageTile(stage)),
+                    ..._stages.map((stage) => _buildStageTile(stage)),
                   ],
                 ],
               ),
