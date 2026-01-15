@@ -233,5 +233,12 @@
   "pending": "लंबित",
   "service_date": "सेवा तिथि: {date}",
   "profile_updated": "प्रोफ़ाइल सफलतापूर्वक अपडेट की गई!",
-  "update_profile_error": "प्रोफ़ाइल अपडेट करने में त्रुटि: {error}"
+  "update_profile_error": "प्रोफ़ाइल अपडेट करने में त्रुटि: {error}",
+  "home_loading_advisory": "फसल सलाह लोड हो रही है...",
+  "home_no_crops_title": "कोई फसल नहीं जोड़ी गई",
+  "home_no_crops_subtitle": "सलाह देखने के लिए फसल जोड़ें",
+  "home_current_stage": "वर्तमान चरण",
+  "home_no_stage": "कोई चरण नहीं चुना",
+  "home_problems": "समस्याएं",
+  "home_no_issues": "कोई समस्या नहीं"
 }

@@ -5,47 +5,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/crop_problem.dart';
 import 'package:cropsync/screens/advisory_details.dart';
-import 'package:cropsync/services/api_service.dart';
-import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/advisory_state.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:easy_localization/easy_localization.dart';
-
-// Data Models
-class FarmerCropSelection {
-  final int id;
-  final String fieldName;
-  final String cropName;
-  final String? cropImageUrl;
-  final int cropId;
-  final int varietyId;
-  final DateTime sowingDate;
-
-  FarmerCropSelection({
-    required this.id,
-    required this.fieldName,
-    required this.cropName,
-    this.cropImageUrl,
-    required this.cropId,
-    required this.varietyId,
-    required this.sowingDate,
-  });
-}
-
-class CropStage {
-  final int id;
-  final String name;
-  final String? imageUrl;
-  final String? description;
-  
-  CropStage({
-    required this.id, 
-    required this.name,
-    this.imageUrl,
-    this.description,
-  });
-}
 
 class AdvisoriesScreen extends StatefulWidget {
   const AdvisoriesScreen({super.key});
@@ -56,19 +20,10 @@ class AdvisoriesScreen extends StatefulWidget {
 
 class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     with TickerProviderStateMixin {
-  bool _isLoading = true;
   final ScrollController _scrollController = ScrollController();
 
-  // Data
-  List<FarmerCropSelection> _farmerCrops = [];
-  List<CropStage> _stages = [];
-  List<CropProblem> _problems = [];
-
-  FarmerCropSelection? _selectedFarmerCrop;
-  CropStage? _selectedStage;
-
-  // Initialization state
-  bool _isInit = true;
+  // Shared advisory state - singleton
+  final AdvisoryState _advisoryState = AdvisoryState();
 
   // Animation
   late AnimationController _feedAnimationController;
@@ -85,23 +40,45 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+
+    // Listen to state changes
+    _advisoryState.addListener(_onStateChanged);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_isInit) {
-      _fetchInitialData();
-      _isInit = false;
+    // Initialize data if not already done
+    if (!_advisoryState.isInitialized) {
+      final locale = _getLocaleField(context.locale.languageCode);
+      _advisoryState.initializeData(locale: locale);
+    } else {
+      // Update locale if changed
+      final locale = _getLocaleField(context.locale.languageCode);
+      _advisoryState.setLocale(locale);
     }
   }
 
   @override
   void dispose() {
+    _advisoryState.removeListener(_onStateChanged);
     _feedAnimationController.dispose();
     _filterAnimationController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onStateChanged() {
+    if (mounted) {
+      setState(() {});
+      // Trigger animations when data changes
+      if (_advisoryState.problems.isNotEmpty) {
+        _feedAnimationController.forward();
+      }
+      if (_advisoryState.farmerCrops.isNotEmpty) {
+        _filterAnimationController.forward();
+      }
+    }
   }
 
   String _getLocaleField(String locale) {
@@ -112,177 +89,6 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         return 'te';
       default:
         return 'en';
-    }
-  }
-
-  Future<void> _fetchInitialData() async {
-    try {
-      print('1. Starting _fetchInitialData...');
-
-      final currentUser = AuthService.currentUser;
-      if (currentUser == null) {
-        print('ERROR: User is not logged in. Aborting.');
-        _showErrorSnackbar(context.tr('login_required'));
-        if (mounted) setState(() => _isLoading = false);
-        return;
-      }
-      final userId = currentUser.userId;
-      print('2. Current User ID: $userId');
-
-      final locale = _getLocaleField(context.locale.languageCode);
-
-      // Fetch user's crop selections from MySQL API
-      final selectionsData =
-          await ApiService.getUserSelections(userId, lang: locale);
-
-      print(
-          '4. Fetched Selections Data: Found ${selectionsData.length} crop(s).');
-
-      if (selectionsData.isEmpty) {
-        print(
-            'WARNING: No crop selections found for this farmer in the database.');
-        if (mounted) {
-          setState(() {
-            _farmerCrops = [];
-            _isLoading = false;
-          });
-        }
-        return;
-      }
-
-      final List<FarmerCropSelection> loadedCrops = selectionsData.map((s) {
-        return FarmerCropSelection(
-          id: int.tryParse(s['selection_id'].toString()) ?? 0,
-          fieldName: s['field_name']?.toString() ?? 'Unknown Field',
-          cropName: s['crop_name']?.toString() ?? 'Unknown Crop',
-          cropImageUrl: s['crop_image_url']?.toString(),
-          cropId: int.tryParse(s['crop_id'].toString()) ?? 1,
-          varietyId: int.tryParse(s['variety_id'].toString()) ?? 1,
-          sowingDate:
-              DateTime.tryParse(s['sowing_date'].toString()) ?? DateTime.now(),
-        );
-      }).toList();
-
-      print('5. Successfully parsed ${loadedCrops.length} crops.');
-
-      if (mounted) {
-        setState(() {
-          _farmerCrops = loadedCrops;
-          if (_farmerCrops.isNotEmpty) {
-            _selectFarmerCrop(_farmerCrops.first);
-          }
-          _isLoading = false;
-        });
-        _filterAnimationController.forward();
-        print('6. State updated successfully.');
-      }
-    } catch (e, st) {
-      print('--- AN ERROR OCCURRED ---');
-      print('Error Type: ${e.runtimeType}');
-      print('Error Message: $e');
-      print('Stack Trace: $st');
-      print('-------------------------');
-      _showErrorSnackbar(context.tr('load_crops_error'));
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _selectFarmerCrop(FarmerCropSelection farmerCrop) async {
-    setState(() {
-      _selectedFarmerCrop = farmerCrop;
-      _stages = [];
-      _problems = [];
-      _selectedStage = null;
-    });
-    _feedAnimationController.reverse();
-
-    try {
-      final locale = _getLocaleField(context.locale.languageCode);
-
-      // Fetch crop stages from MySQL API
-      final stagesData =
-          await ApiService.getCropStages(farmerCrop.cropId, lang: locale);
-
-      final List<CropStage> loadedStages = stagesData.map((s) {
-        return CropStage(
-          id: s['id'] as int,
-          name: s['name'] as String? ?? 'Unknown',
-          imageUrl: s['image_url'] as String?,
-          description: s['description'] as String?,
-        );
-      }).toList();
-
-      // Calculate days since sowing to find the current stage
-      final daysSinceSowing =
-          DateTime.now().difference(farmerCrop.sowingDate).inDays;
-
-      CropStage? currentStage;
-      try {
-        // Query crop_stage_durations to get the current stage's ID
-        final durationData = await ApiService.getStageDuration(
-          farmerCrop.cropId,
-          varietyId: farmerCrop.varietyId,
-        );
-
-        for (var duration in durationData) {
-          final startDay = duration['start_day_from_sowing'] as int? ?? 0;
-          final endDay = duration['end_day_from_sowing'] as int? ?? 999;
-          if (daysSinceSowing >= startDay && daysSinceSowing <= endDay) {
-            final stageId = duration['stage_id'] as int;
-            currentStage = loadedStages.firstWhere(
-              (s) => s.id == stageId,
-              orElse: () => loadedStages.first,
-            );
-            break;
-          }
-        }
-      } catch (e) {
-        debugPrint(
-            'Could not determine current stage automatically. Defaulting to first stage.');
-      }
-
-      if (mounted) {
-        setState(() {
-          _stages = loadedStages;
-          if (_stages.isNotEmpty) {
-            _selectStage(currentStage ?? _stages.first);
-          }
-        });
-      }
-    } catch (e) {
-      _showErrorSnackbar(context.tr('load_stages_error'));
-    }
-  }
-
-  Future<void> _selectStage(CropStage stage) async {
-    setState(() {
-      _selectedStage = stage;
-      _problems = [];
-    });
-    _feedAnimationController.reverse();
-
-    try {
-      final locale = _getLocaleField(context.locale.languageCode);
-
-      // Fetch problems from MySQL API using the problem_stages junction table
-      final problemsData = await ApiService.getProblems(
-        cropId: _selectedFarmerCrop!.cropId,
-        stageId: stage.id,
-        lang: locale,
-      );
-
-      final List<CropProblem> loadedProblems = problemsData.map((p) {
-        return CropProblem.fromJson(p);
-      }).toList();
-
-      if (mounted) {
-        setState(() {
-          _problems = loadedProblems;
-        });
-        _feedAnimationController.forward();
-      }
-    } catch (e) {
-      _showErrorSnackbar(context.tr('load_problems_error'));
     }
   }
 
@@ -346,9 +152,9 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ..._farmerCrops.map((crop) => _buildCropTile(crop)),
+                  ..._advisoryState.farmerCrops.map((crop) => _buildCropTile(crop)),
                   const SizedBox(height: 24),
-                  if (_stages.isNotEmpty) ...[
+                  if (_advisoryState.stages.isNotEmpty) ...[
                     Text(
                       context.tr('crop_stage'),
                       style: GoogleFonts.lexend(
@@ -358,7 +164,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ..._stages.map((stage) => _buildStageTile(stage)),
+                    ..._advisoryState.stages.map((stage) => _buildStageTile(stage)),
                   ],
                 ],
               ),
@@ -370,7 +176,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
   }
 
   Widget _buildStageTile(CropStage stage) {
-    final isSelected = _selectedStage?.id == stage.id;
+    final isSelected = _advisoryState.selectedStage?.id == stage.id;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -378,7 +184,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
-            _selectStage(stage);
+            _advisoryState.selectStage(stage);
             Navigator.pop(context);
           },
           borderRadius: BorderRadius.circular(12),
@@ -443,7 +249,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
   }
 
   Widget _buildCropTile(FarmerCropSelection crop) {
-    final isSelected = _selectedFarmerCrop?.id == crop.id;
+    final isSelected = _advisoryState.selectedFarmerCrop?.id == crop.id;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -451,8 +257,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
-            _selectFarmerCrop(crop);
-            if (_stages.isEmpty) Navigator.pop(context);
+            _advisoryState.selectFarmerCrop(crop);
+            if (_advisoryState.stages.isEmpty) Navigator.pop(context);
           },
           borderRadius: BorderRadius.circular(12),
           child: Container(
@@ -530,13 +336,13 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
-        child: _isLoading
+        child: _advisoryState.isLoading
             ? _buildShimmerEffect()
             : Column(
                 children: [
                   _buildCompactHeader(),
                   // Stage selector horizontal list
-                  if (_stages.isNotEmpty) _buildStageSelector(),
+                  if (_advisoryState.stages.isNotEmpty) _buildStageSelector(),
                   Expanded(child: _buildProblemFeed()),
                 ],
               ),
@@ -551,12 +357,12 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _stages.length,
+        itemCount: _advisoryState.stages.length,
         itemBuilder: (context, index) {
-          final stage = _stages[index];
-          final isSelected = _selectedStage?.id == stage.id;
+          final stage = _advisoryState.stages[index];
+          final isSelected = _advisoryState.selectedStage?.id == stage.id;
           return GestureDetector(
-            onTap: () => _selectStage(stage),
+            onTap: () => _advisoryState.selectStage(stage),
             child: Container(
               width: 80,
               margin: const EdgeInsets.only(right: 12),
@@ -656,11 +462,11 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                         ),
                       ),
                       const SizedBox(height: 4),
-                      if (_selectedFarmerCrop != null)
+                      if (_advisoryState.selectedFarmerCrop != null)
                         FadeTransition(
                           opacity: _filterAnimationController,
                           child: Text(
-                            '${_selectedFarmerCrop!.cropName} • ${_selectedFarmerCrop!.fieldName}',
+                            '${_advisoryState.selectedFarmerCrop!.cropName} • ${_advisoryState.selectedFarmerCrop!.fieldName}',
                             style: GoogleFonts.lexend(
                               fontSize: 14,
                               color: Colors.grey[600],
@@ -724,7 +530,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
   }
 
   Widget _buildProblemFeed() {
-    if (_problems.isEmpty) {
+    if (_advisoryState.problems.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -755,28 +561,16 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       );
     }
 
-    // Group problems by category
-    final Map<String, List<CropProblem>> groupedProblems = {};
-    for (var problem in _problems) {
-      final category = problem.category ?? 'Other';
-      if (!groupedProblems.containsKey(category)) {
-        groupedProblems[category] = [];
-      }
-      groupedProblems[category]!.add(problem);
-    }
-
     return RefreshIndicator(
       onRefresh: () async {
-        if (_selectedStage != null) {
-          await _selectStage(_selectedStage!);
-        }
+        await _advisoryState.refreshData();
       },
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.all(16),
-        itemCount: _problems.length,
+        itemCount: _advisoryState.problems.length,
         itemBuilder: (context, index) {
-          final problem = _problems[index];
+          final problem = _advisoryState.problems[index];
           return FadeTransition(
             opacity: _feedAnimationController,
             child: SlideTransition(
@@ -881,7 +675,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                 ),
                               ),
                             ),
-                          // Gradient overlay for better text visibility
+                          // Gradient overlay
                           Positioned(
                             bottom: 0,
                             left: 0,
@@ -924,9 +718,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                 ),
                               ),
                             ),
-                          // Image indicators if multiple images exist
-                          if (problem.imageUrl2 != null ||
-                              problem.imageUrl3 != null)
+                          // Image count indicator
+                          if (problem.imageUrl2 != null || problem.imageUrl3 != null)
                             Positioned(
                               top: 12,
                               right: 12,
@@ -1020,10 +813,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                           Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [
-                                  Colors.green[600]!,
-                                  Colors.green[700]!
-                                ],
+                                colors: [Colors.green[600]!, Colors.green[700]!],
                               ),
                               borderRadius: BorderRadius.circular(10),
                               boxShadow: [
@@ -1041,8 +831,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (context) =>
-                                          AdvisoryDetailScreen(
-                                              problem: problem),
+                                          AdvisoryDetailScreen(problem: problem),
                                     ),
                                   );
                                 },
