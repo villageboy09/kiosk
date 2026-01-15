@@ -19,7 +19,8 @@ class _UIColors {
   static const Color card = Color(0xFFFFFFFF);
   static const Color primaryText = Color(0xFF212121);
   static const Color secondaryText = Color(0xFF757575);
-  static const Color accent = Color(0xFF27AE60); // A green accent for agriculture
+  static const Color accent =
+      Color(0xFF27AE60); // A green accent for agriculture
   static const Color chemical = Color(0xFF3498DB); // Blue for chemical
   static const Color biological = Color(0xFF27AE60); // Green for biological
 }
@@ -87,7 +88,8 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       final locale = _getLocaleField(context.locale.languageCode);
 
       // Fetch advisory from MySQL API
-      final advisoryData = await ApiService.getAdvisories(widget.problem.id, lang: locale);
+      final advisoryData =
+          await ApiService.getAdvisories(widget.problem.id, lang: locale);
 
       if (advisoryData == null) {
         throw Exception('Advisory not found');
@@ -98,10 +100,14 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       List<AdvisoryRecommendation> recommendations = [];
 
       if (advisoryId != null) {
-        final componentsData = await ApiService.getAdvisoryComponents(advisoryId, lang: locale);
-        recommendations = componentsData.map((r) {
-          return AdvisoryRecommendation.fromJson(r);
-        }).where((rec) => rec.name != 'N/A' && rec.name.isNotEmpty).toList();
+        final componentsData =
+            await ApiService.getAdvisoryComponents(advisoryId, lang: locale);
+        recommendations = componentsData
+            .map((r) {
+              return AdvisoryRecommendation.fromJson(r);
+            })
+            .where((rec) => rec.name != 'N/A' && rec.name.isNotEmpty)
+            .toList();
       }
 
       final Advisory advisory = Advisory(
@@ -142,7 +148,8 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(context.tr('mark_problem_error'), style: GoogleFonts.poppins()),
+            content: Text(context.tr('mark_problem_error'),
+                style: GoogleFonts.poppins()),
             backgroundColor: Colors.red,
           ),
         );
@@ -201,10 +208,14 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                                     vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: _getCategoryColor(widget.problem.category!).withValues(alpha: 0.1),
+                                    color: _getCategoryColor(
+                                            widget.problem.category!)
+                                        .withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                      color: _getCategoryColor(widget.problem.category!).withValues(alpha: 0.3),
+                                      color: _getCategoryColor(
+                                              widget.problem.category!)
+                                          .withValues(alpha: 0.3),
                                     ),
                                   ),
                                   child: Text(
@@ -212,35 +223,37 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                                     style: GoogleFonts.poppins(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: _getCategoryColor(widget.problem.category!),
+                                      color: _getCategoryColor(
+                                          widget.problem.category!),
                                     ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        
+
                         // Symptoms section
                         _buildSectionCard(
                           title: context.tr('symptoms_title'),
                           content: advisory.symptoms,
                           icon: Icons.visibility_outlined,
                         ),
-                        
+
                         if (advisory.notes != null)
                           _buildSectionCard(
                             title: context.tr('notes_title'),
                             content: advisory.notes!,
                             icon: Icons.edit_note_outlined,
                           ),
-                        
+
                         // Management/Remedies section
                         if (advisory.recommendations.isNotEmpty) ...[
                           Padding(
-                            padding: const EdgeInsets.only(top: 24.0, bottom: 16.0),
+                            padding:
+                                const EdgeInsets.only(top: 24.0, bottom: 16.0),
                             child: Row(
                               children: [
-                                Icon(Icons.medical_services_outlined, 
+                                const Icon(Icons.medical_services_outlined,
                                     color: _UIColors.accent, size: 28),
                                 const SizedBox(width: 12),
                                 Text(
@@ -254,7 +267,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                               ],
                             ),
                           ),
-                          
+
                           // Chemical treatments section
                           if (chemicalRecs.isNotEmpty) ...[
                             _buildTreatmentTypeHeader(
@@ -263,9 +276,10 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                               _UIColors.chemical,
                               chemicalRecs.length,
                             ),
-                            ...chemicalRecs.map((rec) => _buildRecommendationCard(rec)),
+                            ...chemicalRecs
+                                .map((rec) => _buildRecommendationCard(rec)),
                           ],
-                          
+
                           // Biological treatments section
                           if (biologicalRecs.isNotEmpty) ...[
                             _buildTreatmentTypeHeader(
@@ -274,10 +288,11 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                               _UIColors.biological,
                               biologicalRecs.length,
                             ),
-                            ...biologicalRecs.map((rec) => _buildRecommendationCard(rec)),
+                            ...biologicalRecs
+                                .map((rec) => _buildRecommendationCard(rec)),
                           ],
                         ],
-                        
+
                         // Invisible spacer for the floating button
                         const SizedBox(height: 100),
                       ]),
@@ -320,7 +335,8 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
     }
   }
 
-  Widget _buildTreatmentTypeHeader(String title, IconData icon, Color color, int count) {
+  Widget _buildTreatmentTypeHeader(
+      String title, IconData icon, Color color, int count) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12, top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -413,9 +429,11 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
               child: CachedNetworkImage(
                 imageUrl: images[index]!,
                 fit: BoxFit.cover,
-                placeholder: (context, url) => Container(color: Colors.grey[200]),
-                errorWidget: (context, url, error) =>
-                    const Icon(Icons.broken_image, color: _UIColors.secondaryText),
+                placeholder: (context, url) =>
+                    Container(color: Colors.grey[200]),
+                errorWidget: (context, url, error) => const Icon(
+                    Icons.broken_image,
+                    color: _UIColors.secondaryText),
               ),
             );
           },
@@ -490,7 +508,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
   Widget _buildRecommendationCard(AdvisoryRecommendation rec) {
     final isChemical = rec.type.toLowerCase() == 'chemical';
     final typeColor = isChemical ? _UIColors.chemical : _UIColors.biological;
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16.0),
       padding: const EdgeInsets.all(20.0),
@@ -561,7 +579,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
               ),
             ],
           ),
-          
+
           // Stage scope badge
           if (rec.stageScope != null && rec.stageScope != 'All Stages')
             Container(
@@ -588,15 +606,18 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                 ],
               ),
             ),
-          
+
           const SizedBox(height: 16),
-          
+
           if (rec.dose != null && rec.dose!.isNotEmpty)
-            _buildDetailRow(Icons.science_outlined, context.tr('dose_title'), rec.dose!),
+            _buildDetailRow(
+                Icons.science_outlined, context.tr('dose_title'), rec.dose!),
           if (rec.method != null && rec.method!.isNotEmpty)
-            _buildDetailRow(Icons.water_drop_outlined, context.tr('method_title'), rec.method!),
+            _buildDetailRow(Icons.water_drop_outlined,
+                context.tr('method_title'), rec.method!),
           if (rec.notes != null && rec.notes!.isNotEmpty)
-            _buildDetailRow(Icons.notes_outlined, context.tr('notes_row_title'), rec.notes!),
+            _buildDetailRow(Icons.notes_outlined, context.tr('notes_row_title'),
+                rec.notes!),
         ],
       ),
     );
@@ -652,7 +673,8 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
         return const SizedBox(
           height: 24,
           width: 24,
-          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+          child:
+              CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
         );
       case IdentificationState.success:
         return Row(
@@ -662,7 +684,9 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             const SizedBox(width: 8),
             Text(context.tr('marked_identified'),
                 style: GoogleFonts.poppins(
-                    color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16)),
           ],
         );
       case IdentificationState.initial:
@@ -674,7 +698,9 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             const SizedBox(width: 8),
             Text(context.tr('i_have_this_problem'),
                 style: GoogleFonts.poppins(
-                    color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16)),
           ],
         );
     }
@@ -708,7 +734,9 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                 const SizedBox(height: 4),
                 Text(value,
                     style: GoogleFonts.poppins(
-                        color: _UIColors.secondaryText, fontSize: 14, height: 1.5)),
+                        color: _UIColors.secondaryText,
+                        fontSize: 14,
+                        height: 1.5)),
               ],
             ),
           ),
@@ -727,7 +755,8 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
           Text(
             context.tr('load_advisory_error'),
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(fontSize: 18, color: _UIColors.secondaryText),
+            style: GoogleFonts.poppins(
+                fontSize: 18, color: _UIColors.secondaryText),
           ),
         ],
       ),
@@ -754,17 +783,20 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                   Container(
                       height: 120,
                       decoration: BoxDecoration(
-                          color: Colors.white, borderRadius: BorderRadius.circular(24))),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24))),
                   const SizedBox(height: 16),
                   Container(
                       height: 150,
                       decoration: BoxDecoration(
-                          color: Colors.white, borderRadius: BorderRadius.circular(24))),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24))),
                   const SizedBox(height: 16),
                   Container(
                       height: 150,
                       decoration: BoxDecoration(
-                          color: Colors.white, borderRadius: BorderRadius.circular(24))),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24))),
                 ]),
               ))
         ],
