@@ -672,7 +672,7 @@ function createEnquiry($pdo) {
     
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO enquiries (product_id, farmer_id, advertiser_id, status, created_at)
+            INSERT INTO enquiries (product_id, farmer_id, advertiser_id, status, enquiry_date)
             VALUES (?, ?, ?, 'Interested', NOW())
         ");
         $stmt->execute([$productId, $farmerId, $advertiserId]);
