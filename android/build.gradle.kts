@@ -20,26 +20,6 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// Force Java 17 for all subprojects to fix obsolete Java 8 warnings
-subprojects {
-    project.plugins.whenPluginAdded {
-        if (this is com.android.build.gradle.BasePlugin) {
-            project.extensions.configure<com.android.build.gradle.BaseExtension>("android") {
-                compileOptions {
-                    setSourceCompatibility(JavaVersion.VERSION_17)
-                    setTargetCompatibility(JavaVersion.VERSION_17)
-                }
-            }
-        }
-    }
-    
-    project.tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        kotlinOptions {
-            jvmTarget = "17"
-        }
-    }
-}
-
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
