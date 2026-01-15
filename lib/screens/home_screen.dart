@@ -5,7 +5,6 @@ import 'package:cropsync/screens/market_prices.dart';
 import 'package:cropsync/screens/seed_varieties.dart';
 import 'package:cropsync/screens/weather.dart';
 import 'package:cropsync/services/auth_service.dart';
-import 'package:cropsync/services/advisory_state.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
@@ -53,9 +52,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String? _profileImageUrl;
 
-  // Shared advisory state
-  final AdvisoryState _advisoryState = AdvisoryState();
-
   late final List<Widget> _widgetOptions;
 
   @override
@@ -66,35 +62,11 @@ class _HomeScreenState extends State<HomeScreen> {
         greeting: _greeting,
         farmerName: _farmerName,
         profileImageUrl: _profileImageUrl,
-        advisoryState: _advisoryState,
       ),
       const AdvisoriesScreen(),
       SettingsScreen(key: UniqueKey()),
     ];
     _fetchFarmerDetails();
-    
-    // Listen to advisory state changes
-    _advisoryState.addListener(_onAdvisoryStateChanged);
-  }
-
-  @override
-  void dispose() {
-    _advisoryState.removeListener(_onAdvisoryStateChanged);
-    super.dispose();
-  }
-
-  void _onAdvisoryStateChanged() {
-    if (mounted) {
-      setState(() {
-        // Update HomeTab with new advisory state
-        _widgetOptions[0] = HomeTab(
-          greeting: _greeting,
-          farmerName: _farmerName,
-          profileImageUrl: _profileImageUrl,
-          advisoryState: _advisoryState,
-        );
-      });
-    }
   }
 
   String _getGreeting() {
@@ -105,17 +77,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return 'home_greeting_afternoon'.tr();
     } else {
       return 'home_greeting_evening'.tr();
-    }
-  }
-
-  String _getLocaleField(String locale) {
-    switch (locale) {
-      case 'hi':
-        return 'hi';
-      case 'te':
-        return 'te';
-      default:
-        return 'en';
     }
   }
 
@@ -139,14 +100,9 @@ class _HomeScreenState extends State<HomeScreen> {
             greeting: _greeting,
             farmerName: _farmerName,
             profileImageUrl: _profileImageUrl,
-            advisoryState: _advisoryState,
           );
           _isLoading = false;
         });
-
-        // Initialize advisory state with current locale
-        final locale = _getLocaleField(context.locale.languageCode);
-        _advisoryState.initializeData(locale: locale);
       } else if (mounted) {
         setState(() {
           _farmerName = 'Farmer';
@@ -155,7 +111,6 @@ class _HomeScreenState extends State<HomeScreen> {
             greeting: _greeting,
             farmerName: _farmerName,
             profileImageUrl: null,
-            advisoryState: _advisoryState,
           );
           _isLoading = false;
         });
@@ -169,7 +124,6 @@ class _HomeScreenState extends State<HomeScreen> {
             greeting: _greeting,
             farmerName: _farmerName,
             profileImageUrl: null,
-            advisoryState: _advisoryState,
           );
           _isLoading = false;
         });
@@ -345,14 +299,12 @@ class HomeTab extends StatelessWidget {
   final String greeting;
   final String farmerName;
   final String? profileImageUrl;
-  final AdvisoryState advisoryState;
 
   const HomeTab({
     super.key,
     required this.greeting,
     required this.farmerName,
     this.profileImageUrl,
-    required this.advisoryState,
   });
 
   static final List<Map<String, dynamic>> features = [
@@ -411,10 +363,7 @@ class HomeTab extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildGreetingCard(context),
-            const SizedBox(height: 20),
-            // Crop Advisory Card - Real-time synced
-            _buildCropAdvisoryCard(context),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             Text(
               'home_services_title'.tr(),
               style: GoogleFonts.poppins(
@@ -497,256 +446,6 @@ class HomeTab extends StatelessWidget {
             height: 100,
           ),
         ],
-      ),
-    );
-  }
-
-  /// Build the Crop Advisory Card that shows real-time stage and problem info
-  Widget _buildCropAdvisoryCard(BuildContext context) {
-    // If no data is loaded yet, show a loading state
-    if (advisoryState.isLoading || !advisoryState.isInitialized) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withValues(alpha: 0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.green,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                'home_loading_advisory'.tr(),
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // If no crops are selected
-    if (advisoryState.farmerCrops.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.orange[50],
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.orange[200]!),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.orange[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.add_circle_outline, color: Colors.orange[700], size: 28),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'home_no_crops_title'.tr(),
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.orange[800],
-                    ),
-                  ),
-                  Text(
-                    'home_no_crops_subtitle'.tr(),
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.orange[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Show the crop advisory card with real-time data
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (context) => const AdvisoriesScreen()),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.green[50]!, Colors.green[100]!],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.green[200]!),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.green.withValues(alpha: 0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row with crop info
-            Row(
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.green[200],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.agriculture, color: Colors.green[700], size: 28),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        advisoryState.currentCropName,
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.green[800],
-                        ),
-                      ),
-                      Text(
-                        advisoryState.currentFieldName,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.green[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.arrow_forward_ios, color: Colors.green[400], size: 16),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Divider
-            Container(
-              height: 1,
-              color: Colors.green[200],
-            ),
-            const SizedBox(height: 12),
-            // Stage and problems info
-            Row(
-              children: [
-                // Current Stage
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'home_current_stage'.tr(),
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          color: Colors.green[600],
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        advisoryState.currentStageName.isNotEmpty
-                            ? advisoryState.currentStageName
-                            : 'home_no_stage'.tr(),
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.green[800],
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Problems count
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: advisoryState.hasProblems 
-                        ? Colors.orange[100] 
-                        : Colors.green[200],
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        advisoryState.hasProblems 
-                            ? Icons.warning_amber_rounded 
-                            : Icons.check_circle,
-                        size: 16,
-                        color: advisoryState.hasProblems 
-                            ? Colors.orange[700] 
-                            : Colors.green[700],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        advisoryState.hasProblems
-                            ? '${advisoryState.problemCount} ${'home_problems'.tr()}'
-                            : 'home_no_issues'.tr(),
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: advisoryState.hasProblems 
-                              ? Colors.orange[700] 
-                              : Colors.green[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

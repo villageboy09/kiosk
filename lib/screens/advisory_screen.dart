@@ -5,11 +5,47 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/crop_problem.dart';
 import 'package:cropsync/screens/advisory_details.dart';
-import 'package:cropsync/services/advisory_state.dart';
+import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:easy_localization/easy_localization.dart';
+
+// Data Models
+class FarmerCropSelection {
+  final int id;
+  final String fieldName;
+  final String cropName;
+  final String? cropImageUrl;
+  final int cropId;
+  final int varietyId;
+  final DateTime sowingDate;
+
+  FarmerCropSelection({
+    required this.id,
+    required this.fieldName,
+    required this.cropName,
+    this.cropImageUrl,
+    required this.cropId,
+    required this.varietyId,
+    required this.sowingDate,
+  });
+}
+
+class CropStage {
+  final int id;
+  final String name;
+  final String? imageUrl;
+  final String? description;
+
+  CropStage({
+    required this.id,
+    required this.name,
+    this.imageUrl,
+    this.description,
+  });
+}
 
 class AdvisoriesScreen extends StatefulWidget {
   const AdvisoriesScreen({super.key});
@@ -20,10 +56,19 @@ class AdvisoriesScreen extends StatefulWidget {
 
 class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     with TickerProviderStateMixin {
+  bool _isLoading = true;
   final ScrollController _scrollController = ScrollController();
 
-  // Shared advisory state - singleton
-  final AdvisoryState _advisoryState = AdvisoryState();
+  // Data
+  List<FarmerCropSelection> _farmerCrops = [];
+  List<CropStage> _stages = [];
+  List<CropProblem> _problems = [];
+
+  FarmerCropSelection? _selectedFarmerCrop;
+  CropStage? _selectedStage;
+
+  // Initialization state
+  bool _isInit = true;
 
   // Animation
   late AnimationController _feedAnimationController;
@@ -40,45 +85,23 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-
-    // Listen to state changes
-    _advisoryState.addListener(_onStateChanged);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Initialize data if not already done
-    if (!_advisoryState.isInitialized) {
-      final locale = _getLocaleField(context.locale.languageCode);
-      _advisoryState.initializeData(locale: locale);
-    } else {
-      // Update locale if changed
-      final locale = _getLocaleField(context.locale.languageCode);
-      _advisoryState.setLocale(locale);
+    if (_isInit) {
+      _fetchInitialData();
+      _isInit = false;
     }
   }
 
   @override
   void dispose() {
-    _advisoryState.removeListener(_onStateChanged);
     _feedAnimationController.dispose();
     _filterAnimationController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _onStateChanged() {
-    if (mounted) {
-      setState(() {});
-      // Trigger animations when data changes
-      if (_advisoryState.problems.isNotEmpty) {
-        _feedAnimationController.forward();
-      }
-      if (_advisoryState.farmerCrops.isNotEmpty) {
-        _filterAnimationController.forward();
-      }
-    }
   }
 
   String _getLocaleField(String locale) {
@@ -90,6 +113,18 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       default:
         return 'en';
     }
+  }
+
+  void _showErrorSnackbar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.lexend()),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
   void _showFilterBottomSheet() {
@@ -143,7 +178,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                   ..._advisoryState.farmerCrops
                       .map((crop) => _buildCropTile(crop)),
                   const SizedBox(height: 24),
-                  if (_advisoryState.stages.isNotEmpty) ...[
+                  if (_stages.isNotEmpty) ...[
                     Text(
                       context.tr('crop_stage'),
                       style: GoogleFonts.lexend(
@@ -166,7 +201,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
   }
 
   Widget _buildStageTile(CropStage stage) {
-    final isSelected = _advisoryState.selectedStage?.id == stage.id;
+    final isSelected = _selectedStage?.id == stage.id;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -174,7 +209,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
-            _advisoryState.selectStage(stage);
+            _selectStage(stage);
             Navigator.pop(context);
           },
           borderRadius: BorderRadius.circular(12),
@@ -240,7 +275,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
   }
 
   Widget _buildCropTile(FarmerCropSelection crop) {
-    final isSelected = _advisoryState.selectedFarmerCrop?.id == crop.id;
+    final isSelected = _selectedFarmerCrop?.id == crop.id;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -248,8 +283,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
-            _advisoryState.selectFarmerCrop(crop);
-            if (_advisoryState.stages.isEmpty) Navigator.pop(context);
+            _selectFarmerCrop(crop);
+            if (_stages.isEmpty) Navigator.pop(context);
           },
           borderRadius: BorderRadius.circular(12),
           child: Container(
@@ -327,13 +362,13 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
-        child: _advisoryState.isLoading
+        child: _isLoading
             ? _buildShimmerEffect()
             : Column(
                 children: [
                   _buildCompactHeader(),
                   // Stage selector horizontal list
-                  if (_advisoryState.stages.isNotEmpty) _buildStageSelector(),
+                  if (_stages.isNotEmpty) _buildStageSelector(),
                   Expanded(child: _buildProblemFeed()),
                 ],
               ),
@@ -348,12 +383,12 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _advisoryState.stages.length,
+        itemCount: _stages.length,
         itemBuilder: (context, index) {
-          final stage = _advisoryState.stages[index];
-          final isSelected = _advisoryState.selectedStage?.id == stage.id;
+          final stage = _stages[index];
+          final isSelected = _selectedStage?.id == stage.id;
           return GestureDetector(
-            onTap: () => _advisoryState.selectStage(stage),
+            onTap: () => _selectStage(stage),
             child: Container(
               width: 80,
               margin: const EdgeInsets.only(right: 12),
@@ -462,11 +497,11 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                         ),
                       ),
                       const SizedBox(height: 4),
-                      if (_advisoryState.selectedFarmerCrop != null)
+                      if (_selectedFarmerCrop != null)
                         FadeTransition(
                           opacity: _filterAnimationController,
                           child: Text(
-                            '${_advisoryState.selectedFarmerCrop!.cropName} • ${_advisoryState.selectedFarmerCrop!.fieldName}',
+                            '${_selectedFarmerCrop!.cropName} • ${_selectedFarmerCrop!.fieldName}',
                             style: GoogleFonts.lexend(
                               fontSize: 14,
                               color: Colors.grey[600],
@@ -530,7 +565,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
   }
 
   Widget _buildProblemFeed() {
-    if (_advisoryState.problems.isEmpty) {
+    if (_problems.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -561,16 +596,28 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       );
     }
 
+    // Group problems by category
+    final Map<String, List<CropProblem>> groupedProblems = {};
+    for (var problem in _problems) {
+      final category = problem.category ?? 'Other';
+      if (!groupedProblems.containsKey(category)) {
+        groupedProblems[category] = [];
+      }
+      groupedProblems[category]!.add(problem);
+    }
+
     return RefreshIndicator(
       onRefresh: () async {
-        await _advisoryState.refreshData();
+        if (_selectedStage != null) {
+          await _selectStage(_selectedStage!);
+        }
       },
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.all(16),
-        itemCount: _advisoryState.problems.length,
+        itemCount: _problems.length,
         itemBuilder: (context, index) {
-          final problem = _advisoryState.problems[index];
+          final problem = _problems[index];
           return FadeTransition(
             opacity: _feedAnimationController,
             child: SlideTransition(
@@ -675,7 +722,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                 ),
                               ),
                             ),
-                          // Gradient overlay
+                          // Gradient overlay for better text visibility
                           Positioned(
                             bottom: 0,
                             left: 0,
