@@ -3,6 +3,7 @@ import 'package:cropsync/screens/language_selection_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -19,6 +20,10 @@ Future<void> main() async {
 
   // Load user session if exists
   await AuthService.loadUserSession();
+
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
 
   runApp(
     EasyLocalization(
