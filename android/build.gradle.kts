@@ -23,11 +23,11 @@ subprojects {
 // Force Java 17 for all subprojects to fix obsolete Java 8 warnings
 subprojects {
     project.plugins.whenPluginAdded {
-        if (this is com.android.build.gradle.BasePlugin<*, *, *, *, *, *>) {
+        if (this is com.android.build.gradle.BasePlugin) {
             project.extensions.configure<com.android.build.gradle.BaseExtension>("android") {
                 compileOptions {
-                    sourceCompatibility = JavaVersion.VERSION_17
-                    targetCompatibility = JavaVersion.VERSION_17
+                    setSourceCompatibility(JavaVersion.VERSION_17)
+                    setTargetCompatibility(JavaVersion.VERSION_17)
                 }
             }
         }
