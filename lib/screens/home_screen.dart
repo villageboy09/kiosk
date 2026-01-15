@@ -1,6 +1,6 @@
 import 'package:cropsync/screens/advisory_screen.dart';
 import 'package:cropsync/screens/agri_shop.dart';
-import 'package:cropsync/screens/drone_booking.dart';
+import 'package:cropsync/screens/chc_booking_screen.dart';
 import 'package:cropsync/screens/market_prices.dart';
 import 'package:cropsync/screens/seed_varieties.dart';
 import 'package:cropsync/screens/weather.dart';
@@ -87,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       // Get user from AuthService instead of Supabase
       User? user = await AuthService.getCurrentUser();
-      
+
       // Optionally refresh user data from server
       user = await AuthService.refreshUserData();
 
@@ -349,7 +349,7 @@ class HomeTab extends StatelessWidget {
       'subtitle_key': 'home_feature_drone_subtitle',
       'icon': Icons.flight_outlined,
       'color': const Color(0xFF6A1B9A),
-      'page': const DroneBookingScreen()
+      'page': const CHCBookingScreen()
     },
   ];
 

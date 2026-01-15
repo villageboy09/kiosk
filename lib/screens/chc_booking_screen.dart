@@ -88,8 +88,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
   late AnimationController _animationController;
 
   // Equipment list with image URLs from kiosk.cropsync.in
-  static final List<Equipment> _equipmentList = [
-    const Equipment(
+  static const List<Equipment> _equipmentList = [
+    Equipment(
       id: 'combined_harvester',
       nameEn: 'Combined Harvester',
       nameHi: 'कंबाइंड हार्वेस्टर',
@@ -99,7 +99,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
       ratePerAcre: 2500.0,
       accentColor: Color(0xFFEF4444),
     ),
-    const Equipment(
+    Equipment(
       id: 'tractor',
       nameEn: 'Tractor',
       nameHi: 'ट्रैक्टर',
@@ -108,7 +108,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
       ratePerAcre: 1500.0,
       accentColor: Color(0xFF3B82F6),
     ),
-    const Equipment(
+    Equipment(
       id: 'balers',
       nameEn: 'Balers',
       nameHi: 'बेलर',
@@ -117,7 +117,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
       ratePerAcre: 1200.0,
       accentColor: Color(0xFF10B981),
     ),
-    const Equipment(
+    Equipment(
       id: 'boomer_spray',
       nameEn: 'Boomer Spray',
       nameHi: 'बूमर स्प्रे',
@@ -127,7 +127,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
       ratePerAcre: 800.0,
       accentColor: Color(0xFF8B5CF6),
     ),
-    const Equipment(
+    Equipment(
       id: 'shredder',
       nameEn: 'Shredder',
       nameHi: 'श्रेडर',
@@ -136,7 +136,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
       ratePerAcre: 1000.0,
       accentColor: Color(0xFFF59E0B),
     ),
-    const Equipment(
+    Equipment(
       id: 'tractor_trolley',
       nameEn: 'Tractor Trolley',
       nameHi: 'ट्रैक्टर ट्रॉली',
@@ -146,7 +146,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
       ratePerAcre: 600.0,
       accentColor: Color(0xFF06B6D4),
     ),
-    const Equipment(
+    Equipment(
       id: 'mobile_grain_dryer',
       nameEn: 'Mobile Grain Dryer',
       nameHi: 'मोबाइल ग्रेन ड्रायर',
@@ -156,7 +156,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
       ratePerAcre: 1800.0,
       accentColor: Color(0xFFEC4899),
     ),
-    const Equipment(
+    Equipment(
       id: 'seed_cum_fertilizer_drill',
       nameEn: 'Seed Cum Fertilizer Drill',
       nameHi: 'सीड कम फर्टिलाइजर ड्रिल',
@@ -166,7 +166,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
       ratePerAcre: 900.0,
       accentColor: Color(0xFF14B8A6),
     ),
-    const Equipment(
+    Equipment(
       id: 'drone',
       nameEn: 'Drone',
       nameHi: 'ड्रोन',
@@ -175,7 +175,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
       ratePerAcre: 600.0,
       accentColor: Color(0xFF6366F1),
     ),
-    const Equipment(
+    Equipment(
       id: 'manual_seed_drill_maize',
       nameEn: 'Manual Seed Drill (Maize)',
       nameHi: 'मैनुअल सीड ड्रिल (मक्का)',
