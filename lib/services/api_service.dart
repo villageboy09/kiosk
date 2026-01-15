@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cropsync/models/user.dart';
@@ -284,14 +286,16 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('DEBUG getProblems: success=${data['success']}, problems count=${data['problems']?.length ?? 0}');
+        print(
+            'DEBUG getProblems: success=${data['success']}, problems count=${data['problems']?.length ?? 0}');
         if (data['success'] == true) {
           final problems = List<Map<String, dynamic>>.from(data['problems']);
           print('DEBUG getProblems: Returning ${problems.length} problems');
           return problems;
         }
       }
-      print('DEBUG getProblems: Returning empty list (non-200 or success=false)');
+      print(
+          'DEBUG getProblems: Returning empty list (non-200 or success=false)');
       return [];
     } catch (e) {
       print('DEBUG getProblems: ERROR: $e');
