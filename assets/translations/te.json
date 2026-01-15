@@ -252,12 +252,5 @@
   "growth_duration": "పెరుగుదల వ్యవధి",
   "average_yield": "సగటు దిగుబడి",
   "quintals_per_acre": "క్వింటాళ్ళు/ఎకరం",
-  "watch_video": "సాక్ష్యం వీడియో చూడండి",
-  "home_loading_advisory": "పంట సలహా లోడ్ అవుతోంది...",
-  "home_no_crops_title": "పంటలు జోడించబడలేదు",
-  "home_no_crops_subtitle": "సలహాలు చూడటానికి పంట జోడించండి",
-  "home_current_stage": "ప్రస్తుత దశ",
-  "home_no_stage": "దశ ఎంపిక కాలేదు",
-  "home_problems": "సమస్యలు",
-  "home_no_issues": "సమస్యలు లేవు"
+  "watch_video": "సాక్ష్యం వీడియో చూడండి"
 }

@@ -252,12 +252,5 @@
   "growth_duration": "Growth Duration",
   "average_yield": "Average Yield",
   "quintals_per_acre": "quintals/acre",
-  "watch_video": "Watch Testimonial Video",
-  "home_loading_advisory": "Loading crop advisory...",
-  "home_no_crops_title": "No Crops Added",
-  "home_no_crops_subtitle": "Add a crop to see advisories",
-  "home_current_stage": "Current Stage",
-  "home_no_stage": "No stage selected",
-  "home_problems": "Issues",
-  "home_no_issues": "No issues"
+  "watch_video": "Watch Testimonial Video"
 }
