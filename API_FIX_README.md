@@ -1,208 +1,286 @@
-# API Fix: Stage-Specific Problems Not Showing
+# Complete Crop Advisory API Fix
 
 ## Problem Statement
 
-Stage-specific diseases, pests, and deficiencies are not visible in the crop advisory sections. While crop stages are visible and working correctly, the problems for each stage are not being returned by the API.
+Stage-specific diseases, pests, and deficiencies were not visible in the crop advisory sections. The complete flow should be:
+
+1. **Select Crop** → Display all stages for that crop
+2. **Select Stage** → Display diseases, pests, and deficiencies specific to that stage of that crop
+3. **Tap on Problem** → Display advisory components (remedies) specific to that problem AND that stage
 
 ## Root Cause Analysis
 
-The deployed API (`api.php` on your production server) uses **incorrect column names** that don't exist in the `rice_problems` database table.
+### Issue 1: Wrong Column Names (Original Issue)
+The deployed API used incorrect column names that don't exist in the database:
+- `name_en`/`name_te` instead of `problem_name_en`/`problem_name_te`
+- `image_url` instead of `image_url1`, `image_url2`, `image_url3`
 
-### Column Name Mismatch
+### Issue 2: Missing problem_stage_id (New Issue)
+The API was not returning `problem_stage_id` which is required to fetch stage-specific advisory components.
 
-| What the deployed API uses | What the database actually has |
-|---------------------------|-------------------------------|
-| `name_en` | `problem_name_en` |
-| `name_te` | `problem_name_te` |
-| `image_url` | `image_url1`, `image_url2`, `image_url3` |
+### Issue 3: Advisory Components Not Stage-Filtered
+The `getAdvisoryComponents` function was not properly filtering by `problem_stage_id`.
 
-### The Faulty Code (in deployed api.php)
+## Database Relationships
 
-```php
-// Line 384 - WRONG column names
-$nameColumn = $lang === 'en' ? 'name_en' : 'name_te';
-
-// Line 388 - WRONG column name for image
-$sql = "SELECT rp.id, rp.$nameColumn as name, rp.image_url 
-        FROM rice_problems rp
-        JOIN problem_stages ps ON rp.id = ps.problem_id 
-        WHERE 1=1";
+```
+crops (id)
+    │
+    └──► CropStages (crop_id → StageID)
+            │
+            └──► problem_stages (stage_id, problem_id) ──► id = problem_stage_id
+                    │
+                    └──► rice_problems (id, crop_id)
+                            │
+                            └──► crop_advisories (problem_id → id)
+                                    │
+                                    └──► advisory_components (advisory_id, problem_stage_id)
 ```
 
-This causes the SQL query to fail because:
-1. Column `name_en` doesn't exist → should be `problem_name_en`
-2. Column `name_te` doesn't exist → should be `problem_name_te`
-3. Column `image_url` doesn't exist → should be `image_url1`
+### Key Table: problem_stages
+This junction table is CRITICAL. It maps problems to stages and provides the `problem_stage_id`:
+- `id` - The problem_stage_id (used for stage-specific advisory components)
+- `problem_id` - Foreign key to rice_problems.id
+- `stage_id` - Foreign key to CropStages.StageID
 
-## Solution
+### Key Table: advisory_components
+This table stores remedies with stage-specific filtering:
+- `advisory_id` - Foreign key to crop_advisories.id
+- `problem_stage_id` - Foreign key to problem_stages.id (stage-specific)
+- `stage_scope` - General stage category (Nursery, Vegetative, Reproductive, Ripening, All Stages)
 
-Replace the `getProblems` function in your deployed `api.php` with the corrected version.
+## Complete API Flow
 
-### Corrected Code
+### Step 1: Get Crops
+```
+GET /api.php?action=get_crops&lang=en
+```
+Returns: List of all crops
 
-```php
-function getProblems($pdo) {
-    $cropId = $_GET['crop_id'] ?? null;
-    $stageId = $_GET['stage_id'] ?? null;
-    $lang = $_GET['lang'] ?? 'te';
-    
-    // CORRECT column names
-    $nameField = ($lang === 'en') ? 'problem_name_en' : 'problem_name_te';
-    
-    if ($stageId) {
-        $sql = "
-            SELECT DISTINCT
-                rp.id,
-                rp.$nameField as name,
-                rp.problem_name_te as name_te,
-                rp.problem_name_en as name_en,
-                rp.category,
-                rp.crop_id,
-                rp.image_url1,
-                rp.image_url2,
-                rp.image_url3
-            FROM rice_problems rp
-            INNER JOIN problem_stages ps ON rp.id = ps.problem_id
-            WHERE ps.stage_id = ?
-        ";
-        $params = [$stageId];
-        
-        if ($cropId) {
-            $sql .= " AND rp.crop_id = ?";
-            $params[] = $cropId;
-        }
-        
-        $sql .= " ORDER BY rp.category, rp.id";
-    } else if ($cropId) {
-        $sql = "
-            SELECT 
-                rp.id,
-                rp.$nameField as name,
-                rp.problem_name_te as name_te,
-                rp.problem_name_en as name_en,
-                rp.category,
-                rp.crop_id,
-                rp.image_url1,
-                rp.image_url2,
-                rp.image_url3
-            FROM rice_problems rp
-            WHERE rp.crop_id = ?
-            ORDER BY rp.category, rp.id
-        ";
-        $params = [$cropId];
-    } else {
-        $sql = "
-            SELECT 
-                rp.id,
-                rp.$nameField as name,
-                rp.problem_name_te as name_te,
-                rp.problem_name_en as name_en,
-                rp.category,
-                rp.crop_id,
-                rp.image_url1,
-                rp.image_url2,
-                rp.image_url3
-            FROM rice_problems rp
-            ORDER BY rp.category, rp.id
-        ";
-        $params = [];
+### Step 2: Get Stages for a Crop
+```
+GET /api.php?action=get_crop_stages&crop_id=1&lang=en
+```
+Returns: All stages for Rice (crop_id=1)
+
+### Step 3: Get Problems for a Stage (FIXED)
+```
+GET /api.php?action=get_problems&crop_id=1&stage_id=2&lang=en
+```
+Returns: Problems for Rice Seedling stage, **including problem_stage_id**
+
+Example response:
+```json
+{
+  "success": true,
+  "problems": [
+    {
+      "id": 5,
+      "name": "Blast",
+      "category": "Fungal Disease",
+      "crop_id": 1,
+      "image_url1": "...",
+      "problem_stage_id": 132,  // <-- CRITICAL: This is needed for step 5
+      "stage_id": 2
     }
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $problems = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    echo json_encode(['success' => true, 'problems' => $problems]);
+  ]
 }
 ```
 
-## How to Apply the Fix
+### Step 4: Get Advisory for a Problem (FIXED)
+```
+GET /api.php?action=get_advisories&problem_id=5&stage_id=2&lang=en
+```
+Returns: Advisory with **problem_stage_id** for stage-specific components
 
-### Option 1: Update the deployed api.php directly
-
-1. SSH into your production server
-2. Navigate to your API directory
-3. Open `api.php` in an editor
-4. Find the `getProblems` function (around line 379)
-5. Replace it with the corrected version above
-6. Save and test
-
-### Option 2: Use the repository version
-
-The repository (`/api/api.php`) already has the correct column names. Simply deploy the latest version from the repository:
-
-```bash
-# On your production server
-cd /path/to/your/api
-git pull origin main
+Example response:
+```json
+{
+  "success": true,
+  "advisory": {
+    "id": 5,
+    "problem_id": 5,
+    "title": "Blast Management",
+    "symptoms": "...",
+    "problem_stage_id": 132,  // <-- CRITICAL: Pass this to step 5
+    "stage_id": 2
+  }
+}
 ```
 
-## Testing the Fix
+### Step 5: Get Stage-Specific Advisory Components (FIXED)
+```
+GET /api.php?action=get_advisory_components&advisory_id=5&problem_stage_id=132&stage_scope=Vegetative&lang=en
+```
+Returns: Only components that are:
+1. Specific to problem_stage_id=132, OR
+2. General (problem_stage_id IS NULL), AND
+3. Match stage_scope=Vegetative OR stage_scope='All Stages'
 
-After applying the fix, test with these API calls:
+## Changes Made
 
+### 1. getProblems Function
+**Before:** Did not return `problem_stage_id`
+**After:** Returns `problem_stage_id` from the `problem_stages` junction table
+
+```php
+// NEW: Include ps.id as problem_stage_id
+SELECT DISTINCT
+    rp.id,
+    rp.problem_name_en as name,
+    ...
+    ps.id as problem_stage_id,  // <-- NEW
+    ps.stage_id                  // <-- NEW
+FROM rice_problems rp
+INNER JOIN problem_stages ps ON rp.id = ps.problem_id
+WHERE ps.stage_id = ?
+```
+
+### 2. getAdvisories Function
+**Before:** Did not return `problem_stage_id`
+**After:** Accepts `stage_id` parameter and returns `problem_stage_id`
+
+```php
+// NEW: Look up problem_stage_id if stage_id is provided
+if ($stageId) {
+    $stmt = $pdo->prepare("
+        SELECT id as problem_stage_id 
+        FROM problem_stages 
+        WHERE problem_id = ? AND stage_id = ?
+    ");
+    $stmt->execute([$problemId, $stageId]);
+    $psResult = $stmt->fetch(PDO::FETCH_ASSOC);
+    $advisory['problem_stage_id'] = $psResult['problem_stage_id'];
+}
+```
+
+### 3. getAdvisoryComponents Function
+**Before:** Only filtered by `advisory_id` and `stage_scope`
+**After:** Also filters by `problem_stage_id` for stage-specific components
+
+```php
+// NEW: Filter by problem_stage_id
+if ($problemStageId) {
+    $sql .= " AND (problem_stage_id = ? OR problem_stage_id IS NULL)";
+    $params[] = $problemStageId;
+}
+```
+
+## Flutter Integration
+
+### In your advisory_screen.dart or similar:
+
+```dart
+// When user selects a problem from the list
+void onProblemSelected(Map<String, dynamic> problem) async {
+  final problemId = problem['id'];
+  final stageId = problem['stage_id'];
+  final problemStageId = problem['problem_stage_id'];
+  
+  // Get advisory with problem_stage_id
+  final advisory = await ApiService.getAdvisories(
+    problemId: problemId,
+    stageId: stageId,
+    lang: currentLocale,
+  );
+  
+  // Navigate to advisory details
+  Navigator.push(context, MaterialPageRoute(
+    builder: (context) => AdvisoryDetailsScreen(
+      advisory: advisory,
+      problemStageId: problemStageId,
+    ),
+  ));
+}
+```
+
+### In your advisory_details.dart:
+
+```dart
+// Fetch stage-specific components
+Future<void> loadComponents() async {
+  final components = await ApiService.getAdvisoryComponents(
+    advisoryId: widget.advisory['id'],
+    problemStageId: widget.problemStageId,  // <-- Pass this!
+    stageScope: _getStageScope(),  // e.g., 'Vegetative'
+    lang: currentLocale,
+  );
+  
+  setState(() {
+    _components = components;
+  });
+}
+```
+
+### Update ApiService.dart:
+
+```dart
+// Updated getProblems - now returns problem_stage_id
+static Future<List<Map<String, dynamic>>> getProblems({
+  int? cropId,
+  int? stageId,
+  String lang = 'te',
+}) async {
+  String url = '$baseUrl/api.php?action=get_problems&lang=$lang';
+  if (cropId != null) url += '&crop_id=$cropId';
+  if (stageId != null) url += '&stage_id=$stageId';
+  // Response now includes problem_stage_id for each problem
+  ...
+}
+
+// Updated getAdvisories - now accepts stage_id and returns problem_stage_id
+static Future<Map<String, dynamic>?> getAdvisories(
+  int problemId, {
+  int? stageId,  // <-- NEW parameter
+  String lang = 'te',
+}) async {
+  String url = '$baseUrl/api.php?action=get_advisories&problem_id=$problemId&lang=$lang';
+  if (stageId != null) url += '&stage_id=$stageId';  // <-- NEW
+  ...
+}
+
+// Updated getAdvisoryComponents - now accepts problem_stage_id
+static Future<List<Map<String, dynamic>>> getAdvisoryComponents(
+  int advisoryId, {
+  int? problemStageId,  // <-- NEW parameter
+  String? stageScope,
+  String lang = 'te',
+}) async {
+  String url = '$baseUrl/api.php?action=get_advisory_components&advisory_id=$advisoryId&lang=$lang';
+  if (problemStageId != null) url += '&problem_stage_id=$problemStageId';  // <-- NEW
+  if (stageScope != null) url += '&stage_scope=$stageScope';
+  ...
+}
+```
+
+## Testing
+
+### Test Rice Stage 2 (Seedling) Problems:
 ```bash
-# Test Rice Stage 1 (Germination)
-curl "https://kiosk.cropsync.in/api/api.php?action=get_problems&crop_id=1&stage_id=1&lang=en"
-
-# Test Rice Stage 2 (Seedling)
 curl "https://kiosk.cropsync.in/api/api.php?action=get_problems&crop_id=1&stage_id=2&lang=en"
-
-# Test Sunflower Stage 26 (Germination)
-curl "https://kiosk.cropsync.in/api/api.php?action=get_problems&crop_id=12&stage_id=26&lang=en"
 ```
 
-Expected response should include problems with proper `name`, `category`, and `image_url1` fields.
+### Test Advisory with Stage:
+```bash
+curl "https://kiosk.cropsync.in/api/api.php?action=get_advisories&problem_id=5&stage_id=2&lang=en"
+```
 
-## Database Schema Reference
+### Test Stage-Specific Components:
+```bash
+curl "https://kiosk.cropsync.in/api/api.php?action=get_advisory_components&advisory_id=5&problem_stage_id=132&stage_scope=Vegetative&lang=en"
+```
 
-### rice_problems table
+## Deployment
 
-| Column | Type | Description |
-|--------|------|-------------|
-| id | int | Primary key |
-| problem_name_te | varchar(255) | Problem name in Telugu |
-| problem_name_en | varchar(255) | Problem name in English |
-| category | varchar(50) | Category (Pest, Disease, Deficiency, etc.) |
-| crop_id | int | Foreign key to crops table |
-| image_url1 | varchar(255) | Primary image URL |
-| image_url2 | varchar(255) | Secondary image URL |
-| image_url3 | varchar(255) | Tertiary image URL |
+1. Copy the updated `api/api.php` to your production server
+2. Update your Flutter app's `ApiService.dart` to pass the new parameters
+3. Update your UI to store and pass `problem_stage_id` through the flow
 
-### problem_stages table
+## Summary
 
-| Column | Type | Description |
-|--------|------|-------------|
-| id | int | Primary key |
-| problem_id | int | Foreign key to rice_problems.id |
-| stage_id | int | Foreign key to CropStages.StageID |
-
-### CropStages table
-
-| Column | Type | Description |
-|--------|------|-------------|
-| StageID | int | Primary key |
-| crop_id | int | Foreign key to crops table |
-| StageName | varchar | Stage name in Telugu |
-| StageName_en | varchar | Stage name in English |
-
-## Verified Data Mappings
-
-The database has correct problem-to-stage mappings:
-
-| Crop | Stage ID | Stage Name | Number of Problems |
-|------|----------|------------|-------------------|
-| Rice | 1 | Germination | 9 problems |
-| Rice | 2 | Seedling | 14 problems |
-| Rice | 3 | Tillering | 11 problems |
-| Rice | 4 | Stem Elongation | 3 problems |
-| Rice | 7 | Flowering | 2 problems |
-| Rice | 8 | Grain Filling | 3 problems |
-| Sunflower | 26 | Germination | 4 problems |
-| Sunflower | 27 | Vegetative | 19 problems |
-| Sunflower | 28 | Bud Initiation | 2 problems |
-| Sunflower | 29 | Flowering | 7 problems |
-| Sunflower | 30 | Seed Filling | 5 problems |
-| Sunflower | 31 | Maturity | 3 problems |
-
-The data is complete - the only issue is the column name mismatch in the API.
+The fix ensures that:
+1. ✅ Selecting a crop shows all its stages
+2. ✅ Selecting a stage shows only problems mapped to that stage
+3. ✅ Each problem includes its `problem_stage_id`
+4. ✅ Advisory components are filtered by `problem_stage_id` for stage-specific remedies
+5. ✅ General components (with NULL problem_stage_id) are still included

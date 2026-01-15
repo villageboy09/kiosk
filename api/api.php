@@ -3,25 +3,12 @@
  * CropSync Kiosk API
  * MySQL Backend API for Flutter App
  * 
- * Endpoints:
- * - POST /api.php?action=login - User login
- * - GET /api.php?action=get_user&user_id=XXX - Get user details
- * - GET /api.php?action=get_crops&lang=te - Get all crops
- * - GET /api.php?action=get_varieties&crop_id=X - Get varieties for a crop
- * - GET /api.php?action=get_user_selections&user_id=XXX - Get user's crop selections
- * - POST /api.php?action=save_selection - Save crop selection
- * - PUT /api.php?action=update_selection - Update crop selection
- * - DELETE /api.php?action=delete_selection&id=X - Delete crop selection
- * - GET /api.php?action=get_crop_stages&crop_id=X&lang=te - Get crop stages
- * - GET /api.php?action=get_stage_duration&crop_id=X&variety_id=X - Get stage durations
- * - GET /api.php?action=get_advisories&problem_id=X&lang=te - Get advisories
- * - GET /api.php?action=get_problems&crop_id=X&stage_id=X&lang=te - Get problems for a stage
- * - GET /api.php?action=get_advisory_components&advisory_id=X&lang=te - Get advisory components/remedies
- * - POST /api.php?action=save_identified_problem - Save identified problem
- * - GET /api.php?action=get_products&category=X&lang=te - Get products
- * - GET /api.php?action=get_product_categories&lang=te - Get product categories
- * - POST /api.php?action=create_enquiry - Create product enquiry
- * - GET /api.php?action=get_seed_varieties&crop_name=X&lang=te - Get seed varieties
+ * COMPLETE FLOW:
+ * 1. Select Crop → get_crops
+ * 2. Get Stages for Crop → get_crop_stages?crop_id=X
+ * 3. Select Stage → get_problems?crop_id=X&stage_id=Y (returns problem_stage_id)
+ * 4. Select Problem → get_advisories?problem_id=X&stage_id=Y (returns advisory with problem_stage_id)
+ * 5. Get Stage-Specific Remedies → get_advisory_components?advisory_id=X&problem_stage_id=Y
  */
 
 header('Content-Type: application/json');
@@ -35,19 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-// Database configuration - Update these with your actual credentials
-$host = 'localhost';
-$dbname = 'u511597003_kiosk';
-$username = 'u511597003_kiosk';
-$password = 'YOUR_PASSWORD'; // Update this
-
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => 'Database connection failed']);
-    exit();
-}
+require_once '../config.php';
 
 $action = $_GET['action'] ?? '';
 
@@ -162,7 +137,6 @@ function getUser($pdo) {
 function getCrops($pdo) {
     $lang = $_GET['lang'] ?? 'te';
     
-    // The crops table has 'name' column (Telugu by default)
     $stmt = $pdo->query("SELECT id, name, image_url FROM crops ORDER BY id");
     $crops = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
@@ -233,7 +207,6 @@ function saveSelection($pdo) {
     }
     
     try {
-        // Get or create sowing_date_id
         $stmt = $pdo->prepare("SELECT id FROM sowing_dates WHERE sowing_date = ?");
         $stmt->execute([$sowingDate]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -246,7 +219,6 @@ function saveSelection($pdo) {
             $sowingDateId = $pdo->lastInsertId();
         }
         
-        // Insert selection
         $stmt = $pdo->prepare("
             INSERT INTO user_crop_selections (user_id, crop_id, variety_id, sowing_date_id, field_number)
             VALUES (?, ?, ?, ?, ?)
@@ -273,7 +245,6 @@ function updateSelection($pdo) {
     }
     
     try {
-        // Get or create sowing_date_id
         $stmt = $pdo->prepare("SELECT id FROM sowing_dates WHERE sowing_date = ?");
         $stmt->execute([$sowingDate]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -286,7 +257,6 @@ function updateSelection($pdo) {
             $sowingDateId = $pdo->lastInsertId();
         }
         
-        // Update selection
         $stmt = $pdo->prepare("
             UPDATE user_crop_selections 
             SET crop_id = ?, variety_id = ?, sowing_date_id = ?
@@ -317,13 +287,11 @@ function deleteSelection($pdo) {
 
 /**
  * Get crop stages for a specific crop
- * Uses the CropStages table with proper column names
  */
 function getCropStages($pdo) {
     $cropId = $_GET['crop_id'] ?? 0;
     $lang = $_GET['lang'] ?? 'te';
     
-    // CropStages table has: StageID, crop_id, StageName (Telugu), StageName_en (English), Description, StageImageURL
     $nameField = ($lang === 'en') ? 'StageName_en' : 'StageName';
     
     $stmt = $pdo->prepare("
@@ -346,23 +314,10 @@ function getCropStages($pdo) {
 
 /**
  * Get stage durations for a crop variety
- * Uses crop_stage_durations table
  */
 function getStageDuration($pdo) {
     $cropId = $_GET['crop_id'] ?? 0;
     $varietyId = $_GET['variety_id'] ?? null;
-    
-    $sql = "
-        SELECT 
-            csd.id,
-            csd.variety_id,
-            csd.stage_id,
-            csd.StartDayFromSowing as start_day_from_sowing,
-            csd.EndDayFromSowing as end_day_from_sowing
-        FROM crop_stage_durations csd
-        WHERE csd.variety_id IN (SELECT id FROM crop_varieties WHERE crop_id = ?)
-    ";
-    $params = [$cropId];
     
     if ($varietyId) {
         $sql = "
@@ -376,6 +331,18 @@ function getStageDuration($pdo) {
             WHERE csd.variety_id = ?
         ";
         $params = [$varietyId];
+    } else {
+        $sql = "
+            SELECT 
+                csd.id,
+                csd.variety_id,
+                csd.stage_id,
+                csd.StartDayFromSowing as start_day_from_sowing,
+                csd.EndDayFromSowing as end_day_from_sowing
+            FROM crop_stage_durations csd
+            WHERE csd.variety_id IN (SELECT id FROM crop_varieties WHERE crop_id = ?)
+        ";
+        $params = [$cropId];
     }
     
     $stmt = $pdo->prepare($sql);
@@ -387,18 +354,26 @@ function getStageDuration($pdo) {
 
 /**
  * Get problems/diseases for a specific crop and stage
- * Uses rice_problems table joined with problem_stages junction table
+ * 
+ * CRITICAL: Returns problem_stage_id which is needed for stage-specific advisory components
+ * 
+ * The problem_stage_id is the ID from the problem_stages junction table that links
+ * a specific problem to a specific stage. This ID is used to fetch stage-specific
+ * advisory components.
+ * 
+ * Usage: get_problems?crop_id=1&stage_id=2&lang=en
+ * Returns: problems with problem_stage_id for each
  */
 function getProblems($pdo) {
     $cropId = $_GET['crop_id'] ?? null;
     $stageId = $_GET['stage_id'] ?? null;
     $lang = $_GET['lang'] ?? 'te';
     
-    // rice_problems has: id, problem_name_te, problem_name_en, category, crop_id, image_url1, image_url2, image_url3
     $nameField = ($lang === 'en') ? 'problem_name_en' : 'problem_name_te';
     
     if ($stageId) {
-        // Get problems for a specific stage using problem_stages junction table
+        // Get problems for a specific stage
+        // CRITICAL: Include ps.id as problem_stage_id for stage-specific advisory lookup
         $sql = "
             SELECT DISTINCT
                 rp.id,
@@ -409,7 +384,9 @@ function getProblems($pdo) {
                 rp.crop_id,
                 rp.image_url1,
                 rp.image_url2,
-                rp.image_url3
+                rp.image_url3,
+                ps.id as problem_stage_id,
+                ps.stage_id
             FROM rice_problems rp
             INNER JOIN problem_stages ps ON rp.id = ps.problem_id
             WHERE ps.stage_id = ?
@@ -423,7 +400,7 @@ function getProblems($pdo) {
         
         $sql .= " ORDER BY rp.category, rp.id";
     } else if ($cropId) {
-        // Get all problems for a crop
+        // Get all problems for a crop (no stage filter)
         $sql = "
             SELECT 
                 rp.id,
@@ -434,7 +411,9 @@ function getProblems($pdo) {
                 rp.crop_id,
                 rp.image_url1,
                 rp.image_url2,
-                rp.image_url3
+                rp.image_url3,
+                NULL as problem_stage_id,
+                NULL as stage_id
             FROM rice_problems rp
             WHERE rp.crop_id = ?
             ORDER BY rp.category, rp.id
@@ -452,7 +431,9 @@ function getProblems($pdo) {
                 rp.crop_id,
                 rp.image_url1,
                 rp.image_url2,
-                rp.image_url3
+                rp.image_url3,
+                NULL as problem_stage_id,
+                NULL as stage_id
             FROM rice_problems rp
             ORDER BY rp.category, rp.id
         ";
@@ -467,17 +448,22 @@ function getProblems($pdo) {
 }
 
 /**
- * Get advisory details for a specific problem
- * Uses crop_advisories table
+ * Get advisory for a specific problem
+ * 
+ * NEW: Also accepts stage_id to return the problem_stage_id for stage-specific components
+ * 
+ * Usage: get_advisories?problem_id=5&stage_id=2&lang=en
+ * Returns: advisory with problem_stage_id for the specific stage
  */
 function getAdvisories($pdo) {
     $problemId = $_GET['problem_id'] ?? 0;
+    $stageId = $_GET['stage_id'] ?? null;
     $lang = $_GET['lang'] ?? 'te';
     
-    // crop_advisories has: id, problem_id, advisory_title_en, advisory_title_te, symptoms_en, symptoms_te
     $titleField = ($lang === 'en') ? 'advisory_title_en' : 'advisory_title_te';
     $symptomsField = ($lang === 'en') ? 'symptoms_en' : 'symptoms_te';
     
+    // Get the advisory for this problem
     $stmt = $pdo->prepare("
         SELECT 
             id,
@@ -495,6 +481,27 @@ function getAdvisories($pdo) {
     $advisory = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($advisory) {
+        // If stage_id is provided, get the problem_stage_id
+        if ($stageId) {
+            $stmt = $pdo->prepare("
+                SELECT id as problem_stage_id 
+                FROM problem_stages 
+                WHERE problem_id = ? AND stage_id = ?
+            ");
+            $stmt->execute([$problemId, $stageId]);
+            $psResult = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($psResult) {
+                $advisory['problem_stage_id'] = $psResult['problem_stage_id'];
+            } else {
+                $advisory['problem_stage_id'] = null;
+            }
+            $advisory['stage_id'] = $stageId;
+        } else {
+            $advisory['problem_stage_id'] = null;
+            $advisory['stage_id'] = null;
+        }
+        
         echo json_encode(['success' => true, 'advisory' => $advisory]);
     } else {
         echo json_encode(['success' => false, 'error' => 'Advisory not found']);
@@ -503,16 +510,25 @@ function getAdvisories($pdo) {
 
 /**
  * Get advisory components/remedies for a specific advisory
- * Uses advisory_components table
+ * 
+ * CRITICAL FIX: Now properly filters by problem_stage_id for stage-specific components
+ * 
+ * The advisory_components table has:
+ * - problem_stage_id: Links to problem_stages.id (stage-specific components)
+ * - stage_scope: General stage category (Nursery, Vegetative, Reproductive, Ripening, All Stages)
+ * 
+ * Logic:
+ * 1. If problem_stage_id is provided, return components that match it OR have NULL problem_stage_id
+ * 2. If stage_scope is provided, also filter by stage_scope OR 'All Stages'
+ * 3. Components with NULL problem_stage_id are general and apply to all stages
+ * 
+ * Usage: get_advisory_components?advisory_id=5&problem_stage_id=13&stage_scope=Nursery&lang=en
  */
 function getAdvisoryComponents($pdo) {
     $advisoryId = $_GET['advisory_id'] ?? 0;
+    $problemStageId = $_GET['problem_stage_id'] ?? null;
     $stageScope = $_GET['stage_scope'] ?? null;
     $lang = $_GET['lang'] ?? 'te';
-    
-    // advisory_components has: id, advisory_id, problem_stage_id, component_type, stage_scope,
-    // component_name_en, component_name_te, alt_component_name_en, alt_component_name_te,
-    // dose_en, dose_te, application_method_en, application_method_te, image_url
     
     $nameField = ($lang === 'en') ? 'component_name_en' : 'component_name_te';
     $altNameField = ($lang === 'en') ? 'alt_component_name_en' : 'alt_component_name_te';
@@ -544,6 +560,15 @@ function getAdvisoryComponents($pdo) {
     ";
     $params = [$advisoryId];
     
+    // Filter by problem_stage_id if provided
+    // Include components that match the specific stage OR are general (NULL)
+    if ($problemStageId) {
+        $sql .= " AND (problem_stage_id = ? OR problem_stage_id IS NULL)";
+        $params[] = $problemStageId;
+    }
+    
+    // Filter by stage_scope if provided
+    // Include components that match the specific scope OR are 'All Stages'
     if ($stageScope) {
         $sql .= " AND (stage_scope = ? OR stage_scope = 'All Stages')";
         $params[] = $stageScope;
@@ -574,7 +599,6 @@ function saveIdentifiedProblem($pdo) {
     }
     
     try {
-        // Create advisory_receipts entry
         $receiptId = 'ADV-' . $problemId . '-' . date('YmdHis') . '-' . uniqid();
         
         $stmt = $pdo->prepare("
@@ -666,7 +690,7 @@ function getSeedVarieties($pdo) {
     $lang = $_GET['lang'] ?? 'te';
     
     $varietyField = ($lang === 'en') ? 'variety_name_en' : 'variety_name_te';
-    $detailsField = 'details_te'; // Add details_en if needed
+    $detailsField = 'details_te';
     
     $sql = "
         SELECT id, crop_name, $varietyField as variety_name, image_url, $detailsField as details, 
@@ -691,11 +715,9 @@ function getSeedVarieties($pdo) {
 }
 
 function getCropNames($pdo) {
-    // Get distinct crop names from seed_varieties
     $stmt = $pdo->query("SELECT DISTINCT crop_name FROM seed_varieties ORDER BY crop_name");
     $crops = $stmt->fetchAll(PDO::FETCH_COLUMN);
     
-    // Also get from crops table for localized names
     $stmt = $pdo->query("SELECT id, name FROM crops ORDER BY id");
     $cropNames = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
