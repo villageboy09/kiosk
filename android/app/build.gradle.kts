@@ -71,5 +71,8 @@ dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22"))
     
     // ✅ FIX for Missing SplitCompat / SplitInstall classes
-    implementation("com.google.android.play:core:1.10.3")
+    // Updated to new split libraries compatible with SDK 34 (Android 14)
+    implementation("com.google.android.play:app-update:2.1.0")
+    implementation("com.google.android.play:review:2.0.1")
+    implementation("com.google.android.play:feature-delivery:2.1.0")
 }
