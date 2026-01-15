@@ -7,8 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/api_service.dart';
-import '../providers/auth_provider.dart';
-import 'package:provider/provider.dart';
+import '../services/auth_service.dart';
 
 // Design System
 class CHCTheme {
@@ -56,7 +55,8 @@ class CHCBookingState {
     DateTime? serviceDate,
   }) : serviceDate = serviceDate ?? DateTime.now().add(const Duration(days: 1));
 
-  double get totalCost => equipment != null ? acres * equipment!.ratePerAcre : 0;
+  double get totalCost =>
+      equipment != null ? acres * equipment!.ratePerAcre : 0;
 
   bool get isValid => equipment != null && acres > 0;
 
@@ -89,95 +89,101 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
 
   // Equipment list with image URLs from kiosk.cropsync.in
   static final List<Equipment> _equipmentList = [
-    Equipment(
+    const Equipment(
       id: 'combined_harvester',
       nameEn: 'Combined Harvester',
       nameHi: 'कंबाइंड हार्वेस्टर',
       nameTe: 'కంబైన్డ్ హార్వెస్టర్',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/Combined_Harvester.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/Combined_Harvester.png',
       ratePerAcre: 2500.0,
-      accentColor: const Color(0xFFEF4444),
+      accentColor: Color(0xFFEF4444),
     ),
-    Equipment(
+    const Equipment(
       id: 'tractor',
       nameEn: 'Tractor',
       nameHi: 'ट्रैक्टर',
       nameTe: 'ట్రాక్టర్',
       imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/Tractor.png',
       ratePerAcre: 1500.0,
-      accentColor: const Color(0xFF3B82F6),
+      accentColor: Color(0xFF3B82F6),
     ),
-    Equipment(
+    const Equipment(
       id: 'balers',
       nameEn: 'Balers',
       nameHi: 'बेलर',
       nameTe: 'బేలర్స్',
       imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/Balers.png',
       ratePerAcre: 1200.0,
-      accentColor: const Color(0xFF10B981),
+      accentColor: Color(0xFF10B981),
     ),
-    Equipment(
+    const Equipment(
       id: 'boomer_spray',
       nameEn: 'Boomer Spray',
       nameHi: 'बूमर स्प्रे',
       nameTe: 'బూమర్ స్ప్రే',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/Boomer_Spray.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/Boomer_Spray.png',
       ratePerAcre: 800.0,
-      accentColor: const Color(0xFF8B5CF6),
+      accentColor: Color(0xFF8B5CF6),
     ),
-    Equipment(
+    const Equipment(
       id: 'shredder',
       nameEn: 'Shredder',
       nameHi: 'श्रेडर',
       nameTe: 'ష్రెడ్డర్',
       imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/Shredder.png',
       ratePerAcre: 1000.0,
-      accentColor: const Color(0xFFF59E0B),
+      accentColor: Color(0xFFF59E0B),
     ),
-    Equipment(
+    const Equipment(
       id: 'tractor_trolley',
       nameEn: 'Tractor Trolley',
       nameHi: 'ट्रैक्टर ट्रॉली',
       nameTe: 'ట్రాక్టర్ ట్రాలీ',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/Tractor_Trolley.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/Tractor_Trolley.png',
       ratePerAcre: 600.0,
-      accentColor: const Color(0xFF06B6D4),
+      accentColor: Color(0xFF06B6D4),
     ),
-    Equipment(
+    const Equipment(
       id: 'mobile_grain_dryer',
       nameEn: 'Mobile Grain Dryer',
       nameHi: 'मोबाइल ग्रेन ड्रायर',
       nameTe: 'మొబైల్ గ్రెయిన్ డ్రయ్యర్',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/Mobile_Grain_Dryer.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/Mobile_Grain_Dryer.png',
       ratePerAcre: 1800.0,
-      accentColor: const Color(0xFFEC4899),
+      accentColor: Color(0xFFEC4899),
     ),
-    Equipment(
+    const Equipment(
       id: 'seed_cum_fertilizer_drill',
       nameEn: 'Seed Cum Fertilizer Drill',
       nameHi: 'सीड कम फर्टिलाइजर ड्रिल',
       nameTe: 'సీడ్ కమ్ ఫెర్టిలైజర్ డ్రిల్',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/Seed_Cum_Fertilizer_Drill.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/Seed_Cum_Fertilizer_Drill.png',
       ratePerAcre: 900.0,
-      accentColor: const Color(0xFF14B8A6),
+      accentColor: Color(0xFF14B8A6),
     ),
-    Equipment(
+    const Equipment(
       id: 'drone',
       nameEn: 'Drone',
       nameHi: 'ड्रोन',
       nameTe: 'డ్రోన్',
       imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/Drone.png',
       ratePerAcre: 600.0,
-      accentColor: const Color(0xFF6366F1),
+      accentColor: Color(0xFF6366F1),
     ),
-    Equipment(
+    const Equipment(
       id: 'manual_seed_drill_maize',
       nameEn: 'Manual Seed Drill (Maize)',
       nameHi: 'मैनुअल सीड ड्रिल (मक्का)',
       nameTe: 'మాన్యువల్ సీడ్ డ్రిల్ (మొక్కజొన్న)',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/Manual_Seed_Drill_Maize.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/Manual_Seed_Drill_Maize.png',
       ratePerAcre: 400.0,
-      accentColor: const Color(0xFF84CC16),
+      accentColor: Color(0xFF84CC16),
     ),
   ];
 
@@ -223,8 +229,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
     HapticFeedback.mediumImpact();
 
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final userId = authProvider.userId ?? '';
+      final currentUser = AuthService.currentUser;
+      final userId = currentUser?.userId ?? '';
 
       if (userId.isEmpty) {
         _showSnackBar(context.tr('login_required'), isError: true);
@@ -232,7 +238,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
         return;
       }
 
-      final bookingId = 'CHC-${DateFormat('yyyyMMdd').format(DateTime.now())}-${DateTime.now().millisecondsSinceEpoch % 10000}';
+      final bookingId =
+          'CHC-${DateFormat('yyyyMMdd').format(DateTime.now())}-${DateTime.now().millisecondsSinceEpoch % 10000}';
 
       final result = await ApiService.createCHCBooking(
         bookingId: bookingId,
@@ -254,7 +261,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
           );
         });
       } else {
-        _showSnackBar(result['error'] ?? context.tr('error_booking'), isError: true);
+        _showSnackBar(result['error'] ?? context.tr('error_booking'),
+            isError: true);
       }
     } catch (e) {
       _showSnackBar(context.tr('error_booking'), isError: true);
@@ -280,7 +288,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
 
     final locale = context.locale.languageCode;
     final equipmentName = _getEquipmentName(_state.equipment!);
-    final formattedDate = DateFormat('dd MMM yyyy', locale).format(_state.serviceDate);
+    final formattedDate =
+        DateFormat('dd MMM yyyy', locale).format(_state.serviceDate);
     final totalValue = '₹${_state.totalCost.toStringAsFixed(0)}';
 
     return showDialog(
@@ -300,7 +309,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
                   color: CHCTheme.accent.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check_circle, size: 48, color: CHCTheme.accent),
+                child: const Icon(Icons.check_circle,
+                    size: 48, color: CHCTheme.accent),
               ),
               const SizedBox(height: 24),
               Text(
@@ -314,7 +324,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
               const SizedBox(height: 12),
               Text(
                 context.tr('chc_success_subtitle'),
-                style: const TextStyle(fontSize: 14, color: CHCTheme.textSecondary),
+                style: const TextStyle(
+                    fontSize: 14, color: CHCTheme.textSecondary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -330,7 +341,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
                     const Divider(height: 20),
                     _DetailRow(context.tr('chc_equipment'), equipmentName),
                     const Divider(height: 20),
-                    _DetailRow(context.tr('detail_acres'), _state.acres.toStringAsFixed(1)),
+                    _DetailRow(context.tr('detail_acres'),
+                        _state.acres.toStringAsFixed(1)),
                     const Divider(height: 20),
                     _DetailRow(context.tr('detail_date'), formattedDate),
                     const Divider(height: 20),
@@ -346,9 +358,11 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
                   onPressed: () => Navigator.pop(ctx),
                   style: FilledButton.styleFrom(
                     backgroundColor: CHCTheme.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: Text(context.tr('done_button'), style: const TextStyle(fontSize: 16)),
+                  child: Text(context.tr('done_button'),
+                      style: const TextStyle(fontSize: 16)),
                 ),
               ),
             ],
@@ -388,7 +402,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
                     _EquipmentGrid(
                       equipmentList: _equipmentList,
                       selected: _state.equipment,
-                      onSelect: (equipment) => _updateState(_state.copyWith(equipment: equipment)),
+                      onSelect: (equipment) =>
+                          _updateState(_state.copyWith(equipment: equipment)),
                       getEquipmentName: _getEquipmentName,
                     ),
                     const SizedBox(height: 32),
@@ -399,7 +414,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
                     _AcreSlider(
                       value: _state.acres,
                       ratePerAcre: _state.equipment?.ratePerAcre ?? 0,
-                      onChanged: (acres) => _updateState(_state.copyWith(acres: acres)),
+                      onChanged: (acres) =>
+                          _updateState(_state.copyWith(acres: acres)),
                     ),
                     const SizedBox(height: 32),
 
@@ -408,7 +424,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
                     const SizedBox(height: 16),
                     _DateSelector(
                       selected: _state.serviceDate,
-                      onSelect: (date) => _updateState(_state.copyWith(serviceDate: date)),
+                      onSelect: (date) =>
+                          _updateState(_state.copyWith(serviceDate: date)),
                     ),
                   ]),
                 ),
@@ -508,7 +525,9 @@ class _EquipmentCard extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
-          color: isSelected ? equipment.accentColor.withOpacity(0.1) : CHCTheme.surfaceCard,
+          color: isSelected
+              ? equipment.accentColor.withOpacity(0.1)
+              : CHCTheme.surfaceCard,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? equipment.accentColor : Colors.grey.shade200,
@@ -570,7 +589,8 @@ class _EquipmentCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: isSelected ? equipment.accentColor : CHCTheme.textPrimary,
+                  color:
+                      isSelected ? equipment.accentColor : CHCTheme.textPrimary,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
@@ -584,7 +604,9 @@ class _EquipmentCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: isSelected ? equipment.accentColor.withOpacity(0.8) : CHCTheme.textSecondary,
+                color: isSelected
+                    ? equipment.accentColor.withOpacity(0.8)
+                    : CHCTheme.textSecondary,
               ),
             ),
           ],
@@ -631,7 +653,8 @@ class _AcreSlider extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: CHCTheme.accent.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -668,8 +691,12 @@ class _AcreSlider extends StatelessWidget {
           const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('0.5', style: TextStyle(fontSize: 12, color: CHCTheme.textSecondary)),
-              Text('100', style: TextStyle(fontSize: 12, color: CHCTheme.textSecondary)),
+              Text('0.5',
+                  style:
+                      TextStyle(fontSize: 12, color: CHCTheme.textSecondary)),
+              Text('100',
+                  style:
+                      TextStyle(fontSize: 12, color: CHCTheme.textSecondary)),
             ],
           ),
         ],
@@ -688,7 +715,8 @@ class _DateSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locale = context.locale.languageCode;
-    final dates = List.generate(14, (i) => DateTime.now().add(Duration(days: i + 1)));
+    final dates =
+        List.generate(14, (i) => DateTime.now().add(Duration(days: i + 1)));
 
     return Container(
       height: 100,
@@ -872,7 +900,8 @@ class _BottomBar extends StatelessWidget {
                           children: [
                             Text(
                               context.tr('total_cost_label'),
-                              style: const TextStyle(fontSize: 13, color: CHCTheme.textSecondary),
+                              style: const TextStyle(
+                                  fontSize: 13, color: CHCTheme.textSecondary),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -894,7 +923,8 @@ class _BottomBar extends StatelessWidget {
                             onPressed: isSubmitting ? null : onSubmit,
                             style: FilledButton.styleFrom(
                               backgroundColor: CHCTheme.primary,
-                              disabledBackgroundColor: CHCTheme.primary.withOpacity(0.5),
+                              disabledBackgroundColor:
+                                  CHCTheme.primary.withOpacity(0.5),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
