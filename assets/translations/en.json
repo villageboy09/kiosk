@@ -252,5 +252,13 @@
   "growth_duration": "Growth Duration",
   "average_yield": "Average Yield",
   "quintals_per_acre": "quintals/acre",
-  "watch_video": "Watch Testimonial Video"
+  "watch_video": "Watch Testimonial Video",
+  "chc_title": "Custom Hiring Center",
+  "chc_select_equipment": "Select Equipment",
+  "chc_equipment": "Equipment",
+  "chc_validation_message": "Please select equipment and enter acres",
+  "chc_success_title": "Booking Confirmed!",
+  "chc_success_subtitle": "Your equipment booking has been submitted successfully.",
+  "chc_book_now": "Book Now",
+  "login_required": "Please login to continue"
 }

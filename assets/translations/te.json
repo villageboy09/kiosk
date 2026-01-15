@@ -252,5 +252,12 @@
   "growth_duration": "పెరుగుదల వ్యవధి",
   "average_yield": "సగటు దిగుబడి",
   "quintals_per_acre": "క్వింటాళ్ళు/ఎకరం",
-  "watch_video": "సాక్ష్యం వీడియో చూడండి"
+  "watch_video": "సాక్ష్యం వీడియో చూడండి",
+  "chc_title": "కస్టమ్ హైరింగ్ సెంటర్",
+  "chc_select_equipment": "పరికరాలను ఎంచుకోండి",
+  "chc_equipment": "పరికరం",
+  "chc_validation_message": "దయచేసి పరికరాన్ని ఎంచుకోండి మరియు ఎకరాలు నమోదు చేయండి",
+  "chc_success_title": "బుకింగ్ నిర్ధారించబడింది!",
+  "chc_success_subtitle": "మీ పరికరాల బుకింగ్ విజయవంతంగా సమర్పించబడింది.",
+  "chc_book_now": "ఇప్పుడే బుక్ చేయండి"
 }

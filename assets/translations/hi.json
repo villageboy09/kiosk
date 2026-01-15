@@ -233,5 +233,12 @@
   "pending": "लंबित",
   "service_date": "सेवा तिथि: {date}",
   "profile_updated": "प्रोफ़ाइल सफलतापूर्वक अपडेट की गई!",
-  "update_profile_error": "प्रोफ़ाइल अपडेट करने में त्रुटि: {error}"
+  "update_profile_error": "प्रोफ़ाइल अपडेट करने में त्रुटि: {error}",
+  "chc_title": "कस्टम हायरिंग सेंटर",
+  "chc_select_equipment": "उपकरण चुनें",
+  "chc_equipment": "उपकरण",
+  "chc_validation_message": "कृपया उपकरण चुनें और एकड़ दर्ज करें",
+  "chc_success_title": "बुकिंग की पुष्टि!",
+  "chc_success_subtitle": "आपकी उपकरण बुकिंग सफलतापूर्वक जमा की गई है।",
+  "chc_book_now": "अभी बुक करें"
 }

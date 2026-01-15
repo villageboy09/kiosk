@@ -551,4 +551,61 @@ class ApiService {
       return {'crop_names': [], 'crops': []};
     }
   }
+
+  // ===================== CHC BOOKING FUNCTIONS =====================
+
+  /// Create a CHC (Custom Hiring Center) booking
+  static Future<Map<String, dynamic>> createCHCBooking({
+    required String bookingId,
+    required String userId,
+    required String equipmentType,
+    String? cropType,
+    required double acres,
+    required DateTime serviceDate,
+    required double ratePerAcre,
+    required double totalCost,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api.php?action=create_chc_booking'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'booking_id': bookingId,
+          'user_id': userId,
+          'equipment_type': equipmentType,
+          'crop_type': cropType,
+          'acres': acres,
+          'service_date': '${serviceDate.year}-${serviceDate.month.toString().padLeft(2, '0')}-${serviceDate.day.toString().padLeft(2, '0')}',
+          'rate_per_acre': ratePerAcre,
+          'total_cost': totalCost,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'error': 'Server error'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
+  /// Get CHC bookings for a user
+  static Future<List<Map<String, dynamic>>> getCHCBookings(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api.php?action=get_chc_bookings&user_id=$userId'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['bookings']);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
 }

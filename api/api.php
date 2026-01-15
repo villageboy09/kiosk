@@ -87,6 +87,12 @@ switch ($action) {
     case 'get_crop_names':
         getCropNames($pdo);
         break;
+    case 'create_chc_booking':
+        createCHCBooking($pdo);
+        break;
+    case 'get_chc_bookings':
+        getCHCBookings($pdo);
+        break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
 }
@@ -722,5 +728,62 @@ function getCropNames($pdo) {
     $cropNames = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     echo json_encode(['success' => true, 'crop_names' => $crops, 'crops' => $cropNames]);
+}
+
+// ===================== CHC BOOKING FUNCTIONS =====================
+
+function createCHCBooking($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    $bookingId = $input['booking_id'] ?? '';
+    $userId = $input['user_id'] ?? '';
+    $equipmentType = $input['equipment_type'] ?? '';
+    $cropType = $input['crop_type'] ?? null;
+    $acres = $input['acres'] ?? 0;
+    $serviceDate = $input['service_date'] ?? '';
+    $ratePerAcre = $input['rate_per_acre'] ?? 0;
+    $totalCost = $input['total_cost'] ?? 0;
+    
+    if (empty($bookingId) || empty($userId) || empty($equipmentType) || empty($acres) || empty($serviceDate)) {
+        echo json_encode(['success' => false, 'error' => 'Missing required fields']);
+        return;
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO chc_bookings (booking_id, user_id, equipment_type, crop_type, acres, service_date, rate_per_acre, total_cost, booking_status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', NOW())
+        ");
+        $stmt->execute([$bookingId, $userId, $equipmentType, $cropType, $acres, $serviceDate, $ratePerAcre, $totalCost]);
+        
+        echo json_encode(['success' => true, 'id' => $pdo->lastInsertId(), 'booking_id' => $bookingId]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function getCHCBookings($pdo) {
+    $userId = $_GET['user_id'] ?? '';
+    
+    if (empty($userId)) {
+        echo json_encode(['success' => false, 'error' => 'User ID required']);
+        return;
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT id, booking_id, equipment_type, crop_type, acres, service_date, 
+                   rate_per_acre, total_cost, booking_status, created_at
+            FROM chc_bookings 
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        ");
+        $stmt->execute([$userId]);
+        $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        echo json_encode(['success' => true, 'bookings' => $bookings]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
 }
 ?>
