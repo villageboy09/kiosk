@@ -462,6 +462,32 @@ class ApiService {
     }
   }
 
+  /// Create a product enquiry
+  static Future<Map<String, dynamic>> createEnquiry({
+    required int productId,
+    required String farmerId,
+    required int advertiserId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api.php?action=create_enquiry'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'product_id': productId,
+          'farmer_id': farmerId,
+          'advertiser_id': advertiserId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'error': 'Server error'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
   // ===================== SEED VARIETIES FUNCTIONS =====================
 
   /// Get seed varieties

@@ -1,5 +1,7 @@
 // lib/screens/product_details_screen.dart
 
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
@@ -8,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final Product product;
@@ -181,7 +184,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     color: Colors.grey.shade500, size: 18),
                 const SizedBox(width: 8),
                 Text(
-                  'Sold by: ${widget.product.advertiserName}',
+                  '${context.tr('sold_by')}: ${widget.product.advertiserName}',
                   style: GoogleFonts.lexend(
                       fontSize: 14, color: Colors.grey.shade600),
                 ),
@@ -191,7 +194,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             const Divider(),
             const SizedBox(height: 16),
             Text(
-              'Description',
+              context.tr('description'),
               style: GoogleFonts.lexend(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -234,7 +237,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Price',
+                Text(context.tr('price'),
                     style: GoogleFonts.lexend(
                         color: Colors.grey.shade500, fontSize: 12)),
                 Text('₹${widget.product.price}',
@@ -247,7 +250,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             const SizedBox(width: 16),
             Expanded(
               child: ElevatedButton(
-                onPressed: _showPurchaseRequestBottomSheet,
+                onPressed: _showEnquiryBottomSheet,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green.shade600,
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -256,7 +259,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   ),
                 ),
                 child: Text(
-                  'Request Purchase',
+                  context.tr('enquire_now'),
                   style: GoogleFonts.lexend(
                     color: Colors.white,
                     fontSize: 16,
@@ -271,12 +274,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  void _showPurchaseRequestBottomSheet() {
-    int quantity = 1;
-    final messageController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
+  void _showEnquiryBottomSheet() {
     bool isLoading = false;
-    double totalPrice = double.parse(widget.product.price);
 
     showModalBottomSheet(
       context: context,
@@ -288,15 +287,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setSheetState) {
-            void updateQuantity(int newQuantity) {
-              if (newQuantity < 1) return;
-              setSheetState(() {
-                quantity = newQuantity;
-                totalPrice = quantity * double.parse(widget.product.price);
-              });
-            }
-
-            Future<void> submitRequest() async {
+            Future<void> submitEnquiry() async {
               if (isLoading) return;
 
               final navigator = Navigator.of(context);
@@ -308,33 +299,29 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 final currentUser = AuthService.currentUser;
                 if (currentUser == null) throw Exception('User not logged in');
 
-                final result = await ApiService.createPurchaseRequest(
-                  userId: currentUser.userId,
+                // Create enquiry in the enquiries table
+                final result = await ApiService.createEnquiry(
                   productId: widget.product.id,
+                  farmerId: currentUser.userId,
                   advertiserId: widget.product.advertiserId,
-                  quantity: quantity,
-                  totalPrice: totalPrice,
-                  message: messageController.text.isEmpty
-                      ? null
-                      : messageController.text,
                 );
 
                 if (result['success'] != true) {
-                  throw Exception(result['error'] ?? 'Failed to send request');
+                  throw Exception(result['error'] ?? 'Failed to send enquiry');
                 }
 
                 if (!mounted) return;
                 navigator.pop();
                 scaffoldMessenger.showSnackBar(
-                  const SnackBar(
-                      content: Text('Request sent successfully!'),
+                  SnackBar(
+                      content: Text(context.tr('enquiry_sent_success')),
                       backgroundColor: Colors.green),
                 );
               } catch (e) {
                 if (!mounted) return;
                 scaffoldMessenger.showSnackBar(
                   SnackBar(
-                      content: Text('Error: ${e.toString()}'),
+                      content: Text('${context.tr('error')}: ${e.toString()}'),
                       backgroundColor: Colors.red),
                 );
               } finally {
@@ -349,100 +336,123 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Container(
                 padding: const EdgeInsets.all(20),
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(2)),
-                        ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2)),
                       ),
-                      const SizedBox(height: 24),
-                      Text('Send Purchase Request',
-                          style: GoogleFonts.lexend(
-                              fontSize: 20, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    ),
+                    const SizedBox(height: 24),
+                    Text(context.tr('send_enquiry'),
+                        style: GoogleFonts.lexend(
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    
+                    // Product summary card
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
                         children: [
-                          Text('Quantity (${widget.product.unit})',
-                              style: GoogleFonts.lexend(
-                                  fontSize: 16, fontWeight: FontWeight.w500)),
-                          Container(
-                            decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(30)),
-                            child: Row(
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CachedNetworkImage(
+                              imageUrl: widget.product.imageUrl1 ?? '',
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                width: 60,
+                                height: 60,
+                                color: Colors.grey.shade200,
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                width: 60,
+                                height: 60,
+                                color: Colors.grey.shade200,
+                                child: Icon(Icons.eco_outlined,
+                                    color: Colors.grey.shade400),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                IconButton(
-                                    icon: const Icon(Icons.remove,
-                                        color: Colors.red),
-                                    onPressed: () =>
-                                        updateQuantity(quantity - 1)),
-                                Text(quantity.toString(),
-                                    style: GoogleFonts.lexend(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold)),
-                                IconButton(
-                                    icon: const Icon(Icons.add,
-                                        color: Colors.green),
-                                    onPressed: () =>
-                                        updateQuantity(quantity + 1)),
+                                Text(
+                                  widget.product.name,
+                                  style: GoogleFonts.lexend(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '₹${widget.product.price}',
+                                  style: GoogleFonts.lexend(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green.shade700,
+                                  ),
+                                ),
                               ],
                             ),
-                          )
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 20),
-                      TextFormField(
-                        controller: messageController,
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          hintText: 'Add an optional message...',
-                          fillColor: Colors.grey.shade100,
-                          filled: true,
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none),
-                        ),
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    Text(
+                      context.tr('enquiry_description'),
+                      style: GoogleFonts.lexend(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
                       ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: submitRequest,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade600,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: isLoading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: submitEnquiry,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade600,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 3,
+                                ))
+                            : Text(
+                                context.tr('confirm_enquiry'),
+                                style: GoogleFonts.lexend(
                                     color: Colors.white,
-                                    strokeWidth: 3,
-                                  ))
-                              : Text(
-                                  'Send Request • ₹${totalPrice.toStringAsFixed(0)}',
-                                  style: GoogleFonts.lexend(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                        ),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold),
+                              ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             );

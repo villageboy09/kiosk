@@ -17,8 +17,9 @@
  * - GET /api.php?action=get_advisories&problem_id=X&lang=te - Get advisories
  * - GET /api.php?action=get_problems&crop_id=X&stage_id=X&lang=te - Get problems
  * - POST /api.php?action=save_identified_problem - Save identified problem
- * - GET /api.php?action=get_products&category=X - Get products
- * - POST /api.php?action=save_purchase_request - Save purchase request
+ * - GET /api.php?action=get_products&category=X&lang=te - Get products
+ * - GET /api.php?action=get_product_categories&lang=te - Get product categories
+ * - POST /api.php?action=create_enquiry - Create product enquiry
  * - GET /api.php?action=get_seed_varieties&crop_name=X&lang=te - Get seed varieties
  */
 
@@ -65,6 +66,9 @@ switch ($action) {
     case 'get_user_selections':
         getUserSelections($pdo);
         break;
+    case 'get_used_fields':
+        getUsedFields($pdo);
+        break;
     case 'save_selection':
         saveSelection($pdo);
         break;
@@ -83,6 +87,9 @@ switch ($action) {
     case 'get_advisories':
         getAdvisories($pdo);
         break;
+    case 'get_advisory_components':
+        getAdvisoryComponents($pdo);
+        break;
     case 'get_problems':
         getProblems($pdo);
         break;
@@ -92,51 +99,54 @@ switch ($action) {
     case 'get_products':
         getProducts($pdo);
         break;
-    case 'save_purchase_request':
-        savePurchaseRequest($pdo);
+    case 'get_product_categories':
+        getProductCategories($pdo);
+        break;
+    case 'create_enquiry':
+        createEnquiry($pdo);
         break;
     case 'get_seed_varieties':
         getSeedVarieties($pdo);
         break;
-    case 'get_sowing_date_id':
-        getSowingDateId($pdo);
+    case 'get_crop_names':
+        getCropNames($pdo);
         break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
 }
 
-// ===================== USER FUNCTIONS =====================
+// ===================== AUTH FUNCTIONS =====================
 
 function handleLogin($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
-    $user_id = $input['user_id'] ?? '';
+    $userId = $input['user_id'] ?? '';
     
-    if (empty($user_id)) {
-        echo json_encode(['success' => false, 'error' => 'User ID is required']);
+    if (empty($userId)) {
+        echo json_encode(['success' => false, 'message' => 'User ID is required']);
         return;
     }
     
     $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
-    $stmt->execute([$user_id]);
+    $stmt->execute([$userId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($user) {
         echo json_encode(['success' => true, 'user' => $user]);
     } else {
-        echo json_encode(['success' => false, 'error' => 'User not found']);
+        echo json_encode(['success' => false, 'message' => 'User not found']);
     }
 }
 
 function getUser($pdo) {
-    $user_id = $_GET['user_id'] ?? '';
+    $userId = $_GET['user_id'] ?? '';
     
-    if (empty($user_id)) {
+    if (empty($userId)) {
         echo json_encode(['success' => false, 'error' => 'User ID is required']);
         return;
     }
     
     $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
-    $stmt->execute([$user_id]);
+    $stmt->execute([$userId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($user) {
@@ -151,24 +161,21 @@ function getUser($pdo) {
 function getCrops($pdo) {
     $lang = $_GET['lang'] ?? 'te';
     
-    // The crops table has 'name' column (Telugu by default)
-    // For multi-language support, you may need to add name_en, name_hi columns
-    $stmt = $pdo->query("SELECT id, name, image_url FROM crops ORDER BY id");
+    $nameField = 'name_te';
+    if ($lang === 'en') $nameField = 'name_en';
+    if ($lang === 'hi') $nameField = 'name_hi';
+    
+    $stmt = $pdo->query("SELECT id, $nameField as name, name_en, name_te, name_hi, image_url FROM crops ORDER BY name_en");
     $crops = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     echo json_encode(['success' => true, 'crops' => $crops]);
 }
 
 function getVarieties($pdo) {
-    $crop_id = $_GET['crop_id'] ?? '';
+    $cropId = $_GET['crop_id'] ?? 0;
     
-    if (empty($crop_id)) {
-        echo json_encode(['success' => false, 'error' => 'Crop ID is required']);
-        return;
-    }
-    
-    $stmt = $pdo->prepare("SELECT id, variety_name, packet_image_url, growth_duration FROM crop_varieties WHERE crop_id = ?");
-    $stmt->execute([$crop_id]);
+    $stmt = $pdo->prepare("SELECT id, variety_name FROM crop_varieties WHERE crop_id = ?");
+    $stmt->execute([$cropId]);
     $varieties = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     echo json_encode(['success' => true, 'varieties' => $varieties]);
@@ -177,110 +184,55 @@ function getVarieties($pdo) {
 // ===================== USER CROP SELECTIONS =====================
 
 function getUserSelections($pdo) {
-    $user_id = $_GET['user_id'] ?? '';
+    $userId = $_GET['user_id'] ?? '';
     $lang = $_GET['lang'] ?? 'te';
     
-    if (empty($user_id)) {
-        echo json_encode(['success' => false, 'error' => 'User ID is required']);
-        return;
-    }
+    $nameField = 'c.name_te';
+    if ($lang === 'en') $nameField = 'c.name_en';
+    if ($lang === 'hi') $nameField = 'c.name_hi';
     
     $stmt = $pdo->prepare("
-        SELECT 
-            ucs.id as selection_id,
-            ucs.field_number as field_name,
-            c.name as crop_name,
-            c.image_url as crop_image_url,
-            cv.variety_name,
-            sd.sowing_date
+        SELECT ucs.id, ucs.crop_id, ucs.variety_id, ucs.sowing_date, ucs.field_name,
+               $nameField as crop_name, c.image_url as crop_image_url,
+               cv.variety_name
         FROM user_crop_selections ucs
-        JOIN crops c ON ucs.crop_id = c.id
+        LEFT JOIN crops c ON ucs.crop_id = c.id
         LEFT JOIN crop_varieties cv ON ucs.variety_id = cv.id
-        JOIN sowing_dates sd ON ucs.sowing_date_id = sd.id
         WHERE ucs.user_id = ?
         ORDER BY ucs.created_at DESC
     ");
-    $stmt->execute([$user_id]);
+    $stmt->execute([$userId]);
     $selections = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     echo json_encode(['success' => true, 'selections' => $selections]);
 }
 
-function getUsedFieldNames($pdo) {
-    $user_id = $_GET['user_id'] ?? '';
+function getUsedFields($pdo) {
+    $userId = $_GET['user_id'] ?? '';
     
-    if (empty($user_id)) {
-        echo json_encode(['success' => false, 'error' => 'User ID is required']);
-        return;
-    }
-    
-    $stmt = $pdo->prepare("SELECT field_number FROM user_crop_selections WHERE user_id = ?");
-    $stmt->execute([$user_id]);
+    $stmt = $pdo->prepare("SELECT DISTINCT field_name FROM user_crop_selections WHERE user_id = ?");
+    $stmt->execute([$userId]);
     $fields = $stmt->fetchAll(PDO::FETCH_COLUMN);
     
     echo json_encode(['success' => true, 'used_fields' => $fields]);
 }
 
-function getSowingDateId($pdo) {
-    $input = json_decode(file_get_contents('php://input'), true);
-    $sowing_date = $input['sowing_date'] ?? '';
-    
-    if (empty($sowing_date)) {
-        echo json_encode(['success' => false, 'error' => 'Sowing date is required']);
-        return;
-    }
-    
-    // Check if date exists
-    $stmt = $pdo->prepare("SELECT id FROM sowing_dates WHERE sowing_date = ?");
-    $stmt->execute([$sowing_date]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if ($result) {
-        echo json_encode(['success' => true, 'sowing_date_id' => $result['id']]);
-    } else {
-        // Insert new date
-        $stmt = $pdo->prepare("INSERT INTO sowing_dates (sowing_date) VALUES (?)");
-        $stmt->execute([$sowing_date]);
-        $id = $pdo->lastInsertId();
-        echo json_encode(['success' => true, 'sowing_date_id' => $id]);
-    }
-}
-
 function saveSelection($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     
-    $user_id = $input['user_id'] ?? '';
-    $crop_id = $input['crop_id'] ?? '';
-    $variety_id = $input['variety_id'] ?? null;
-    $sowing_date = $input['sowing_date'] ?? '';
-    $field_name = $input['field_name'] ?? '';
-    
-    if (empty($user_id) || empty($crop_id) || empty($sowing_date) || empty($field_name)) {
-        echo json_encode(['success' => false, 'error' => 'Missing required fields']);
-        return;
-    }
+    $stmt = $pdo->prepare("
+        INSERT INTO user_crop_selections (user_id, crop_id, variety_id, sowing_date, field_name)
+        VALUES (?, ?, ?, ?, ?)
+    ");
     
     try {
-        // Get or create sowing_date_id
-        $stmt = $pdo->prepare("SELECT id FROM sowing_dates WHERE sowing_date = ?");
-        $stmt->execute([$sowing_date]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($result) {
-            $sowing_date_id = $result['id'];
-        } else {
-            $stmt = $pdo->prepare("INSERT INTO sowing_dates (sowing_date) VALUES (?)");
-            $stmt->execute([$sowing_date]);
-            $sowing_date_id = $pdo->lastInsertId();
-        }
-        
-        // Insert selection
-        $stmt = $pdo->prepare("
-            INSERT INTO user_crop_selections (user_id, crop_id, variety_id, sowing_date_id, field_number)
-            VALUES (?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([$user_id, $crop_id, $variety_id, $sowing_date_id, $field_name]);
-        
+        $stmt->execute([
+            $input['user_id'],
+            $input['crop_id'],
+            $input['variety_id'] ?? null,
+            $input['sowing_date'],
+            $input['field_name']
+        ]);
         echo json_encode(['success' => true, 'id' => $pdo->lastInsertId()]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -290,38 +242,19 @@ function saveSelection($pdo) {
 function updateSelection($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     
-    $id = $input['id'] ?? '';
-    $crop_id = $input['crop_id'] ?? '';
-    $variety_id = $input['variety_id'] ?? null;
-    $sowing_date = $input['sowing_date'] ?? '';
-    
-    if (empty($id) || empty($crop_id) || empty($sowing_date)) {
-        echo json_encode(['success' => false, 'error' => 'Missing required fields']);
-        return;
-    }
+    $stmt = $pdo->prepare("
+        UPDATE user_crop_selections 
+        SET crop_id = ?, variety_id = ?, sowing_date = ?
+        WHERE id = ?
+    ");
     
     try {
-        // Get or create sowing_date_id
-        $stmt = $pdo->prepare("SELECT id FROM sowing_dates WHERE sowing_date = ?");
-        $stmt->execute([$sowing_date]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($result) {
-            $sowing_date_id = $result['id'];
-        } else {
-            $stmt = $pdo->prepare("INSERT INTO sowing_dates (sowing_date) VALUES (?)");
-            $stmt->execute([$sowing_date]);
-            $sowing_date_id = $pdo->lastInsertId();
-        }
-        
-        // Update selection
-        $stmt = $pdo->prepare("
-            UPDATE user_crop_selections 
-            SET crop_id = ?, variety_id = ?, sowing_date_id = ?
-            WHERE id = ?
-        ");
-        $stmt->execute([$crop_id, $variety_id, $sowing_date_id, $id]);
-        
+        $stmt->execute([
+            $input['crop_id'],
+            $input['variety_id'] ?? null,
+            $input['sowing_date'],
+            $input['id']
+        ]);
         echo json_encode(['success' => true]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -329,15 +262,11 @@ function updateSelection($pdo) {
 }
 
 function deleteSelection($pdo) {
-    $id = $_GET['id'] ?? '';
+    $id = $_GET['id'] ?? 0;
     
-    if (empty($id)) {
-        echo json_encode(['success' => false, 'error' => 'Selection ID is required']);
-        return;
-    }
+    $stmt = $pdo->prepare("DELETE FROM user_crop_selections WHERE id = ?");
     
     try {
-        $stmt = $pdo->prepare("DELETE FROM user_crop_selections WHERE id = ?");
         $stmt->execute([$id]);
         echo json_encode(['success' => true]);
     } catch (PDOException $e) {
@@ -348,43 +277,35 @@ function deleteSelection($pdo) {
 // ===================== ADVISORY FUNCTIONS =====================
 
 function getCropStages($pdo) {
-    $crop_id = $_GET['crop_id'] ?? '';
+    $cropId = $_GET['crop_id'] ?? 0;
     $lang = $_GET['lang'] ?? 'te';
     
-    if (empty($crop_id)) {
-        echo json_encode(['success' => false, 'error' => 'Crop ID is required']);
-        return;
-    }
-    
-    $nameColumn = $lang === 'en' ? 'StageName_en' : 'StageName';
+    $nameField = 'stage_name_te';
+    if ($lang === 'en') $nameField = 'stage_name_en';
+    if ($lang === 'hi') $nameField = 'stage_name_hi';
     
     $stmt = $pdo->prepare("
-        SELECT StageID as id, $nameColumn as name, Description as description, StageImageURL as image_url
-        FROM CropStages 
+        SELECT id, $nameField as stage_name, stage_name_en, stage_name_te, stage_name_hi, image_url
+        FROM crop_stages 
         WHERE crop_id = ?
-        ORDER BY StageID
+        ORDER BY id
     ");
-    $stmt->execute([$crop_id]);
+    $stmt->execute([$cropId]);
     $stages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     echo json_encode(['success' => true, 'stages' => $stages]);
 }
 
 function getStageDuration($pdo) {
-    $crop_id = $_GET['crop_id'] ?? '';
-    $variety_id = $_GET['variety_id'] ?? '';
-    
-    if (empty($crop_id)) {
-        echo json_encode(['success' => false, 'error' => 'Crop ID is required']);
-        return;
-    }
+    $cropId = $_GET['crop_id'] ?? 0;
+    $varietyId = $_GET['variety_id'] ?? null;
     
     $sql = "SELECT * FROM crop_stage_durations WHERE crop_id = ?";
-    $params = [$crop_id];
+    $params = [$cropId];
     
-    if (!empty($variety_id)) {
+    if ($varietyId) {
         $sql .= " AND variety_id = ?";
-        $params[] = $variety_id;
+        $params[] = $varietyId;
     }
     
     $stmt = $pdo->prepare($sql);
@@ -395,17 +316,32 @@ function getStageDuration($pdo) {
 }
 
 function getProblems($pdo) {
-    $crop_id = $_GET['crop_id'] ?? '';
-    $stage_id = $_GET['stage_id'] ?? '';
+    $cropId = $_GET['crop_id'] ?? null;
+    $stageId = $_GET['stage_id'] ?? null;
     $lang = $_GET['lang'] ?? 'te';
     
-    $nameColumn = $lang === 'en' ? 'name_en' : 'name_te';
+    $nameField = 'problem_name_te';
+    $descField = 'description_te';
+    if ($lang === 'en') {
+        $nameField = 'problem_name_en';
+        $descField = 'description_en';
+    }
+    if ($lang === 'hi') {
+        $nameField = 'problem_name_hi';
+        $descField = 'description_hi';
+    }
     
-    $sql = "SELECT id, $nameColumn as name, image_url FROM rice_problems WHERE 1=1";
+    $sql = "SELECT id, $nameField as problem_name, $descField as description, image_url, crop_id, stage_id FROM crop_problems WHERE 1=1";
     $params = [];
     
-    // Note: rice_problems table may need crop_id column for multi-crop support
-    // For now, returning all problems
+    if ($cropId) {
+        $sql .= " AND crop_id = ?";
+        $params[] = $cropId;
+    }
+    if ($stageId) {
+        $sql .= " AND stage_id = ?";
+        $params[] = $stageId;
+    }
     
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -415,59 +351,78 @@ function getProblems($pdo) {
 }
 
 function getAdvisories($pdo) {
-    $problem_id = $_GET['problem_id'] ?? '';
+    $problemId = $_GET['problem_id'] ?? 0;
     $lang = $_GET['lang'] ?? 'te';
     
-    if (empty($problem_id)) {
-        echo json_encode(['success' => false, 'error' => 'Problem ID is required']);
-        return;
+    $titleField = 'title_te';
+    $descField = 'description_te';
+    if ($lang === 'en') {
+        $titleField = 'title_en';
+        $descField = 'description_en';
+    }
+    if ($lang === 'hi') {
+        $titleField = 'title_hi';
+        $descField = 'description_hi';
     }
     
-    $titleColumn = $lang === 'en' ? 'advisory_title_en' : 'advisory_title_te';
-    $symptomsColumn = $lang === 'en' ? 'symptoms_en' : 'symptoms_te';
-    
     $stmt = $pdo->prepare("
-        SELECT id, $titleColumn as title, $symptomsColumn as symptoms
+        SELECT id, $titleField as title, $descField as description, image_url, video_url
         FROM crop_advisories 
         WHERE problem_id = ?
     ");
-    $stmt->execute([$problem_id]);
+    $stmt->execute([$problemId]);
     $advisory = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($advisory) {
-        // Get advisory components/recommendations
-        $stmt = $pdo->prepare("
-            SELECT * FROM advisory_components WHERE advisory_id = ?
-        ");
-        $stmt->execute([$advisory['id']]);
-        $components = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $advisory['components'] = $components;
+        echo json_encode(['success' => true, 'advisory' => $advisory]);
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Advisory not found']);
+    }
+}
+
+function getAdvisoryComponents($pdo) {
+    $advisoryId = $_GET['advisory_id'] ?? 0;
+    $lang = $_GET['lang'] ?? 'te';
+    
+    $nameField = 'component_name_te';
+    $altNameField = 'alt_component_name_te';
+    $doseField = 'dose_te';
+    $methodField = 'application_method_te';
+    
+    if ($lang === 'en') {
+        $nameField = 'component_name_en';
+        $altNameField = 'alt_component_name_en';
+        $doseField = 'dose_en';
+        $methodField = 'application_method_en';
     }
     
-    echo json_encode(['success' => true, 'advisory' => $advisory]);
+    $stmt = $pdo->prepare("
+        SELECT id, $nameField as component_name, $altNameField as alt_component_name,
+               $doseField as dose, $methodField as application_method,
+               component_type, stage_scope, image_url
+        FROM advisory_components 
+        WHERE advisory_id = ?
+    ");
+    $stmt->execute([$advisoryId]);
+    $components = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    echo json_encode(['success' => true, 'components' => $components]);
 }
 
 function saveIdentifiedProblem($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     
-    $user_id = $input['user_id'] ?? '';
-    $problem_id = $input['problem_id'] ?? '';
-    $selection_id = $input['selection_id'] ?? null;
-    
-    if (empty($user_id) || empty($problem_id)) {
-        echo json_encode(['success' => false, 'error' => 'Missing required fields']);
-        return;
-    }
+    $stmt = $pdo->prepare("
+        INSERT INTO farmer_identified_problems (farmer_id, problem_id, selection_id)
+        VALUES (?, ?, ?)
+    ");
     
     try {
-        // Note: You may need to create a user_identified_problems table
-        // For now, using a generic approach
-        $stmt = $pdo->prepare("
-            INSERT INTO user_identified_problems (user_id, problem_id, selection_id, identified_at)
-            VALUES (?, ?, ?, NOW())
-        ");
-        $stmt->execute([$user_id, $problem_id, $selection_id]);
-        
+        $stmt->execute([
+            $input['user_id'],
+            $input['problem_id'],
+            $input['selection_id'] ?? null
+        ]);
         echo json_encode(['success' => true, 'id' => $pdo->lastInsertId()]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -477,24 +432,41 @@ function saveIdentifiedProblem($pdo) {
 // ===================== PRODUCT FUNCTIONS =====================
 
 function getProducts($pdo) {
-    $category = $_GET['category'] ?? '';
-    $search = $_GET['search'] ?? '';
+    $category = $_GET['category'] ?? null;
+    $search = $_GET['search'] ?? null;
+    $sort = $_GET['sort'] ?? 'default';
+    $lang = $_GET['lang'] ?? 'te';
     
-    $sql = "SELECT * FROM products WHERE 1=1";
+    $sql = "
+        SELECT p.product_id, p.product_code, p.category, p.product_name, 
+               p.price, p.product_description, p.product_video_url,
+               p.image_url_1, p.image_url_2, p.image_url_3,
+               a.advertiser_id, a.advertiser_name
+        FROM products p
+        LEFT JOIN advertisers a ON p.advertiser_id = a.advertiser_id
+        WHERE 1=1
+    ";
     $params = [];
     
-    if (!empty($category)) {
-        $sql .= " AND category = ?";
+    if ($category && $category !== 'All' && $category !== 'అన్ని') {
+        $sql .= " AND p.category = ?";
         $params[] = $category;
     }
     
-    if (!empty($search)) {
-        $sql .= " AND (product_name LIKE ? OR product_description LIKE ?)";
+    if ($search) {
+        $sql .= " AND (p.product_name LIKE ? OR p.product_description LIKE ?)";
         $params[] = "%$search%";
         $params[] = "%$search%";
     }
     
-    $sql .= " ORDER BY created_at DESC";
+    // Sorting
+    if ($sort === 'price_asc') {
+        $sql .= " ORDER BY p.price ASC";
+    } elseif ($sort === 'price_desc') {
+        $sql .= " ORDER BY p.price DESC";
+    } else {
+        $sql .= " ORDER BY p.created_at DESC";
+    }
     
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -503,27 +475,35 @@ function getProducts($pdo) {
     echo json_encode(['success' => true, 'products' => $products]);
 }
 
-function savePurchaseRequest($pdo) {
+function getProductCategories($pdo) {
+    $lang = $_GET['lang'] ?? 'te';
+    
+    $stmt = $pdo->query("SELECT DISTINCT category FROM products WHERE category IS NOT NULL");
+    $categories = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    echo json_encode(['success' => true, 'categories' => $categories]);
+}
+
+function createEnquiry($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     
-    $user_id = $input['user_id'] ?? '';
-    $product_id = $input['product_id'] ?? '';
-    $quantity = $input['quantity'] ?? 1;
+    $productId = $input['product_id'] ?? null;
+    $farmerId = $input['farmer_id'] ?? null;
+    $advertiserId = $input['advertiser_id'] ?? null;
     
-    if (empty($user_id) || empty($product_id)) {
+    if (!$productId || !$farmerId || !$advertiserId) {
         echo json_encode(['success' => false, 'error' => 'Missing required fields']);
         return;
     }
     
+    $stmt = $pdo->prepare("
+        INSERT INTO enquiries (product_id, farmer_id, advertiser_id, status)
+        VALUES (?, ?, ?, 'Interested')
+    ");
+    
     try {
-        // Note: You may need to create a purchase_requests table
-        $stmt = $pdo->prepare("
-            INSERT INTO purchase_requests (user_id, product_id, quantity, created_at)
-            VALUES (?, ?, ?, NOW())
-        ");
-        $stmt->execute([$user_id, $product_id, $quantity]);
-        
-        echo json_encode(['success' => true, 'id' => $pdo->lastInsertId()]);
+        $stmt->execute([$productId, $farmerId, $advertiserId]);
+        echo json_encode(['success' => true, 'enquiry_id' => $pdo->lastInsertId()]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
@@ -532,23 +512,50 @@ function savePurchaseRequest($pdo) {
 // ===================== SEED VARIETIES FUNCTIONS =====================
 
 function getSeedVarieties($pdo) {
-    $crop_name = $_GET['crop_name'] ?? '';
+    $cropName = $_GET['crop_name'] ?? null;
     $lang = $_GET['lang'] ?? 'te';
     
-    $varietyColumn = $lang === 'en' ? 'variety_name_en' : 'variety_name_te';
-    $detailsColumn = $lang === 'te' ? 'details_te' : 'details_te'; // Add details_en if needed
+    // Determine variety name field based on language
+    $varietyNameField = 'variety_name_te';
+    $detailsField = 'details_te';
+    $varietyNameSecondary = 'variety_name_en';
     
-    $sql = "SELECT id, crop_name, $varietyColumn as variety_name, image_url, $detailsColumn as details, 
-            region, sowing_period, testimonial_video_url, price, price_unit, average_yield, growth_duration
-            FROM seed_varieties WHERE 1=1";
-    $params = [];
-    
-    if (!empty($crop_name)) {
-        $sql .= " AND crop_name = ?";
-        $params[] = $crop_name;
+    if ($lang === 'en') {
+        $varietyNameField = 'variety_name_en';
+        $detailsField = 'details_te'; // Fallback to Telugu if English details not available
+        $varietyNameSecondary = 'NULL';
+    } elseif ($lang === 'hi') {
+        $varietyNameField = 'variety_name_en'; // Fallback to English for Hindi
+        $detailsField = 'details_te';
+        $varietyNameSecondary = 'variety_name_te';
     }
     
-    $sql .= " ORDER BY id";
+    $sql = "
+        SELECT 
+            sv.id,
+            sv.crop_name,
+            sv.$varietyNameField as variety_name,
+            sv.variety_name_en as variety_name_secondary,
+            sv.image_url,
+            sv.$detailsField as details,
+            sv.region,
+            sv.sowing_period,
+            sv.testimonial_video_url,
+            sv.price,
+            sv.price_unit,
+            sv.average_yield,
+            sv.growth_duration
+        FROM seed_varieties sv
+        WHERE 1=1
+    ";
+    $params = [];
+    
+    if ($cropName) {
+        $sql .= " AND sv.crop_name = ?";
+        $params[] = $cropName;
+    }
+    
+    $sql .= " ORDER BY sv.crop_name, sv.variety_name_en";
     
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -558,16 +565,9 @@ function getSeedVarieties($pdo) {
 }
 
 function getCropNames($pdo) {
-    $lang = $_GET['lang'] ?? 'te';
-    
-    // Get distinct crop names from seed_varieties
     $stmt = $pdo->query("SELECT DISTINCT crop_name FROM seed_varieties ORDER BY crop_name");
-    $crops = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $cropNames = $stmt->fetchAll(PDO::FETCH_COLUMN);
     
-    // Also get from crops table for localized names
-    $stmt = $pdo->query("SELECT name FROM crops ORDER BY id");
-    $cropNames = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    echo json_encode(['success' => true, 'crop_names' => $crops, 'crops' => $cropNames]);
+    echo json_encode(['success' => true, 'crop_names' => $cropNames]);
 }
 ?>
