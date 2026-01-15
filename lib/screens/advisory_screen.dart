@@ -255,6 +255,10 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
   }
 
   Future<void> _selectStage(CropStage stage) async {
+    // DEBUG: Log the stage selection
+    print('DEBUG _selectStage: Selected stage: ${stage.name} (id=${stage.id})');
+    print('DEBUG _selectStage: Current crop: ${_selectedFarmerCrop?.cropName} (cropId=${_selectedFarmerCrop?.cropId})');
+    
     setState(() {
       _selectedStage = stage;
       _problems = [];
@@ -263,25 +267,32 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
 
     try {
       final locale = _getLocaleField(context.locale.languageCode);
+      print('DEBUG _selectStage: Locale: $locale');
 
       // Fetch problems from MySQL API using the problem_stages junction table
+      print('DEBUG _selectStage: Calling ApiService.getProblems(cropId=${_selectedFarmerCrop!.cropId}, stageId=${stage.id}, lang=$locale)');
       final problemsData = await ApiService.getProblems(
         cropId: _selectedFarmerCrop!.cropId,
         stageId: stage.id,
         lang: locale,
       );
+      print('DEBUG _selectStage: Received ${problemsData.length} problems from API');
 
       final List<CropProblem> loadedProblems = problemsData.map((p) {
         return CropProblem.fromJson(p);
       }).toList();
+      print('DEBUG _selectStage: Parsed ${loadedProblems.length} CropProblem objects');
 
       if (mounted) {
         setState(() {
           _problems = loadedProblems;
         });
+        print('DEBUG _selectStage: Set _problems with ${_problems.length} items');
         _feedAnimationController.forward();
       }
-    } catch (e) {
+    } catch (e, st) {
+      print('DEBUG _selectStage: ERROR: $e');
+      print('DEBUG _selectStage: Stack trace: $st');
       _showErrorSnackbar(context.tr('load_problems_error'));
     }
   }

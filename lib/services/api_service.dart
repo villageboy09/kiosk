@@ -272,16 +272,29 @@ class ApiService {
       if (cropId != null) url += '&crop_id=$cropId';
       if (stageId != null) url += '&stage_id=$stageId';
 
+      // DEBUG: Print the exact URL being called
+      print('DEBUG getProblems: Calling URL: $url');
+      print('DEBUG getProblems: cropId=$cropId, stageId=$stageId, lang=$lang');
+
       final response = await http.get(Uri.parse(url));
+
+      // DEBUG: Print response status and body length
+      print('DEBUG getProblems: Response status: ${response.statusCode}');
+      print('DEBUG getProblems: Response body length: ${response.body.length}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        print('DEBUG getProblems: success=${data['success']}, problems count=${data['problems']?.length ?? 0}');
         if (data['success'] == true) {
-          return List<Map<String, dynamic>>.from(data['problems']);
+          final problems = List<Map<String, dynamic>>.from(data['problems']);
+          print('DEBUG getProblems: Returning ${problems.length} problems');
+          return problems;
         }
       }
+      print('DEBUG getProblems: Returning empty list (non-200 or success=false)');
       return [];
     } catch (e) {
+      print('DEBUG getProblems: ERROR: $e');
       return [];
     }
   }
