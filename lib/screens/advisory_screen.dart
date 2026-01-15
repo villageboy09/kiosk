@@ -92,18 +92,6 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     }
   }
 
-  void _showErrorSnackbar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: GoogleFonts.lexend()),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-  }
-
   void _showFilterBottomSheet() {
     showModalBottomSheet(
       context: context,
@@ -152,7 +140,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ..._advisoryState.farmerCrops.map((crop) => _buildCropTile(crop)),
+                  ..._advisoryState.farmerCrops
+                      .map((crop) => _buildCropTile(crop)),
                   const SizedBox(height: 24),
                   if (_advisoryState.stages.isNotEmpty) ...[
                     Text(
@@ -164,7 +153,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ..._advisoryState.stages.map((stage) => _buildStageTile(stage)),
+                    ..._advisoryState.stages
+                        .map((stage) => _buildStageTile(stage)),
                   ],
                 ],
               ),
@@ -232,7 +222,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                   child: Text(
                     stage.name,
                     style: GoogleFonts.lexend(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
                       fontSize: 15,
                       color: isSelected ? Colors.green[700] : Colors.grey[800],
                     ),
@@ -374,7 +365,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: isSelected ? Colors.green[700]! : Colors.grey[300]!,
+                        color:
+                            isSelected ? Colors.green[700]! : Colors.grey[300]!,
                         width: isSelected ? 3 : 2,
                       ),
                       boxShadow: isSelected
@@ -388,24 +380,31 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                           : null,
                     ),
                     child: ClipOval(
-                      child: stage.imageUrl != null && stage.imageUrl!.isNotEmpty
+                      child: stage.imageUrl != null &&
+                              stage.imageUrl!.isNotEmpty
                           ? CachedNetworkImage(
                               imageUrl: stage.imageUrl!,
                               fit: BoxFit.cover,
                               placeholder: (context, url) => Container(
                                 color: Colors.green[50],
-                                child: Icon(Icons.eco, color: Colors.green[300]),
+                                child:
+                                    Icon(Icons.eco, color: Colors.green[300]),
                               ),
                               errorWidget: (context, url, error) => Container(
                                 color: Colors.green[50],
-                                child: Icon(Icons.eco, color: Colors.green[300]),
+                                child:
+                                    Icon(Icons.eco, color: Colors.green[300]),
                               ),
                             )
                           : Container(
-                              color: isSelected ? Colors.green[100] : Colors.grey[100],
+                              color: isSelected
+                                  ? Colors.green[100]
+                                  : Colors.grey[100],
                               child: Icon(
                                 Icons.eco,
-                                color: isSelected ? Colors.green[700] : Colors.grey[400],
+                                color: isSelected
+                                    ? Colors.green[700]
+                                    : Colors.grey[400],
                               ),
                             ),
                     ),
@@ -418,7 +417,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                     textAlign: TextAlign.center,
                     style: GoogleFonts.lexend(
                       fontSize: 10,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
                       color: isSelected ? Colors.green[700] : Colors.grey[600],
                     ),
                   ),
@@ -719,7 +719,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                               ),
                             ),
                           // Image count indicator
-                          if (problem.imageUrl2 != null || problem.imageUrl3 != null)
+                          if (problem.imageUrl2 != null ||
+                              problem.imageUrl3 != null)
                             Positioned(
                               top: 12,
                               right: 12,
@@ -813,7 +814,10 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                           Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [Colors.green[600]!, Colors.green[700]!],
+                                colors: [
+                                  Colors.green[600]!,
+                                  Colors.green[700]!
+                                ],
                               ),
                               borderRadius: BorderRadius.circular(10),
                               boxShadow: [
@@ -831,7 +835,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (context) =>
-                                          AdvisoryDetailScreen(problem: problem),
+                                          AdvisoryDetailScreen(
+                                              problem: problem),
                                     ),
                                   );
                                 },
