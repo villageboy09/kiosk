@@ -434,9 +434,9 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: CHCTheme.bg,
-        body: Center(child: CircularProgressIndicator(color: CHCTheme.primary)),
+        body: _buildSkeletonLoading(),
       );
     }
 
@@ -595,6 +595,132 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  // ==================== SKELETON LOADING ====================
+  Widget _buildSkeletonLoading() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(CHCTheme.spacingMd),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header skeleton
+            const _ShimmerBox(
+                width: double.infinity,
+                height: 120,
+                borderRadius: CHCTheme.radiusXl),
+            const SizedBox(height: CHCTheme.spacingLg),
+            // Equipment section skeleton
+            const _ShimmerBox(
+                width: 200, height: 20, borderRadius: CHCTheme.radiusSm),
+            const SizedBox(height: CHCTheme.spacingMd),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: CHCTheme.spacingMd,
+                crossAxisSpacing: CHCTheme.spacingMd,
+                childAspectRatio: 0.85,
+              ),
+              itemCount: 4,
+              itemBuilder: (_, __) => const _ShimmerBox(
+                width: double.infinity,
+                height: double.infinity,
+                borderRadius: CHCTheme.radiusLg,
+              ),
+            ),
+            const SizedBox(height: CHCTheme.spacingLg),
+            // Acres section skeleton
+            const _ShimmerBox(
+                width: 180, height: 20, borderRadius: CHCTheme.radiusSm),
+            const SizedBox(height: CHCTheme.spacingMd),
+            const Center(
+              child: _ShimmerBox(
+                  width: 200, height: 60, borderRadius: CHCTheme.radiusMd),
+            ),
+            const SizedBox(height: CHCTheme.spacingLg),
+            // Calendar skeleton
+            const _ShimmerBox(
+                width: 150, height: 20, borderRadius: CHCTheme.radiusSm),
+            const SizedBox(height: CHCTheme.spacingMd),
+            const _ShimmerBox(
+                width: double.infinity,
+                height: 250,
+                borderRadius: CHCTheme.radiusMd),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// SHIMMER LOADING WIDGET
+// ============================================================================
+class _ShimmerBox extends StatefulWidget {
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  const _ShimmerBox({
+    required this.width,
+    required this.height,
+    this.borderRadius = 8,
+  });
+
+  @override
+  State<_ShimmerBox> createState() => _ShimmerBoxState();
+}
+
+class _ShimmerBoxState extends State<_ShimmerBox>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat();
+    _animation = Tween<double>(begin: -2, end: 2).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOutSine),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            gradient: LinearGradient(
+              begin: Alignment(_animation.value - 1, 0),
+              end: Alignment(_animation.value + 1, 0),
+              colors: const [
+                Color(0xFFE8E8E8),
+                Color(0xFFF5F5F5),
+                Color(0xFFE8E8E8),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -845,6 +971,7 @@ class _EquipmentCard extends StatelessWidget {
         ),
         child: Stack(
           children: [
+            // Member badge
             if (isMember)
               Positioned(
                 top: 6,
@@ -862,53 +989,62 @@ class _EquipmentCard extends StatelessWidget {
                           color: const Color(0xFF333333))),
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.all(CHCTheme.spacingSm),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Expanded(
-                    flex: 3,
+            // Image at top, labels at center-bottom
+            Column(
+              children: [
+                // Top: Equipment image
+                Expanded(
+                  flex: 3,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
                     child: CachedNetworkImage(
                       imageUrl: equipment.image.startsWith('http')
                           ? equipment.image
                           : 'https://kiosk.cropsync.in/custom_hiring_center/${equipment.image}',
                       fit: BoxFit.contain,
-                      placeholder: (_, __) => const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2)),
+                      placeholder: (_, __) => const _ShimmerBox(
+                          width: 60, height: 60, borderRadius: 8),
                       errorWidget: (_, __, ___) => const Icon(Icons.agriculture,
-                          size: 40, color: CHCTheme.textSecondary),
+                          size: 50, color: CHCTheme.textSecondary),
                     ),
                   ),
-                  const SizedBox(height: CHCTheme.spacingXs),
-                  Text(
-                    equipment.getDisplayName(locale),
-                    style: GoogleFonts.notoSansTelugu(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: isSelected ? CHCTheme.primary : CHCTheme.text),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: CHCTheme.spacingXs),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                        color: CHCTheme.accent.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20)),
-                    child: Text(
-                        '₹${equipment.displayPrice.toStringAsFixed(0)}/${equipment.unit}',
-                        style: GoogleFonts.poppins(
-                            fontSize: 10,
+                ),
+                // Bottom: Name and price (centered)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        equipment.getDisplayName(locale),
+                        style: GoogleFonts.notoSansTelugu(
+                            fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: CHCTheme.accent)),
+                            color:
+                                isSelected ? CHCTheme.primary : CHCTheme.text),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: CHCTheme.accent.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20)),
+                        child: Text(
+                            '₹${equipment.displayPrice.toStringAsFixed(0)}/${equipment.unit}',
+                            style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: CHCTheme.accent)),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
@@ -923,13 +1059,22 @@ class _CHCCropSelector extends StatelessWidget {
   final Crop? selected;
   final ValueChanged<Crop> onSelect;
 
+  // Base URL for crop images from the crops table
+  static const String _cropImageBaseUrl = 'https://kiosk.cropsync.in/';
+
   const _CHCCropSelector(
       {required this.crops, required this.selected, required this.onSelect});
+
+  String _getCropImageUrl(String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty) return '';
+    if (imageUrl.startsWith('http')) return imageUrl;
+    return '$_cropImageBaseUrl$imageUrl';
+  }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 90,
+      height: 100,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: crops.length,
@@ -937,11 +1082,13 @@ class _CHCCropSelector extends StatelessWidget {
         itemBuilder: (ctx, i) {
           final crop = crops[i];
           final isSelected = selected?.id == crop.id;
+          final imageUrl = _getCropImageUrl(crop.imageUrl);
+
           return GestureDetector(
             onTap: () => onSelect(crop),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              width: 75,
+              width: 80,
               decoration: BoxDecoration(
                 color: isSelected ? CHCTheme.primary : Colors.white,
                 borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
@@ -951,32 +1098,47 @@ class _CHCCropSelector extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (crop.imageUrl != null)
+                  if (imageUrl.isNotEmpty)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
                       child: CachedNetworkImage(
-                          imageUrl: crop.imageUrl!,
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => Icon(Icons.grass,
-                              color: isSelected
-                                  ? Colors.white
-                                  : CHCTheme.primary)),
+                        imageUrl: imageUrl,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => const SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: Center(
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        ),
+                        errorWidget: (_, __, ___) => Icon(Icons.grass,
+                            size: 40,
+                            color:
+                                isSelected ? Colors.white : CHCTheme.primary),
+                      ),
                     )
                   else
                     Icon(Icons.grass,
                         color: isSelected ? Colors.white : CHCTheme.primary,
-                        size: 32),
+                        size: 40),
                   const SizedBox(height: 4),
-                  Text(crop.name,
-                      style: GoogleFonts.notoSansTelugu(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected ? Colors.white : CHCTheme.text),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(crop.name,
+                        style: GoogleFonts.notoSansTelugu(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? Colors.white : CHCTheme.text),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ),
                 ],
               ),
             ),
