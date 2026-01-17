@@ -621,16 +621,60 @@ class ApiService {
   }
 
   /// Get CHC equipment list from database
-  static Future<List<Map<String, dynamic>>> getCHCEquipments() async {
+  /// Only returns Active equipment with quantity > 0
+  static Future<List<Map<String, dynamic>>> getCHCEquipments({bool isMember = false}) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=get_chc_equipments'),
+        Uri.parse('$baseUrl/api.php?action=get_chc_equipments&is_member=${isMember ? 1 : 0}'),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
           return List<Map<String, dynamic>>.from(data['equipments']);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Check equipment availability for a specific date
+  /// Returns available slots count and whether booking is possible
+  static Future<Map<String, dynamic>> checkEquipmentAvailability({
+    required String equipmentName,
+    required String serviceDate,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api.php?action=check_chc_availability&equipment_name=${Uri.encodeComponent(equipmentName)}&service_date=$serviceDate'),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'error': 'Server error'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
+  /// Get booked dates for an equipment (for calendar highlighting)
+  static Future<List<Map<String, dynamic>>> getBookedDates({
+    required String equipmentName,
+    required int month,
+    required int year,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api.php?action=get_booked_dates&equipment_name=${Uri.encodeComponent(equipmentName)}&month=$month&year=$year'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['dates']);
         }
       }
       return [];
