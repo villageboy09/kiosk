@@ -96,6 +96,12 @@ switch ($action) {
     case 'get_chc_equipments':
         getCHCEquipments($pdo);
         break;
+    case 'check_chc_availability':
+        checkCHCAvailability($pdo);
+        break;
+    case 'get_booked_dates':
+        getBookedDates($pdo);
+        break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
 }
@@ -815,17 +821,114 @@ function getCHCBookings($pdo) {
 }
 
 function getCHCEquipments($pdo) {
+    $isMember = isset($_GET['is_member']) && $_GET['is_member'] == '1';
+    
     try {
         $stmt = $pdo->query("
             SELECT id, name_en, name_te, image, description, 
                    price_member, price_non_member, unit, quantity, status
             FROM chc_equipments 
-            WHERE status = 'Active'
+            WHERE status = 'Active' AND quantity > 0
             ORDER BY id
         ");
         $equipments = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
+        // Add display_price based on membership
+        foreach ($equipments as &$eq) {
+            $eq['display_price'] = $isMember ? $eq['price_member'] : $eq['price_non_member'];
+        }
+        
         echo json_encode(['success' => true, 'equipments' => $equipments]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function checkCHCAvailability($pdo) {
+    $equipmentName = $_GET['equipment_name'] ?? '';
+    $serviceDate = $_GET['service_date'] ?? '';
+    
+    if (empty($equipmentName) || empty($serviceDate)) {
+        echo json_encode(['success' => false, 'error' => 'Missing required parameters']);
+        return;
+    }
+    
+    try {
+        // Get total quantity for equipment
+        $stmt = $pdo->prepare("SELECT quantity FROM chc_equipments WHERE name_en = ?");
+        $stmt->execute([$equipmentName]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $totalQty = $result ? (int)$result['quantity'] : 0;
+        
+        // Count existing bookings for this date (excluding cancelled)
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as booked_count 
+            FROM chc_bookings 
+            WHERE equipment_type = ? AND service_date = ? AND booking_status != 'Cancelled'
+        ");
+        $stmt->execute([$equipmentName, $serviceDate]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $bookedCount = $result ? (int)$result['booked_count'] : 0;
+        
+        $available = $totalQty - $bookedCount;
+        $canBook = $available > 0;
+        
+        echo json_encode([
+            'success' => true,
+            'total_quantity' => $totalQty,
+            'booked_count' => $bookedCount,
+            'available' => $available,
+            'can_book' => $canBook,
+            'message' => $canBook ? 'Slot available' : 'క్షమించండి, ఈ తేదీలో స్లాట్లు అన్నీ బుక్ అయిపోయాయి. (Fully Booked)'
+        ]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function getBookedDates($pdo) {
+    $equipmentName = $_GET['equipment_name'] ?? '';
+    $month = isset($_GET['month']) ? (int)$_GET['month'] : date('n');
+    $year = isset($_GET['year']) ? (int)$_GET['year'] : date('Y');
+    
+    if (empty($equipmentName)) {
+        echo json_encode(['success' => false, 'error' => 'Equipment name required']);
+        return;
+    }
+    
+    try {
+        // Get total quantity for equipment
+        $stmt = $pdo->prepare("SELECT quantity FROM chc_equipments WHERE name_en = ?");
+        $stmt->execute([$equipmentName]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $totalQty = $result ? (int)$result['quantity'] : 0;
+        
+        // Get booking counts per date for this month
+        $startDate = sprintf('%04d-%02d-01', $year, $month);
+        $endDate = date('Y-m-t', strtotime($startDate));
+        
+        $stmt = $pdo->prepare("
+            SELECT service_date, COUNT(*) as booked_count 
+            FROM chc_bookings 
+            WHERE equipment_type = ? 
+              AND service_date BETWEEN ? AND ?
+              AND booking_status != 'Cancelled'
+            GROUP BY service_date
+        ");
+        $stmt->execute([$equipmentName, $startDate, $endDate]);
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $dates = [];
+        foreach ($results as $row) {
+            $dates[] = [
+                'date' => $row['service_date'],
+                'booked_count' => (int)$row['booked_count'],
+                'total_quantity' => $totalQty,
+                'is_full' => (int)$row['booked_count'] >= $totalQty
+            ];
+        }
+        
+        echo json_encode(['success' => true, 'dates' => $dates]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }

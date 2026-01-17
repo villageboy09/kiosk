@@ -35,6 +35,8 @@ dependencies:
   flutter_animate: ^4.5.2
   # Added for local session management
   shared_preferences: ^2.2.2
+  # Confetti animation for success dialogs
+  confetti: ^0.7.0
 
 
 dev_dependencies:
