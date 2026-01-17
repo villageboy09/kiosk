@@ -555,6 +555,7 @@ class ApiService {
   // ===================== CHC BOOKING FUNCTIONS =====================
 
   /// Create a CHC (Custom Hiring Center) booking
+  /// Updated to match new database structure with billing_type, unit_type, etc.
   static Future<Map<String, dynamic>> createCHCBooking({
     required String bookingId,
     required String userId,
@@ -564,6 +565,11 @@ class ApiService {
     required DateTime serviceDate,
     required double ratePerAcre,
     required double totalCost,
+    String billingType = 'Fixed',
+    String? unitType,
+    double? billedQty,
+    String? notes,
+    String bookingStatus = 'Confirmed',
   }) async {
     try {
       final response = await http.post(
@@ -573,11 +579,16 @@ class ApiService {
           'booking_id': bookingId,
           'user_id': userId,
           'equipment_type': equipmentType,
+          'billing_type': billingType,
           'crop_type': cropType,
-          'acres': acres,
+          'land_size_acres': acres,
+          'billed_qty': billedQty ?? acres,
+          'unit_type': unitType ?? 'Acre',
           'service_date': '${serviceDate.year}-${serviceDate.month.toString().padLeft(2, '0')}-${serviceDate.day.toString().padLeft(2, '0')}',
-          'rate_per_acre': ratePerAcre,
+          'rate': ratePerAcre,
           'total_cost': totalCost,
+          'notes': notes,
+          'booking_status': bookingStatus,
         }),
       );
 
@@ -601,6 +612,25 @@ class ApiService {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
           return List<Map<String, dynamic>>.from(data['bookings']);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Get CHC equipment list from database
+  static Future<List<Map<String, dynamic>>> getCHCEquipments() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api.php?action=get_chc_equipments'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['equipments']);
         }
       }
       return [];

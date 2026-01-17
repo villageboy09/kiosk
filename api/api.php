@@ -93,6 +93,9 @@ switch ($action) {
     case 'get_chc_bookings':
         getCHCBookings($pdo);
         break;
+    case 'get_chc_equipments':
+        getCHCEquipments($pdo);
+        break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
 }
@@ -738,23 +741,46 @@ function createCHCBooking($pdo) {
     $bookingId = $input['booking_id'] ?? '';
     $userId = $input['user_id'] ?? '';
     $equipmentType = $input['equipment_type'] ?? '';
+    $billingType = $input['billing_type'] ?? 'Fixed';
     $cropType = $input['crop_type'] ?? null;
-    $acres = $input['acres'] ?? 0;
+    $landSizeAcres = $input['land_size_acres'] ?? 0;
+    $billedQty = $input['billed_qty'] ?? null;
+    $unitType = $input['unit_type'] ?? 'Acre';
     $serviceDate = $input['service_date'] ?? '';
-    $ratePerAcre = $input['rate_per_acre'] ?? 0;
+    $rate = $input['rate'] ?? 0;
     $totalCost = $input['total_cost'] ?? 0;
+    $notes = $input['notes'] ?? null;
+    $bookingStatus = $input['booking_status'] ?? 'Confirmed';
     
-    if (empty($bookingId) || empty($userId) || empty($equipmentType) || empty($acres) || empty($serviceDate)) {
+    if (empty($bookingId) || empty($userId) || empty($equipmentType) || empty($serviceDate)) {
         echo json_encode(['success' => false, 'error' => 'Missing required fields']);
         return;
     }
     
+    // Generate operator notes for variable billing
+    $operatorNotes = null;
+    if ($billingType === 'Variable') {
+        $operatorNotes = "Variable Billing: Final bill based on actual $unitType";
+        if ($unitType === 'Trip') {
+            $operatorNotes .= " (Note: Valid up to 5km only)";
+        }
+    } else {
+        $operatorNotes = "Fixed Rate Booking";
+    }
+    
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO chc_bookings (booking_id, user_id, equipment_type, crop_type, acres, service_date, rate_per_acre, total_cost, booking_status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', NOW())
+            INSERT INTO chc_bookings (
+                booking_id, user_id, equipment_type, billing_type, crop_type, 
+                land_size_acres, billed_qty, unit_type, service_date, rate, 
+                total_cost, notes, booking_status, operator_notes, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
-        $stmt->execute([$bookingId, $userId, $equipmentType, $cropType, $acres, $serviceDate, $ratePerAcre, $totalCost]);
+        $stmt->execute([
+            $bookingId, $userId, $equipmentType, $billingType, $cropType,
+            $landSizeAcres, $billedQty, $unitType, $serviceDate, $rate,
+            $totalCost, $notes, $bookingStatus, $operatorNotes
+        ]);
         
         echo json_encode(['success' => true, 'id' => $pdo->lastInsertId(), 'booking_id' => $bookingId]);
     } catch (PDOException $e) {
@@ -772,8 +798,9 @@ function getCHCBookings($pdo) {
     
     try {
         $stmt = $pdo->prepare("
-            SELECT id, booking_id, equipment_type, crop_type, acres, service_date, 
-                   rate_per_acre, total_cost, booking_status, created_at
+            SELECT id, booking_id, equipment_type, billing_type, crop_type, 
+                   land_size_acres, billed_qty, unit_type, service_date, rate, 
+                   total_cost, notes, booking_status, operator_notes, created_at
             FROM chc_bookings 
             WHERE user_id = ?
             ORDER BY created_at DESC
@@ -782,6 +809,23 @@ function getCHCBookings($pdo) {
         $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         echo json_encode(['success' => true, 'bookings' => $bookings]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function getCHCEquipments($pdo) {
+    try {
+        $stmt = $pdo->query("
+            SELECT id, name_en, name_te, image, description, 
+                   price_member, price_non_member, unit, quantity, status
+            FROM chc_equipments 
+            WHERE status = 'Active'
+            ORDER BY id
+        ");
+        $equipments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        echo json_encode(['success' => true, 'equipments' => $equipments]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
