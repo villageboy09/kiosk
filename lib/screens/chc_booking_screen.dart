@@ -142,9 +142,9 @@ class CHCBookingState {
   // Calculate total cost based on billing type
   double get totalCost {
     if (equipment == null) return 0;
-    
+
     final rate = equipment!.getPrice(isMember);
-    
+
     if (equipment!.billingType == BillingType.fixed) {
       // For acre-based: landSize * rate
       return landSizeAcres * rate;
@@ -158,14 +158,18 @@ class CHCBookingState {
   bool get isValid {
     if (equipment == null) return false;
     if (equipment!.requiresCropSelection && selectedCrop == null) return false;
-    if (equipment!.billingType == BillingType.fixed && landSizeAcres <= 0) return false;
+    if (equipment!.billingType == BillingType.fixed && landSizeAcres <= 0) {
+      return false;
+    }
     return true;
   }
 
   // Get booking status based on billing type
   String get bookingStatus {
     if (equipment == null) return 'Pending';
-    return equipment!.billingType == BillingType.variable ? 'Slot Booked' : 'Confirmed';
+    return equipment!.billingType == BillingType.variable
+        ? 'Slot Booked'
+        : 'Confirmed';
   }
 
   CHCBookingState copyWith({
@@ -207,42 +211,50 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
     CropOption(
       nameEn: 'Paddy',
       nameTe: 'వరి',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/crops/paddy.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/crops/paddy.png',
     ),
     CropOption(
       nameEn: 'Cotton',
       nameTe: 'పత్తి',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/crops/cotton.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/crops/cotton.png',
     ),
     CropOption(
       nameEn: 'Sunflower',
       nameTe: 'పొద్దుతిరుగుడు',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/crops/sunflower.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/crops/sunflower.png',
     ),
     CropOption(
       nameEn: 'Banana',
       nameTe: 'అరటి',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/crops/banana.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/crops/banana.png',
     ),
     CropOption(
       nameEn: 'Turmeric',
       nameTe: 'పసుపు',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/crops/turmeric.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/crops/turmeric.png',
     ),
     CropOption(
       nameEn: 'Chilli',
       nameTe: 'మిర్చి',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/crops/chilli.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/crops/chilli.png',
     ),
     CropOption(
       nameEn: 'Maize',
       nameTe: 'మొక్కజొన్న',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/crops/maize.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/crops/maize.png',
     ),
     CropOption(
       nameEn: 'Groundnut',
       nameTe: 'వేరుశెనగ',
-      imageUrl: 'https://kiosk.cropsync.in/custom_hiring_center/crops/groundnut.png',
+      imageUrl:
+          'https://kiosk.cropsync.in/custom_hiring_center/crops/groundnut.png',
     ),
   ];
 
@@ -378,7 +390,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
     final currentUser = AuthService.currentUser;
     final isMember = currentUser?.membershipType?.toLowerCase() == 'member' ||
         currentUser?.membershipType?.toLowerCase() == 'prp';
-    
+
     _state = CHCBookingState(
       serviceDate: DateTime.now().add(const Duration(days: 1)),
       isMember: isMember,
@@ -437,8 +449,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
         acres: _state.landSizeAcres,
         serviceDate: _state.serviceDate,
         ratePerAcre: _state.equipment!.getPrice(_state.isMember),
-        totalCost: _state.equipment!.billingType == BillingType.fixed 
-            ? _state.totalCost 
+        totalCost: _state.equipment!.billingType == BillingType.fixed
+            ? _state.totalCost
             : 0, // Variable billing has 0 total until service completion
       );
 
@@ -484,9 +496,10 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
         DateFormat('dd MMM yyyy', locale).format(_state.serviceDate);
     final rate = _state.equipment!.getPrice(_state.isMember);
     final unitName = _state.equipment!.unit.getLocalizedName(locale);
-    
-    final isVariableBilling = _state.equipment!.billingType == BillingType.variable;
-    final totalValue = isVariableBilling 
+
+    final isVariableBilling =
+        _state.equipment!.billingType == BillingType.variable;
+    final totalValue = isVariableBilling
         ? context.tr('chc_bill_pending')
         : '₹${_state.totalCost.toStringAsFixed(0)}';
 
@@ -504,20 +517,23 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: isVariableBilling 
+                  color: isVariableBilling
                       ? CHCTheme.slotBooked.withOpacity(0.1)
                       : CHCTheme.accent.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isVariableBilling ? Icons.event_available : Icons.check_circle,
+                  isVariableBilling
+                      ? Icons.event_available
+                      : Icons.check_circle,
                   size: 48,
-                  color: isVariableBilling ? CHCTheme.slotBooked : CHCTheme.accent,
+                  color:
+                      isVariableBilling ? CHCTheme.slotBooked : CHCTheme.accent,
                 ),
               ),
               const SizedBox(height: 24),
               Text(
-                isVariableBilling 
+                isVariableBilling
                     ? context.tr('chc_slot_booked_title')
                     : context.tr('chc_success_title'),
                 style: GoogleFonts.inter(
@@ -572,7 +588,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
                       const SizedBox(height: 8),
                       Text(
                         context.tr('chc_variable_billing_note'),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 11,
                           color: CHCTheme.slotBooked,
                           fontStyle: FontStyle.italic,
@@ -589,8 +605,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
                 child: FilledButton(
                   onPressed: () => Navigator.of(ctx).pop(),
                   style: FilledButton.styleFrom(
-                    backgroundColor: isVariableBilling 
-                        ? CHCTheme.slotBooked 
+                    backgroundColor: isVariableBilling
+                        ? CHCTheme.slotBooked
                         : CHCTheme.primary,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -818,16 +834,16 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
               ),
               // Membership badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: _state.isMember 
+                  color: _state.isMember
                       ? CHCTheme.memberBadge.withOpacity(0.2)
                       : Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: _state.isMember 
-                        ? CHCTheme.memberBadge 
-                        : Colors.white70,
+                    color:
+                        _state.isMember ? CHCTheme.memberBadge : Colors.white70,
                   ),
                 ),
                 child: Row(
@@ -836,20 +852,20 @@ class _CHCBookingScreenState extends State<CHCBookingScreen>
                     Icon(
                       _state.isMember ? Icons.star : Icons.person,
                       size: 16,
-                      color: _state.isMember 
-                          ? CHCTheme.memberBadge 
+                      color: _state.isMember
+                          ? CHCTheme.memberBadge
                           : Colors.white70,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      _state.isMember 
+                      _state.isMember
                           ? context.tr('member')
                           : context.tr('non_member'),
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: _state.isMember 
-                            ? CHCTheme.memberBadge 
+                        color: _state.isMember
+                            ? CHCTheme.memberBadge
                             : Colors.white70,
                       ),
                     ),
@@ -979,8 +995,9 @@ class _EquipmentCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color:
-                          isSelected ? equipment.accentColor : CHCTheme.textPrimary,
+                      color: isSelected
+                          ? equipment.accentColor
+                          : CHCTheme.textPrimary,
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 2,
@@ -1068,7 +1085,8 @@ class _CropSelector extends StatelessWidget {
                     color: isSelected ? CHCTheme.primary : CHCTheme.surface,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isSelected ? CHCTheme.primary : Colors.grey.shade200,
+                      color:
+                          isSelected ? CHCTheme.primary : Colors.grey.shade200,
                     ),
                   ),
                   child: Column(
@@ -1098,7 +1116,8 @@ class _CropSelector extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
-                          color: isSelected ? Colors.white : CHCTheme.textPrimary,
+                          color:
+                              isSelected ? Colors.white : CHCTheme.textPrimary,
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 1,
@@ -1135,7 +1154,8 @@ class _QuantitySlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rate = equipment?.getPrice(isMember) ?? 0;
-    final unitName = equipment?.unit.getLocalizedName(locale) ?? context.tr('acres');
+    final unitName =
+        equipment?.unit.getLocalizedName(locale) ?? context.tr('acres');
     final isVariableBilling = equipment?.billingType == BillingType.variable;
 
     return Container(
@@ -1170,7 +1190,7 @@ class _QuantitySlider extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: isVariableBilling 
+                color: isVariableBilling
                     ? CHCTheme.slotBooked.withOpacity(0.1)
                     : CHCTheme.accent.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
@@ -1182,7 +1202,9 @@ class _QuantitySlider extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
-                      color: isVariableBilling ? CHCTheme.slotBooked : CHCTheme.accent,
+                      color: isVariableBilling
+                          ? CHCTheme.slotBooked
+                          : CHCTheme.accent,
                     ),
                   ),
                   if (isVariableBilling) ...[
@@ -1396,7 +1418,8 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isVariableBilling = state.equipment?.billingType == BillingType.variable;
+    final isVariableBilling =
+        state.equipment?.billingType == BillingType.variable;
     final rate = state.equipment?.getPrice(state.isMember) ?? 0;
     final unitName = state.equipment?.unit.getLocalizedName(locale) ?? '';
 
@@ -1531,8 +1554,8 @@ class _BottomBar extends StatelessWidget {
                           child: FilledButton(
                             onPressed: isSubmitting ? null : onSubmit,
                             style: FilledButton.styleFrom(
-                              backgroundColor: isVariableBilling 
-                                  ? CHCTheme.slotBooked 
+                              backgroundColor: isVariableBilling
+                                  ? CHCTheme.slotBooked
                                   : CHCTheme.primary,
                               disabledBackgroundColor: isVariableBilling
                                   ? CHCTheme.slotBooked.withOpacity(0.5)

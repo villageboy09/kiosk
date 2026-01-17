@@ -10,6 +10,7 @@ class User {
   final String? clientCode;
   final String? cardUid;
   final String? profileImageUrl;
+  final String? membershipType;
 
   User({
     required this.userId,
@@ -22,6 +23,7 @@ class User {
     this.clientCode,
     this.cardUid,
     this.profileImageUrl,
+    this.membershipType,
   });
 
   /// Create a User from JSON response
@@ -37,6 +39,7 @@ class User {
       clientCode: json['client_code']?.toString(),
       cardUid: json['card_uid']?.toString(),
       profileImageUrl: json['profile_image_url']?.toString(),
+      membershipType: json['membership_type']?.toString(),
     );
   }
 
@@ -53,6 +56,7 @@ class User {
       'client_code': clientCode,
       'card_uid': cardUid,
       'profile_image_url': profileImageUrl,
+      'membership_type': membershipType,
     };
   }
 
@@ -68,6 +72,7 @@ class User {
     String? clientCode,
     String? cardUid,
     String? profileImageUrl,
+    String? membershipType,
   }) {
     return User(
       userId: userId ?? this.userId,
@@ -80,6 +85,7 @@ class User {
       clientCode: clientCode ?? this.clientCode,
       cardUid: cardUid ?? this.cardUid,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      membershipType: membershipType ?? this.membershipType,
     );
   }
 }
