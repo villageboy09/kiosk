@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:confetti/confetti.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 
@@ -212,7 +211,6 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
   List<Equipment> _equipments = [];
   List<Crop> _crops = [];
   DateTime _calendarMonth = DateTime.now();
-  late ConfettiController _confettiController;
 
   static const List<String> _monthNamesTe = [
     'జనవరి',
@@ -232,8 +230,6 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
   @override
   void initState() {
     super.initState();
-    _confettiController =
-        ConfettiController(duration: const Duration(seconds: 2));
     final currentUser = AuthService.currentUser;
     // Check membership via card_uid: if null/empty, user has no membership
     final isMember =
@@ -244,20 +240,20 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
 
   @override
   void dispose() {
-    _confettiController.dispose();
     super.dispose();
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final equipmentsData =
-          await ApiService.getCHCEquipments(isMember: _state.isMember);
+      final user = AuthService.currentUser;
+      final equipmentsData = await ApiService.getCHCEquipments(
+          isMember: _state.isMember, userId: user?.userId);
       _equipments = equipmentsData.map((e) => Equipment.fromJson(e)).toList();
       final cropsData = await ApiService.getCrops();
       _crops = cropsData.map((c) => Crop.fromJson(c)).toList();
     } catch (e) {
-      debugPrint('Error loading CHC data: $e');
+      // Silent error handling
     }
     if (mounted) setState(() => _isLoading = false);
   }
@@ -278,7 +274,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
         setState(() => _state = _state.copyWith(fullyBookedDates: fullyBooked));
       }
     } catch (e) {
-      debugPrint('Error loading booked dates: $e');
+      // Silent error handling
     }
   }
 
@@ -371,7 +367,6 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        _confettiController.play();
         await _showSuccessDialog(
             bookingId: bookingId,
             billingType: billingType,
@@ -412,7 +407,6 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
         billingType: billingType,
         totalCost: totalCost,
         state: _state,
-        confettiController: _confettiController,
         onClose: () => Navigator.pop(ctx),
       ),
     );
@@ -761,8 +755,7 @@ class _CHCHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              _BackButton(),
-              const SizedBox(width: CHCTheme.spacingMd),
+              // Back button removed
               const Icon(Icons.agriculture, color: Colors.white, size: 28),
               const SizedBox(width: CHCTheme.spacingSm),
               Expanded(
@@ -786,23 +779,6 @@ class _CHCHeader extends StatelessWidget {
           const SizedBox(height: CHCTheme.spacingSm),
           _MemberBadge(isMember: state.isMember),
         ],
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.pop(context),
-      child: Container(
-        padding: const EdgeInsets.all(CHCTheme.spacingSm),
-        decoration: BoxDecoration(
-          color: Colors.white24,
-          borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
-        ),
-        child: const Icon(Icons.arrow_back, color: Colors.white),
       ),
     );
   }
@@ -971,55 +947,51 @@ class _EquipmentCard extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            // Member badge
-            if (isMember)
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                  decoration: BoxDecoration(
-                      color: CHCTheme.memberBadge,
-                      borderRadius: BorderRadius.circular(6)),
-                  child: Text('సభ్యుల ధర',
-                      style: GoogleFonts.notoSansTelugu(
-                          fontSize: 7,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF333333))),
-                ),
-              ),
-            // Image at top, labels at center-bottom
+            // 1. Content (Image + Text) - Rendered FIRST (Bottom layer)
             Column(
               children: [
                 // Top: Equipment image
                 Expanded(
                   flex: 3,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                    child: CachedNetworkImage(
-                      imageUrl: equipment.image.startsWith('http')
-                          ? equipment.image
-                          : 'https://kiosk.cropsync.in/custom_hiring_center/${equipment.image}',
-                      fit: BoxFit.contain,
-                      placeholder: (_, __) => const _ShimmerBox(
-                          width: 60, height: 60, borderRadius: 8),
-                      errorWidget: (_, __, ___) => const Icon(Icons.agriculture,
-                          size: 50, color: CHCTheme.textSecondary),
+                    padding: const EdgeInsets.all(
+                        12), // Increased padding for cleaner look
+                    child: Center(
+                      child: AspectRatio(
+                        aspectRatio: 1.2, // Enforce aspect ratio for uniformity
+                        child: CachedNetworkImage(
+                          imageUrl: equipment.image.startsWith('http')
+                              ? equipment.image
+                              : 'https://kiosk.cropsync.in/custom_hiring_center/${equipment.image}',
+                          fit: BoxFit
+                              .contain, // Maintain aspect ratio within the box
+                          memCacheHeight: 300,
+                          placeholder: (_, __) => const Center(
+                              child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))),
+                          errorWidget: (_, __, ___) => const Icon(
+                              Icons.agriculture,
+                              size: 40,
+                              color: CHCTheme.textSecondary),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                // Bottom: Name and price (centered)
+                // Bottom: Name and price
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         equipment.getDisplayName(locale),
                         style: GoogleFonts.notoSansTelugu(
-                            fontSize: 11,
+                            fontSize: 12, // Slightly larger font
                             fontWeight: FontWeight.w700,
                             color:
                                 isSelected ? CHCTheme.primary : CHCTheme.text),
@@ -1027,17 +999,17 @@ class _EquipmentCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                            color: CHCTheme.accent.withOpacity(0.1),
+                            color: CHCTheme.accent.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(20)),
                         child: Text(
                             '₹${equipment.displayPrice.toStringAsFixed(0)}/${equipment.unit}',
                             style: GoogleFonts.poppins(
-                                fontSize: 10,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 color: CHCTheme.accent)),
                       ),
@@ -1046,6 +1018,40 @@ class _EquipmentCard extends StatelessWidget {
                 ),
               ],
             ),
+
+            // 2. Member badge - Rendered LAST (Top layer)
+            if (isMember)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: CHCTheme.memberBadge,
+                    borderRadius: BorderRadius.circular(6),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star, size: 10, color: Colors.black54),
+                      const SizedBox(width: 2),
+                      Text('MEMBER',
+                          style: GoogleFonts.poppins(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF333333))),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -1105,6 +1111,7 @@ class _CHCCropSelector extends StatelessWidget {
                         imageUrl: imageUrl,
                         width: 48,
                         height: 48,
+                        memCacheHeight: 96, // Optimized for 48px * 2
                         fit: BoxFit.cover,
                         placeholder: (_, __) => const SizedBox(
                           width: 48,
@@ -1692,7 +1699,6 @@ class _SuccessDialog extends StatelessWidget {
   final String billingType;
   final double totalCost;
   final CHCBookingState state;
-  final ConfettiController confettiController;
   final VoidCallback onClose;
 
   const _SuccessDialog({
@@ -1700,7 +1706,6 @@ class _SuccessDialog extends StatelessWidget {
     required this.billingType,
     required this.totalCost,
     required this.state,
-    required this.confettiController,
     required this.onClose,
   });
 
@@ -1710,100 +1715,75 @@ class _SuccessDialog extends StatelessWidget {
     final equipmentName = state.equipment!.getDisplayName(locale);
     final dateStr = DateFormat('dd MMM yyyy').format(state.serviceDate!);
 
-    return Stack(
-      children: [
-        Dialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(CHCTheme.radiusXl)),
-          child: Padding(
-            padding: const EdgeInsets.all(CHCTheme.spacingLg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                      color: CHCTheme.primary.withOpacity(0.1),
-                      shape: BoxShape.circle),
-                  child: const Icon(Icons.check,
-                      size: 40, color: CHCTheme.primary),
-                ),
-                const SizedBox(height: CHCTheme.spacingMd),
-                Text('బుకింగ్ విజయవంతమైంది!',
-                    style: GoogleFonts.notoSansTelugu(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: CHCTheme.primaryDark)),
-                const SizedBox(height: CHCTheme.spacingSm),
-                Text('Booking ID:',
-                    style:
-                        TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                Text(bookingId,
-                    style: GoogleFonts.poppins(
-                        fontSize: 22, fontWeight: FontWeight.bold)),
-                const SizedBox(height: CHCTheme.spacingMd),
-                Container(
-                  padding: const EdgeInsets.all(CHCTheme.spacingMd),
-                  decoration: BoxDecoration(
-                      color: CHCTheme.bg,
-                      borderRadius: BorderRadius.circular(CHCTheme.radiusMd)),
-                  child: Column(
-                    children: [
-                      _ReceiptRow('యంత్రం:', equipmentName),
-                      if (state.crop != null)
-                        _ReceiptRow('పంట:', state.crop!.name),
-                      _ReceiptRow('విస్తీర్ణం:', '${state.acres} ఎకరాలు'),
-                      _ReceiptRow('తేదీ:', dateStr),
-                      const Divider(height: CHCTheme.spacingMd),
-                      _ReceiptRow(
-                          'మొత్తం:',
-                          billingType == 'Fixed'
-                              ? '₹${totalCost.toStringAsFixed(0)}'
-                              : 'బిల్లు పెండింగ్',
-                          isTotal: true,
-                          isPending: billingType != 'Fixed'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: CHCTheme.spacingLg),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: onClose,
-                    style: FilledButton.styleFrom(
-                        backgroundColor: CHCTheme.text,
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(CHCTheme.radiusMd))),
-                    child: Text('సరే (Done)',
-                        style: GoogleFonts.notoSansTelugu(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ],
+    return Dialog(
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(CHCTheme.radiusXl)),
+      child: Padding(
+        padding: const EdgeInsets.all(CHCTheme.spacingLg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                  color: CHCTheme.primary.withOpacity(0.1),
+                  shape: BoxShape.circle),
+              child: const Icon(Icons.check, size: 40, color: CHCTheme.primary),
             ),
-          ),
+            const SizedBox(height: CHCTheme.spacingMd),
+            Text('బుకింగ్ విజయవంతమైంది!',
+                style: GoogleFonts.notoSansTelugu(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: CHCTheme.primaryDark)),
+            const SizedBox(height: CHCTheme.spacingSm),
+            Text('Booking ID:',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+            Text(bookingId,
+                style: GoogleFonts.poppins(
+                    fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: CHCTheme.spacingMd),
+            Container(
+              padding: const EdgeInsets.all(CHCTheme.spacingMd),
+              decoration: BoxDecoration(
+                  color: CHCTheme.bg,
+                  borderRadius: BorderRadius.circular(CHCTheme.radiusMd)),
+              child: Column(
+                children: [
+                  _ReceiptRow('యంత్రం:', equipmentName),
+                  if (state.crop != null) _ReceiptRow('పంట:', state.crop!.name),
+                  _ReceiptRow('విస్తీర్ణం:', '${state.acres} ఎకరాలు'),
+                  _ReceiptRow('తేదీ:', dateStr),
+                  const Divider(height: CHCTheme.spacingMd),
+                  _ReceiptRow(
+                      'మొత్తం:',
+                      billingType == 'Fixed'
+                          ? '₹${totalCost.toStringAsFixed(0)}'
+                          : 'బిల్లు పెండింగ్',
+                      isTotal: true,
+                      isPending: billingType != 'Fixed'),
+                ],
+              ),
+            ),
+            const SizedBox(height: CHCTheme.spacingLg),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: onClose,
+                style: FilledButton.styleFrom(
+                    backgroundColor: CHCTheme.text,
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(CHCTheme.radiusMd))),
+                child: Text('సరే (Done)',
+                    style: GoogleFonts.notoSansTelugu(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
         ),
-        Align(
-          alignment: Alignment.topCenter,
-          child: ConfettiWidget(
-            confettiController: confettiController,
-            blastDirectionality: BlastDirectionality.explosive,
-            particleDrag: 0.05,
-            emissionFrequency: 0.05,
-            numberOfParticles: 20,
-            gravity: 0.1,
-            colors: const [
-              CHCTheme.primary,
-              CHCTheme.accent,
-              CHCTheme.memberBadge,
-              Colors.blue,
-              Colors.green
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

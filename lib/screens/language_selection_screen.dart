@@ -9,70 +9,121 @@ class LanguageSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Title Text
-                Text(
-                  'Choose your language',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 40),
-
-                // Language Cards
-                const LanguageCard(
-                  language: 'English',
-                  locale: Locale('en'),
-                ),
-                const SizedBox(height: 16),
-                const LanguageCard(
-                  language: 'हिंदी', // Hindi
-                  locale: Locale('hi'),
-                ),
-                const SizedBox(height: 16),
-                const LanguageCard(
-                  language: 'తెలుగు', // Telugu
-                  locale: Locale('te'),
-                ),
-              ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. Custom Deep Gradient Background
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF1B5E20), // Deep Green (800)
+                  Color(0xFF000000), // Black
+                ],
+                stops: [0.2, 0.9],
+              ),
             ),
           ),
-        ),
+
+          // 2. Content Overlay
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Title
+                  Text(
+                    'Choose your language',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 60),
+
+                  // Pyramid Layout
+                  // Top Row: English (Centered)
+                  const Center(
+                    child: SizedBox(
+                      width: 140, // Square width
+                      height: 140, // Square height
+                      child: _LanguageCard(
+                        character: 'A',
+                        label: 'English',
+                        locale: Locale('en'),
+                        color: Colors.white,
+                        textColor: Colors.black,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24), // Spacing between rows
+
+                  // Bottom Row: Hindi & Telugu (Side-by-Side)
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 140,
+                        height: 140,
+                        child: _LanguageCard(
+                          character: 'अ',
+                          label: 'हिंदी',
+                          locale: Locale('hi'),
+                          color: Colors.white,
+                          textColor: Colors.black,
+                        ),
+                      ),
+                      SizedBox(width: 24), // Spacing between cards
+                      SizedBox(
+                        width: 140,
+                        height: 140,
+                        child: _LanguageCard(
+                          character: 'అ',
+                          label: 'తెలుగు',
+                          locale: Locale('te'),
+                          color: Colors.white,
+                          textColor: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// A reusable card widget for language selection
-class LanguageCard extends StatelessWidget {
-  final String language;
+// A reusable SQUARE card widget for language selection
+class _LanguageCard extends StatelessWidget {
+  final String character;
+  final String label;
   final Locale locale;
+  final Color color;
+  final Color textColor;
 
-  const LanguageCard({
-    super.key,
-    required this.language,
+  const _LanguageCard({
+    required this.character,
+    required this.label,
     required this.locale,
+    required this.color,
+    required this.textColor,
   });
 
-  // UPDATED: Made this method 'async'
   void _onLanguageSelected(BuildContext context) async {
-    // UPDATED: 'await' the locale change to complete
     await context.setLocale(locale);
 
-    // Add a check to ensure the widget is still on screen
     if (context.mounted) {
-      // Navigate to the SplashScreen and remove this page from the stack
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const SplashScreen()),
       );
@@ -81,33 +132,36 @@ class LanguageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => _onLanguageSelected(context),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            // Minimalistic shadow
-            BoxShadow(
-              color: Colors.grey.shade200,
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+    return Material(
+      color: color,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 8,
+      shadowColor: Colors.black.withValues(alpha: 0.3),
+      child: InkWell(
+        onTap: () => _onLanguageSelected(context),
+        borderRadius: BorderRadius.circular(20),
+        splashColor: Colors.green.withValues(alpha: 0.2),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              character,
+              style: GoogleFonts.poppins(
+                fontSize: 48,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: textColor.withValues(alpha: 0.7),
+              ),
             ),
           ],
-          border: Border.all(color: Colors.grey.shade300, width: 1),
-        ),
-        child: Center(
-          child: Text(
-            language,
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-              color: Colors.black,
-            ),
-          ),
         ),
       ),
     );

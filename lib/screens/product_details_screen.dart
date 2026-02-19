@@ -37,19 +37,43 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       }
     });
 
-    if (widget.product.videoUrl != null) {
-      _videoController =
-          VideoPlayerController.networkUrl(Uri.parse(widget.product.videoUrl!));
-      _videoController!.initialize().then((_) {
-        if (mounted) {
-          _chewieController = ChewieController(
-            videoPlayerController: _videoController!,
-            autoPlay: false,
-            looping: false,
-          );
-          setState(() {});
-        }
-      });
+    if (widget.product.videoUrl != null &&
+        widget.product.videoUrl!.isNotEmpty) {
+      _initializeVideo();
+    }
+  }
+
+  Future<void> _initializeVideo() async {
+    try {
+      _videoController = VideoPlayerController.networkUrl(
+        Uri.parse(widget.product.videoUrl!),
+      );
+      await _videoController!.initialize();
+      if (mounted) {
+        _chewieController = ChewieController(
+          videoPlayerController: _videoController!,
+          autoPlay: false,
+          looping: false,
+          errorBuilder: (context, errorMessage) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 42),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Video unavailable',
+                    style: GoogleFonts.lexend(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+        setState(() {});
+      }
+    } catch (e) {
+      // Video failed to initialize, will show images instead
     }
   }
 
@@ -354,7 +378,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         style: GoogleFonts.lexend(
                             fontSize: 20, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
-                    
+
                     // Product summary card
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -415,7 +439,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         ],
                       ),
                     ),
-                    
+
                     const SizedBox(height: 16),
                     Text(
                       context.tr('enquiry_description'),

@@ -3,9 +3,11 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:cached_network_image/cached_network_image.dart';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/services/auth_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -58,21 +60,23 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   String _selectedCategory = '';
   String _sortOrder = 'default'; // 'price_asc', 'price_desc'
   final TextEditingController _searchController = TextEditingController();
-  bool _isInit = true;
 
   @override
   void initState() {
     super.initState();
   }
 
+  Locale? _lastLocale;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_isInit) {
+    final currentLocale = context.locale;
+    if (_lastLocale != currentLocale) {
+      _lastLocale = currentLocale;
       _selectedCategory = context.tr('all_category');
       _categoriesFuture = _fetchCategories();
       _loadProducts();
-      _isInit = false;
     }
   }
 
@@ -123,16 +127,18 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
         categoryFilter = category;
       }
 
+      final user = AuthService.currentUser;
+
       final response = await ApiService.getProducts(
         lang: locale,
         category: categoryFilter,
         search: search,
         sort: sort,
+        userId: user?.userId,
       );
 
       return _mapResponseToProducts(response, locale);
     } catch (e) {
-      debugPrint('Error fetching products: $e');
       return [];
     }
   }
@@ -178,28 +184,39 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F5F7),
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          context.tr('crop_sync_market'),
-          style: GoogleFonts.lexend(
-            color: Colors.black87,
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
-        ),
-      ),
+      backgroundColor: Colors.white,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverToBoxAdapter(child: _buildSearchAndFilters()),
           SliverAppBar(
-            backgroundColor: const Color(0xFFF5F5F7),
+            backgroundColor: Colors.white,
+            elevation: 0,
             pinned: true,
+            centerTitle: false,
+            leadingWidth: 0,
+            leading: null,
+            title: Text(
+              context.tr('crop_sync_market'),
+              style: GoogleFonts.lexend(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF1A1A1A),
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: _buildSearchAndFilters(),
+            ),
+          ),
+          SliverAppBar(
+            backgroundColor: Colors.white,
+            pinned: true,
+            primary: false,
             automaticallyImplyLeading: false,
             toolbarHeight: 60,
+            elevation: 0,
             flexibleSpace: _buildCategoryTabs(),
           )
         ],
@@ -263,7 +280,15 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
         }
         final categories = snapshot.data!;
         return Container(
-          color: const Color(0xFFF5F5F7),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color: Colors.grey.shade200,
+                width: 1,
+              ),
+            ),
+          ),
           height: 60,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
@@ -317,7 +342,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
         if (products.isEmpty) return _buildEmptyState();
         return AnimationLimiter(
           child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               childAspectRatio: 0.7,

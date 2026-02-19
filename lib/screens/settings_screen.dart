@@ -8,8 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/global_notifiers.dart';
 import 'package:shimmer/shimmer.dart';
-import 'dart:math' as math;
 
 // --- DATA MODELS ---
 class Crop {
@@ -54,38 +54,25 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen>
     with TickerProviderStateMixin {
   int _selectedIndex = 0;
-
-  late AnimationController _backgroundController;
   late AnimationController _viewSwitchController;
-  late Animation<double> _backgroundAnimation;
-
   late List<Widget> _views;
 
   @override
   void initState() {
     super.initState();
-
     _views = [
       const AddNewCropSelectionView(key: ValueKey('add_crop')),
-      MyFieldsView(key: UniqueKey()),
+      const MyFieldsView(key: ValueKey('my_fields')),
     ];
-
-    _backgroundController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 20),
-    )..repeat();
     _viewSwitchController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _backgroundAnimation =
-        Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
     _viewSwitchController.forward();
   }
 
   @override
   void dispose() {
-    _backgroundController.dispose();
     _viewSwitchController.dispose();
     super.dispose();
   }
@@ -94,10 +81,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (_selectedIndex != newIndex) {
       setState(() {
         _selectedIndex = newIndex;
+        // Always force refresh when switching to My Fields tab
         if (newIndex == 1) {
-          _views[1] = MyFieldsView(key: UniqueKey());
-        } else if (newIndex == 0) {
-          _views[0] = const AddNewCropSelectionView(key: ValueKey('add_crop'));
+          _MyFieldsViewState._shouldForceRefresh = true;
         }
       });
       _viewSwitchController.reset();
@@ -108,149 +94,126 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: AnimatedBuilder(
-        animation: _backgroundAnimation,
-        builder: (context, child) {
-          return Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color.lerp(
-                          const Color(0xFFE8F5E8),
-                          const Color(0xFFF0F8F0),
-                          math.sin(_backgroundAnimation.value * 2 * math.pi) *
-                                  0.5 +
-                              0.5)!
-                      .withOpacity(0.8),
-                  Color.lerp(
-                          const Color(0xFFF8F9FA),
-                          const Color(0xFFE6F7E6),
-                          math.cos(_backgroundAnimation.value * 2 * math.pi) *
-                                  0.5 +
-                              0.5)!
-                      .withOpacity(0.8),
-                ],
+      backgroundColor: const Color(0xFFFAFAFA),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            _buildSegmentedControl(),
+            Expanded(
+              child: FadeTransition(
+                opacity: _viewSwitchController,
+                child: IndexedStack(
+                  index: _selectedIndex,
+                  children: _views,
+                ),
               ),
             ),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  _buildCleanAppBar(),
-                  _buildSegmentedControl(),
-                  Expanded(
-                    child: FadeTransition(
-                      opacity: _viewSwitchController,
-                      child: IndexedStack(
-                        index: _selectedIndex,
-                        children: _views,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildCleanAppBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 1200),
-        curve: Curves.elasticOut,
-        builder: (context, value, child) {
-          return Transform.translate(
-            offset: Offset(0, (1 - value) * -30),
-            child: Opacity(
-              opacity: value.clamp(0.0, 1.0),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green[600],
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.green.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.agriculture,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      'crop_details'.tr(),
-                      style: GoogleFonts.lexend(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green[800],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildSegmentedControl() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-      child: SizedBox(
-        width: double.infinity,
-        child: SegmentedButton<int>(
-          segments: [
-            ButtonSegment<int>(
-              value: 0,
-              label: Text('add_crop'.tr(),
-                  style: GoogleFonts.lexend(fontSize: 15)),
-              icon: const Icon(Icons.add_circle_outline, size: 22),
-            ),
-            ButtonSegment<int>(
-              value: 1,
-              label: Text('my_fields'.tr(),
-                  style: GoogleFonts.lexend(fontSize: 15)),
-              icon: Icon(
-                _selectedIndex == 1
-                    ? Icons.check_circle
-                    : Icons.grid_view_rounded,
-                size: 22,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      height: 56,
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Stack(
+        children: [
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.fastOutSlowIn,
+            alignment: _selectedIndex == 0
+                ? Alignment.centerLeft
+                : Alignment.centerRight,
+            child: FractionallySizedBox(
+              widthFactor: 0.5,
+              child: Container(
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
-          selected: {_selectedIndex},
-          onSelectionChanged: (Set<int> newSelection) {
-            _onTabChanged(newSelection.first);
-          },
-          style: SegmentedButton.styleFrom(
-            backgroundColor: Colors.green.withOpacity(0.1),
-            foregroundColor: Colors.green[800],
-            selectedBackgroundColor: Colors.green[600],
-            selectedForegroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            side: BorderSide(color: Colors.green.withOpacity(0.2)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
           ),
-        ),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _onTabChanged(0),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_circle_outline,
+                            size: 20,
+                            color: _selectedIndex == 0
+                                ? const Color(0xFF1B5E20)
+                                : Colors.grey[600]),
+                        const SizedBox(width: 8),
+                        Text(
+                          'add_crop'.tr(),
+                          style: GoogleFonts.poppins(
+                            fontWeight: _selectedIndex == 0
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                            color: _selectedIndex == 0
+                                ? const Color(0xFF1B5E20)
+                                : Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _onTabChanged(1),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.grid_view_rounded,
+                            size: 20,
+                            color: _selectedIndex == 1
+                                ? const Color(0xFF1B5E20)
+                                : Colors.grey[600]),
+                        const SizedBox(width: 8),
+                        Text(
+                          'my_fields'.tr(),
+                          style: GoogleFonts.poppins(
+                            fontWeight: _selectedIndex == 1
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                            color: _selectedIndex == 1
+                                ? const Color(0xFF1B5E20)
+                                : Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -272,6 +235,11 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
   List<CropVariety> _varieties = [];
   final List<String> _fieldNames = ['పొలం 1', 'పొలం 2', 'పొలం 3', 'పొలం 4'];
   Set<String> _usedFieldNames = {};
+
+  // Static cache to prevent shimmer on revisit
+  static List<Crop>? _cachedCrops;
+  static Set<String>? _cachedUsedFields;
+
   Crop? _selectedCrop;
   CropVariety? _selectedVariety;
   DateTime _selectedDate = DateTime.now();
@@ -288,6 +256,16 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
         vsync: this, duration: const Duration(milliseconds: 1200));
     _saveButtonController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 600));
+
+    // Listen for global updates (e.g. deletion from My Fields)
+    GlobalNotifiers.shouldRefreshAdvisory.addListener(_handleGlobalRefresh);
+  }
+
+  void _handleGlobalRefresh() {
+    if (mounted) {
+      // Force refresh to update used fields list
+      _fetchInitialData(forceRefresh: true);
+    }
   }
 
   @override
@@ -303,10 +281,29 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
   void dispose() {
     _sectionEntranceController.dispose();
     _saveButtonController.dispose();
+    GlobalNotifiers.shouldRefreshAdvisory.removeListener(_handleGlobalRefresh);
     super.dispose();
   }
 
-  Future<void> _fetchInitialData() async {
+  Future<void> _fetchInitialData({bool forceRefresh = false}) async {
+    // Invalidate cache if forced
+    if (forceRefresh) {
+      _cachedUsedFields = null;
+    }
+
+    // Check cache first
+    if (!forceRefresh && _cachedCrops != null && _cachedUsedFields != null) {
+      if (mounted) {
+        setState(() {
+          _crops = _cachedCrops!;
+          _usedFieldNames = _cachedUsedFields!;
+          _isFetchingInitialData = false;
+        });
+        _sectionEntranceController.forward();
+      }
+      return;
+    }
+
     try {
       if (!mounted) return;
       final langCode = context.locale.languageCode;
@@ -329,6 +326,10 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       }
 
       if (mounted) {
+        // Update cache
+        _cachedCrops = loadedCrops;
+        _cachedUsedFields = _usedFieldNames;
+
         setState(() {
           _crops = loadedCrops;
           _isFetchingInitialData = false;
@@ -386,7 +387,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       final userId = AuthService.currentUser?.userId;
 
       if (userId == null) {
-        _showFeedbackSnackbar('User not logged in', false);
+        _showFeedbackSnackbar('Please login to save your selection.', false);
         return;
       }
 
@@ -401,8 +402,28 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       if (result['success'] == true) {
         if (mounted) {
           _showFeedbackSnackbar('save_success'.tr(), true);
+
+          // Optimistic Update: Add to 'My Fields' cache if ID is available
+          final newId = result['id'] ?? result['selection_id'];
+          // Force refresh My Fields on next tab switch
+          _MyFieldsViewState._shouldForceRefresh = true;
+
+          _usedFieldNames.add(_selectedFieldName!);
+          _cachedUsedFields = _usedFieldNames;
+
+          // Emit optimistic add event
+          GlobalNotifiers.selectionAdded.value = {
+            'id': newId,
+            'field_name': _selectedFieldName,
+            'crop_name': _selectedCrop!.name,
+            'crop_image_url': _selectedCrop!.imageUrl,
+            'crop_id': _selectedCrop!.id,
+            'variety_id': _selectedVariety!.id,
+            'sowing_date': formattedDate,
+            'variety_name': _selectedVariety!.name, // Helpful extra
+          };
+
           setState(() {
-            _usedFieldNames.add(_selectedFieldName!);
             _selectedCrop = null;
             _selectedVariety = null;
             _selectedFieldName = null;
@@ -411,12 +432,14 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
           await _saveButtonController.reverse();
         }
       } else {
-        _showFeedbackSnackbar(result['error'] ?? 'Save failed', false);
+        _showFeedbackSnackbar(
+            result['error'] ?? 'Could not save selection. Please try again.',
+            false);
         _saveButtonController.reverse();
       }
     } catch (e) {
       _showFeedbackSnackbar(
-          'save_error'.tr(namedArgs: {'error': e.toString()}), false);
+          'Something went wrong. Please check your connection.', false);
       _saveButtonController.reverse();
     } finally {
       if (mounted) {
@@ -428,7 +451,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
   void _showFeedbackSnackbar(String message, bool isSuccess) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(message, style: GoogleFonts.lexend()),
+        content: Text(message, style: GoogleFonts.poppins()),
         backgroundColor: isSuccess ? Colors.green : Colors.red,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -511,26 +534,21 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
   }
 
   Widget _buildSectionHeader(String title, IconData icon, int index) {
-    return SlideTransition(
-      position: Tween<Offset>(begin: const Offset(-0.2, 0), end: Offset.zero)
-          .animate(CurvedAnimation(
-              parent: _sectionEntranceController,
-              curve: Interval(index * 0.1, (index * 0.1 + 0.4).clamp(0.0, 1.0),
-                  curve: Curves.easeOutCubic))),
-      child: FadeTransition(
-        opacity: CurvedAnimation(
-            parent: _sectionEntranceController,
-            curve: Interval(index * 0.1, (index * 0.1 + 0.5).clamp(0.0, 1.0),
-                curve: Curves.easeOut)),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.green[700], size: 22),
-            const SizedBox(width: 8),
-            Text(title,
-                style: GoogleFonts.lexend(
-                    fontSize: 18, fontWeight: FontWeight.w600)),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF1B5E20), size: 20),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF2D2D2D),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -564,7 +582,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       return SizedBox(
         height: 120,
         child: Center(
-          child: Text('no_varieties_found'.tr(), style: GoogleFonts.lexend()),
+          child: Text('no_varieties_found'.tr(), style: GoogleFonts.poppins()),
         ),
       );
     }
@@ -638,7 +656,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
                         color: Colors.white, strokeWidth: 3))
                 : const Icon(Icons.save_outlined),
             label: Text('save_selection'.tr(),
-                style: GoogleFonts.lexend(fontSize: 16)),
+                style: GoogleFonts.poppins(fontSize: 16)),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green[600],
               foregroundColor: Colors.white,
@@ -662,54 +680,77 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
     bool isDisabled = false,
   }) {
     return Container(
-      width: isSmall ? 100 : 120,
+      width: isSmall ? 80 : 100,
       margin: const EdgeInsets.only(right: 12),
       child: GestureDetector(
         onTap: isDisabled ? null : onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: isDisabled
-                ? Colors.grey[200]
-                : isSelected
-                    ? Colors.green[50]
-                    : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(
+              50), // Match AnimatedContainer's border radius
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(
+                vertical: 8.0, horizontal: 4.0), // Added padding
+            decoration: BoxDecoration(
               color: isDisabled
-                  ? Colors.grey[400]!
+                  ? Colors.grey[200]
                   : isSelected
-                      ? Colors.green[600]!
-                      : Colors.grey[300]!,
-              width: isSelected ? 2.0 : 1.0,
+                      ? const Color(0xFF1B5E20).withOpacity(
+                          0.05) // Corrected withValues to withOpacity
+                      : Colors.white,
+              borderRadius: BorderRadius.circular(50), // Pill/Capsule shape
+              border: Border.all(
+                color: isDisabled
+                    ? Colors.grey[400]!
+                    : isSelected
+                        ? const Color(0xFF1B5E20)
+                        : Colors.grey[300]!,
+                width: isSelected ? 2.0 : 1.0,
+              ),
             ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (imageUrl != null) ...[
-                CircleAvatar(
-                  radius: isSmall ? 20 : 30,
-                  backgroundImage: CachedNetworkImageProvider(imageUrl),
-                  backgroundColor: Colors.grey[200],
-                ),
-                const SizedBox(height: 8),
-              ],
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                child: Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.lexend(
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 13,
-                    color: isDisabled ? Colors.grey[600] : null,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (imageUrl != null) ...[
+                  CircleAvatar(
+                    radius: isSmall ? 18 : 28,
+                    backgroundImage: CachedNetworkImageProvider(imageUrl),
+                    backgroundColor: Colors.grey[200],
+                  ),
+                  const SizedBox(height: 8),
+                ] else if (isSmall) ...[
+                  Icon(
+                    Icons.landscape,
+                    size: 24,
+                    color:
+                        isSelected ? const Color(0xFF1B5E20) : Colors.grey[400],
+                  ),
+                  const SizedBox(height: 4),
+                ],
+                Expanded(
+                  // Use Expanded to prevent text overflow
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 12,
+                        color: isDisabled
+                            ? Colors.grey[600]
+                            : isSelected
+                                ? const Color(0xFF1B5E20)
+                                : const Color(0xFF4A4A4A),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -732,19 +773,24 @@ class _MyFieldsViewState extends State<MyFieldsView>
   late AnimationController _listEntranceController;
   bool _didFetchSelections = false;
 
+  // Flag to force refresh on tab switch
+  static bool _shouldForceRefresh = false;
+
   @override
   void initState() {
     super.initState();
     _listEntranceController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1000));
+        vsync: this, duration: const Duration(milliseconds: 600));
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_didFetchSelections) {
+    // Always fetch if force refresh flag is set or first time
+    if (!_didFetchSelections || _shouldForceRefresh) {
       _fetchSelections();
       _didFetchSelections = true;
+      _shouldForceRefresh = false;
     }
   }
 
@@ -756,6 +802,7 @@ class _MyFieldsViewState extends State<MyFieldsView>
 
   Future<void> _fetchSelections() async {
     if (!mounted) return;
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -773,7 +820,8 @@ class _MyFieldsViewState extends State<MyFieldsView>
         return;
       }
 
-      final response = await ApiService.getUserSelections(userId, lang: langCode);
+      final response =
+          await ApiService.getUserSelections(userId, lang: langCode);
 
       final selections = response
           .map((item) => FarmerSelection(
@@ -811,7 +859,10 @@ class _MyFieldsViewState extends State<MyFieldsView>
         return EditSelectionSheet(
           initialSelection: selection,
           onCompleted: () {
-            _fetchSelections();
+            // Force refresh to get updated data
+            if (mounted) {
+              _fetchSelections();
+            }
           },
         );
       },
@@ -838,10 +889,12 @@ class _MyFieldsViewState extends State<MyFieldsView>
         builder: (context, child) {
           return ListView.builder(
               padding: const EdgeInsets.all(20),
+              cacheExtent: 300, // Pre-render items for smoother scrolling
               itemCount: selections.length,
               itemBuilder: (context, index) {
                 final selection = selections[index];
-                return SlideTransition(
+                return RepaintBoundary(
+                  child: SlideTransition(
                     position: Tween<Offset>(
                             begin: const Offset(0.2, 0), end: Offset.zero)
                         .animate(CurvedAnimation(
@@ -855,7 +908,9 @@ class _MyFieldsViewState extends State<MyFieldsView>
                             curve: Interval(index * 0.03,
                                 (index * 0.03 + 0.7).clamp(0.0, 1.0),
                                 curve: Curves.easeOut)),
-                        child: _buildSimpleFieldCard(selection)));
+                        child: _buildSimpleFieldCard(selection)),
+                  ),
+                );
               });
         });
   }
@@ -866,57 +921,61 @@ class _MyFieldsViewState extends State<MyFieldsView>
             .format(selection.sowingDate);
 
     return Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        child: Material(
-            elevation: 4,
-            shadowColor: Colors.black.withOpacity(0.05),
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+            color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            child: Container(
-                decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey[200]!)),
-                child: InkWell(
-                    onTap: () => _showEditSheet(selection),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(children: [
-                          CircleAvatar(
-                              radius: 30,
-                              backgroundColor: Colors.green[50],
-                              backgroundImage: selection.cropImageUrl != null
-                                  ? CachedNetworkImageProvider(
-                                      selection.cropImageUrl!)
-                                  : null,
-                              child: selection.cropImageUrl == null
-                                  ? Icon(Icons.eco,
-                                      color: Colors.green[600], size: 30)
-                                  : null),
-                          const SizedBox(width: 16),
-                          Expanded(
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                Text(selection.fieldName,
-                                    style: GoogleFonts.lexend(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.green[800])),
-                                const SizedBox(height: 4),
-                                Text(
-                                    '${selection.cropName} - ${selection.varietyName}',
-                                    style: GoogleFonts.lexend(
-                                        fontSize: 14, color: Colors.grey[700])),
-                                const SizedBox(height: 4),
-                                Text('${'sown_on'.tr()}: $formattedSownDate',
-                                    style: GoogleFonts.lexend(
-                                        fontSize: 12, color: Colors.grey[500]))
-                              ])),
-                          Icon(Icons.chevron_right, color: Colors.grey[400])
-                        ]))))));
+            border: Border.all(color: Colors.grey[200]!),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2))
+            ]),
+        child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+                onTap: () => _showEditSheet(selection),
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(children: [
+                      CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Colors.green[50],
+                          backgroundImage: selection.cropImageUrl != null
+                              ? CachedNetworkImageProvider(
+                                  selection.cropImageUrl!,
+                                  maxWidth: 60,
+                                  maxHeight: 60)
+                              : null,
+                          child: selection.cropImageUrl == null
+                              ? Icon(Icons.eco,
+                                  color: Colors.green[600], size: 28)
+                              : null),
+                      const SizedBox(width: 16),
+                      Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                            Text(selection.fieldName,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.green[800])),
+                            const SizedBox(height: 4),
+                            Text(
+                                '${selection.cropName} - ${selection.varietyName}',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 14, color: Colors.grey[700])),
+                            const SizedBox(height: 4),
+                            Text(formattedSownDate,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 12, color: Colors.grey[500]))
+                          ])),
+                      const Icon(Icons.chevron_right, color: Colors.grey)
+                    ])))));
   }
-
   Widget _buildSimpleLoadingList() {
     return Shimmer.fromColors(
         baseColor: Colors.grey[300]!,
@@ -940,17 +999,17 @@ class _MyFieldsViewState extends State<MyFieldsView>
               Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
               const SizedBox(height: 16),
               Text('error_loading'.tr(),
-                  style: GoogleFonts.lexend(
+                  style: GoogleFonts.poppins(
                       fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               Text(error,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.lexend(color: Colors.grey[600])),
+                  style: GoogleFonts.poppins(color: Colors.grey[600])),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                   onPressed: _fetchSelections,
                   icon: const Icon(Icons.refresh),
-                  label: Text('retry'.tr(), style: GoogleFonts.lexend()),
+                  label: Text('retry'.tr(), style: GoogleFonts.poppins()),
                   style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green[600],
                       foregroundColor: Colors.white))
@@ -970,12 +1029,12 @@ class _MyFieldsViewState extends State<MyFieldsView>
                       size: 64, color: Colors.green[400])),
               const SizedBox(height: 24),
               Text('no_fields_yet'.tr(),
-                  style: GoogleFonts.lexend(
+                  style: GoogleFonts.poppins(
                       fontSize: 20, fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               Text('add_first_field'.tr(),
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.lexend(color: Colors.grey[600]))
+                  style: GoogleFonts.poppins(color: Colors.grey[600]))
             ])));
   }
 }
@@ -1104,6 +1163,21 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
       if (!mounted) return;
 
       if (result['success'] == true) {
+        // Force refresh My Fields on next view
+        _MyFieldsViewState._shouldForceRefresh = true;
+
+        // Emit optimistic update event
+        GlobalNotifiers.selectionUpdated.value = {
+          'id': widget.initialSelection.selectionId,
+          'field_name': _selectedFieldName,
+          'crop_name': _selectedCrop!.name,
+          'crop_image_url': _selectedCrop!.imageUrl,
+          'crop_id': _selectedCrop!.id,
+          'variety_id': _selectedVariety!.id,
+          'sowing_date': formattedDate,
+          'variety_name': _selectedVariety!.name,
+        };
+
         Navigator.pop(context);
         widget.onCompleted();
       } else {
@@ -1123,17 +1197,18 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
     final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-                title: Text('confirm_deletion'.tr(), style: GoogleFonts.lexend()),
+                title:
+                    Text('confirm_deletion'.tr(), style: GoogleFonts.poppins()),
                 content:
-                    Text('delete_warning'.tr(), style: GoogleFonts.lexend()),
+                    Text('delete_warning'.tr(), style: GoogleFonts.poppins()),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(context, false),
-                      child: Text('cancel'.tr(), style: GoogleFonts.lexend())),
+                      child: Text('cancel'.tr(), style: GoogleFonts.poppins())),
                   TextButton(
                       onPressed: () => Navigator.pop(context, true),
                       style: TextButton.styleFrom(foregroundColor: Colors.red),
-                      child: Text('delete'.tr(), style: GoogleFonts.lexend()))
+                      child: Text('delete'.tr(), style: GoogleFonts.poppins()))
                 ]));
 
     if (!mounted) return;
@@ -1141,12 +1216,22 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
     if (confirmed == true) {
       setState(() => _isDeleting = true);
       try {
-        final result =
-            await ApiService.deleteSelection(widget.initialSelection.selectionId);
+        final result = await ApiService.deleteSelection(
+            widget.initialSelection.selectionId);
 
         if (!mounted) return;
 
         if (result['success'] == true) {
+          // Update Cache & Notifiers
+          if (_AddNewCropSelectionViewState._cachedUsedFields != null) {
+            _AddNewCropSelectionViewState._cachedUsedFields!
+                .remove(widget.initialSelection.fieldName);
+          }
+          // Force refresh My Fields on next view
+          _MyFieldsViewState._shouldForceRefresh = true;
+          GlobalNotifiers.selectionDeleted.value =
+              widget.initialSelection.selectionId;
+
           Navigator.pop(context);
           widget.onCompleted();
         } else {
@@ -1171,7 +1256,8 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         child: Scaffold(
           appBar: AppBar(
-            title: Text('edit_field_selection'.tr(), style: GoogleFonts.lexend()),
+            title:
+                Text('edit_field_selection'.tr(), style: GoogleFonts.poppins()),
             automaticallyImplyLeading: false,
             actions: [
               IconButton(
@@ -1186,7 +1272,8 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildSectionHeader('crop_label'.tr(), Icons.eco_outlined),
+                        _buildSectionHeader(
+                            'crop_label'.tr(), Icons.eco_outlined),
                         const SizedBox(height: 12),
                         _buildCropGrid(),
                         const SizedBox(height: 24),
@@ -1208,7 +1295,8 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                         _buildSimpleDateSelector(),
                         const SizedBox(height: 40),
                         ElevatedButton.icon(
-                            onPressed: _isUpdating ? null : _updateCropSelection,
+                            onPressed:
+                                _isUpdating ? null : _updateCropSelection,
                             icon: _isUpdating
                                 ? Container(
                                     width: 24,
@@ -1218,7 +1306,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                                         color: Colors.white, strokeWidth: 3))
                                 : const Icon(Icons.update),
                             label: Text('update_selection'.tr(),
-                                style: GoogleFonts.lexend(fontSize: 16)),
+                                style: GoogleFonts.poppins(fontSize: 16)),
                             style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green[600],
                                 foregroundColor: Colors.white,
@@ -1237,7 +1325,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                                         color: Colors.red, strokeWidth: 3))
                                 : const Icon(Icons.delete_outline),
                             label: Text('delete_entry'.tr(),
-                                style: GoogleFonts.lexend(fontSize: 16)),
+                                style: GoogleFonts.poppins(fontSize: 16)),
                             style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.red,
                                 side: const BorderSide(color: Colors.red),
@@ -1253,7 +1341,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
   void _showFeedbackSnackbar(String message, bool isSuccess) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(message, style: GoogleFonts.lexend()),
+        content: Text(message, style: GoogleFonts.poppins()),
         backgroundColor: isSuccess ? Colors.green : Colors.red,
         behavior: SnackBarBehavior.floating));
   }
@@ -1263,7 +1351,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
       Icon(icon, color: Colors.green[700], size: 22),
       const SizedBox(width: 8),
       Text(title,
-          style: GoogleFonts.lexend(fontSize: 18, fontWeight: FontWeight.w600))
+          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600))
     ]);
   }
 
@@ -1293,7 +1381,8 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
       return SizedBox(
           height: 120,
           child: Center(
-              child: Text("no_varieties_found".tr(), style: GoogleFonts.lexend())));
+              child: Text("no_varieties_found".tr(),
+                  style: GoogleFonts.poppins())));
     }
     return SizedBox(
         height: 120,
@@ -1341,41 +1430,70 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
       VoidCallback? onTap,
       bool isSmall = false}) {
     return Container(
-        width: isSmall ? 100 : 120,
-        margin: const EdgeInsets.only(right: 12),
-        child: GestureDetector(
-            onTap: onTap,
-            child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                    color: isSelected ? Colors.green[50] : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color:
-                            isSelected ? Colors.green[600]! : Colors.grey[300]!,
-                        width: isSelected ? 2.0 : 1.0)),
-                child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (imageUrl != null) ...[
-                        CircleAvatar(
-                            radius: isSmall ? 20 : 30,
-                            backgroundImage:
-                                CachedNetworkImageProvider(imageUrl),
-                            backgroundColor: Colors.grey[200]),
-                        const SizedBox(height: 8)
-                      ],
-                      Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                          child: Text(title,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.lexend(
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  fontSize: 13)))
-                    ]))));
+      width: isSmall ? 80 : 100,
+      margin: const EdgeInsets.only(right: 12),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF1B5E20).withValues(alpha: 0.05)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(50), // Pill Shape
+            border: Border.all(
+                color: isSelected ? const Color(0xFF1B5E20) : Colors.grey[300]!,
+                width: isSelected ? 2.0 : 1.0),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(50),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min, // Important for scaling
+                children: [
+                  if (imageUrl != null) ...[
+                    CircleAvatar(
+                        radius: isSmall ? 18 : 28,
+                        backgroundImage: CachedNetworkImageProvider(imageUrl),
+                        backgroundColor: Colors.grey[200]),
+                    const SizedBox(height: 8)
+                  ] else if (isSmall) ...[
+                    Icon(
+                      Icons.landscape,
+                      size: 24,
+                      color: isSelected
+                          ? const Color(0xFF1B5E20)
+                          : Colors.grey[400],
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  Flexible(
+                    // Use Flexible instead of Padding/Expanded to allow shrink
+                    child: Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 11, // Slightly smaller font
+                        height: 1.1, // Tighter line height
+                        color: isSelected
+                            ? const Color(0xFF1B5E20)
+                            : const Color(0xFF4A4A4A),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

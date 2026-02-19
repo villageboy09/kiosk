@@ -112,7 +112,7 @@ class _ToastWidgetState extends State<_ToastWidget>
                 Expanded(
                   child: Text(
                     widget.message,
-                    style: GoogleFonts.lexend(
+                    style: GoogleFonts.poppins(
                       fontWeight: FontWeight.w500,
                       color: Colors.white,
                       fontSize: 14,

@@ -1,6 +1,7 @@
 {
   "welcome_title": "क्रॉपसिंक में आपका स्वागत है",
   "home_welcome_message": "आपके खेती डैशबोर्ड में आपका स्वागत है",
+  "language_select_title": "भाषा चुनें",
   "home_services_title": "हमारी सेवाएँ",
   "personal_info": "व्यक्तिगत जानकारी",
   "user_id": "उपयोगकर्ता आईडी",
@@ -46,6 +47,15 @@
   "nav_advice": "सलाह",
   "nav_weather": "मौसम",
   "nav_forecast": "पूर्वानुमान",
+  "weather_humidity": "नमी",
+  "weather_wind": "हवा",
+  "weather_rain": "बारिश",
+  "weather_hourly": "आज का पूर्वानुमान",
+  "purchase_request": "खरीद अनुरोध",
+  "quantity_kg": "मात्रा (किग्रा)",
+  "total": "कुल",
+  "submit_request": "अनुरोध सबमिट करें",
+  "purchase_request_sent": "खरीद अनुरोध सफलतापूर्वक भेजा गया!",
   "today_advice_title": "आज की कृषि सलाह",
   "today_advice_subtitle": "मौसम की स्थिति के आधार पर अपनी गतिविधियों की योजना बनाएं।",
   "category_irrigation": "सिंचाई",
@@ -146,6 +156,7 @@
   "seed_varieties_title": "बीज किस्में",
   "all_filter": "सभी",
   "load_error": "बीज किस्मों को लोड करने में विफल।",
+  "no_varieties_found": "कोई किस्में नहीं मिलीं",
   "price_label": "₹{price}",
   "crop_sync_market": "क्रॉपसिंक मार्केट",
   "search_products": "उत्पादों के लिए खोजें...",
@@ -275,5 +286,8 @@
   "sold_by": "विक्रेता",
   "sowing_period": "बुआई का समय",
   "watch_video": "वीडियो देखें",
-  "webview_not_supported": "इस प्लेटफ़ॉर्म पर वेबव्यू समर्थित नहीं है"
+  "webview_not_supported": "इस प्लेटफ़ॉर्म पर वेबव्यू समर्थित नहीं है",
+  "home_announcements_section_title": "घोषणाएं",
+  "home_announcement_label": "घोषणा",
+  "tap_to_play_video": "वीडियो चलाने के लिए टैप करें"
 }

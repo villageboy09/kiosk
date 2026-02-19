@@ -1,8 +1,10 @@
 // ignore_for_file: avoid_print
 
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:cropsync/models/user.dart';
+import 'package:cropsync/services/cache_service.dart';
 
 /// API Service class for handling all HTTP requests to the MySQL backend
 class ApiService {
@@ -26,13 +28,14 @@ class ApiService {
         final userData = data['user'] as Map<String, dynamic>;
         return User.fromJson(userData);
       } else {
-        throw Exception(data['message'] ?? 'Login failed');
+        throw Exception(
+            data['message'] ?? 'Login failed. Please checks your details.');
       }
     } catch (e) {
       if (e is Exception) {
         rethrow;
       }
-      throw Exception('Network error: Unable to connect to server');
+      throw Exception('Please check your internet connection.');
     }
   }
 
@@ -53,13 +56,15 @@ class ApiService {
         final userData = data['user'] as Map<String, dynamic>;
         return User.fromJson(userData);
       } else {
-        throw Exception(data['message'] ?? 'Failed to fetch user profile');
+        throw Exception(data['message'] ??
+            'Could not load your profile. Please try again.');
       }
     } catch (e) {
       if (e is Exception) {
         rethrow;
       }
-      throw Exception('Network error: Unable to connect to server');
+      throw Exception(
+          'Unable to connect to server. Please check your internet connection.');
     }
   }
 
@@ -68,21 +73,28 @@ class ApiService {
   /// Get all crops
   static Future<List<Map<String, dynamic>>> getCrops(
       {String lang = 'te'}) async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=get_crops&lang=$lang'),
-      );
+    final cacheKey = '${CacheKeys.crops}_$lang';
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return List<Map<String, dynamic>>.from(data['crops']);
+    return CacheService.getOrFetch(
+      cacheKey,
+      () async {
+        try {
+          final response = await http.get(
+            Uri.parse('$baseUrl/api.php?action=get_crops&lang=$lang'),
+          );
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            if (data['success'] == true) {
+              return List<Map<String, dynamic>>.from(data['crops']);
+            }
+          }
+          return [];
+        } catch (e) {
+          return [];
         }
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+      },
+    );
   }
 
   /// Get varieties for a crop
@@ -275,30 +287,21 @@ class ApiService {
       if (stageId != null) url += '&stage_id=$stageId';
 
       // DEBUG: Print the exact URL being called
-      print('DEBUG getProblems: Calling URL: $url');
-      print('DEBUG getProblems: cropId=$cropId, stageId=$stageId, lang=$lang');
 
       final response = await http.get(Uri.parse(url));
 
       // DEBUG: Print response status and body length
-      print('DEBUG getProblems: Response status: ${response.statusCode}');
-      print('DEBUG getProblems: Response body length: ${response.body.length}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print(
-            'DEBUG getProblems: success=${data['success']}, problems count=${data['problems']?.length ?? 0}');
         if (data['success'] == true) {
           final problems = List<Map<String, dynamic>>.from(data['problems']);
-          print('DEBUG getProblems: Returning ${problems.length} problems');
+
           return problems;
         }
       }
-      print(
-          'DEBUG getProblems: Returning empty list (non-200 or success=false)');
       return [];
     } catch (e) {
-      print('DEBUG getProblems: ERROR: $e');
       return [];
     }
   }
@@ -379,47 +382,79 @@ class ApiService {
     String? category,
     String? search,
     String? sort,
+    String? userId,
     String lang = 'en',
   }) async {
-    try {
-      String url = '$baseUrl/api.php?action=get_products&lang=$lang';
-      if (category != null) url += '&category=${Uri.encodeComponent(category)}';
-      if (search != null && search.isNotEmpty) {
-        url += '&search=${Uri.encodeComponent(search)}';
-      }
-      if (sort != null && sort != 'default') url += '&sort=$sort';
+    final cacheKey = CacheKeys.withParams(
+      '${CacheKeys.products}_$lang',
+      {
+        'category': category,
+        'search': search,
+        'sort': sort,
+        'user_id': userId,
+      },
+    );
 
-      final response = await http.get(Uri.parse(url));
+    return CacheService.getOrFetch(
+      cacheKey,
+      () async {
+        try {
+          String url = '$baseUrl/api.php?action=get_products&lang=$lang';
+          if (category != null) {
+            url += '&category=${Uri.encodeComponent(category)}';
+          }
+          if (search != null && search.isNotEmpty) {
+            url += '&search=${Uri.encodeComponent(search)}';
+          }
+          if (userId != null) {
+            url += '&user_id=${Uri.encodeComponent(userId)}';
+          }
+          if (sort != null && sort != 'default') url += '&sort=$sort';
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return List<Map<String, dynamic>>.from(data['products']);
+          final response = await http.get(Uri.parse(url));
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            if (data['success'] == true) {
+              return List<Map<String, dynamic>>.from(data['products']);
+            }
+          }
+          return [];
+        } catch (e) {
+          return [];
         }
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+      },
+      duration:
+          const Duration(minutes: 5), // Products might update more frequently
+    );
   }
 
   /// Get product categories
   static Future<List<String>> getProductCategories({String lang = 'en'}) async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=get_product_categories&lang=$lang'),
-      );
+    final cacheKey = '${CacheKeys.productCategories}_$lang';
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return List<String>.from(data['categories']);
+    return CacheService.getOrFetch(
+      cacheKey,
+      () async {
+        try {
+          final response = await http.get(
+            Uri.parse(
+                '$baseUrl/api.php?action=get_product_categories&lang=$lang'),
+          );
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            if (data['success'] == true) {
+              return List<String>.from(data['categories']);
+            }
+          }
+          return [];
+        } catch (e) {
+          return [];
         }
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+      },
+      duration: const Duration(hours: 1), // Categories rarely change
+    );
   }
 
   /// Save a purchase request
@@ -508,26 +543,40 @@ class ApiService {
   // ===================== SEED VARIETIES FUNCTIONS =====================
 
   /// Get seed varieties
+  /// Get seed varieties
   static Future<List<Map<String, dynamic>>> getSeedVarieties(
-      {String? cropName, String lang = 'te'}) async {
-    try {
-      String url = '$baseUrl/api.php?action=get_seed_varieties&lang=$lang';
-      if (cropName != null) {
-        url += '&crop_name=${Uri.encodeComponent(cropName)}';
-      }
+      {String? cropName, String? userId, String lang = 'te'}) async {
+    final cacheKey = CacheKeys.withParams(
+      '${CacheKeys.seedVarieties}_$lang',
+      {'crop_name': cropName, 'user_id': userId},
+    );
 
-      final response = await http.get(Uri.parse(url));
+    return CacheService.getOrFetch(
+      cacheKey,
+      () async {
+        try {
+          String url = '$baseUrl/api.php?action=get_seed_varieties&lang=$lang';
+          if (cropName != null) {
+            url += '&crop_name=${Uri.encodeComponent(cropName)}';
+          }
+          if (userId != null) {
+            url += '&user_id=${Uri.encodeComponent(userId)}';
+          }
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return List<Map<String, dynamic>>.from(data['varieties']);
+          final response = await http.get(Uri.parse(url));
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            if (data['success'] == true) {
+              return List<Map<String, dynamic>>.from(data['varieties']);
+            }
+          }
+          return [];
+        } catch (e) {
+          return [];
         }
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+      },
+    );
   }
 
   /// Get crop names for seed varieties filter
@@ -549,6 +598,43 @@ class ApiService {
       return {'crop_names': [], 'crops': []};
     } catch (e) {
       return {'crop_names': [], 'crops': []};
+    }
+  }
+
+  /// Create a seed booking/purchase request
+  static Future<Map<String, dynamic>> createSeedBooking({
+    required String bookingId,
+    required String userId,
+    required int seedVarietyId,
+    required double quantityKg,
+    required double totalPrice,
+  }) async {
+    const url = '$baseUrl/api.php?action=create_seed_booking';
+    final body = jsonEncode({
+      'booking_id': bookingId,
+      'user_id': userId,
+      'seed_variety_id': seedVarietyId,
+      'quantity_kg': quantityKg,
+      'total_price': totalPrice,
+      'booking_status': 'pending',
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {
+        'success': false,
+        'error': 'Server error: ${response.statusCode}'
+      };
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
     }
   }
 
@@ -584,7 +670,8 @@ class ApiService {
           'land_size_acres': acres,
           'billed_qty': billedQty ?? acres,
           'unit_type': unitType ?? 'Acre',
-          'service_date': '${serviceDate.year}-${serviceDate.month.toString().padLeft(2, '0')}-${serviceDate.day.toString().padLeft(2, '0')}',
+          'service_date':
+              '${serviceDate.year}-${serviceDate.month.toString().padLeft(2, '0')}-${serviceDate.day.toString().padLeft(2, '0')}',
           'rate': ratePerAcre,
           'total_cost': totalCost,
           'notes': notes,
@@ -602,7 +689,8 @@ class ApiService {
   }
 
   /// Get CHC bookings for a user
-  static Future<List<Map<String, dynamic>>> getCHCBookings(String userId) async {
+  static Future<List<Map<String, dynamic>>> getCHCBookings(
+      String userId) async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/api.php?action=get_chc_bookings&user_id=$userId'),
@@ -622,11 +710,16 @@ class ApiService {
 
   /// Get CHC equipment list from database
   /// Only returns Active equipment with quantity > 0
-  static Future<List<Map<String, dynamic>>> getCHCEquipments({bool isMember = false}) async {
+  static Future<List<Map<String, dynamic>>> getCHCEquipments(
+      {bool isMember = false, String? userId}) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=get_chc_equipments&is_member=${isMember ? 1 : 0}'),
-      );
+      String url =
+          '$baseUrl/api.php?action=get_chc_equipments&is_member=${isMember ? 1 : 0}';
+      if (userId != null) {
+        url += '&user_id=${Uri.encodeComponent(userId)}';
+      }
+
+      final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -648,7 +741,8 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=check_chc_availability&equipment_name=${Uri.encodeComponent(equipmentName)}&service_date=$serviceDate'),
+        Uri.parse(
+            '$baseUrl/api.php?action=check_chc_availability&equipment_name=${Uri.encodeComponent(equipmentName)}&service_date=$serviceDate'),
       );
 
       if (response.statusCode == 200) {
@@ -668,13 +762,35 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=get_booked_dates&equipment_name=${Uri.encodeComponent(equipmentName)}&month=$month&year=$year'),
+        Uri.parse(
+            '$baseUrl/api.php?action=get_booked_dates&equipment_name=${Uri.encodeComponent(equipmentName)}&month=$month&year=$year'),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
           return List<Map<String, dynamic>>.from(data['dates']);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+  // ===================== ANNOUNCEMENTS FUNCTIONS =====================
+
+  /// Get announcements for home screen
+  static Future<List<Map<String, dynamic>>> getAnnouncements(
+      {int limit = 5}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api.php?action=get_announcements&limit=$limit'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['announcements']);
         }
       }
       return [];

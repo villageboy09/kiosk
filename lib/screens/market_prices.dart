@@ -3,8 +3,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:cropsync/services/location_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shimmer/shimmer.dart';
@@ -75,7 +74,6 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   String _statusMessage = '';
   String _currentDistrict = '';
   String _currentState = '';
-  bool _isInit = true; // Flag to run didChangeDependencies once
 
   final List<String> _allCommodities = [
     'rice',
@@ -104,15 +102,16 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     // Do NOT use context or call _getCurrentLocation() here
   }
 
+  Locale? _lastLocale;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // This method is called after initState and can safely use context
-    // We use a flag to make sure this logic runs only once
-    if (_isInit) {
+    final currentLocale = context.locale;
+    if (_lastLocale != currentLocale) {
+      _lastLocale = currentLocale;
       _statusMessage = context.tr('detecting_location');
       _getCurrentLocation();
-      _isInit = false; // Set flag to false so it doesn't run again
     }
   }
 
@@ -206,7 +205,6 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
-    // We can safely use context here because it's called from didChangeDependencies
     setState(() {
       _isLoading = true;
       _statusMessage = context.tr('detecting_location');
@@ -218,58 +216,35 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     }
 
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      // Use LocationService instead of direct Geolocator calls
+      final hasPermission = await LocationService.requestPermission();
       if (!mounted) return;
-      if (!serviceEnabled) {
-        _useDefaultLocation(reason: context.tr('enable_location'));
+
+      if (!hasPermission) {
+        _useDefaultLocation(reason: context.tr('permission_denied'));
         return;
       }
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (!mounted) return;
-        if (permission == LocationPermission.denied) {
-          _useDefaultLocation(reason: context.tr('permission_denied'));
-          return;
-        }
-      }
+      final position = await LocationService.getCurrentPosition();
+      if (!mounted) return;
 
-      if (permission == LocationPermission.deniedForever) {
-        // ignore: use_build_context_synchronously
-        _useDefaultLocation(reason: context.tr('permission_permanent'));
+      if (position == null) {
+        _useDefaultLocation(reason: context.tr('location_error'));
         return;
       }
 
-      Position position = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.high),
-      );
+      final district = await LocationService.getDistrict();
+      final state = await LocationService.getState();
 
       if (!mounted) return;
 
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-
-      if (!mounted) return;
-
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks[0];
-        setState(() {
-          _currentDistrict =
-              (place.subAdministrativeArea ?? 'Hyderabad').trim();
-          _currentState = (place.administrativeArea ?? 'Telangana').trim();
-          _statusMessage = context.tr('location_detected', namedArgs: {
-            'district': _currentDistrict,
-            'state': _currentState
-          });
-        });
-        await _fetchPrices();
-      } else {
-        _useDefaultLocation(reason: context.tr('no_placemark'));
-      }
+      setState(() {
+        _currentDistrict = district;
+        _currentState = state;
+        _statusMessage = context.tr('location_detected',
+            namedArgs: {'district': _currentDistrict, 'state': _currentState});
+      });
+      await _fetchPrices();
     } catch (e) {
       if (mounted) {
         _useDefaultLocation(reason: context.tr('location_error'));
@@ -289,11 +264,12 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F8F8),
+      backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 1,
-        shadowColor: Colors.grey.withOpacity(0.1),
+        elevation: 0,
+        leading: null,
+        automaticallyImplyLeading: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -301,32 +277,34 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
             Text(
               context.tr('market_prices_title'),
               style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
                 color: Colors.black87,
+                letterSpacing: 0.2,
               ),
             ),
             Text(
               '$_currentDistrict, $_currentState',
               style: GoogleFonts.poppins(
-                fontSize: 14,
+                fontSize: 12,
                 color: Colors.grey[600],
+                letterSpacing: 0.3,
               ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.grey),
+            icon: Icon(Icons.refresh_rounded, color: Colors.grey[600]),
             onPressed: _getCurrentLocation,
           ),
-          const SizedBox(width: 8), // Small padding for edge
+          const SizedBox(width: 4),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
+          preferredSize: const Size.fromHeight(56),
           child: Container(
             color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -337,8 +315,9 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                             label: Text(
                               context.tr(commodity),
                               style: GoogleFonts.poppins(
-                                  fontSize: 13,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w500,
+                                  letterSpacing: 0.2,
                                   color: _activeCommodities.contains(commodity)
                                       ? Colors.green[800]
                                       : Colors.black54),

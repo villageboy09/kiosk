@@ -10,9 +10,11 @@ import 'package:cropsync/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:cropsync/services/global_notifiers.dart';
 import 'package:easy_localization/easy_localization.dart';
 
-// Data Models
+// ... (existing imports)
+
 class FarmerCropSelection {
   final int id;
   final String fieldName;
@@ -85,6 +87,88 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+
+    // Listen for global refreshes
+    // Listen for global refreshes and optimistic updates
+    GlobalNotifiers.shouldRefreshAdvisory.addListener(_handleRefresh);
+    GlobalNotifiers.selectionAdded.addListener(_onSelectionAdded);
+    GlobalNotifiers.selectionDeleted.addListener(_onSelectionDeleted);
+    GlobalNotifiers.selectionUpdated.addListener(_onSelectionUpdated);
+  }
+
+  void _handleRefresh() {
+    if (mounted) {
+      _fetchInitialData();
+    }
+  }
+
+  void _onSelectionAdded() {
+    final payload = GlobalNotifiers.selectionAdded.value;
+    if (payload == null || !mounted) return;
+
+    final newSelection = FarmerCropSelection(
+      id: int.parse(payload['id'].toString()),
+      fieldName: payload['field_name'],
+      cropName: payload['crop_name'],
+      cropImageUrl: payload['crop_image_url'],
+      cropId: payload['crop_id'],
+      varietyId: payload['variety_id'],
+      sowingDate: DateTime.parse(payload['sowing_date']),
+    );
+
+    setState(() {
+      _farmerCrops.insert(0, newSelection);
+      // Automatically select the new crop
+      _selectFarmerCrop(newSelection);
+    });
+  }
+
+  void _onSelectionUpdated() {
+    final payload = GlobalNotifiers.selectionUpdated.value;
+    if (payload == null || !mounted) return;
+
+    final id = int.parse(payload['id'].toString());
+    final index = _farmerCrops.indexWhere((c) => c.id == id);
+
+    if (index != -1) {
+      final updatedSelection = FarmerCropSelection(
+        id: id,
+        fieldName: payload['field_name'],
+        cropName: payload['crop_name'],
+        cropImageUrl: payload['crop_image_url'],
+        cropId: payload['crop_id'],
+        varietyId: payload['variety_id'],
+        sowingDate: DateTime.parse(payload['sowing_date']),
+      );
+
+      setState(() {
+        _farmerCrops[index] = updatedSelection;
+        if (_selectedFarmerCrop?.id == id) {
+          _selectedFarmerCrop =
+              updatedSelection; // Update current selection if it matches
+        }
+      });
+    }
+  }
+
+  void _onSelectionDeleted() {
+    final id = GlobalNotifiers.selectionDeleted.value;
+    if (id == null || !mounted) return;
+
+    setState(() {
+      _farmerCrops.removeWhere((c) => c.id == id);
+
+      // If we deleted the currently selected crop, select the first available one
+      if (_selectedFarmerCrop?.id == id) {
+        if (_farmerCrops.isNotEmpty) {
+          _selectFarmerCrop(_farmerCrops.first);
+        } else {
+          _selectedFarmerCrop = null;
+          _stages = [];
+          _problems = [];
+        }
+      }
+    });
   }
 
   @override
@@ -101,6 +185,10 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     _feedAnimationController.dispose();
     _filterAnimationController.dispose();
     _scrollController.dispose();
+    GlobalNotifiers.shouldRefreshAdvisory.removeListener(_handleRefresh);
+    GlobalNotifiers.selectionAdded.removeListener(_onSelectionAdded);
+    GlobalNotifiers.selectionDeleted.removeListener(_onSelectionDeleted);
+    GlobalNotifiers.selectionUpdated.removeListener(_onSelectionUpdated);
     super.dispose();
   }
 
@@ -117,17 +205,13 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
 
   Future<void> _fetchInitialData() async {
     try {
-      print('1. Starting _fetchInitialData...');
-
       final currentUser = AuthService.currentUser;
       if (currentUser == null) {
-        print('ERROR: User is not logged in. Aborting.');
         _showErrorSnackbar(context.tr('login_required'));
         if (mounted) setState(() => _isLoading = false);
         return;
       }
       final userId = currentUser.userId;
-      print('2. Current User ID: $userId');
 
       final locale = _getLocaleField(context.locale.languageCode);
 
@@ -135,12 +219,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       final selectionsData =
           await ApiService.getUserSelections(userId, lang: locale);
 
-      print(
-          '4. Fetched Selections Data: Found ${selectionsData.length} crop(s).');
-
       if (selectionsData.isEmpty) {
-        print(
-            'WARNING: No crop selections found for this farmer in the database.');
         if (mounted) {
           setState(() {
             _farmerCrops = [];
@@ -163,8 +242,6 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         );
       }).toList();
 
-      print('5. Successfully parsed ${loadedCrops.length} crops.');
-
       if (mounted) {
         setState(() {
           _farmerCrops = loadedCrops;
@@ -174,15 +251,10 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
           _isLoading = false;
         });
         _filterAnimationController.forward();
-        print('6. State updated successfully.');
       }
-    } catch (e, st) {
-      print('--- AN ERROR OCCURRED ---');
-      print('Error Type: ${e.runtimeType}');
-      print('Error Message: $e');
-      print('Stack Trace: $st');
-      print('-------------------------');
-      _showErrorSnackbar(context.tr('load_crops_error'));
+    } catch (e) {
+      _showErrorSnackbar(
+          'Could not load your crops. Please check your connection.');
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -250,15 +322,16 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
         });
       }
     } catch (e) {
-      _showErrorSnackbar(context.tr('load_stages_error'));
+      _showErrorSnackbar('Could not load crop stages. Please try again.');
     }
   }
 
   Future<void> _selectStage(CropStage stage) async {
     // DEBUG: Log the stage selection
     print('DEBUG _selectStage: Selected stage: ${stage.name} (id=${stage.id})');
-    print('DEBUG _selectStage: Current crop: ${_selectedFarmerCrop?.cropName} (cropId=${_selectedFarmerCrop?.cropId})');
-    
+    print(
+        'DEBUG _selectStage: Current crop: ${_selectedFarmerCrop?.cropName} (cropId=${_selectedFarmerCrop?.cropId})');
+
     setState(() {
       _selectedStage = stage;
       _problems = [];
@@ -270,30 +343,35 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
       print('DEBUG _selectStage: Locale: $locale');
 
       // Fetch problems from MySQL API using the problem_stages junction table
-      print('DEBUG _selectStage: Calling ApiService.getProblems(cropId=${_selectedFarmerCrop!.cropId}, stageId=${stage.id}, lang=$locale)');
+      print(
+          'DEBUG _selectStage: Calling ApiService.getProblems(cropId=${_selectedFarmerCrop!.cropId}, stageId=${stage.id}, lang=$locale)');
       final problemsData = await ApiService.getProblems(
         cropId: _selectedFarmerCrop!.cropId,
         stageId: stage.id,
         lang: locale,
       );
-      print('DEBUG _selectStage: Received ${problemsData.length} problems from API');
+      print(
+          'DEBUG _selectStage: Received ${problemsData.length} problems from API');
 
       final List<CropProblem> loadedProblems = problemsData.map((p) {
         return CropProblem.fromJson(p);
       }).toList();
-      print('DEBUG _selectStage: Parsed ${loadedProblems.length} CropProblem objects');
+      print(
+          'DEBUG _selectStage: Parsed ${loadedProblems.length} CropProblem objects');
 
       if (mounted) {
         setState(() {
           _problems = loadedProblems;
         });
-        print('DEBUG _selectStage: Set _problems with ${_problems.length} items');
+        print(
+            'DEBUG _selectStage: Set _problems with ${_problems.length} items');
         _feedAnimationController.forward();
       }
     } catch (e, st) {
       print('DEBUG _selectStage: ERROR: $e');
       print('DEBUG _selectStage: Stack trace: $st');
-      _showErrorSnackbar(context.tr('load_problems_error'));
+      _showErrorSnackbar(
+          'Could not load problems. Please check your connection.');
     }
   }
 
@@ -301,7 +379,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.lexend()),
+        content: Text(message, style: GoogleFonts.poppins()),
         backgroundColor: Colors.redAccent,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -338,7 +416,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
               padding: const EdgeInsets.all(20),
               child: Text(
                 context.tr('filter_title'),
-                style: GoogleFonts.lexend(
+                style: GoogleFonts.poppins(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
@@ -350,7 +428,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                 children: [
                   Text(
                     context.tr('my_crops'),
-                    style: GoogleFonts.lexend(
+                    style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: Colors.grey[700],
@@ -362,7 +440,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                   if (_stages.isNotEmpty) ...[
                     Text(
                       context.tr('crop_stage'),
-                      style: GoogleFonts.lexend(
+                      style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: Colors.grey[700],
@@ -436,7 +514,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                 Expanded(
                   child: Text(
                     stage.name,
-                    style: GoogleFonts.lexend(
+                    style: GoogleFonts.poppins(
                       fontWeight:
                           isSelected ? FontWeight.w600 : FontWeight.normal,
                       fontSize: 15,
@@ -512,14 +590,14 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                     children: [
                       Text(
                         crop.fieldName,
-                        style: GoogleFonts.lexend(
+                        style: GoogleFonts.poppins(
                           fontWeight: FontWeight.w600,
                           fontSize: 15,
                         ),
                       ),
                       Text(
                         crop.cropName,
-                        style: GoogleFonts.lexend(
+                        style: GoogleFonts.poppins(
                           color: Colors.grey[600],
                           fontSize: 13,
                         ),
@@ -558,8 +636,8 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
 
   Widget _buildStageSelector() {
     return Container(
-      height: 100,
-      margin: const EdgeInsets.only(top: 8),
+      height: 110,
+      margin: const EdgeInsets.only(top: 12, bottom: 4),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -574,67 +652,76 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
               margin: const EdgeInsets.only(right: 12),
               child: Column(
                 children: [
-                  Container(
-                    width: 60,
-                    height: 60,
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: isSelected ? 68 : 60,
+                    height: isSelected ? 68 : 60,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color:
-                            isSelected ? Colors.green[700]! : Colors.grey[300]!,
-                        width: isSelected ? 3 : 2,
+                        color: isSelected
+                            ? const Color(0xFF1B5E20)
+                            : Colors.grey[300]!,
+                        width: isSelected ? 4 : 2,
                       ),
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
-                                color: Colors.green.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
+                                color: const Color(0xFF1B5E20)
+                                    .withValues(alpha: 0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
                               ),
                             ]
                           : null,
                     ),
-                    child: ClipOval(
-                      child: stage.imageUrl != null &&
-                              stage.imageUrl!.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: stage.imageUrl!,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: Colors.green[50],
-                                child:
-                                    Icon(Icons.eco, color: Colors.green[300]),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.green[50],
-                                child:
-                                    Icon(Icons.eco, color: Colors.green[300]),
-                              ),
-                            )
-                          : Container(
-                              color: isSelected
-                                  ? Colors.green[100]
-                                  : Colors.grey[100],
-                              child: Icon(
-                                Icons.eco,
+                    child: Padding(
+                      padding: const EdgeInsets.all(3.0), // Space for border
+                      child: ClipOval(
+                        child: stage.imageUrl != null &&
+                                stage.imageUrl!.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: stage.imageUrl!,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.green[50],
+                                  child: Icon(Icons.eco,
+                                      color: Colors.green[300], size: 30),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.green[50],
+                                  child: Icon(Icons.eco,
+                                      color: Colors.green[300], size: 30),
+                                ),
+                              )
+                            : Container(
                                 color: isSelected
-                                    ? Colors.green[700]
-                                    : Colors.grey[400],
+                                    ? Colors.green[100]
+                                    : Colors.grey[100],
+                                child: Icon(
+                                  Icons.eco,
+                                  color: isSelected
+                                      ? Colors.green[700]
+                                      : Colors.grey[400],
+                                  size: 30,
+                                ),
                               ),
-                            ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Text(
                     stage.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.lexend(
-                      fontSize: 10,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
                       fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? Colors.green[700] : Colors.grey[600],
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected
+                          ? const Color(0xFF1B5E20)
+                          : Colors.grey[600],
                     ),
                   ),
                 ],
@@ -670,7 +757,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                     children: [
                       Text(
                         context.tr('advisories_title'),
-                        style: GoogleFonts.lexend(
+                        style: GoogleFonts.poppins(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: Colors.green[800],
@@ -682,7 +769,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                           opacity: _filterAnimationController,
                           child: Text(
                             '${_selectedFarmerCrop!.cropName} • ${_selectedFarmerCrop!.fieldName}',
-                            style: GoogleFonts.lexend(
+                            style: GoogleFonts.poppins(
                               fontSize: 14,
                               color: Colors.grey[600],
                             ),
@@ -725,7 +812,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                             const SizedBox(width: 8),
                             Text(
                               context.tr('filter_button'),
-                              style: GoogleFonts.lexend(
+                              style: GoogleFonts.poppins(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -758,7 +845,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
             const SizedBox(height: 16),
             Text(
               context.tr('no_problems_found'),
-              style: GoogleFonts.lexend(
+              style: GoogleFonts.poppins(
                 fontSize: 16,
                 color: Colors.grey[600],
               ),
@@ -766,7 +853,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
             const SizedBox(height: 8),
             Text(
               context.tr('select_another_stage'),
-              style: GoogleFonts.lexend(
+              style: GoogleFonts.poppins(
                 fontSize: 14,
                 color: Colors.grey[500],
               ),
@@ -937,7 +1024,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                 ),
                                 child: Text(
                                   problem.category!,
-                                  style: GoogleFonts.lexend(
+                                  style: GoogleFonts.poppins(
                                     color: Colors.white,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
@@ -996,7 +1083,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                     children: [
                       Text(
                         problem.name,
-                        style: GoogleFonts.lexend(
+                        style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.grey[800],
@@ -1027,7 +1114,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                   const SizedBox(width: 6),
                                   Text(
                                     context.tr('problem_detected'),
-                                    style: GoogleFonts.lexend(
+                                    style: GoogleFonts.poppins(
                                       fontSize: 12,
                                       color: Colors.orange[700],
                                       fontWeight: FontWeight.w600,
@@ -1077,7 +1164,7 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
                                     children: [
                                       Text(
                                         context.tr('view_advice'),
-                                        style: GoogleFonts.lexend(
+                                        style: GoogleFonts.poppins(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w600,
                                           fontSize: 14,
@@ -1112,28 +1199,87 @@ class _AdvisoriesScreenState extends State<AdvisoriesScreen>
     return Shimmer.fromColors(
       baseColor: Colors.grey[300]!,
       highlightColor: Colors.grey[100]!,
-      child: Column(
-        children: [
-          Container(
-            height: 100,
-            color: Colors.white,
-            margin: const EdgeInsets.only(bottom: 16),
-          ),
-          Expanded(
-            child: ListView.builder(
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Shimmer
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 150,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 200,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Stage Circles Shimmer
+            SizedBox(
+              height: 110,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: 5,
+                itemBuilder: (context, index) => Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 50,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Feed Items Shimmer
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               itemCount: 3,
               itemBuilder: (context, index) => Container(
-                height: 280,
-                margin: const EdgeInsets.only(bottom: 20),
+                height: 200,
+                margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

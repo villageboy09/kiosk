@@ -1,7 +1,6 @@
 // lib/profile_screen.dart
 // ignore_for_file: use_build_context_synchronously
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/welcome_screen.dart';
@@ -12,6 +11,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -39,16 +39,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
 
+  // Scroll Controller for sticky header
+  late ScrollController _scrollController;
+  bool _showTitle = false;
+
   @override
   void initState() {
     super.initState();
     _userFuture = _fetchAndSetUserProfile();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_scrollListener);
+  }
+
+  void _scrollListener() {
+    // Show title only when 240 pixels scrolled (approaching collapsed state)
+    if (_scrollController.offset > 200 && !_showTitle) {
+      setState(() => _showTitle = true);
+    } else if (_scrollController.offset <= 200 && _showTitle) {
+      setState(() => _showTitle = false);
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -68,93 +85,103 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                context.tr('logout_title'),
-                style: GoogleFonts.poppins(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF282C3F),
-                ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
               ),
-              const SizedBox(height: 16),
-              Text(
-                context.tr('logout_message'),
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  color: const Color(0xFF7E808C),
-                ),
-                textAlign: TextAlign.center,
+            ),
+            Text(
+              context.tr('logout_title'),
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF282C3F),
               ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.tr('logout_message'),
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: const Color(0xFF7E808C),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: Color(0xFFE23846)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text(
-                        context.tr('cancel'),
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF282C3F),
-                        ),
+                    ),
+                    child: Text(
+                      context.tr('cancel'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFFE23846),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        // Use AuthService to logout
-                        await AuthService.logout();
-                        if (mounted) {
-                          Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(
-                                builder: (context) => const SplashScreen()),
-                            (route) => false,
-                          );
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        backgroundColor: const Color(0xFFFC8019),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await AuthService.logout();
+                      if (mounted) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                              builder: (context) => const SplashScreen()),
+                          (route) => false,
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: const Color(0xFFE23846),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text(
-                        context.tr('logout'),
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    ),
+                    child: Text(
+                      context.tr('logout'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
                   ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );
@@ -417,61 +444,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             final user = snapshot.data!;
 
-            return CustomScrollView(
-              slivers: [
-                SliverAppBar(
-                  expandedHeight: 240,
-                  pinned: true,
-                  backgroundColor: const Color(0xFF60B246),
-                  elevation: 0,
-                  automaticallyImplyLeading: false,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(30),
-                      bottomRight: Radius.circular(30),
+            return Scaffold(
+              body: CustomScrollView(
+                controller: _scrollController,
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  SliverAppBar(
+                    expandedHeight: 280,
+                    pinned: true,
+                    backgroundColor: const Color(0xFF1B5E20),
+                    elevation: 0,
+                    automaticallyImplyLeading: false, // Ensure no back button
+                    title: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 300),
+                      opacity: _showTitle ? 1.0 : 0.0,
+                      child: Text(user.name,
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          )),
+                    ),
+                    centerTitle: false,
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: _buildProfileHeader(user),
+                      collapseMode: CollapseMode.pin,
                     ),
                   ),
-                  leading: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: InkWell(
-                      onTap: () => Navigator.of(context).pop(),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: Colors.white,
-                          size: 18,
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            _buildPremiumCard(),
+                            const SizedBox(height: 24),
+                            _buildUserDetailsList(user),
+                            const SizedBox(height: 12),
+                            _buildMenuCard(),
+                            const SizedBox(height: 12),
+                            _buildLogoutCard(),
+                            const SizedBox(height: 40),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                  flexibleSpace: FlexibleSpaceBar(
-                    background: _buildGradientHeader(user),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          _buildPersonalInfoCard(user),
-                          const SizedBox(height: 12),
-                          _buildMenuCard(),
-                          const SizedBox(height: 12),
-                          _buildLogoutCard(),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         ),
@@ -479,93 +499,182 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildGradientHeader(User user) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF60B246), Color(0xFF4CAF50)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 40),
-            // Profile Image
+  Widget _buildProfileHeader(User user) {
+    return RepaintBoundary(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Background Image
+          if (user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty)
+            CachedNetworkImage(
+              imageUrl: user.profileImageUrl!,
+              fit: BoxFit.cover,
+              placeholder: (_, __) => Container(color: const Color(0xFF1B5E20)),
+              errorWidget: (_, __, ___) =>
+                  Container(color: const Color(0xFF1B5E20)),
+            )
+          else
             Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 3),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: const Center(
+                  child: Icon(Icons.person, size: 80, color: Colors.white24)),
+            ),
+
+          // Black Gradient Overlay
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.3),
+                  Colors.black.withValues(alpha: 0.8),
                 ],
+                stops: const [0.4, 0.7, 1.0],
               ),
-              child: ClipOval(
-                child: (user.profileImageUrl != null &&
-                        user.profileImageUrl!.isNotEmpty &&
-                        (user.profileImageUrl!.startsWith('http') ||
-                            user.profileImageUrl!.startsWith('https')))
-                    ? CachedNetworkImage(
-                        imageUrl: user.profileImageUrl!,
-                        width: 100,
-                        height: 100,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Colors.grey[300],
-                          child: const Icon(Icons.person,
-                              size: 50, color: Colors.white),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Colors.grey[300],
-                          child: const Icon(Icons.person,
-                              size: 50, color: Colors.white),
-                        ),
-                      )
-                    : Container(
-                        color: Colors.grey[300],
-                        child: const Icon(Icons.person,
-                            size: 50, color: Colors.white),
+            ),
+          ),
+
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user.name,
+                  style: GoogleFonts.poppins(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        offset: const Offset(0, 2),
+                        blurRadius: 4,
                       ),
-              ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.phone_outlined,
+                          color: Colors.white, size: 14),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      user.phoneNumber ?? '',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              user.name,
-              style: GoogleFonts.poppins(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              user.phoneNumber ?? '',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.white70,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildPersonalInfoCard(User user) {
+  Widget _buildPremiumCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFE8F5E9),
+          width: 1,
+          style: BorderStyle
+              .none, // We want the dashed painter if we had one, but using simple border for now or clean look
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.green.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('CROPSYNC',
+                  style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF2E7D32) // Green
+                      )),
+              Text(' PLUS',
+                  style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFFFF9800) // Orange
+                      )),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E7D32),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('FREE',
+                    style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold)),
+              ),
+              const Spacer(),
+              const Icon(Icons.emoji_events_rounded,
+                  color: Color(0xFFFFD700), size: 32)
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            context.tr('expert_advisory_anytime'),
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF3D4152),
+            ),
+          ),
+          Text(
+            context.tr('unlimited_crop_support'),
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: const Color(0xFF7E808C),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserDetailsList(User user) {
+    return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -578,53 +687,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            context.tr('personal_info'),
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF282C3F),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildInfoRow(context.tr('user_id'), user.userId),
-          _buildInfoRow(context.tr('name'), user.name),
-          _buildInfoRow(context.tr('phone'), user.phoneNumber ?? 'N/A'),
-          _buildInfoRow(context.tr('district'), user.district ?? 'N/A'),
-          _buildInfoRow(context.tr('village'), user.village ?? 'N/A'),
-          _buildInfoRow(context.tr('region'), user.region ?? 'N/A'),
+          _buildInfoTile(
+              context.tr('user_id'), user.userId, Icons.badge_outlined),
+          _buildDashedDivider(),
+          _buildInfoTile(context.tr('name'), user.name, Icons.person_outline),
+          _buildDashedDivider(),
+          _buildInfoTile(context.tr('phone'), user.phoneNumber ?? 'N/A',
+              Icons.phone_outlined),
+          _buildDashedDivider(),
+          _buildInfoTile(
+              context.tr('region'), user.region ?? 'N/A', Icons.map_outlined),
+          if (user.mandal != null && user.mandal!.isNotEmpty) ...[
+            _buildDashedDivider(),
+            _buildInfoTile(
+                context.tr('mandal'), user.mandal!, Icons.business_outlined),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildDashedDivider() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.only(left: 56, right: 24),
+      child: SizedBox(
+        height: 1,
+        child: CustomPaint(
+          size: const Size(double.infinity, 1),
+          painter: DashedLinePainter(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoTile(String title, String value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: const Color(0xFF7E808C),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F5E9),
+              borderRadius: BorderRadius.circular(10),
             ),
+            child: Icon(icon, color: const Color(0xFF2E7D32), size: 20),
           ),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF282C3F),
-            ),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: const Color(0xFF7E808C),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF282C3F),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+
+  // Dashed Line Painter helper
+  /*
+  class DashedLinePainter extends CustomPainter { ... }
+  */
 
   Widget _buildMenuCard() {
     return Container(
@@ -680,28 +820,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildLogoutCard() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFEBEE), Color(0xFFFFCDD2)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.red.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: ListTile(
-        leading: const Icon(Icons.logout, color: Colors.redAccent),
-        title: Text(
-          context.tr('logout'),
-          style: GoogleFonts.poppins(
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-            color: Colors.redAccent,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _logout,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.logout_rounded,
+                      color: Colors.red, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Text(
+                  context.tr('logout'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red[700],
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const Spacer(),
+                Icon(Icons.chevron_right, color: Colors.red[300], size: 22),
+              ],
+            ),
           ),
         ),
-        trailing: const Icon(Icons.chevron_right, color: Color(0xFF93959F)),
-        onTap: _logout,
       ),
     );
   }
@@ -750,6 +916,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+}
+
+// Custom Dashed Line Painter
+class DashedLinePainter extends CustomPainter {
+  final Color color;
+  final double dashWidth;
+  final double dashSpace;
+
+  DashedLinePainter({
+    this.color = const Color(0xFFE0E0E0),
+    this.dashWidth = 4,
+    this.dashSpace = 3,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+
+    double startX = 0;
+    while (startX < size.width) {
+      canvas.drawLine(
+        Offset(startX, 0),
+        Offset(startX + dashWidth, 0),
+        paint,
+      );
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // Privacy Policy Screen with WebView

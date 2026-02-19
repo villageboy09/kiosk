@@ -153,7 +153,6 @@ class _WeatherScreenState extends State<WeatherScreen> {
           }
         }
       } catch (e) {
-        print("Geocoding failed: $e. Using fallback location name.");
         // If geocoding fails, we just continue with the fallback name
       }
       // --- END ROBUST GEOCODING BLOCK ---
@@ -205,7 +204,6 @@ class _WeatherScreenState extends State<WeatherScreen> {
         forecastDays: forecastDays.take(7).toList(),
       );
     } catch (e) {
-      print("Error in _fetchWeatherData: $e");
       // Re-throw the error so the FutureBuilder can display it in the UI
       rethrow;
     }

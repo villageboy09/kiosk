@@ -102,6 +102,12 @@ switch ($action) {
     case 'get_booked_dates':
         getBookedDates($pdo);
         break;
+    case 'create_seed_booking':
+        createSeedBooking($pdo);
+        break;
+    case 'get_announcements':
+        getAnnouncements($pdo);
+        break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
 }
@@ -600,13 +606,13 @@ function getAdvisoryComponents($pdo) {
 
 /**
  * Save an identified problem for a farmer
+ * Saves to farmer_identified_problems table
  */
 function saveIdentifiedProblem($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     
     $userId = $input['user_id'] ?? '';
     $problemId = $input['problem_id'] ?? '';
-    $selectionId = $input['selection_id'] ?? null;
     
     if (empty($userId) || empty($problemId)) {
         echo json_encode(['success' => false, 'error' => 'Missing required fields']);
@@ -614,15 +620,36 @@ function saveIdentifiedProblem($pdo) {
     }
     
     try {
-        $receiptId = 'ADV-' . $problemId . '-' . date('YmdHis') . '-' . uniqid();
-        
-        $stmt = $pdo->prepare("
-            INSERT INTO advisory_receipts (user_id, problem_id, receipt_id, receipt_url, status, created_at)
-            VALUES (?, ?, ?, '', 'New', NOW())
+        // Check if already identified to prevent duplicates
+        $checkStmt = $pdo->prepare("
+            SELECT id FROM farmer_identified_problems 
+            WHERE user_id = ? AND problem_id = ?
         ");
-        $stmt->execute([$userId, $problemId, $receiptId]);
+        $checkStmt->execute([$userId, $problemId]);
+        $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
         
-        echo json_encode(['success' => true, 'id' => $pdo->lastInsertId(), 'receipt_id' => $receiptId]);
+        if ($existing) {
+            // Already marked, return success with existing ID
+            echo json_encode([
+                'success' => true, 
+                'id' => $existing['id'], 
+                'message' => 'Already identified'
+            ]);
+            return;
+        }
+        
+        // Insert new record
+        $stmt = $pdo->prepare("
+            INSERT INTO farmer_identified_problems (problem_id, user_id, created_at)
+            VALUES (?, ?, NOW())
+        ");
+        $stmt->execute([$problemId, $userId]);
+        
+        echo json_encode([
+            'success' => true, 
+            'id' => $pdo->lastInsertId(),
+            'message' => 'Problem marked as identified'
+        ]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
@@ -631,39 +658,79 @@ function saveIdentifiedProblem($pdo) {
 // ===================== PRODUCT FUNCTIONS =====================
 
 function getProducts($pdo) {
-    $category = $_GET['category'] ?? null;
-    $search = $_GET['search'] ?? null;
-    $lang = $_GET['lang'] ?? 'te';
-    
-    $sql = "
-        SELECT p.product_id, p.product_code, p.category, p.product_name, 
-               p.price, p.product_description, p.product_video_url,
-               p.image_url_1, p.image_url_2, p.image_url_3,
-               a.advertiser_id, a.advertiser_name
-        FROM products p
-        LEFT JOIN advertisers a ON p.advertiser_id = a.advertiser_id
-        WHERE 1=1
-    ";
-    $params = [];
-    
-    if ($category) {
-        $sql .= " AND p.category = ?";
-        $params[] = $category;
+    try {
+        $category = $_GET['category'] ?? null;
+        $search = $_GET['search'] ?? null;
+        $userId = $_GET['user_id'] ?? null;
+        $lang = $_GET['lang'] ?? 'te';
+        
+        $sql = "
+            SELECT p.product_id, p.product_code, p.category, p.product_name, 
+                   p.price, p.product_description, p.product_video_url,
+                   p.image_url_1, p.image_url_2, p.image_url_3,
+                   a.advertiser_id, a.advertiser_name
+            FROM products p
+            LEFT JOIN advertisers a ON p.advertiser_id = a.advertiser_id
+            WHERE 1=1
+        ";
+        $params = [];
+        
+        if ($category) {
+            $sql .= " AND p.category = ?";
+            $params[] = $category;
+        }
+        
+        if ($search) {
+            $sql .= " AND (p.product_name LIKE ? OR p.product_description LIKE ?)";
+            $params[] = "%$search%";
+            $params[] = "%$search%";
+        }
+        
+        // Filter by User Region
+        if ($userId) {
+            // Get user's region
+            $stmtUser = $pdo->prepare("SELECT region FROM users WHERE user_id = ?");
+            $stmtUser->execute([$userId]);
+            $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
+            
+            if ($user && !empty($user['region'])) {
+                $userRegion = $user['region'];
+                
+                // FIND REGION ID
+                // Schema confirmed: regions(id, region_name, client_code, created_at)
+                // We match users.region (string) against regions.region_name
+                try {
+                    $stmtRegion = $pdo->prepare("SELECT id FROM regions WHERE region_name = ? LIMIT 1"); 
+                    $stmtRegion->execute([$userRegion]);
+                    $region = $stmtRegion->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($region) {
+                        $regionId = $region['id'];
+                        // Logic: Show products for this Region ID OR Global products (NULL)
+                        $sql .= " AND (p.region_id IS NULL OR p.region_id = ?)";
+                        $params[] = $regionId;
+                    } else {
+                        // Region name from user profile doesn't match any region in DB.
+                        // Fallback: Show ONLY Global products.
+                        $sql .= " AND p.region_id IS NULL";
+                    }
+                } catch (PDOException $e) {
+                    // Fallback to Global if query fails
+                    $sql .= " AND p.region_id IS NULL";
+                }
+            }
+        }
+        
+        $sql .= " ORDER BY p.product_id DESC";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        echo json_encode(['success' => true, 'products' => $products]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
-    
-    if ($search) {
-        $sql .= " AND (p.product_name LIKE ? OR p.product_description LIKE ?)";
-        $params[] = "%$search%";
-        $params[] = "%$search%";
-    }
-    
-    $sql .= " ORDER BY p.product_id DESC";
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    echo json_encode(['success' => true, 'products' => $products]);
 }
 
 function getProductCategories($pdo) {
@@ -702,25 +769,66 @@ function createEnquiry($pdo) {
 
 function getSeedVarieties($pdo) {
     $cropName = $_GET['crop_name'] ?? '';
+    $userId = $_GET['user_id'] ?? '';
     $lang = $_GET['lang'] ?? 'te';
     
     $varietyField = ($lang === 'en') ? 'variety_name_en' : 'variety_name_te';
     $detailsField = 'details_te';
     
+    // Base SQL
     $sql = "
-        SELECT id, crop_name, $varietyField as variety_name, image_url, $detailsField as details, 
-               region, sowing_period, testimonial_video_url, price, price_unit, average_yield, growth_duration
-        FROM seed_varieties 
+        SELECT DISTINCT 
+            sv.id, 
+            sv.crop_name, 
+            sv.$varietyField as variety_name, 
+            sv.image_url, 
+            sv.$detailsField as details, 
+            sv.region, 
+            sv.sowing_period, 
+            sv.testimonial_video_url, 
+            vl.base_price as price, 
+            vl.packet_size as price_unit, 
+            sv.average_yield, 
+            sv.growth_duration
+        FROM seed_varieties sv
+        LEFT JOIN vendor_listings vl ON sv.id = vl.seed_variety_id
         WHERE 1=1
     ";
+    
     $params = [];
     
+    // Filter by Crop Name
     if (!empty($cropName)) {
-        $sql .= " AND crop_name = ?";
+        $sql .= " AND sv.crop_name = ?";
         $params[] = $cropName;
     }
     
-    $sql .= " ORDER BY id";
+    // Filter by User Region
+    if (!empty($userId)) {
+        // Get user's region
+        $stmtUser = $pdo->prepare("SELECT region FROM users WHERE user_id = ?");
+        $stmtUser->execute([$userId]);
+        $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
+        
+        if ($user && !empty($user['region'])) {
+            $userRegion = $user['region'];
+            
+            // Filter: (All Regions OR Specific Region)
+            // Note: vl.is_all_regions = 1 means available everywhere
+            // sv.region matches user's region
+            // RELAXED LOGIC: If is_all_regions column doesn't exist or is null, checks sv.region
+            $sql .= " AND (
+                (vl.base_price IS NOT NULL AND vl.is_all_regions = 1) 
+                OR 
+                (sv.region LIKE ?)
+                OR
+                (sv.region IS NULL OR sv.region = '')
+            )";
+            $params[] = "%$userRegion%";
+        }
+    }
+    
+    $sql .= " ORDER BY sv.id";
     
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -822,15 +930,59 @@ function getCHCBookings($pdo) {
 
 function getCHCEquipments($pdo) {
     $isMember = isset($_GET['is_member']) && $_GET['is_member'] == '1';
+    $userId = $_GET['user_id'] ?? null;
     
     try {
-        $stmt = $pdo->query("
-            SELECT id, name_en, name_te, image, description, 
-                   price_member, price_non_member, unit, quantity, status
-            FROM chc_equipments 
-            WHERE status = 'Active' AND quantity > 0
-            ORDER BY id
-        ");
+        $sql = "
+            SELECT ce.id, ce.name_en, ce.name_te, ce.image, ce.description, 
+                   ce.price_member, ce.price_non_member, ce.unit, ce.quantity, ce.status
+            FROM chc_equipments ce
+            WHERE ce.status = 'Active' AND ce.quantity > 0
+        ";
+        
+        $params = [];
+        
+        if ($userId) {
+            // Get user's region
+            $stmtUser = $pdo->prepare("SELECT region FROM users WHERE user_id = ?");
+            $stmtUser->execute([$userId]);
+            $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
+            
+            if ($user && !empty($user['region'])) {
+                // Assuming the table name is 'equipment_regions' based on the schema provided by user (id, region, equipment_id)
+                // Using LEFT JOIN to include equipment available for the specific region OR general availability if we want?
+                // The prompt implies "display based on user region", so strictly filtering seems appropriate.
+                // However, if there are "Global" equipments, we should include them. 
+                // Let's assume strict filtering for now based on "display based on user region".
+                // But typically some items are for all regions. 
+                // Let's use: WHERE id IN (SELECT equipment_id FROM equipment_regions WHERE region = ?)
+                
+                // WAIT, checking if table name is known. User just gave columns. 
+                // I will use `equipment_availability` or similar? No, I'll use `region_equipment_mapping` or similar. 
+                // Actually, I'll assume the table is `equipment_regions` as per convention and earlier plan approval.
+                
+                // Correct table name from user screenshot: chc_region_availability
+                // Schema: id, region, equipment_id
+                // Schema: id, region, equipment_id
+                // Logic: 
+                // 1. Equipment is explicitly available in user's region (IN clause)
+                // 2. Equipment is NOT in the availability table at all (Global)
+                // This covers:
+                // - Restrictive: If it's in the table for ANY region, it adheres to those rules.
+                // - Global: If it's not in the table, it's open to all.
+                $sql .= " AND (
+                    ce.id IN (SELECT equipment_id FROM chc_region_availability WHERE region = ?)
+                    OR
+                    ce.id NOT IN (SELECT DISTINCT equipment_id FROM chc_region_availability)
+                )";
+                $params[] = $user['region'];
+            }
+        }
+        
+        $sql .= " ORDER BY ce.id";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         $equipments = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Add display_price based on membership
@@ -929,6 +1081,94 @@ function getBookedDates($pdo) {
         }
         
         echo json_encode(['success' => true, 'dates' => $dates]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function createSeedBooking($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    $bookingId = $input['booking_id'] ?? '';
+    $userId = $input['user_id'] ?? '';
+    $seedVarietyId = $input['seed_variety_id'] ?? 0;
+    $quantityKg = $input['quantity_kg'] ?? 1.0;
+    $totalPrice = $input['total_price'] ?? 0;
+    
+    if (empty($bookingId)) {
+        echo json_encode(['success' => false, 'error' => 'Missing booking_id']);
+        return;
+    }
+    if (empty($userId)) {
+        echo json_encode(['success' => false, 'error' => 'Missing user_id']);
+        return;
+    }
+    if (empty($seedVarietyId)) {
+        echo json_encode(['success' => false, 'error' => 'Missing seed_variety_id']);
+        return;
+    }
+    
+    try {
+        error_log("Seed Booking: Request received - ID: $bookingId, User: $userId, Variety: $seedVarietyId");
+        
+        // Find a valid listing_id for this seed variety
+        // Prioritize listings that are active and available in all regions or match user's region
+        // For simplicity, we'll pick the first active listing for this variety
+        // In a real scenario, you might want to pass the specific listing_id from the frontend if multiple vendors exist
+        $stmtListing = $pdo->prepare("
+            SELECT id FROM vendor_listings 
+            WHERE seed_variety_id = ? AND is_active = 1 
+            LIMIT 1
+        ");
+        $stmtListing->execute([$seedVarietyId]);
+        $listing = $stmtListing->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$listing) {
+            echo json_encode(['success' => false, 'error' => 'No active vendor listing found for this variety']);
+            return;
+        }
+        
+        $listingId = $listing['id'];
+        
+        // Get user region optionally
+        $stmtUser = $pdo->prepare("SELECT region FROM users WHERE user_id = ?");
+        $stmtUser->execute([$userId]);
+        $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
+        $userRegion = $user['region'] ?? null;
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO bookings (
+                booking_id, user_id, seed_variety_id, listing_id, user_region, quantity_kg, total_price, booking_status, booking_timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+        ");
+        $stmt->execute([
+            $bookingId, $userId, $seedVarietyId, $listingId, $userRegion, $quantityKg, $totalPrice
+        ]);
+        
+        error_log("Seed Booking: Successfully created ID " . $pdo->lastInsertId());
+        echo json_encode(['success' => true, 'id' => $pdo->lastInsertId(), 'booking_id' => $bookingId]);
+    } catch (PDOException $e) {
+        error_log("Seed Booking Error: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+// ===================== ANNOUNCEMENTS FUNCTIONS =====================
+
+function getAnnouncements($pdo) {
+    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 5;
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT id, headline, description, media_url, media_type, created_at
+            FROM announcements 
+            ORDER BY created_at DESC
+            LIMIT ?
+        ");
+        $stmt->execute([$limit]);
+        $announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        echo json_encode(['success' => true, 'announcements' => $announcements]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
