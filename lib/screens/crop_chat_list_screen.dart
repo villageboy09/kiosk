@@ -263,15 +263,15 @@ class _CropChatListScreenState extends State<CropChatListScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'పంట సలహా',
-                  style: GoogleFonts.notoSansTelugu(
+                  context.tr('home_feature_advisory_title'),
+                  style: GoogleFonts.poppins(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
                 ),
                 Text(
-                  'Crop Advisory',
+                  context.tr('advisories_title'),
                   style: GoogleFonts.poppins(
                     fontSize: 12,
                     color: Colors.white70,
@@ -336,8 +336,8 @@ class _CropChatListScreenState extends State<CropChatListScreen> {
             Icon(Icons.grass_outlined, size: 80, color: Colors.grey[300]),
             const SizedBox(height: ChatTheme.spacingMd),
             Text(
-              'మీ పంటలు జోడించండి',
-              style: GoogleFonts.notoSansTelugu(
+              context.tr('no_fields_yet'),
+              style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: ChatTheme.text,
@@ -345,7 +345,7 @@ class _CropChatListScreenState extends State<CropChatListScreen> {
             ),
             const SizedBox(height: ChatTheme.spacingSm),
             Text(
-              'Add your crops in Profile to get personalized advice',
+              context.tr('add_first_crop'),
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 color: ChatTheme.textSecondary,

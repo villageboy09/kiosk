@@ -206,7 +206,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
-                    childAspectRatio: 0.52,
+                    childAspectRatio: 0.68,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) => _SeedCard(

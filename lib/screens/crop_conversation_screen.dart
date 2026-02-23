@@ -25,7 +25,6 @@ import 'package:shimmer/shimmer.dart';
 // ============================================================================
 class _ChatColors {
   static const primary = Color(0xFF075E54);
-  static const primaryLight = Color(0xFF128C7E);
   static const accent = Color(0xFF25D366);
   static const bg = Color(0xFFECE5DD);
   static const surface = Color(0xFFFFFFFF);
@@ -33,8 +32,6 @@ class _ChatColors {
   static const textSecondary = Color(0xFF667781);
   static const bubbleIncoming = Color(0xFFFFFFFF);
   static const bubbleOutgoing = Color(0xFFDCF8C6);
-  static const storyRing = Color(0xFF25D366);
-  static const storyRingViewed = Color(0xFFCCCCCC);
 }
 
 // ============================================================================
@@ -310,13 +307,12 @@ class _CropConversationScreenState extends State<CropConversationScreen>
       body: Column(
         children: [
           _buildHeader(),
-          if (!_isLoadingStages && _stages.isNotEmpty) _buildStageStories(),
+          if (_isLoadingStages)
+            _buildStageStoriesSkeleton()
+          else if (_stages.isNotEmpty)
+            _buildStageStories(),
           Expanded(
-            child: _isLoadingStages
-                ? const Center(
-                    child:
-                        CircularProgressIndicator(color: _ChatColors.primary))
-                : _buildChatArea(),
+            child: _isLoadingStages ? _buildChatSkeleton() : _buildChatArea(),
           ),
         ],
       ),
@@ -380,7 +376,7 @@ class _CropConversationScreenState extends State<CropConversationScreen>
                   ),
                 ),
                 Text(
-                  '${widget.crop.fieldName} • ${widget.crop.daysSinceSowing} రోజులు',
+                  '${widget.crop.fieldName} • ${widget.crop.daysSinceSowing} ${context.tr('days')}',
                   style: GoogleFonts.notoSansTelugu(
                     fontSize: 12,
                     color: Colors.white70,
@@ -411,146 +407,258 @@ class _CropConversationScreenState extends State<CropConversationScreen>
     );
   }
 
-  Widget _buildStageStories() {
+  // ── Skeleton loading for stage stories ──
+  Widget _buildStageStoriesSkeleton() {
     return Container(
-      height: 100,
       color: _ChatColors.surface,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        itemCount: _stages.length,
-        itemBuilder: (ctx, i) {
-          final stage = _stages[i];
-          final isSelected = _selectedStage?.id == stage.id;
-
-          return GestureDetector(
-            onTap: () => _selectStage(stage),
-            child: Container(
-              width: 70,
-              margin: const EdgeInsets.only(right: 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Story circle with gradient ring
-                  Container(
-                    width: isSelected ? 60 : 52, // Larger if selected
-                    height: isSelected ? 60 : 52,
-                    padding: EdgeInsets.all(isSelected ? 3 : 2),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color:
-                                    _ChatColors.primary.withValues(alpha: 0.4),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              )
-                            ]
-                          : null,
-                      gradient: LinearGradient(
-                        colors: stage.isCurrentStage
-                            ? [_ChatColors.storyRing, _ChatColors.accent]
-                            : isSelected
-                                ? [
-                                    _ChatColors.primaryLight,
-                                    _ChatColors.primary
-                                  ]
-                                : [
-                                    _ChatColors.storyRingViewed,
-                                    _ChatColors.storyRingViewed
-                                  ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+      child: Shimmer.fromColors(
+        baseColor: Colors.grey[300]!,
+        highlightColor: Colors.grey[100]!,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: List.generate(
+              5,
+              (i) => Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Image placeholder (36×36)
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _ChatColors.surface,
-                      ),
-                      padding: const EdgeInsets.all(2),
-                      child: ClipOval(
-                        child: stage.imageUrl != null &&
-                                stage.imageUrl!.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: stage.imageUrl!,
-                                fit: BoxFit.cover,
-                                memCacheHeight: 120, // Limit memory cache size
-                                fadeInDuration:
-                                    const Duration(milliseconds: 150),
-                                placeholder: (_, __) => Container(
-                                  color: Colors.green[50],
-                                  child:
-                                      Icon(Icons.eco, color: Colors.green[400]),
-                                ),
-                                errorWidget: (_, __, ___) => Container(
-                                  color: Colors.green[50],
-                                  child:
-                                      Icon(Icons.eco, color: Colors.green[400]),
-                                ),
-                              )
-                            : Container(
-                                color: Colors.green[50],
-                                child:
-                                    Icon(Icons.eco, color: Colors.green[400]),
-                              ),
+                    const SizedBox(width: 6),
+                    // Text placeholder
+                    Container(
+                      width: 56,
+                      height: 14,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(4),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  // Stage name
-                  Flexible(
-                    child: Text(
-                      stage.name,
-                      style: GoogleFonts.notoSansTelugu(
-                        fontSize: 9,
-                        fontWeight: stage.isCurrentStage || isSelected
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: isSelected
-                            ? _ChatColors.primary
-                            : _ChatColors.textSecondary,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          );
-        },
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Skeleton loading for chat bubbles ──
+  Widget _buildChatSkeleton() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: 4,
+        itemBuilder: (context, index) => Container(
+          margin: const EdgeInsets.only(bottom: 8, right: 60),
+          padding: const EdgeInsets.all(8),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+              bottomLeft: Radius.circular(4),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image placeholder (180px, matching _ProblemImageCarousel)
+              Container(
+                height: 180,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Category chip placeholder (matching padding h:8 v:3)
+              Container(
+                width: 60,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              const SizedBox(height: 6),
+              // Problem name placeholder (fontSize 15 → ~18px height)
+              Container(
+                width: 200,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 4),
+              // Tap hint placeholder (fontSize 11 → ~14px height)
+              Container(
+                width: 120,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStageStories() {
+    return Container(
+      color: _ChatColors.surface,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: _stages.map((stage) {
+            final isSelected = _selectedStage?.id == stage.id;
+            final isCurrent = stage.isCurrentStage;
+
+            // Determine colors
+            final Color bgColor;
+            final Color borderColor;
+            final Color textColor;
+            if (isSelected) {
+              bgColor = _ChatColors.primary;
+              borderColor = _ChatColors.primary;
+              textColor = Colors.white;
+            } else if (isCurrent) {
+              bgColor = _ChatColors.accent.withValues(alpha: 0.12);
+              borderColor = _ChatColors.accent;
+              textColor = _ChatColors.primary;
+            } else {
+              bgColor = Colors.grey.withValues(alpha: 0.08);
+              borderColor = const Color(0xFFE0E0E0);
+              textColor = _ChatColors.textSecondary;
+            }
+
+            return GestureDetector(
+              onTap: () => _selectStage(stage),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: borderColor, width: isSelected ? 1.5 : 1),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: _ChatColors.primary.withValues(alpha: 0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Stage image thumbnail
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected
+                              ? Colors.white.withValues(alpha: 0.4)
+                              : Colors.transparent,
+                          width: 1,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(9),
+                        child:
+                            stage.imageUrl != null && stage.imageUrl!.isNotEmpty
+                                ? CachedNetworkImage(
+                                    imageUrl: stage.imageUrl!,
+                                    fit: BoxFit.cover,
+                                    memCacheHeight: 72,
+                                    fadeInDuration:
+                                        const Duration(milliseconds: 150),
+                                    placeholder: (_, __) => Container(
+                                      color: Colors.green[50],
+                                      child: Icon(Icons.eco,
+                                          size: 16, color: Colors.green[300]),
+                                    ),
+                                    errorWidget: (_, __, ___) => Container(
+                                      color: Colors.green[50],
+                                      child: Icon(Icons.eco,
+                                          size: 16, color: Colors.green[300]),
+                                    ),
+                                  )
+                                : Container(
+                                    color: Colors.green[50],
+                                    child: Icon(Icons.eco,
+                                        size: 16, color: Colors.green[300]),
+                                  ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // Stage label
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 80),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Text(
+                          stage.name,
+                          style: GoogleFonts.notoSansTelugu(
+                            fontSize: 11,
+                            fontWeight: isSelected || isCurrent
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                            color: textColor,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
 
   Widget _buildChatArea() {
     if (_isLoadingProblems) {
-      return Shimmer.fromColors(
-        baseColor: Colors.grey[300]!,
-        highlightColor: Colors.grey[100]!,
-        child: ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: 4,
-          itemBuilder: (context, index) => Padding(
-            padding: const EdgeInsets.only(bottom: 16, right: 60),
-            child: Container(
-              height: 120,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(4),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
+      return _buildChatSkeleton();
     }
 
     if (_problems.isEmpty) {
@@ -562,8 +670,8 @@ class _CropConversationScreenState extends State<CropConversationScreen>
                 size: 64, color: Colors.green[300]),
             const SizedBox(height: 16),
             Text(
-              'ఈ దశలో సమస్యలు లేవు!',
-              style: GoogleFonts.notoSansTelugu(
+              context.tr('no_problems_found'),
+              style: GoogleFonts.poppins(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: _ChatColors.text,
@@ -571,7 +679,7 @@ class _CropConversationScreenState extends State<CropConversationScreen>
             ),
             const SizedBox(height: 4),
             Text(
-              'No problems in this stage',
+              context.tr('select_another_stage'),
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 color: _ChatColors.textSecondary,
@@ -585,7 +693,7 @@ class _CropConversationScreenState extends State<CropConversationScreen>
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       cacheExtent: 500, // Pre-render items for smoother scrolling
-      physics: const BouncingScrollPhysics(), // Smoother scrolling
+      physics: const ClampingScrollPhysics(),
       itemCount: _problems.length,
       itemBuilder: (ctx, i) {
         // Wrap in RepaintBoundary for optimized rendering

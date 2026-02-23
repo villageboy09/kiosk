@@ -912,12 +912,33 @@ function getCHCBookings($pdo) {
     
     try {
         $stmt = $pdo->prepare("
-            SELECT id, booking_id, equipment_type, billing_type, crop_type, 
-                   land_size_acres, billed_qty, unit_type, service_date, rate, 
-                   total_cost, notes, booking_status, operator_notes, created_at
-            FROM chc_bookings 
-            WHERE user_id = ?
-            ORDER BY created_at DESC
+            SELECT 
+                b.id, b.booking_id, b.equipment_type, b.billing_type, b.crop_type, 
+                b.land_size_acres, b.billed_qty, b.unit_type, b.service_date, 
+                b.rescheduled_date, b.rate, b.total_cost, b.notes, b.booking_status, 
+                b.operator_notes, b.assignment_status, b.created_at, b.updated_at,
+                
+                o.name AS operator_name,
+                o.phone_number AS operator_phone,
+                o.profile_image AS operator_image,
+                o.rating AS operator_rating,
+                o.base_village AS operator_village,
+                
+                tc.status AS task_status,
+                tc.start_reading, tc.end_reading,
+                tc.measured_qty, tc.measured_unit,
+                tc.applied_rate, tc.final_amount,
+                tc.transit_start_time, tc.transit_end_time,
+                tc.work_start_time, tc.work_end_time,
+                tc.return_time,
+                tc.breakdown_start, tc.breakdown_end, tc.breakdown_reason,
+                tc.cumulative_pause
+                
+            FROM chc_bookings b
+            LEFT JOIN chc_operators o ON b.assigned_operator_id = o.operator_id
+            LEFT JOIN chc_task_completions tc ON b.booking_id = tc.booking_id
+            WHERE b.user_id = ?
+            ORDER BY b.created_at DESC
         ");
         $stmt->execute([$userId]);
         $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -930,7 +951,7 @@ function getCHCBookings($pdo) {
 
 function getCHCEquipments($pdo) {
     $isMember = isset($_GET['is_member']) && $_GET['is_member'] == '1';
-    $userId = $_GET['user_id'] ?? null;
+    $clientCode = $_GET['client_code'] ?? null;
     
     try {
         $sql = "
@@ -942,40 +963,23 @@ function getCHCEquipments($pdo) {
         
         $params = [];
         
-        if ($userId) {
-            // Get user's region
-            $stmtUser = $pdo->prepare("SELECT region FROM users WHERE user_id = ?");
-            $stmtUser->execute([$userId]);
-            $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
+        if ($clientCode) {
+            // Look up region_id from regions table using client_code
+            $stmtRegion = $pdo->prepare("SELECT id FROM regions WHERE client_code = ? LIMIT 1");
+            $stmtRegion->execute([$clientCode]);
+            $region = $stmtRegion->fetch(PDO::FETCH_ASSOC);
             
-            if ($user && !empty($user['region'])) {
-                // Assuming the table name is 'equipment_regions' based on the schema provided by user (id, region, equipment_id)
-                // Using LEFT JOIN to include equipment available for the specific region OR general availability if we want?
-                // The prompt implies "display based on user region", so strictly filtering seems appropriate.
-                // However, if there are "Global" equipments, we should include them. 
-                // Let's assume strict filtering for now based on "display based on user region".
-                // But typically some items are for all regions. 
-                // Let's use: WHERE id IN (SELECT equipment_id FROM equipment_regions WHERE region = ?)
-                
-                // WAIT, checking if table name is known. User just gave columns. 
-                // I will use `equipment_availability` or similar? No, I'll use `region_equipment_mapping` or similar. 
-                // Actually, I'll assume the table is `equipment_regions` as per convention and earlier plan approval.
-                
-                // Correct table name from user screenshot: chc_region_availability
-                // Schema: id, region, equipment_id
-                // Schema: id, region, equipment_id
-                // Logic: 
-                // 1. Equipment is explicitly available in user's region (IN clause)
+            if ($region) {
+                $regionId = $region['id'];
+                // Logic:
+                // 1. Equipment is explicitly available in user's region (via region_id)
                 // 2. Equipment is NOT in the availability table at all (Global)
-                // This covers:
-                // - Restrictive: If it's in the table for ANY region, it adheres to those rules.
-                // - Global: If it's not in the table, it's open to all.
                 $sql .= " AND (
-                    ce.id IN (SELECT equipment_id FROM chc_region_availability WHERE region = ?)
+                    ce.id IN (SELECT equipment_id FROM chc_region_availability WHERE region_id = ?)
                     OR
                     ce.id NOT IN (SELECT DISTINCT equipment_id FROM chc_region_availability)
                 )";
-                $params[] = $user['region'];
+                $params[] = $regionId;
             }
         }
         

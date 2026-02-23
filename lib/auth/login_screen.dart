@@ -118,9 +118,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(height: 40),
                             _buildBranding(),
                             const SizedBox(height: 40),
-                            _buildSingleInputDisplay(), // Single Box
-                            const SizedBox(height: 40),
-                            _buildKeypad(), // Includes submit button
+                            _buildSingleInputDisplay(),
+                            const SizedBox(height: 10),
+                            _buildHintChip(),
+                            const SizedBox(height: 30),
+                            _buildKeypad(),
                             const SizedBox(height: 40),
                           ],
                         ),
@@ -232,6 +234,36 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // ── Hint chip below the PIN input ──
+  Widget _buildHintChip() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.lightbulb_outline_rounded,
+            size: 15,
+            color: Color(0xFF388E3C),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'login_pin_hint'.tr(),
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: const Color(0xFF388E3C),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildKeypad() {
     return Center(
       child: ConstrainedBox(
@@ -240,9 +272,9 @@ class _LoginScreenState extends State<LoginScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 3,
-          mainAxisSpacing: 20,
-          crossAxisSpacing: 20,
-          childAspectRatio: 1.0,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.3,
           children: [
             ...List.generate(9, (i) => i + 1)
                 .map((number) => _buildKeyButton(number.toString())),
@@ -264,41 +296,37 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!_isLoading) _login();
       },
       onTapCancel: () => setState(() => _pressedButton = null),
-      child: Center(
-        child: AnimatedScale(
-          scale: isPressed ? 0.92 : 1.0,
-          duration: const Duration(milliseconds: 100),
-          curve: Curves.easeOut,
-          child: Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2196F3), // Primary Blue
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2196F3).withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            alignment: Alignment.center,
-            child: _isLoading
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 28,
-                    color: Colors.white,
-                  ),
+      child: AnimatedScale(
+        scale: isPressed ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.easeOut,
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF2196F3),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2196F3).withValues(alpha: 0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
+          alignment: Alignment.center,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 28,
+                  color: Colors.white,
+                ),
         ),
       ),
     );
@@ -313,26 +341,40 @@ class _LoginScreenState extends State<LoginScreen> {
         _appendDigit(label);
       },
       onTapCancel: () => setState(() => _pressedButton = null),
-      child: Center(
-        child: AnimatedScale(
-          scale: isPressed ? 0.92 : 1.0,
-          duration: const Duration(milliseconds: 100),
-          curve: Curves.easeOut,
-          child: Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.6),
-              shape: BoxShape.circle,
+      child: AnimatedScale(
+        scale: isPressed ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          decoration: BoxDecoration(
+            color: isPressed
+                ? const Color(0xFFE8F5E9) // Subtle green tint on press
+                : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isPressed
+                  ? const Color(0xFF4CAF50).withValues(alpha: 0.4)
+                  : const Color(0xFFE0E0E0),
+              width: 1,
             ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 24,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF1A1A1A),
-              ),
+            boxShadow: isPressed
+                ? []
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 24,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF1A1A1A),
             ),
           ),
         ),
@@ -349,24 +391,21 @@ class _LoginScreenState extends State<LoginScreen> {
         _deleteDigit();
       },
       onTapCancel: () => setState(() => _pressedButton = null),
-      child: Center(
-        child: AnimatedScale(
-          scale: isPressed ? 0.92 : 1.0,
-          duration: const Duration(milliseconds: 100),
-          curve: Curves.easeOut,
-          child: Container(
-            width: 72,
-            height: 72,
-            decoration: const BoxDecoration(
-              color: Colors.transparent,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.backspace_outlined,
-              size: 24,
-              color: Color(0xFF1A1A1A),
-            ),
+      child: AnimatedScale(
+        scale: isPressed ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.easeOut,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.backspace_outlined,
+            size: 24,
+            color:
+                isPressed ? const Color(0xFFE53935) : const Color(0xFF1A1A1A),
           ),
         ),
       ),

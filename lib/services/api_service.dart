@@ -711,12 +711,12 @@ class ApiService {
   /// Get CHC equipment list from database
   /// Only returns Active equipment with quantity > 0
   static Future<List<Map<String, dynamic>>> getCHCEquipments(
-      {bool isMember = false, String? userId}) async {
+      {bool isMember = false, String? clientCode}) async {
     try {
       String url =
           '$baseUrl/api.php?action=get_chc_equipments&is_member=${isMember ? 1 : 0}';
-      if (userId != null) {
-        url += '&user_id=${Uri.encodeComponent(userId)}';
+      if (clientCode != null && clientCode.isNotEmpty) {
+        url += '&client_code=${Uri.encodeComponent(clientCode)}';
       }
 
       final response = await http.get(Uri.parse(url));
@@ -777,6 +777,7 @@ class ApiService {
       return [];
     }
   }
+
   // ===================== ANNOUNCEMENTS FUNCTIONS =====================
 
   /// Get announcements for home screen

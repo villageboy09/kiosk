@@ -248,7 +248,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
     try {
       final user = AuthService.currentUser;
       final equipmentsData = await ApiService.getCHCEquipments(
-          isMember: _state.isMember, userId: user?.userId);
+          isMember: _state.isMember, clientCode: user?.clientCode);
       _equipments = equipmentsData.map((e) => Equipment.fromJson(e)).toList();
       final cropsData = await ApiService.getCrops();
       _crops = cropsData.map((c) => Crop.fromJson(c)).toList();
@@ -276,6 +276,18 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
     } catch (e) {
       // Silent error handling
     }
+  }
+
+  void _showBookingsBottomSheet() {
+    final currentUser = AuthService.currentUser;
+    if (currentUser == null) return;
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _CHCBookingsBottomSheet(userId: currentUser.userId),
+    );
   }
 
   void _selectEquipment(Equipment equipment) {
@@ -456,7 +468,10 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
           child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
-                  child: _CHCHeader(state: _state, currentUser: currentUser)),
+                  child: _CHCHeader(
+                      state: _state,
+                      currentUser: currentUser,
+                      onBookingsPressed: _showBookingsBottomSheet)),
               _buildEquipmentSection(locale),
               if (_state.equipment?.requiresCropSelection == true)
                 _buildCropSection(),
@@ -489,7 +504,10 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
           child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
-                  child: _CHCHeader(state: _state, currentUser: currentUser)),
+                  child: _CHCHeader(
+                      state: _state,
+                      currentUser: currentUser,
+                      onBookingsPressed: _showBookingsBottomSheet)),
               _buildEquipmentSection(locale),
               if (_state.equipment?.requiresCropSelection == true)
                 _buildCropSection(),
@@ -727,8 +745,10 @@ class _ShimmerBoxState extends State<_ShimmerBox>
 class _CHCHeader extends StatelessWidget {
   final CHCBookingState state;
   final dynamic currentUser;
+  final VoidCallback? onBookingsPressed;
 
-  const _CHCHeader({required this.state, required this.currentUser});
+  const _CHCHeader(
+      {required this.state, required this.currentUser, this.onBookingsPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -755,7 +775,6 @@ class _CHCHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              // Back button removed
               const Icon(Icons.agriculture, color: Colors.white, size: 28),
               const SizedBox(width: CHCTheme.spacingSm),
               Expanded(
@@ -768,6 +787,37 @@ class _CHCHeader extends StatelessWidget {
                   ),
                 ),
               ),
+              if (onBookingsPressed != null)
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onBookingsPressed,
+                    borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.receipt_long,
+                              color: Colors.white, size: 20),
+                          const SizedBox(width: 4),
+                          Text(
+                            context.tr('chc_my_bookings'),
+                            style: GoogleFonts.notoSansTelugu(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: CHCTheme.spacingSm),
@@ -1785,6 +1835,956 @@ class _SuccessDialog extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ============================================================================
+// BOOKINGS BOTTOM SHEET
+// ============================================================================
+class _CHCBookingsBottomSheet extends StatefulWidget {
+  final String userId;
+  const _CHCBookingsBottomSheet({required this.userId});
+
+  @override
+  State<_CHCBookingsBottomSheet> createState() =>
+      _CHCBookingsBottomSheetState();
+}
+
+class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
+  bool _loading = true;
+  List<Map<String, dynamic>> _bookings = [];
+  int? _expandedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchBookings();
+  }
+
+  Future<void> _fetchBookings() async {
+    try {
+      final data = await ApiService.getCHCBookings(widget.userId);
+      if (mounted) {
+        setState(() {
+          _bookings = data;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Color _statusColor(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'confirmed':
+        return const Color(0xFF4CAF50);
+      case 'completed':
+        return const Color(0xFF2196F3);
+      case 'cancelled':
+        return const Color(0xFFF44336);
+      case 'slot booked':
+        return CHCTheme.slotBooked;
+      default:
+        return CHCTheme.warning;
+    }
+  }
+
+  Color _taskStatusColor(String? status) {
+    switch (status) {
+      case 'En Route':
+        return const Color(0xFFFF9800);
+      case 'Working':
+        return const Color(0xFF9C27B0);
+      case 'Halted':
+        return const Color(0xFFF44336);
+      case 'Completed':
+        return const Color(0xFF4CAF50);
+      default:
+        return CHCTheme.textSecondary;
+    }
+  }
+
+  IconData _taskStatusIcon(String? status) {
+    switch (status) {
+      case 'En Route':
+        return Icons.directions_car;
+      case 'Working':
+        return Icons.engineering;
+      case 'Halted':
+        return Icons.pause_circle;
+      case 'Completed':
+        return Icons.check_circle;
+      default:
+        return Icons.schedule;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
+      decoration: const BoxDecoration(
+        color: CHCTheme.bg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Title
+          Padding(
+            padding: const EdgeInsets.fromLTRB(CHCTheme.spacingLg,
+                CHCTheme.spacingMd, CHCTheme.spacingLg, CHCTheme.spacingSm),
+            child: Row(
+              children: [
+                const Icon(Icons.receipt_long,
+                    color: CHCTheme.primaryDark, size: 24),
+                const SizedBox(width: CHCTheme.spacingSm),
+                Expanded(
+                  child: Text(
+                    context.tr('chc_my_bookings'),
+                    style: GoogleFonts.notoSansTelugu(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: CHCTheme.text,
+                    ),
+                  ),
+                ),
+                if (!_loading && _bookings.isNotEmpty)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: CHCTheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${_bookings.length}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: CHCTheme.primary,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 4),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, color: CHCTheme.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          // Content
+          if (_loading)
+            Flexible(
+                child: SingleChildScrollView(child: _buildShimmerLoading()))
+          else if (_bookings.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(CHCTheme.spacingXl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.event_busy, size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: CHCTheme.spacingMd),
+                  Text(
+                    context.tr('chc_no_bookings'),
+                    style: GoogleFonts.notoSansTelugu(
+                        fontSize: 16, color: CHCTheme.textSecondary),
+                  ),
+                ],
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: const EdgeInsets.all(CHCTheme.spacingMd),
+                itemCount: _bookings.length,
+                itemBuilder: (ctx, i) => _buildBookingCard(_bookings[i], i),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Shimmer loading skeleton ──────────────────────────────────────
+  Widget _buildShimmerLoading() {
+    return Padding(
+      padding: const EdgeInsets.all(CHCTheme.spacingMd),
+      child: Column(
+        children: List.generate(
+          3,
+          (_) => Container(
+            margin: const EdgeInsets.only(bottom: CHCTheme.spacingMd),
+            padding: const EdgeInsets.all(CHCTheme.spacingMd),
+            decoration: BoxDecoration(
+              color: CHCTheme.surface,
+              borderRadius: BorderRadius.circular(CHCTheme.radiusLg),
+              border: Border.all(color: CHCTheme.border.withOpacity(0.3)),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _ShimmerBox(width: 140, height: 16, borderRadius: 4),
+                    Spacer(),
+                    _ShimmerBox(width: 70, height: 22, borderRadius: 6),
+                  ],
+                ),
+                SizedBox(height: 14),
+                _ShimmerBox(
+                    width: double.infinity, height: 14, borderRadius: 4),
+                SizedBox(height: 10),
+                _ShimmerBox(width: 200, height: 14, borderRadius: 4),
+                SizedBox(height: 10),
+                _ShimmerBox(width: 160, height: 14, borderRadius: 4),
+                SizedBox(height: 14),
+                Row(
+                  children: [
+                    _ShimmerBox(width: 32, height: 32, borderRadius: 16),
+                    SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _ShimmerBox(width: 100, height: 12, borderRadius: 4),
+                        SizedBox(height: 6),
+                        _ShimmerBox(width: 70, height: 10, borderRadius: 4),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Booking card ──────────────────────────────────────────────────
+  Widget _buildBookingCard(Map<String, dynamic> booking, int index) {
+    final status = booking['booking_status']?.toString() ?? 'Pending';
+    final billingType = booking['billing_type']?.toString() ?? 'Fixed';
+    final equipmentType = booking['equipment_type']?.toString() ?? '';
+    final bookingId = booking['booking_id']?.toString() ?? '';
+    final acres = booking['land_size_acres']?.toString() ?? '0';
+    final rate = double.tryParse(booking['rate']?.toString() ?? '0') ?? 0;
+    final totalCost =
+        double.tryParse(booking['total_cost']?.toString() ?? '0') ?? 0;
+    final unitType = booking['unit_type']?.toString() ?? 'Acre';
+    final cropType = booking['crop_type']?.toString();
+    final serviceDate = booking['service_date']?.toString() ?? '';
+    final rescheduledDate = booking['rescheduled_date']?.toString();
+    final createdAt = booking['created_at']?.toString() ?? '';
+    final notes = booking['notes']?.toString();
+
+    // Operator info
+    final operatorName = booking['operator_name']?.toString();
+    final operatorPhone = booking['operator_phone']?.toString();
+    final operatorImage = booking['operator_image']?.toString();
+    final operatorRating =
+        double.tryParse(booking['operator_rating']?.toString() ?? '0');
+    final operatorVillage = booking['operator_village']?.toString();
+    final hasOperator = operatorName != null &&
+        operatorName.isNotEmpty &&
+        operatorName != 'null';
+
+    // Task completion info
+    final taskStatus = booking['task_status']?.toString();
+    final finalAmount =
+        double.tryParse(booking['final_amount']?.toString() ?? '0');
+    final workStart = booking['work_start_time']?.toString();
+    final workEnd = booking['work_end_time']?.toString();
+    final transitStart = booking['transit_start_time']?.toString();
+    final returnTime = booking['return_time']?.toString();
+    final startReading = booking['start_reading']?.toString();
+    final endReading = booking['end_reading']?.toString();
+    final breakdownReason = booking['breakdown_reason']?.toString();
+    final hasTaskInfo =
+        taskStatus != null && taskStatus.isNotEmpty && taskStatus != 'null';
+
+    final isExpanded = _expandedIndex == index;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: CHCTheme.spacingMd),
+      decoration: BoxDecoration(
+        color: CHCTheme.surface,
+        borderRadius: BorderRadius.circular(CHCTheme.radiusLg),
+        border: Border.all(color: CHCTheme.border.withOpacity(0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // ── Header ─────────────────────────────────────────────
+          InkWell(
+            borderRadius: BorderRadius.circular(CHCTheme.radiusLg),
+            onTap: () => setState(() {
+              _expandedIndex = isExpanded ? null : index;
+            }),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: CHCTheme.spacingMd, vertical: CHCTheme.spacingSm),
+              decoration: BoxDecoration(
+                color: _statusColor(status).withOpacity(0.08),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.agriculture,
+                      size: 18, color: _statusColor(status)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(equipmentType,
+                            style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: CHCTheme.text)),
+                        Text(bookingId,
+                            style: GoogleFonts.poppins(
+                                fontSize: 10, color: CHCTheme.textSecondary)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _statusColor(status),
+                      borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
+                    ),
+                    child: Text(status,
+                        style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white)),
+                  ),
+                  const SizedBox(width: 4),
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(Icons.expand_more,
+                        size: 20, color: CHCTheme.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Expandable details ─────────────────────────────────
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            child: isExpanded
+                ? _buildExpandedDetails(
+                    booking,
+                    serviceDate,
+                    rescheduledDate,
+                    cropType,
+                    acres,
+                    rate,
+                    unitType,
+                    totalCost,
+                    billingType,
+                    notes,
+                    createdAt,
+                    hasOperator,
+                    operatorName,
+                    operatorPhone,
+                    operatorImage,
+                    operatorRating,
+                    operatorVillage,
+                    hasTaskInfo,
+                    taskStatus,
+                    finalAmount,
+                    workStart,
+                    workEnd,
+                    transitStart,
+                    returnTime,
+                    startReading,
+                    endReading,
+                    breakdownReason,
+                  )
+                : const SizedBox.shrink(),
+          ),
+
+          // ── Collapsed summary row ──────────────────────────────
+          if (!isExpanded)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: CHCTheme.spacingMd, vertical: 6),
+              decoration: const BoxDecoration(
+                color: CHCTheme.bg,
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today,
+                      size: 12, color: Colors.grey.shade400),
+                  const SizedBox(width: 4),
+                  Text(_formatDate(serviceDate),
+                      style: GoogleFonts.poppins(
+                          fontSize: 11, color: CHCTheme.textSecondary)),
+                  const SizedBox(width: 12),
+                  Icon(Icons.straighten, size: 12, color: Colors.grey.shade400),
+                  const SizedBox(width: 4),
+                  Text('$acres ${context.tr("acres")}',
+                      style: GoogleFonts.poppins(
+                          fontSize: 11, color: CHCTheme.textSecondary)),
+                  const Spacer(),
+                  if (hasOperator) ...[
+                    Icon(Icons.person, size: 12, color: Colors.grey.shade400),
+                    const SizedBox(width: 4),
+                  ],
+                  if (hasTaskInfo &&
+                      status.toLowerCase() == 'completed' &&
+                      finalAmount != null &&
+                      finalAmount > 0)
+                    Text(
+                      '₹${finalAmount.toStringAsFixed(0)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: CHCTheme.primary,
+                      ),
+                    )
+                  else
+                    Text(
+                      billingType == 'Fixed'
+                          ? '₹${totalCost.toStringAsFixed(0)}'
+                          : context.tr('chc_bill_pending'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: billingType == 'Fixed'
+                            ? CHCTheme.primary
+                            : CHCTheme.warning,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Expanded booking details ──────────────────────────────────────
+  Widget _buildExpandedDetails(
+    Map<String, dynamic> booking,
+    String serviceDate,
+    String? rescheduledDate,
+    String? cropType,
+    String acres,
+    double rate,
+    String unitType,
+    double totalCost,
+    String billingType,
+    String? notes,
+    String createdAt,
+    bool hasOperator,
+    String? operatorName,
+    String? operatorPhone,
+    String? operatorImage,
+    double? operatorRating,
+    String? operatorVillage,
+    bool hasTaskInfo,
+    String? taskStatus,
+    double? finalAmount,
+    String? workStart,
+    String? workEnd,
+    String? transitStart,
+    String? returnTime,
+    String? startReading,
+    String? endReading,
+    String? breakdownReason,
+  ) {
+    return Column(
+      children: [
+        // Booking details
+        Padding(
+          padding: const EdgeInsets.all(CHCTheme.spacingMd),
+          child: Column(
+            children: [
+              _bookingDetailRow(Icons.calendar_today,
+                  context.tr('chc_service_date'), _formatDate(serviceDate)),
+              if (rescheduledDate != null &&
+                  rescheduledDate.isNotEmpty &&
+                  rescheduledDate != 'null')
+                _bookingDetailRow(
+                    Icons.event,
+                    context.tr('chc_rescheduled_date'),
+                    _formatDate(rescheduledDate)),
+              if (cropType != null && cropType.isNotEmpty && cropType != 'null')
+                _bookingDetailRow(
+                    Icons.grass, context.tr('detail_crop'), cropType),
+              _bookingDetailRow(Icons.straighten, context.tr('chc_land_size'),
+                  '$acres ${context.tr("acres")}'),
+              _bookingDetailRow(Icons.payments, context.tr('chc_rate'),
+                  '₹${rate.toStringAsFixed(0)}/$unitType'),
+              if (!hasTaskInfo || taskStatus?.toLowerCase() != 'completed')
+                Row(
+                  children: [
+                    const Icon(Icons.receipt,
+                        size: 16, color: CHCTheme.primary),
+                    const SizedBox(width: 8),
+                    Text(context.tr('total'),
+                        style: GoogleFonts.notoSansTelugu(
+                            fontSize: 12, color: CHCTheme.textSecondary)),
+                    const Spacer(),
+                    Text(
+                      billingType == 'Fixed'
+                          ? '₹${totalCost.toStringAsFixed(0)}'
+                          : context.tr('chc_bill_pending'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: billingType == 'Fixed'
+                            ? CHCTheme.primary
+                            : CHCTheme.warning,
+                      ),
+                    ),
+                  ],
+                ),
+              if (notes != null && notes.isNotEmpty && notes != 'null') ...[
+                const SizedBox(height: CHCTheme.spacingSm),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(CHCTheme.spacingSm),
+                  decoration: BoxDecoration(
+                    color: CHCTheme.bg,
+                    borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.notes, size: 14, color: Colors.grey.shade400),
+                      const SizedBox(width: 6),
+                      Expanded(
+                          child: Text(notes,
+                              style: GoogleFonts.notoSansTelugu(
+                                  fontSize: 11,
+                                  color: CHCTheme.textSecondary))),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+
+        // ── Operator card ─────────────────────────────────────────
+        if (hasOperator) ...[
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(CHCTheme.spacingMd),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.tr('chc_operator_assigned'),
+                    style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: CHCTheme.textSecondary,
+                        letterSpacing: 0.5)),
+                const SizedBox(height: CHCTheme.spacingSm),
+                Container(
+                  padding: const EdgeInsets.all(CHCTheme.spacingSm + 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F7FF),
+                    borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
+                    border: Border.all(
+                        color: const Color(0xFF2196F3).withOpacity(0.15)),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor:
+                            const Color(0xFF2196F3).withOpacity(0.15),
+                        backgroundImage: (_isValidStr(operatorImage))
+                            ? NetworkImage(operatorImage!)
+                            : null,
+                        child: (!_isValidStr(operatorImage))
+                            ? Text(operatorName![0].toUpperCase(),
+                                style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF2196F3)))
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(operatorName!,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: CHCTheme.text)),
+                            if (_isValidStr(operatorVillage))
+                              Text(operatorVillage!,
+                                  style: GoogleFonts.notoSansTelugu(
+                                      fontSize: 11,
+                                      color: CHCTheme.textSecondary)),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (operatorRating != null && operatorRating > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF8E1),
+                                borderRadius:
+                                    BorderRadius.circular(CHCTheme.radiusSm),
+                              ),
+                              child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.star,
+                                        size: 12, color: Color(0xFFFF9800)),
+                                    const SizedBox(width: 2),
+                                    Text(operatorRating.toStringAsFixed(1),
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: const Color(0xFFE65100))),
+                                  ]),
+                            ),
+                          if (_isValidStr(operatorPhone))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.phone,
+                                        size: 11, color: Colors.grey.shade500),
+                                    const SizedBox(width: 3),
+                                    Text(operatorPhone!,
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 10,
+                                            color: CHCTheme.textSecondary)),
+                                  ]),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        // ── Task completion timeline ────────────────────────────────
+        if (hasTaskInfo) ...[
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(CHCTheme.spacingMd),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(context.tr('chc_work_progress'),
+                        style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: CHCTheme.textSecondary,
+                            letterSpacing: 0.5)),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _taskStatusColor(taskStatus).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(_taskStatusIcon(taskStatus),
+                            size: 12, color: _taskStatusColor(taskStatus)),
+                        const SizedBox(width: 4),
+                        Text(taskStatus ?? '',
+                            style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: _taskStatusColor(taskStatus))),
+                      ]),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: CHCTheme.spacingSm),
+                Container(
+                  padding: const EdgeInsets.all(CHCTheme.spacingSm + 2),
+                  decoration: BoxDecoration(
+                    color: CHCTheme.bg,
+                    borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
+                  ),
+                  child: Column(
+                    children: [
+                      if (_isValidStr(transitStart))
+                        _timelineRow(
+                            Icons.directions_car,
+                            context.tr('chc_departed'),
+                            _formatTime(transitStart!),
+                            const Color(0xFF2196F3)),
+                      if (_isValidStr(workStart))
+                        _timelineRow(
+                            Icons.play_circle_fill,
+                            context.tr('chc_work_started'),
+                            _formatTime(workStart!),
+                            const Color(0xFF4CAF50)),
+                      if (_isValidStr(breakdownReason))
+                        _timelineRow(
+                            Icons.warning_amber,
+                            context.tr('chc_breakdown'),
+                            breakdownReason!,
+                            const Color(0xFFF44336)),
+                      if (_isValidStr(workEnd))
+                        _timelineRow(
+                            Icons.stop_circle,
+                            context.tr('chc_work_ended'),
+                            _formatTime(workEnd!),
+                            const Color(0xFF9C27B0)),
+                      if (_isValidStr(returnTime))
+                        _timelineRow(Icons.home, context.tr('chc_returned'),
+                            _formatTime(returnTime!), const Color(0xFF607D8B)),
+                    ],
+                  ),
+                ),
+                if (_isValidStr(startReading) || _isValidStr(endReading)) ...[
+                  const SizedBox(height: CHCTheme.spacingSm),
+                  Row(
+                    children: [
+                      if (_isValidStr(startReading))
+                        Expanded(
+                            child: _readingChip(context.tr('chc_start_reading'),
+                                startReading!)),
+                      if (_isValidStr(startReading) && _isValidStr(endReading))
+                        const SizedBox(width: CHCTheme.spacingSm),
+                      if (_isValidStr(endReading))
+                        Expanded(
+                            child: _readingChip(
+                                context.tr('chc_end_reading'), endReading!)),
+                    ],
+                  ),
+                ],
+                if (finalAmount != null && finalAmount > 0) ...[
+                  const SizedBox(height: CHCTheme.spacingSm),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: CHCTheme.spacingMd,
+                        vertical: CHCTheme.spacingSm),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [
+                        CHCTheme.primary.withOpacity(0.08),
+                        CHCTheme.primary.withOpacity(0.03),
+                      ]),
+                      borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
+                      border:
+                          Border.all(color: CHCTheme.primary.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.receipt_long,
+                            size: 16, color: CHCTheme.primary),
+                        const SizedBox(width: 8),
+                        Text(context.tr('chc_final_bill'),
+                            style: GoogleFonts.notoSansTelugu(
+                                fontSize: 12, color: CHCTheme.textSecondary)),
+                        const Spacer(),
+                        Text('₹${finalAmount.toStringAsFixed(0)}',
+                            style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: CHCTheme.primary)),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+
+        // ── Footer ─────────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: CHCTheme.spacingMd, vertical: CHCTheme.spacingXs),
+          decoration: const BoxDecoration(
+            color: CHCTheme.bg,
+            borderRadius: BorderRadius.vertical(
+                bottom: Radius.circular(CHCTheme.radiusLg)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.access_time, size: 12, color: Colors.grey.shade400),
+              const SizedBox(width: 4),
+              Text(
+                  '${context.tr("chc_booked_on")} ${_formatDateTime(createdAt)}',
+                  style: GoogleFonts.poppins(
+                      fontSize: 10, color: Colors.grey.shade500)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Timeline row ──────────────────────────────────────────────────
+  Widget _timelineRow(IconData icon, String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+                color: color.withOpacity(0.1), shape: BoxShape.circle),
+            child: Icon(icon, size: 13, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Text(label,
+                  style: GoogleFonts.notoSansTelugu(
+                      fontSize: 11, color: CHCTheme.textSecondary))),
+          Text(value,
+              style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: CHCTheme.text)),
+        ],
+      ),
+    );
+  }
+
+  // ── Reading chip (shows image if URL, else text) ─────────────────────
+  bool _isUrl(String s) => s.startsWith('http://') || s.startsWith('https://');
+
+  Widget _readingChip(String label, String value) {
+    final isImage = _isUrl(value);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: CHCTheme.surface,
+        borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
+        border: Border.all(color: CHCTheme.border.withOpacity(0.5)),
+      ),
+      child: Column(children: [
+        Text(label,
+            style: GoogleFonts.notoSansTelugu(
+                fontSize: 10, color: CHCTheme.textSecondary)),
+        const SizedBox(height: 4),
+        if (isImage)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: CachedNetworkImage(
+              imageUrl: value,
+              height: 100,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              placeholder: (_, __) => const SizedBox(
+                height: 100,
+                child: Center(
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: CHCTheme.primary)),
+              ),
+              errorWidget: (_, __, ___) => const SizedBox(
+                height: 60,
+                child: Center(
+                    child: Icon(Icons.broken_image,
+                        color: CHCTheme.textSecondary)),
+              ),
+            ),
+          )
+        else
+          Text(value,
+              style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: CHCTheme.text)),
+      ]),
+    );
+  }
+
+  // ── Detail row helper ─────────────────────────────────────────────
+  Widget _bookingDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: CHCTheme.textSecondary),
+          const SizedBox(width: 8),
+          Text(label,
+              style: GoogleFonts.notoSansTelugu(
+                  fontSize: 12, color: CHCTheme.textSecondary)),
+          const Spacer(),
+          Text(value,
+              style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: CHCTheme.text)),
+        ],
+      ),
+    );
+  }
+
+  bool _isValidStr(String? s) => s != null && s.isNotEmpty && s != 'null';
+
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return DateFormat('dd MMM yyyy').format(date);
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  String _formatTime(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return DateFormat('hh:mm a').format(date);
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  String _formatDateTime(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return DateFormat('dd MMM yyyy, hh:mm a').format(date);
+    } catch (_) {
+      return dateStr;
+    }
   }
 }
 
