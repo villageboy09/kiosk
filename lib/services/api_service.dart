@@ -13,7 +13,7 @@ class ApiService {
   /// Login with user ID (6-digit PIN)
   /// Returns a User object on success, throws an exception on failure
   static Future<User> loginWithUserId(String userId) async {
-    final url = Uri.parse('$baseUrl/login_api.php');
+    final url = Uri.parse('$baseUrl/api.php?action=login');
 
     try {
       final response = await http.post(
@@ -41,7 +41,7 @@ class ApiService {
 
   /// Get user profile by user ID
   static Future<User> getUserProfile(String userId) async {
-    final url = Uri.parse('$baseUrl/login_api.php');
+    final url = Uri.parse('$baseUrl/api.php?action=get_user_profile');
 
     try {
       final response = await http.post(
@@ -65,6 +65,93 @@ class ApiService {
       }
       throw Exception(
           'Unable to connect to server. Please check your internet connection.');
+    }
+  }
+
+  // ===================== OTP & REGISTRATION FUNCTIONS =====================
+
+  /// Send OTP using MSG91
+  static Future<Map<String, dynamic>> sendOtp(String phoneNumber) async {
+    final url = Uri.parse('$baseUrl/api.php?action=send_otp');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone_number': phoneNumber}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'error': 'Server error: ${response.statusCode}'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
+  /// Verify OTP using MSG91
+  static Future<Map<String, dynamic>> verifyOtp(String phoneNumber, String otp) async {
+    final url = Uri.parse('$baseUrl/api.php?action=verify_otp');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'phone_number': phoneNumber,
+          'otp': otp,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'error': 'Server error: ${response.statusCode}'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
+  /// Register a new user
+  static Future<Map<String, dynamic>> registerUser(String name, String phoneNumber) async {
+    final url = Uri.parse('$baseUrl/api.php?action=register_user');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'name': name,
+          'phone_number': phoneNumber,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'error': 'Server error: ${response.statusCode}'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
+  /// Check if user is registered by phone number
+  static Future<bool> checkUser(String phoneNumber) async {
+    final url = Uri.parse('$baseUrl/api.php?action=check_user&phone_number=$phoneNumber');
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return data['exists'] == true;
+        }
+      }
+      return false;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -121,22 +208,25 @@ class ApiService {
   /// Get user's crop selections
   static Future<List<Map<String, dynamic>>> getUserSelections(String userId,
       {String lang = 'te'}) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-            '$baseUrl/api.php?action=get_user_selections&user_id=$userId&lang=$lang'),
-      );
+    final cacheKey = '${CacheKeys.userSelections}_${userId}_$lang';
+    return CacheService.getOrFetch(cacheKey, () async {
+      try {
+        final response = await http.get(
+          Uri.parse(
+              '$baseUrl/api.php?action=get_user_selections&user_id=$userId&lang=$lang'),
+        );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return List<Map<String, dynamic>>.from(data['selections']);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['success'] == true) {
+            return List<Map<String, dynamic>>.from(data['selections']);
+          }
         }
+        return <Map<String, dynamic>>[];
+      } catch (e) {
+        return <Map<String, dynamic>>[];
       }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    });
   }
 
   /// Get used field names for a user
@@ -224,6 +314,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
+        CacheService.invalidatePrefix(CacheKeys.userSelections);
         return jsonDecode(response.body);
       }
       return {'success': false, 'error': 'Server error'};
@@ -237,116 +328,126 @@ class ApiService {
   /// Get crop stages
   static Future<List<Map<String, dynamic>>> getCropStages(int cropId,
       {String lang = 'te'}) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-            '$baseUrl/api.php?action=get_crop_stages&crop_id=$cropId&lang=$lang'),
-      );
+    final cacheKey = '${CacheKeys.cropStages}_${cropId}_$lang';
+    return CacheService.getOrFetch(cacheKey, () async {
+      try {
+        final response = await http.get(
+          Uri.parse(
+              '$baseUrl/api.php?action=get_crop_stages&crop_id=$cropId&lang=$lang'),
+        );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return List<Map<String, dynamic>>.from(data['stages']);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['success'] == true) {
+            return List<Map<String, dynamic>>.from(data['stages']);
+          }
         }
+        return <Map<String, dynamic>>[];
+      } catch (e) {
+        return <Map<String, dynamic>>[];
       }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    });
   }
 
   /// Get stage durations
   static Future<List<Map<String, dynamic>>> getStageDuration(int cropId,
       {int? varietyId}) async {
-    try {
-      String url = '$baseUrl/api.php?action=get_stage_duration&crop_id=$cropId';
-      if (varietyId != null) {
-        url += '&variety_id=$varietyId';
-      }
-
-      final response = await http.get(Uri.parse(url));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return List<Map<String, dynamic>>.from(data['durations']);
+    final cacheKey = 'stage_duration_${cropId}_${varietyId ?? 'all'}';
+    return CacheService.getOrFetch(cacheKey, () async {
+      try {
+        String url = '$baseUrl/api.php?action=get_stage_duration&crop_id=$cropId';
+        if (varietyId != null) {
+          url += '&variety_id=$varietyId';
         }
+
+        final response = await http.get(Uri.parse(url));
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['success'] == true) {
+            return List<Map<String, dynamic>>.from(data['durations']);
+          }
+        }
+        return <Map<String, dynamic>>[];
+      } catch (e) {
+        return <Map<String, dynamic>>[];
       }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    });
   }
 
   /// Get problems for a crop/stage
   static Future<List<Map<String, dynamic>>> getProblems(
       {int? cropId, int? stageId, String lang = 'te'}) async {
-    try {
-      String url = '$baseUrl/api.php?action=get_problems&lang=$lang';
-      if (cropId != null) url += '&crop_id=$cropId';
-      if (stageId != null) url += '&stage_id=$stageId';
+    final cacheKey = 'problems_${cropId ?? 'all'}_${stageId ?? 'all'}_$lang';
+    return CacheService.getOrFetch(cacheKey, () async {
+      try {
+        String url = '$baseUrl/api.php?action=get_problems&lang=$lang';
+        if (cropId != null) url += '&crop_id=$cropId';
+        if (stageId != null) url += '&stage_id=$stageId';
 
-      // DEBUG: Print the exact URL being called
+        final response = await http.get(Uri.parse(url));
 
-      final response = await http.get(Uri.parse(url));
-
-      // DEBUG: Print response status and body length
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          final problems = List<Map<String, dynamic>>.from(data['problems']);
-
-          return problems;
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['success'] == true) {
+            final problems = List<Map<String, dynamic>>.from(data['problems']);
+            return problems;
+          }
         }
+        return <Map<String, dynamic>>[];
+      } catch (e) {
+        return <Map<String, dynamic>>[];
       }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    });
   }
 
   /// Get advisories for a problem
   static Future<Map<String, dynamic>?> getAdvisories(int problemId,
       {String lang = 'te'}) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-            '$baseUrl/api.php?action=get_advisories&problem_id=$problemId&lang=$lang'),
-      );
+    final cacheKey = 'advisories_${problemId}_$lang';
+    return CacheService.getOrFetch(cacheKey, () async {
+      try {
+        final response = await http.get(
+          Uri.parse(
+              '$baseUrl/api.php?action=get_advisories&problem_id=$problemId&lang=$lang'),
+        );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return data['advisory'];
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['success'] == true) {
+            return data['advisory'] as Map<String, dynamic>?;
+          }
         }
+        return null;
+      } catch (e) {
+        return null;
       }
-      return null;
-    } catch (e) {
-      return null;
-    }
+    });
   }
 
   /// Get advisory components/recommendations
   static Future<List<Map<String, dynamic>>> getAdvisoryComponents(
       int advisoryId,
       {String lang = 'te'}) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-            '$baseUrl/api.php?action=get_advisory_components&advisory_id=$advisoryId&lang=$lang'),
-      );
+    final cacheKey = 'advisory_components_${advisoryId}_$lang';
+    return CacheService.getOrFetch(cacheKey, () async {
+      try {
+        final response = await http.get(
+          Uri.parse(
+              '$baseUrl/api.php?action=get_advisory_components&advisory_id=$advisoryId&lang=$lang'),
+        );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return List<Map<String, dynamic>>.from(data['components']);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['success'] == true) {
+            return List<Map<String, dynamic>>.from(data['components']);
+          }
         }
+        return <Map<String, dynamic>>[];
+      } catch (e) {
+        return <Map<String, dynamic>>[];
       }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    });
   }
 
   /// Save an identified problem

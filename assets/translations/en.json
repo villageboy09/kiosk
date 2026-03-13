@@ -108,6 +108,7 @@
   "filter_title": "Select Crop and Stage",
   "my_crops": "My Crops",
   "crop_stage": "Crop Stage",
+  "stage": "Stage",
   "filter_button": "Filter",
   "problem_detected": "Problem Detected",
   "view_advice": "View Advice",
@@ -313,5 +314,19 @@
   "chc_breakdown": "Breakdown",
   "chc_start_reading": "Start Reading",
   "chc_end_reading": "End Reading",
-  "chc_final_bill": "Final Bill"
+  "chc_final_bill": "Final Bill",
+  "signup_title": "Create Account",
+  "signup_subtitle": "Join CropSync today",
+  "signup_name_hint": "Enter your full name",
+  "signup_phone_hint": "Enter 10-digit mobile number",
+  "signup_send_otp": "Send OTP",
+  "signup_verify_otp": "Verify & Register",
+  "signup_otp_hint": "Enter the 6-digit OTP sent to your phone",
+  "signup_otp_sent": "OTP sent successfully to {phone}",
+  "signup_create_account": "Create Account",
+  "signup_confirm_create": "Confirm & Create",
+  "signup_already_have_account": "Already have an account? Login",
+  "signup_login": "Login instead",
+  "signup_error_name": "Please enter your name",
+  "signup_error_phone": "Please enter a valid 10-digit phone number"
 }

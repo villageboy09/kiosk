@@ -108,11 +108,252 @@ switch ($action) {
     case 'get_announcements':
         getAnnouncements($pdo);
         break;
+    case 'send_otp':
+        sendOtp($pdo);
+        break;
+    case 'verify_otp':
+        verifyOtp($pdo);
+        break;
+    case 'register_user':
+        registerUser($pdo);
+        break;
+    case 'check_user':
+        checkUser($pdo);
+        break;
+    case 'login':
+        loginUser($pdo);
+        break;
+    case 'get_user_profile':
+        getUserProfile($pdo);
+        break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
 }
 
 // ===================== AUTH FUNCTIONS =====================
+
+// MSG91 configuration
+define('MSG91_AUTHKEY', '491154AraRrF6el3UI69a6deb0P1'); // Replace with actual Authkey
+define('MSG91_TEMPLATE_ID', '69aede8e203e58f67f082ba2'); // Replace with actual Template ID
+
+function sendOtp($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $phone = $input['phone_number'] ?? '';
+
+    if (empty($phone)) {
+        echo json_encode(['success' => false, 'error' => 'Phone number is required']);
+        return;
+    }
+
+    $authkey = defined('MSG91_AUTHKEY') && !empty(MSG91_AUTHKEY) ? MSG91_AUTHKEY : '491154AraRrF6el3UI69a6deb0P1';
+    $template_id = defined('MSG91_TEMPLATE_ID') && !empty(MSG91_TEMPLATE_ID) ? MSG91_TEMPLATE_ID : '69aede8e203e58f67f082ba2';
+    
+    // Default to Indian country code if not present
+    $mobile = preg_match('/^\d{10}$/', $phone) ? '91' . $phone : $phone;
+
+    // Generate 6-digit OTP
+    $otp = str_pad(mt_rand(0, 999999), 6, '0', STR_PAD_LEFT);
+    $expiresAt = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+
+    try {
+        // Insert OTP to database
+        $stmt = $pdo->prepare("INSERT INTO otps (phone_number, otp, expires_at) VALUES (?, ?, ?)");
+        $stmt->execute([$phone, $otp, $expiresAt]);
+
+        $curl = curl_init();
+        
+        // We use MSG91 Send SMS (Flow API) to deliver our custom generated OTP
+        $postData = json_encode([
+            "template_id" => $template_id,
+            "short_url" => "0", // 0 or 1 depending on requirement
+            "recipients" => [
+                [
+                    "mobiles" => $mobile,
+                    "var1" => $otp
+                ]
+            ]
+        ]);
+
+        curl_setopt_array($curl, [
+          CURLOPT_URL => "https://api.msg91.com/api/v5/flow/",
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_ENCODING => "",
+          CURLOPT_MAXREDIRS => 10,
+          CURLOPT_TIMEOUT => 30,
+          CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+          CURLOPT_CUSTOMREQUEST => "POST",
+          CURLOPT_POSTFIELDS => $postData,
+          CURLOPT_HTTPHEADER => [
+            "Content-Type: application/json",
+            "authkey: $authkey"
+          ],
+        ]);
+
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+
+        curl_close($curl);
+
+        if ($err) {
+            echo json_encode(['success' => false, 'error' => "cURL Error #:" . $err]);
+        } else {
+            $result = json_decode($response, true);
+            // Flow API success usually does not have "type": "success". It returns an empty json or success message with a request_id
+            if (isset($result['type']) && $result['type'] === 'success' || !empty($result['request_id']) || (isset($result['message']) && stripos($result['message'], 'success') !== false)) {
+                echo json_encode(['success' => true, 'message' => 'OTP sent successfully']);
+            } else {
+                echo json_encode(['success' => false, 'error' => $result['message'] ?? 'Failed to send OTP']);
+            }
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+    }
+}
+
+function verifyOtp($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $phone = $input['phone_number'] ?? '';
+    $otp = $input['otp'] ?? '';
+
+    if (empty($phone) || empty($otp)) {
+        echo json_encode(['success' => false, 'error' => 'Phone number and OTP are required']);
+        return;
+    }
+
+    try {
+        // Fetch the most recent unused OTP for this phone
+        $stmt = $pdo->prepare("SELECT * FROM otps WHERE phone_number = ? AND is_verified = 0 ORDER BY created_at DESC LIMIT 1");
+        $stmt->execute([$phone]);
+        $record = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$record) {
+            echo json_encode(['success' => false, 'error' => 'No pending OTP found. Please send another OTP.']);
+            return;
+        }
+
+        // Check if expired
+        $currentTime = date('Y-m-d H:i:s');
+        if ($record['expires_at'] < $currentTime) {
+            echo json_encode(['success' => false, 'error' => 'OTP has expired']);
+            return;
+        }
+
+        // Check if OTP matches
+        if ($record['otp'] === $otp) {
+            // Mark as verified
+            $updateStmt = $pdo->prepare("UPDATE otps SET is_verified = 1 WHERE id = ?");
+            $updateStmt->execute([$record['id']]);
+
+            echo json_encode(['success' => true, 'message' => 'OTP verified successfully']);
+        } else {
+            echo json_encode(['success' => false, 'error' => 'Invalid OTP']);
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+    }
+}
+
+function registerUser($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $userId = $input['phone_number'] ?? ''; // Using phone_number as user_id per requirement
+    $name = $input['name'] ?? '';
+    
+    if (empty($userId) || empty($name)) {
+        echo json_encode(['success' => false, 'error' => 'Name and Phone number are required']);
+        return;
+    }
+
+    try {
+        // Check if user already exists
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        $existingUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($existingUser) {
+            echo json_encode(['success' => false, 'error' => 'User with this phone number already exists']);
+            return;
+        }
+
+        // Insert new user
+        $stmt = $pdo->prepare("INSERT INTO users (user_id, name, phone_number) VALUES (?, ?, ?)");
+        $stmt->execute([$userId, $name, $userId]); // phone_number is same as user_id
+
+        // Fetch user object to return
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        $newUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'message' => 'User registered successfully', 'user' => $newUser]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function checkUser($pdo) {
+    $userId = $_GET['phone_number'] ?? '';
+    if (empty($userId)) {
+        echo json_encode(['success' => false, 'error' => 'Phone number is required']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT 1 FROM users WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        $exists = $stmt->fetchColumn();
+
+        echo json_encode(['success' => true, 'exists' => (bool)$exists]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+    }
+}
+
+function loginUser($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $userId = $input['user_id'] ?? '';
+
+    if (empty($userId)) {
+        echo json_encode(['success' => false, 'message' => 'User ID is required']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($user) {
+            echo json_encode(['success' => true, 'user' => $user]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'User not found. Please register first.']);
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+}
+
+function getUserProfile($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $userId = $input['user_id'] ?? '';
+
+    if (empty($userId)) {
+        echo json_encode(['success' => false, 'message' => 'User ID is required']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($user) {
+            echo json_encode(['success' => true, 'user' => $user]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'User not found']);
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+}
 
 function handleLogin($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);

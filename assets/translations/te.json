@@ -108,6 +108,7 @@
   "filter_title": "పంట మరియు దశ ఎంచుకోండి",
   "my_crops": "నా పంటలు",
   "crop_stage": "పంట దశ",
+  "stage": "దశ",
   "filter_button": "ఫిల్టర్",
   "problem_detected": "సమస్య గుర్తించబడింది",
   "view_advice": "సలహా చూడండి",
@@ -313,5 +314,19 @@
   "chc_breakdown": "బ్రేక్‌డౌన్",
   "chc_start_reading": "ప్రారంభ రీడింగ్",
   "chc_end_reading": "చివరి రీడింగ్",
-  "chc_final_bill": "చివరి బిల్లు"
+  "chc_final_bill": "చివరి బిల్లు",
+  "signup_title": "ఖాతాను సృష్టించండి",
+  "signup_subtitle": "ఈరోజే క్రాప్‌సింక్‌లో చేరండి",
+  "signup_name_hint": "మీ పూర్తి పేరు నమోదు చేయండి",
+  "signup_phone_hint": "10-అంకెల మొబైల్ నంబర్ నమోదు చేయండి",
+  "signup_send_otp": "OTP పంపండి",
+  "signup_verify_otp": "ధృవీకరించండి & నమోదు చేయండి",
+  "signup_otp_hint": "మీ ఫోన్‌కి పంపిన 6-అంకెల OTPని నమోదు చేయండి",
+  "signup_otp_sent": "OTP విజయవంతంగా {phone} కి పంపబడింది",
+  "signup_create_account": "ఖాతాను సృష్టించండి",
+  "signup_confirm_create": "నిర్ధారించండి & సృష్టించండి",
+  "signup_already_have_account": "ఇప్పటికే ఖాతా ఉందా? లాగిన్ చేయండి",
+  "signup_login": "బదులుగా లాగిన్ చేయండి",
+  "signup_error_name": "దయచేసి మీ పేరు నమోదు చేయండి",
+  "signup_error_phone": "దయచేసి చెల్లుబాటు అయ్యే 10-అంకెల ఫోన్ నంబర్‌ను నమోదు చేయండి"
 }

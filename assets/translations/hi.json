@@ -106,6 +106,7 @@
   "filter_title": "फसल और चरण चुनें",
   "my_crops": "मेरी फसलें",
   "crop_stage": "फसल चरण",
+  "stage": "चरण",
   "filter_button": "फ़िल्टर",
   "problem_detected": "समस्या का पता चला",
   "view_advice": "सलाह देखें",
@@ -308,5 +309,18 @@
   "chc_breakdown": "ब्रेकडाउन",
   "chc_start_reading": "शुरू रीडिंग",
   "chc_end_reading": "अंतिम रीडिंग",
-  "chc_final_bill": "अंतिम बिल"
+  "chc_final_bill": "अंतिम बिल",
+  "signup_title": "खाता बनाएं",
+  "signup_subtitle": "आज ही क्रॉपसिंक से जुड़ें",
+  "signup_name_hint": "अपना पूरा नाम दर्ज करें",
+  "signup_phone_hint": "10 अंकों का मोबाइल नंबर दर्ज करें",
+  "signup_send_otp": "OTP भेजें",
+  "signup_verify_otp": "सत्यापित करें और पंजीकरण करें",
+  "signup_otp_hint": "आपके फोन पर भेजे गए 6 अंकों का OTP दर्ज करें",
+  "signup_otp_sent": "OTP सफलतापूर्वक {phone} पर भेजा गया",
+  "signup_create_account": "खाता बनाएं",
+  "signup_already_have_account": "क्या आपके पास पहले से खाता है? लॉगिन करें",
+  "signup_login": "इसके बजाय लॉगिन करें",
+  "signup_error_name": "कृपया अपना नाम दर्ज करें",
+  "signup_error_phone": "कृपया एक वैध 10 अंकों का फ़ोन नंबर दर्ज करें"
 }

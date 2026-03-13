@@ -256,14 +256,16 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                                 const Icon(Icons.medical_services_outlined,
                                     color: _UIColors.accent, size: 28),
                                 const SizedBox(width: 12),
-                                Text(
-                                  context.tr('management_title'),
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: _UIColors.primaryText,
+                                  Expanded(
+                                    child: Text(
+                                      context.tr('management_title'),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        color: _UIColors.primaryText,
+                                      ),
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
                           ),

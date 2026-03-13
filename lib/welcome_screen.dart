@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:cropsync/auth/login_screen.dart';
+import 'package:cropsync/auth/signup_screen.dart';
 import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:flutter/material.dart';
@@ -76,7 +76,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
     } else {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        MaterialPageRoute(builder: (context) => const SignupScreen()),
       );
     }
   }

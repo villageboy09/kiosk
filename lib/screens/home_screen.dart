@@ -1,6 +1,6 @@
 // ignore_for_file: prefer_const_constructors
 
-import 'package:cropsync/screens/crop_chat_list_screen.dart';
+import 'package:cropsync/screens/crop_advisory_grid_screen.dart';
 import 'package:cropsync/screens/profile_screen.dart';
 import 'package:cropsync/screens/settings_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
@@ -163,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         farmerName: _farmerName,
         profileImageUrl: _profileImageUrl,
       ),
-      CropChatListScreen(key: const ValueKey('advisory_tab')),
+      CropAdvisoryGridScreen(key: const ValueKey('advisory_tab')),
       SettingsScreen(key: const ValueKey('settings_tab')),
     ];
 

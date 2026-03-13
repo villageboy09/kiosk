@@ -4,7 +4,10 @@ import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 
 import 'package:cropsync/screens/home_screen.dart';
+
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/auth/signup_screen.dart';
 
 extension ColorExtension on Color {
   Color withValues({double? alpha, int? red, int? green, int? blue}) {
@@ -18,7 +21,8 @@ extension ColorExtension on Color {
 }
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? initialPhoneNumber;
+  const LoginScreen({super.key, this.initialPhoneNumber});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -29,6 +33,14 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   String? _pressedButton;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPhoneNumber != null) {
+      _pinController.text = widget.initialPhoneNumber!;
+    }
+  }
 
   @override
   void dispose() {
@@ -45,6 +57,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
+      final isRegistered = await ApiService.checkUser(pin);
+      if (!isRegistered) {
+        _showError('User not registered. Redirecting to Signup...');
+        // Add a slight delay so user can see the message
+        await Future.delayed(const Duration(milliseconds: 1500));
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => SignupScreen(initialPhoneNumber: pin)),
+        );
+        return;
+      }
+
       await AuthService.login(pin);
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -67,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _appendDigit(String digit) {
     if (_pinController.text.length >= 10) {
-      return; // Limit to 10 digits as requested
+      return;
     }
     setState(() {
       _pinController.text += digit;
@@ -84,57 +109,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Soft gradient background like the reference image
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFE3F2FD), // Light Blue 50
-              Color(0xFFFFFFFF), // White
-              Color(0xFFE8F5E9), // Light Green 50 (subtle brand touch)
-              Color(0xFFE3F2FD), // Light Blue 50
-            ],
-            stops: [0.0, 0.4, 0.7, 1.0],
-          ),
-        ),
+      backgroundColor: Colors.white,
+      resizeToAvoidBottomInset: false, // Prevent keyboard from jumping view
+      body: SafeArea(
         child: Stack(
           children: [
-            SafeArea(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    physics: const ClampingScrollPhysics(),
-                    child: ConstrainedBox(
-                      constraints:
-                          BoxConstraints(minHeight: constraints.maxHeight),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 40),
-                            _buildBranding(),
-                            const SizedBox(height: 40),
-                            _buildSingleInputDisplay(),
-                            const SizedBox(height: 10),
-                            _buildHintChip(),
-                            const SizedBox(height: 30),
-                            _buildKeypad(),
-                            const SizedBox(height: 40),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 450),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Spacer(flex: 2),
+                      _buildBranding(),
+                      const Spacer(flex: 1),
+                      _buildSingleInputDisplay(),
+                      const SizedBox(height: 12),
+                      _buildHintChip(),
+                      const SizedBox(height: 24),
+                      _buildKeypad(),
+                      const Spacer(flex: 1),
+                      _buildSignupLink(),
+                      const Spacer(flex: 2),
+                    ],
+                  ),
+                ),
               ),
             ),
             if (_errorMessage != null)
               Positioned(
-                top: MediaQuery.of(context).padding.top + 16,
+                top: 16,
                 left: 24,
                 right: 24,
                 child: _buildErrorNotification(),
@@ -148,49 +155,34 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildBranding() {
     return Column(
       children: [
-        Container(
-          width: 140, // Increased from 100
-          height: 140, // Increased from 100
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF1B5E20)
-                    .withValues(alpha: 0.15), // Brand green shadow
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(24), // Increased padding
-          child: Image.asset(
-            'assets/images/logo_t.png',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Icon(
-              Icons.agriculture_rounded,
-              size: 70, // Increased from 50
-              color: Color(0xFF1B5E20),
-            ),
+        Image.asset(
+          'assets/images/logo_t.png',
+          height: 80,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Icon(
+            Icons.agriculture_rounded,
+            size: 64,
+            color: Color(0xFF1B5E20),
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
         Text(
           'login_welcome_back'.tr(),
           style: GoogleFonts.poppins(
             fontSize: 28,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF1A1A1A),
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF111827),
             letterSpacing: -0.5,
+            height: 1.2,
           ),
         ),
         const SizedBox(height: 8),
         Text(
           'enter_field'.tr(namedArgs: {'field': 'user_id'.tr()}),
           style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: const Color(0xFF757575),
-            fontWeight: FontWeight.w400,
+            fontSize: 16,
+            color: const Color(0xFF4B5563),
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
@@ -198,63 +190,60 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildSingleInputDisplay() {
-    return Center(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 320),
-        width: double.infinity,
-        height: 64,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF5F9FF),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFF2196F3).withValues(alpha: 0.3),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2196F3).withValues(alpha: 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+    final hasInput = _pinController.text.isNotEmpty;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 320),
+      width: double.infinity,
+      height: 64,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasInput
+              ? const Color(0xFF059669)
+              : const Color(0xFFD1D5DB),
+          width: 2.0,
         ),
-        alignment: Alignment.center,
-        child: Text(
-          _pinController.text.isEmpty ? '------' : _pinController.text,
-          style: GoogleFonts.poppins(
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 4,
-            color: _pinController.text.isEmpty
-                ? Colors.grey.withValues(alpha: 0.5)
-                : const Color(0xFF1A1A1A),
-          ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        hasInput ? _pinController.text : '------',
+        style: GoogleFonts.poppins(
+          fontSize: 28,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 8,
+          color: hasInput
+              ? const Color(0xFF111827)
+              : const Color(0xFF9CA3AF), 
         ),
       ),
     );
   }
 
-  // ── Hint chip below the PIN input ──
   Widget _buildHintChip() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFFF1F8E9),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFFC8E6C9),
+          width: 1,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(
-            Icons.lightbulb_outline_rounded,
-            size: 15,
+            Icons.lock_outline_rounded,
+            size: 16,
             color: Color(0xFF388E3C),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Text(
             'login_pin_hint'.tr(),
             style: GoogleFonts.poppins(
-              fontSize: 12,
+              fontSize: 13,
               color: const Color(0xFF388E3C),
               fontWeight: FontWeight.w500,
             ),
@@ -265,24 +254,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildKeypad() {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 320),
-        child: GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 3,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.3,
-          children: [
-            ...List.generate(9, (i) => i + 1)
-                .map((number) => _buildKeyButton(number.toString())),
-            _buildSubmitButton(), // Submit button left of 0
-            _buildKeyButton('0'),
-            _buildDeleteButton(),
-          ],
-        ),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 300),
+      child: GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 3,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 1.25,
+        children: [
+          ...List.generate(9, (i) => i + 1)
+              .map((number) => _buildKeyButton(number.toString())),
+          _buildSubmitButton(),
+          _buildKeyButton('0'),
+          _buildDeleteButton(),
+        ],
       ),
     );
   }
@@ -297,20 +284,12 @@ class _LoginScreenState extends State<LoginScreen> {
       },
       onTapCancel: () => setState(() => _pressedButton = null),
       child: AnimatedScale(
-        scale: isPressed ? 0.92 : 1.0,
+        scale: isPressed ? 0.95 : 1.0,
         duration: const Duration(milliseconds: 100),
-        curve: Curves.easeOut,
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF2196F3),
+            color: const Color(0xFF059669),
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2196F3).withValues(alpha: 0.25),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
           ),
           alignment: Alignment.center,
           child: _isLoading
@@ -319,12 +298,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 24,
                   child: CircularProgressIndicator(
                     color: Colors.white,
-                    strokeWidth: 2,
+                    strokeWidth: 2.5,
                   ),
                 )
               : const Icon(
                   Icons.arrow_forward_rounded,
-                  size: 28,
+                  size: 32,
                   color: Colors.white,
                 ),
         ),
@@ -341,41 +320,23 @@ class _LoginScreenState extends State<LoginScreen> {
         _appendDigit(label);
       },
       onTapCancel: () => setState(() => _pressedButton = null),
-      child: AnimatedScale(
-        scale: isPressed ? 0.92 : 1.0,
+      child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
-        curve: Curves.easeOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          decoration: BoxDecoration(
-            color: isPressed
-                ? const Color(0xFFE8F5E9) // Subtle green tint on press
-                : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isPressed
-                  ? const Color(0xFF4CAF50).withValues(alpha: 0.4)
-                  : const Color(0xFFE0E0E0),
-              width: 1,
-            ),
-            boxShadow: isPressed
-                ? []
-                : [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+        decoration: BoxDecoration(
+          color: isPressed ? const Color(0xFFE5E7EB) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFE5E7EB),
+            width: 1.5,
           ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF1A1A1A),
-            ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 26,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF1F2937),
           ),
         ),
       ),
@@ -391,30 +352,83 @@ class _LoginScreenState extends State<LoginScreen> {
         _deleteDigit();
       },
       onTapCancel: () => setState(() => _pressedButton = null),
-      child: AnimatedScale(
-        scale: isPressed ? 0.92 : 1.0,
+      child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
-        curve: Curves.easeOut,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.backspace_outlined,
-            size: 24,
-            color:
-                isPressed ? const Color(0xFFE53935) : const Color(0xFF1A1A1A),
+        decoration: BoxDecoration(
+          color: isPressed ? const Color(0xFFFEE2E2) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFFCA5A5),
+            width: 1.5,
           ),
         ),
+        alignment: Alignment.center,
+        child: const Icon(
+          Icons.backspace_rounded,
+          size: 28,
+          color: Color(0xFFEF4444),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSignupLink() {
+    return TextButton(
+      onPressed: () {
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const SignupScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(1.0, 0.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOutCubic;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              return SlideTransition(
+                position: animation.drive(tween),
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 400),
+          ),
+        );
+      },
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: const Color(0xFFF0FDF4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.person_add_alt_1_rounded,
+            size: 20,
+            color: Color(0xFF047857),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'signup_create_account'.tr(),
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              color: const Color(0xFF047857),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Icon(
+            Icons.arrow_forward_rounded,
+            size: 18,
+            color: Color(0xFF047857),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildErrorNotification() {
     return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutBack,
       tween: Tween(begin: -100, end: 0),
       builder: (context, value, child) {
@@ -424,22 +438,15 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFFE53935),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFE53935).withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: const Color(0xFFDC2626),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.info_outline, color: Colors.white, size: 20),
+            const Icon(Icons.error_outline_rounded, color: Colors.white, size: 22),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
