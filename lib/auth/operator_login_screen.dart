@@ -169,27 +169,6 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
         ),
         const SizedBox(height: 28),
         // Icon badge
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF10B981), Color(0xFF059669)],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF059669).withValues(alpha: 0.3),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.agriculture_rounded,
-              color: Colors.white, size: 34),
-        ),
         const SizedBox(height: 20),
         Text(
           'operator_login_title'.tr(),
