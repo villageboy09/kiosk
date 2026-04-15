@@ -8,6 +8,7 @@ import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/auth/login_screen.dart';
+import 'package:cropsync/auth/operator_login_screen.dart';
 
 extension ColorExtension on Color {
   Color withValues({double? alpha, int? red, int? green, int? blue}) {
@@ -117,7 +118,7 @@ class _SignupScreenState extends State<SignupScreen>
 
     try {
       final isRegistered = await ApiService.checkUser(phone);
-      if (isRegistered) {
+      if (isRegistered != null) {
         _showError('signup_user_exists'.tr());
         if (!mounted) return;
         Navigator.pushReplacement(
@@ -233,6 +234,8 @@ class _SignupScreenState extends State<SignupScreen>
                             _buildMainCard(),
                             const SizedBox(height: 32),
                             _buildLoginLink(),
+                            const SizedBox(height: 16),
+                            _buildOperatorLink(),
                           ],
                         ),
                       ),
@@ -570,6 +573,66 @@ class _SignupScreenState extends State<SignupScreen>
             color: Color(0xFF4B5563),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildOperatorLink() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => const OperatorLoginScreen(),
+            transitionsBuilder: (_, animation, __, child) {
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                    parent: animation, curve: Curves.easeOutCubic)),
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 400),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFA7F3D0),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.agriculture_rounded,
+                  color: Colors.white, size: 16),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                'Are you a CHC Operator? Sign In →',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: const Color(0xFF047857),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

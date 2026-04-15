@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:cropsync/models/user.dart';
+import 'package:cropsync/models/chc_operator.dart';
 import 'package:cropsync/services/cache_service.dart';
 
 /// API Service class for handling all HTTP requests to the MySQL backend
@@ -84,14 +85,18 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
-      return {'success': false, 'error': 'Server error: ${response.statusCode}'};
+      return {
+        'success': false,
+        'error': 'Server error: ${response.statusCode}'
+      };
     } catch (e) {
       return {'success': false, 'error': 'Network error: $e'};
     }
   }
 
   /// Verify OTP using MSG91
-  static Future<Map<String, dynamic>> verifyOtp(String phoneNumber, String otp) async {
+  static Future<Map<String, dynamic>> verifyOtp(
+      String phoneNumber, String otp) async {
     final url = Uri.parse('$baseUrl/api.php?action=verify_otp');
 
     try {
@@ -107,14 +112,18 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
-      return {'success': false, 'error': 'Server error: ${response.statusCode}'};
+      return {
+        'success': false,
+        'error': 'Server error: ${response.statusCode}'
+      };
     } catch (e) {
       return {'success': false, 'error': 'Network error: $e'};
     }
   }
 
   /// Register a new user
-  static Future<Map<String, dynamic>> registerUser(String name, String phoneNumber) async {
+  static Future<Map<String, dynamic>> registerUser(
+      String name, String phoneNumber) async {
     final url = Uri.parse('$baseUrl/api.php?action=register_user');
 
     try {
@@ -130,28 +139,33 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
-      return {'success': false, 'error': 'Server error: ${response.statusCode}'};
+      return {
+        'success': false,
+        'error': 'Server error: ${response.statusCode}'
+      };
     } catch (e) {
       return {'success': false, 'error': 'Network error: $e'};
     }
   }
 
-  /// Check if user is registered by phone number
-  static Future<bool> checkUser(String phoneNumber) async {
-    final url = Uri.parse('$baseUrl/api.php?action=check_user&phone_number=$phoneNumber');
-
+  /// Check if a user exists by phone number.
+  /// Returns user data if found, null otherwise.
+  static Future<Map<String, dynamic>?> checkUser(String phoneNumber) async {
     try {
-      final response = await http.get(url);
+      final response = await http.get(
+        Uri.parse(
+            '$baseUrl/api.php?action=check_user&phone_number=$phoneNumber'),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return data['exists'] == true;
+        if (data['success'] == true && data['exists'] == true) {
+          return data['user'];
         }
       }
-      return false;
+      return null;
     } catch (e) {
-      return false;
+      return null;
     }
   }
 
@@ -355,7 +369,8 @@ class ApiService {
     final cacheKey = 'stage_duration_${cropId}_${varietyId ?? 'all'}';
     return CacheService.getOrFetch(cacheKey, () async {
       try {
-        String url = '$baseUrl/api.php?action=get_stage_duration&crop_id=$cropId';
+        String url =
+            '$baseUrl/api.php?action=get_stage_duration&crop_id=$cropId';
         if (varietyId != null) {
           url += '&variety_id=$varietyId';
         }
@@ -834,6 +849,50 @@ class ApiService {
     }
   }
 
+  /// Calculate tractor-trolley pricing using backend slab logic.
+  static Future<Map<String, dynamic>> calculateTrolleyPrice({
+    required dynamic equipmentId,
+    String? clientCode,
+    required double distance,
+    required bool isMember,
+  }) async {
+    if (clientCode == null || clientCode.isEmpty) {
+      return {
+        'success': false,
+        'error': 'Client code is required to calculate trolley price',
+      };
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/api.php?action=calculate_trolley_price'
+          '&equipment_id=$equipmentId'
+          '&client_code=${Uri.encodeComponent(clientCode)}'
+          '&distance=$distance'
+          '&is_member=${isMember ? 1 : 0}',
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic>) {
+          return data;
+        }
+      }
+
+      return {
+        'success': false,
+        'error': 'Failed to calculate trolley price',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Network error: $e',
+      };
+    }
+  }
+
   /// Check equipment availability for a specific date
   /// Returns available slots count and whether booking is possible
   static Future<Map<String, dynamic>> checkEquipmentAvailability({
@@ -876,6 +935,107 @@ class ApiService {
       return [];
     } catch (e) {
       return [];
+    }
+  }
+
+  // ===================== OPERATOR FUNCTIONS =====================
+
+  /// Authenticate a CHC Operator by phone number and password.
+  /// Returns a ChcOperator object on success, throws on failure.
+  static Future<ChcOperator> operatorLogin(
+      String phoneNumber, String password) async {
+    final url = Uri.parse('$baseUrl/api.php?action=operator_login');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone_number': phoneNumber, 'password': password}),
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['success'] == true) {
+        return ChcOperator.fromJson(data['operator'] as Map<String, dynamic>);
+      } else {
+        throw Exception(
+            data['message'] ?? 'Login failed. Check your credentials.');
+      }
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Please check your internet connection.');
+    }
+  }
+
+  /// Get all CHC bookings assigned to a specific operator.
+  static Future<List<Map<String, dynamic>>> getOperatorBookings(
+      String operatorId) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+            '$baseUrl/api.php?action=get_operator_bookings&operator_id=${Uri.encodeComponent(operatorId)}'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['bookings']);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Manually complete/log a walk-in booking by an operator.
+  static Future<Map<String, dynamic>> completeBookingManual({
+    required String operatorId,
+    required String farmerPhone,
+    required String farmerName,
+    required String village,
+    required String equipmentUsed,
+    required int equipmentId,
+    required String startTime,
+    required String endTime,
+    required double finalAmount,
+    String? serviceDate,
+    String? cropType,
+    double landSizeAcres = 0,
+    double billedQty = 0,
+    String? unitType,
+    double rate = 0,
+    String? notes,
+    String? operatorNotes,
+    double distance = 0,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api.php?action=complete_booking_manual'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'operator_id': operatorId,
+          'farmer_phone': farmerPhone,
+          'farmer_name': farmerName,
+          'village': village,
+          'equipment_used': equipmentUsed,
+          'equipment_id': equipmentId,
+          'start_time': startTime,
+          'end_time': endTime,
+          'distance': distance,
+          'service_date': serviceDate,
+          'crop_type': cropType,
+          'land_size_acres': landSizeAcres,
+          'billed_qty': billedQty,
+          'unit_type': unitType,
+          'rate': rate,
+          'notes': notes,
+          'operator_notes': operatorNotes,
+          'final_amount': finalAmount,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'error': 'Server error'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
     }
   }
 

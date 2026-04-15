@@ -2,13 +2,6 @@
 /**
  * CropSync Kiosk API
  * MySQL Backend API for Flutter App
- * 
- * COMPLETE FLOW:
- * 1. Select Crop → get_crops
- * 2. Get Stages for Crop → get_crop_stages?crop_id=X
- * 3. Select Stage → get_problems?crop_id=X&stage_id=Y (returns problem_stage_id)
- * 4. Select Problem → get_advisories?problem_id=X&stage_id=Y (returns advisory with problem_stage_id)
- * 5. Get Stage-Specific Remedies → get_advisory_components?advisory_id=X&problem_stage_id=Y
  */
 
 header('Content-Type: application/json');
@@ -108,6 +101,15 @@ switch ($action) {
     case 'get_announcements':
         getAnnouncements($pdo);
         break;
+    case 'operator_login':
+        operatorLogin($pdo);
+        break;
+    case 'get_operator_bookings':
+        getOperatorBookings($pdo);
+        break;
+    case 'complete_booking_manual':
+        completeBookingManual($pdo);
+        break;
     case 'send_otp':
         sendOtp($pdo);
         break;
@@ -126,9 +128,60 @@ switch ($action) {
     case 'get_user_profile':
         getUserProfile($pdo);
         break;
+    // NEW ENDPOINT FOR TROLLEY PRICING
+    case 'calculate_trolley_price':
+        calculateTrolleyPrice($pdo);
+        break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
 }
+
+// ===================== TRACTOR TROLLEY PRICING CALCULATION =====================
+
+function calculateTrolleyPrice($pdo) {
+    $equipmentId = $_GET['equipment_id'] ?? 0;
+    $clientCode = $_GET['client_code'] ?? '';
+    $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
+    $isMember = isset($_GET['is_member']) && $_GET['is_member'] == '1';
+
+    if (empty($equipmentId) || empty($clientCode)) {
+        echo json_encode(['success' => false, 'error' => 'Equipment ID and Client Code are required']);
+        return;
+    }
+
+    try {
+        // Find the specific slab where distance falls between min_km and max_km
+        $stmt = $pdo->prepare("
+            SELECT price_member, price_non_member 
+            FROM client_item_price_slabs 
+            WHERE item_id = ? AND client_code = ? 
+              AND ? > min_km AND ? <= max_km 
+            LIMIT 1
+        ");
+        $stmt->execute([$equipmentId, $clientCode, $distance, $distance]);
+        $slab = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($slab) {
+            $price = $isMember ? $slab['price_member'] : $slab['price_non_member'];
+            echo json_encode(['success' => true, 'price' => $price, 'slab_found' => true]);
+        } else {
+            // Fallback to the maximum slab if distance exceeds all defined slabs
+            $stmtMax = $pdo->prepare("SELECT price_member, price_non_member, max_km FROM client_item_price_slabs WHERE item_id = ? AND client_code = ? ORDER BY max_km DESC LIMIT 1");
+            $stmtMax->execute([$equipmentId, $clientCode]);
+            $maxSlab = $stmtMax->fetch(PDO::FETCH_ASSOC);
+            
+            if ($maxSlab && $distance > $maxSlab['max_km']) {
+                $price = $isMember ? $maxSlab['price_member'] : $maxSlab['price_non_member'];
+                echo json_encode(['success' => true, 'price' => $price, 'slab_found' => true, 'note' => 'Distance exceeds max slab, applying highest slab rate']);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'No pricing slab found for this distance']);
+            }
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
 
 // ===================== AUTH FUNCTIONS =====================
 
@@ -297,11 +350,15 @@ function checkUser($pdo) {
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT 1 FROM users WHERE user_id = ?");
-        $stmt->execute([$userId]);
-        $exists = $stmt->fetchColumn();
+        $stmt = $pdo->prepare("SELECT user_id, name, phone_number, village, mandal, district, region, card_uid FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
+        $stmt->execute([$userId, $userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        echo json_encode(['success' => true, 'exists' => (bool)$exists]);
+        if ($user) {
+            echo json_encode(['success' => true, 'exists' => true, 'user' => $user]);
+        } else {
+            echo json_encode(['success' => true, 'exists' => false]);
+        }
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
     }
@@ -616,15 +673,6 @@ function getStageDuration($pdo) {
 
 /**
  * Get problems/diseases for a specific crop and stage
- * 
- * CRITICAL: Returns problem_stage_id which is needed for stage-specific advisory components
- * 
- * The problem_stage_id is the ID from the problem_stages junction table that links
- * a specific problem to a specific stage. This ID is used to fetch stage-specific
- * advisory components.
- * 
- * Usage: get_problems?crop_id=1&stage_id=2&lang=en
- * Returns: problems with problem_stage_id for each
  */
 function getProblems($pdo) {
     $cropId = $_GET['crop_id'] ?? null;
@@ -634,8 +682,6 @@ function getProblems($pdo) {
     $nameField = ($lang === 'en') ? 'problem_name_en' : 'problem_name_te';
     
     if ($stageId) {
-        // Get problems for a specific stage
-        // CRITICAL: Include ps.id as problem_stage_id for stage-specific advisory lookup
         $sql = "
             SELECT DISTINCT
                 rp.id,
@@ -662,7 +708,6 @@ function getProblems($pdo) {
         
         $sql .= " ORDER BY rp.category, rp.id";
     } else if ($cropId) {
-        // Get all problems for a crop (no stage filter)
         $sql = "
             SELECT 
                 rp.id,
@@ -682,7 +727,6 @@ function getProblems($pdo) {
         ";
         $params = [$cropId];
     } else {
-        // Get all problems
         $sql = "
             SELECT 
                 rp.id,
@@ -711,11 +755,6 @@ function getProblems($pdo) {
 
 /**
  * Get advisory for a specific problem
- * 
- * NEW: Also accepts stage_id to return the problem_stage_id for stage-specific components
- * 
- * Usage: get_advisories?problem_id=5&stage_id=2&lang=en
- * Returns: advisory with problem_stage_id for the specific stage
  */
 function getAdvisories($pdo) {
     $problemId = $_GET['problem_id'] ?? 0;
@@ -725,7 +764,6 @@ function getAdvisories($pdo) {
     $titleField = ($lang === 'en') ? 'advisory_title_en' : 'advisory_title_te';
     $symptomsField = ($lang === 'en') ? 'symptoms_en' : 'symptoms_te';
     
-    // Get the advisory for this problem
     $stmt = $pdo->prepare("
         SELECT 
             id,
@@ -743,7 +781,6 @@ function getAdvisories($pdo) {
     $advisory = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($advisory) {
-        // If stage_id is provided, get the problem_stage_id
         if ($stageId) {
             $stmt = $pdo->prepare("
                 SELECT id as problem_stage_id 
@@ -772,19 +809,6 @@ function getAdvisories($pdo) {
 
 /**
  * Get advisory components/remedies for a specific advisory
- * 
- * CRITICAL FIX: Now properly filters by problem_stage_id for stage-specific components
- * 
- * The advisory_components table has:
- * - problem_stage_id: Links to problem_stages.id (stage-specific components)
- * - stage_scope: General stage category (Nursery, Vegetative, Reproductive, Ripening, All Stages)
- * 
- * Logic:
- * 1. If problem_stage_id is provided, return components that match it OR have NULL problem_stage_id
- * 2. If stage_scope is provided, also filter by stage_scope OR 'All Stages'
- * 3. Components with NULL problem_stage_id are general and apply to all stages
- * 
- * Usage: get_advisory_components?advisory_id=5&problem_stage_id=13&stage_scope=Nursery&lang=en
  */
 function getAdvisoryComponents($pdo) {
     $advisoryId = $_GET['advisory_id'] ?? 0;
@@ -822,15 +846,11 @@ function getAdvisoryComponents($pdo) {
     ";
     $params = [$advisoryId];
     
-    // Filter by problem_stage_id if provided
-    // Include components that match the specific stage OR are general (NULL)
     if ($problemStageId) {
         $sql .= " AND (problem_stage_id = ? OR problem_stage_id IS NULL)";
         $params[] = $problemStageId;
     }
     
-    // Filter by stage_scope if provided
-    // Include components that match the specific scope OR are 'All Stages'
     if ($stageScope) {
         $sql .= " AND (stage_scope = ? OR stage_scope = 'All Stages')";
         $params[] = $stageScope;
@@ -847,7 +867,6 @@ function getAdvisoryComponents($pdo) {
 
 /**
  * Save an identified problem for a farmer
- * Saves to farmer_identified_problems table
  */
 function saveIdentifiedProblem($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
@@ -861,7 +880,6 @@ function saveIdentifiedProblem($pdo) {
     }
     
     try {
-        // Check if already identified to prevent duplicates
         $checkStmt = $pdo->prepare("
             SELECT id FROM farmer_identified_problems 
             WHERE user_id = ? AND problem_id = ?
@@ -870,7 +888,6 @@ function saveIdentifiedProblem($pdo) {
         $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
         
         if ($existing) {
-            // Already marked, return success with existing ID
             echo json_encode([
                 'success' => true, 
                 'id' => $existing['id'], 
@@ -879,7 +896,6 @@ function saveIdentifiedProblem($pdo) {
             return;
         }
         
-        // Insert new record
         $stmt = $pdo->prepare("
             INSERT INTO farmer_identified_problems (problem_id, user_id, created_at)
             VALUES (?, ?, NOW())
@@ -927,9 +943,7 @@ function getProducts($pdo) {
             $params[] = "%$search%";
         }
         
-        // Filter by User Region
         if ($userId) {
-            // Get user's region
             $stmtUser = $pdo->prepare("SELECT region FROM users WHERE user_id = ?");
             $stmtUser->execute([$userId]);
             $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
@@ -937,9 +951,6 @@ function getProducts($pdo) {
             if ($user && !empty($user['region'])) {
                 $userRegion = $user['region'];
                 
-                // FIND REGION ID
-                // Schema confirmed: regions(id, region_name, client_code, created_at)
-                // We match users.region (string) against regions.region_name
                 try {
                     $stmtRegion = $pdo->prepare("SELECT id FROM regions WHERE region_name = ? LIMIT 1"); 
                     $stmtRegion->execute([$userRegion]);
@@ -947,16 +958,12 @@ function getProducts($pdo) {
                     
                     if ($region) {
                         $regionId = $region['id'];
-                        // Logic: Show products for this Region ID OR Global products (NULL)
                         $sql .= " AND (p.region_id IS NULL OR p.region_id = ?)";
                         $params[] = $regionId;
                     } else {
-                        // Region name from user profile doesn't match any region in DB.
-                        // Fallback: Show ONLY Global products.
                         $sql .= " AND p.region_id IS NULL";
                     }
                 } catch (PDOException $e) {
-                    // Fallback to Global if query fails
                     $sql .= " AND p.region_id IS NULL";
                 }
             }
@@ -1016,7 +1023,6 @@ function getSeedVarieties($pdo) {
     $varietyField = ($lang === 'en') ? 'variety_name_en' : 'variety_name_te';
     $detailsField = 'details_te';
     
-    // Base SQL
     $sql = "
         SELECT DISTINCT 
             sv.id, 
@@ -1038,15 +1044,12 @@ function getSeedVarieties($pdo) {
     
     $params = [];
     
-    // Filter by Crop Name
     if (!empty($cropName)) {
         $sql .= " AND sv.crop_name = ?";
         $params[] = $cropName;
     }
     
-    // Filter by User Region
     if (!empty($userId)) {
-        // Get user's region
         $stmtUser = $pdo->prepare("SELECT region FROM users WHERE user_id = ?");
         $stmtUser->execute([$userId]);
         $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
@@ -1054,10 +1057,6 @@ function getSeedVarieties($pdo) {
         if ($user && !empty($user['region'])) {
             $userRegion = $user['region'];
             
-            // Filter: (All Regions OR Specific Region)
-            // Note: vl.is_all_regions = 1 means available everywhere
-            // sv.region matches user's region
-            // RELAXED LOGIC: If is_all_regions column doesn't exist or is null, checks sv.region
             $sql .= " AND (
                 (vl.base_price IS NOT NULL AND vl.is_all_regions = 1) 
                 OR 
@@ -1112,7 +1111,6 @@ function createCHCBooking($pdo) {
         return;
     }
     
-    // Generate operator notes for variable billing
     $operatorNotes = null;
     if ($billingType === 'Variable') {
         $operatorNotes = "Variable Billing: Final bill based on actual $unitType";
@@ -1190,51 +1188,67 @@ function getCHCBookings($pdo) {
     }
 }
 
+/**
+ * Fetch CHC Equipments
+ * Region-specific filter based on client_code
+ */
 function getCHCEquipments($pdo) {
     $isMember = isset($_GET['is_member']) && $_GET['is_member'] == '1';
     $clientCode = $_GET['client_code'] ?? null;
+    $operatorId = $_GET['operator_id'] ?? null; 
     
     try {
-        $sql = "
-            SELECT ce.id, ce.name_en, ce.name_te, ce.image, ce.description, 
-                   ce.price_member, ce.price_non_member, ce.unit, ce.quantity, ce.status
-            FROM chc_equipments ce
-            WHERE ce.status = 'Active' AND ce.quantity > 0
-        ";
-        
-        $params = [];
-        
-        if ($clientCode) {
-            // Look up region_id from regions table using client_code
-            $stmtRegion = $pdo->prepare("SELECT id FROM regions WHERE client_code = ? LIMIT 1");
-            $stmtRegion->execute([$clientCode]);
-            $region = $stmtRegion->fetch(PDO::FETCH_ASSOC);
-            
-            if ($region) {
-                $regionId = $region['id'];
-                // Logic:
-                // 1. Equipment is explicitly available in user's region (via region_id)
-                // 2. Equipment is NOT in the availability table at all (Global)
-                $sql .= " AND (
-                    ce.id IN (SELECT equipment_id FROM chc_region_availability WHERE region_id = ?)
-                    OR
-                    ce.id NOT IN (SELECT DISTINCT equipment_id FROM chc_region_availability)
-                )";
-                $params[] = $regionId;
+        // Automatically fetch client_code if the flutter app sends operator_id
+        if (empty($clientCode) && !empty($operatorId)) {
+            $stmtOp = $pdo->prepare("SELECT client_code FROM chc_operators WHERE operator_id = ?");
+            $stmtOp->execute([$operatorId]);
+            $opData = $stmtOp->fetch(PDO::FETCH_ASSOC);
+            if ($opData && !empty($opData['client_code'])) {
+                $clientCode = $opData['client_code'];
             }
         }
-        
-        $sql .= " ORDER BY ce.id";
-        
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $equipments = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Add display_price based on membership
-        foreach ($equipments as &$eq) {
-            $eq['display_price'] = $isMember ? $eq['price_member'] : $eq['price_non_member'];
+
+        if (!empty($clientCode)) {
+            // Filter by region availability based on client_code and use custom pricing as fallback
+            $stmt = $pdo->prepare("
+                SELECT DISTINCT e.id, e.name_en, e.name_te, e.image, e.description,
+                       e.unit, e.quantity, e.status,
+                       COALESCE(p.price_member, e.price_member) AS price_member, 
+                       COALESCE(p.price_non_member, e.price_non_member) AS price_non_member
+                FROM chc_equipments e
+                JOIN chc_region_availability cra ON e.id = cra.equipment_id
+                JOIN regions r ON cra.region_id = r.id
+                LEFT JOIN client_item_pricing p ON e.id = p.item_id AND p.client_code = ?
+                WHERE r.client_code = ? AND e.status = 'Active'
+                ORDER BY e.name_en
+            ");
+            $stmt->execute([$clientCode, $clientCode]);
+        } else {
+            // Fallback for generic fetch
+            $stmt = $pdo->prepare("
+                SELECT e.id, e.name_en, e.name_te, e.image, e.description,
+                       e.unit, e.quantity, e.status,
+                       e.price_member, e.price_non_member
+                FROM chc_equipments e
+                WHERE e.status = 'Active'
+                ORDER BY e.name_en
+            ");
+            $stmt->execute();
         }
-        
+
+        $equipments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Add display_price and fetch slabs for Tractor-Trolley
+        foreach ($equipments as &$eq) {
+            $eq['display_price'] = $isMember ? ($eq['price_member'] ?? 0) : ($eq['price_non_member'] ?? 0);
+
+            if (stripos($eq['name_en'], 'Tractor-Trolley') !== false && !empty($clientCode)) {
+                $stmtSlab = $pdo->prepare("SELECT min_km, max_km, price_member, price_non_member FROM client_item_price_slabs WHERE item_id = ? AND client_code = ? ORDER BY min_km");
+                $stmtSlab->execute([$eq['id'], $clientCode]);
+                $eq['slabs'] = $stmtSlab->fetchAll(PDO::FETCH_ASSOC);
+            }
+        }
+
         echo json_encode(['success' => true, 'equipments' => $equipments]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -1251,13 +1265,11 @@ function checkCHCAvailability($pdo) {
     }
     
     try {
-        // Get total quantity for equipment
         $stmt = $pdo->prepare("SELECT quantity FROM chc_equipments WHERE name_en = ?");
         $stmt->execute([$equipmentName]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         $totalQty = $result ? (int)$result['quantity'] : 0;
         
-        // Count existing bookings for this date (excluding cancelled)
         $stmt = $pdo->prepare("
             SELECT COUNT(*) as booked_count 
             FROM chc_bookings 
@@ -1294,13 +1306,11 @@ function getBookedDates($pdo) {
     }
     
     try {
-        // Get total quantity for equipment
         $stmt = $pdo->prepare("SELECT quantity FROM chc_equipments WHERE name_en = ?");
         $stmt->execute([$equipmentName]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         $totalQty = $result ? (int)$result['quantity'] : 0;
         
-        // Get booking counts per date for this month
         $startDate = sprintf('%04d-%02d-01', $year, $month);
         $endDate = date('Y-m-t', strtotime($startDate));
         
@@ -1356,10 +1366,6 @@ function createSeedBooking($pdo) {
     try {
         error_log("Seed Booking: Request received - ID: $bookingId, User: $userId, Variety: $seedVarietyId");
         
-        // Find a valid listing_id for this seed variety
-        // Prioritize listings that are active and available in all regions or match user's region
-        // For simplicity, we'll pick the first active listing for this variety
-        // In a real scenario, you might want to pass the specific listing_id from the frontend if multiple vendors exist
         $stmtListing = $pdo->prepare("
             SELECT id FROM vendor_listings 
             WHERE seed_variety_id = ? AND is_active = 1 
@@ -1375,7 +1381,6 @@ function createSeedBooking($pdo) {
         
         $listingId = $listing['id'];
         
-        // Get user region optionally
         $stmtUser = $pdo->prepare("SELECT region FROM users WHERE user_id = ?");
         $stmtUser->execute([$userId]);
         $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
@@ -1418,4 +1423,210 @@ function getAnnouncements($pdo) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
 }
-?>
+
+// ===================== OPERATOR FUNCTIONS =====================
+
+function operatorLogin($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $phone = $input['phone_number'] ?? '';
+    $password = $input['password'] ?? '';
+
+    if (empty($phone) || empty($password)) {
+        echo json_encode(['success' => false, 'message' => 'Phone and password are required']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM chc_operators WHERE phone_number = ?");
+        $stmt->execute([$phone]);
+        $operator = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$operator) {
+            echo json_encode(['success' => false, 'message' => 'Operator not found. Check your phone number.']);
+            return;
+        }
+
+        $passwordMatch = false;
+        if (isset($operator['password'])) {
+            if (password_verify($password, $operator['password'])) {
+                $passwordMatch = true;
+            } elseif ($operator['password'] === $password) {
+                $passwordMatch = true;
+            }
+        }
+
+        if (!$passwordMatch) {
+            echo json_encode(['success' => false, 'message' => 'Incorrect password.']);
+            return;
+        }
+
+        unset($operator['password']);
+        echo json_encode(['success' => true, 'operator' => $operator]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+}
+
+function getOperatorBookings($pdo) {
+    $operatorId = $_GET['operator_id'] ?? '';
+
+    if (empty($operatorId)) {
+        echo json_encode(['success' => false, 'error' => 'Operator ID required']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT
+                b.id, b.booking_id, b.user_id, b.equipment_type, b.billing_type,
+                b.crop_type, b.land_size_acres, b.billed_qty, b.unit_type,
+                b.service_date, b.rescheduled_date, b.rate, b.total_cost,
+                b.notes, b.booking_status, b.operator_notes,
+                b.assignment_status, b.created_at, b.updated_at,
+
+                u.name AS farmer_name,
+                u.phone_number AS farmer_phone,
+                u.village AS farmer_village,
+
+                tc.status AS task_status,
+                tc.start_reading, tc.end_reading,
+                tc.measured_qty, tc.measured_unit,
+                tc.applied_rate, tc.final_amount,
+                tc.work_start_time, tc.work_end_time
+
+            FROM chc_bookings b
+            LEFT JOIN users u ON b.user_id = u.user_id
+            LEFT JOIN chc_task_completions tc ON b.booking_id = tc.booking_id
+            WHERE b.assigned_operator_id = ?
+            ORDER BY b.created_at DESC
+        ");
+        $stmt->execute([$operatorId]);
+        $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'bookings' => $bookings]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function completeBookingManual($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    $operatorId     = $input['operator_id'] ?? '';
+    $farmerPhone    = $input['farmer_phone'] ?? '';
+    $farmerName     = $input['farmer_name'] ?? '';
+    $village        = $input['village'] ?? '';
+    $equipment      = $input['equipment_used'] ?? '';
+    $equipmentId    = $input['equipment_id'] ?? null;
+    $startTime      = $input['start_time'] ?? '';
+    $endTime        = $input['end_time'] ?? '';
+    $distance       = (float)($input['distance'] ?? 0);
+    $serviceDate    = $input['service_date'] ?? '';
+    $cropType       = $input['crop_type'] ?? null;
+    $landSizeAcres  = (float)($input['land_size_acres'] ?? 0);
+    $billedQty      = (float)($input['billed_qty'] ?? 0);
+    $unitType       = $input['unit_type'] ?? '';
+    $rate           = (float)($input['rate'] ?? 0);
+    $notes          = $input['notes'] ?? null;
+    $operatorNotes  = $input['operator_notes'] ?? 'Walk-in job logged by operator';
+    $finalAmount    = (float)($input['final_amount'] ?? 0);
+
+    if (empty($operatorId) || empty($farmerPhone) || empty($farmerName) || empty($village) || empty($equipment) || empty($serviceDate)) {
+        echo json_encode(['success' => false, 'error' => 'Missing required fields']);
+        return;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmtOp = $pdo->prepare("SELECT client_code FROM chc_operators WHERE operator_id = ?");
+        $stmtOp->execute([$operatorId]);
+        $operator = $stmtOp->fetch(PDO::FETCH_ASSOC);
+        $clientCode = $operator['client_code'] ?? null;
+
+        $stmtUser = $pdo->prepare("SELECT user_id, card_uid FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
+        $stmtUser->execute([$farmerPhone, $farmerPhone]);
+        $existingUser = $stmtUser->fetch(PDO::FETCH_ASSOC);
+
+        if (!$existingUser) {
+            $regionId = null;
+            if ($clientCode) {
+                $stmtReg = $pdo->prepare("SELECT id FROM regions WHERE client_code = ? LIMIT 1");
+                $stmtReg->execute([$clientCode]);
+                $regionRow = $stmtReg->fetch(PDO::FETCH_ASSOC);
+                $regionId = $regionRow['id'] ?? null;
+            }
+
+            $stmtNewUser = $pdo->prepare("
+                INSERT INTO users (user_id, name, phone_number, village, client_code, region_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ");
+            $stmtNewUser->execute([$farmerPhone, $farmerName, $farmerPhone, $village, $clientCode, $regionId]);
+        } else {
+            $stmtUpdateUser = $pdo->prepare("UPDATE users SET name = ?, village = ? WHERE user_id = ? OR phone_number = ?");
+            $stmtUpdateUser->execute([$farmerName, $village, $farmerPhone, $farmerPhone]);
+        }
+
+        $bookingId = 'WLK-' . strtoupper(substr(md5(uniqid()), 0, 8));
+        $billingType = $unitType === 'Trip' || $unitType === 'Hour' ? 'Variable' : 'Fixed';
+
+        $stmtBook = $pdo->prepare("
+            INSERT INTO chc_bookings (
+                booking_id, user_id, equipment_type, billing_type, crop_type,
+                land_size_acres, billed_qty, unit_type, service_date, rate,
+                total_cost, notes, booking_status, assigned_operator_id,
+                operator_notes, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Completed', ?, ?, NOW())
+        ");
+        $stmtBook->execute([
+            $bookingId,
+            $farmerPhone,
+            $equipment,
+            $billingType,
+            $cropType,
+            $landSizeAcres,
+            $billedQty,
+            $unitType,
+            $serviceDate,
+            $rate,
+            $finalAmount,
+            $notes,
+            $operatorId,
+            $operatorNotes,
+        ]);
+
+        $stmtTask = $pdo->prepare("
+            INSERT INTO chc_task_completions (
+                booking_id, operator_id, status,
+                work_start_time, work_end_time,
+                measured_qty, measured_unit,
+                applied_rate, final_amount, created_at
+            ) VALUES (?, ?, 'Completed', ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        $stmtTask->execute([
+            $bookingId,
+            $operatorId,
+            $startTime,
+            $endTime,
+            $billedQty,
+            $unitType,
+            $rate,
+            $finalAmount,
+        ]);
+
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'booking_id' => $bookingId,
+            'equipment_id' => $equipmentId,
+            'distance' => $distance,
+            'message' => 'Walk-in job logged successfully'
+        ]);
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}

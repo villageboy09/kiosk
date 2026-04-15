@@ -58,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       final isRegistered = await ApiService.checkUser(pin);
-      if (!isRegistered) {
+      if (isRegistered == null) {
         _showError('User not registered. Redirecting to Signup...');
         // Add a slight delay so user can see the message
         await Future.delayed(const Duration(milliseconds: 1500));

@@ -108,10 +108,11 @@ class AppTheme {
       ];
 
   // ============ TYPOGRAPHY ============
-  // All styles now include letter spacing for better readability
+  // Using Google Sans as the primary font and Noto Sans Telugu for regional text
 
   /// Headline 1 - Large titles
-  static TextStyle get h1 => GoogleFonts.poppins(
+  static TextStyle get h1 => const TextStyle(
+        fontFamily: 'Google Sans',
         fontSize: 24,
         fontWeight: FontWeight.w700,
         color: textPrimary,
@@ -120,7 +121,8 @@ class AppTheme {
       );
 
   /// Headline 2 - Section titles
-  static TextStyle get h2 => GoogleFonts.poppins(
+  static TextStyle get h2 => const TextStyle(
+        fontFamily: 'Google Sans',
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: textPrimary,
@@ -129,7 +131,8 @@ class AppTheme {
       );
 
   /// Headline 3 - Card titles
-  static TextStyle get h3 => GoogleFonts.poppins(
+  static TextStyle get h3 => const TextStyle(
+        fontFamily: 'Google Sans',
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: textPrimary,
@@ -138,7 +141,8 @@ class AppTheme {
       );
 
   /// Body text
-  static TextStyle get body => GoogleFonts.poppins(
+  static TextStyle get body => const TextStyle(
+        fontFamily: 'Google Sans',
         fontSize: 14,
         fontWeight: FontWeight.w400,
         color: textPrimary,
@@ -147,7 +151,8 @@ class AppTheme {
       );
 
   /// Body medium
-  static TextStyle get bodyMedium => GoogleFonts.poppins(
+  static TextStyle get bodyMedium => const TextStyle(
+        fontFamily: 'Google Sans',
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: textPrimary,
@@ -156,7 +161,8 @@ class AppTheme {
       );
 
   /// Caption text
-  static TextStyle get caption => GoogleFonts.poppins(
+  static TextStyle get caption => const TextStyle(
+        fontFamily: 'Google Sans',
         fontSize: 12,
         fontWeight: FontWeight.w400,
         color: textSecondary,
@@ -165,7 +171,8 @@ class AppTheme {
       );
 
   /// Small text
-  static TextStyle get small => GoogleFonts.poppins(
+  static TextStyle get small => const TextStyle(
+        fontFamily: 'Google Sans',
         fontSize: 11,
         fontWeight: FontWeight.w400,
         color: textSecondary,
@@ -174,7 +181,8 @@ class AppTheme {
       );
 
   /// Button text
-  static TextStyle get button => GoogleFonts.poppins(
+  static TextStyle get button => const TextStyle(
+        fontFamily: 'Google Sans',
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: textOnPrimary,
@@ -183,7 +191,8 @@ class AppTheme {
       );
 
   /// AppBar title
-  static TextStyle get appBarTitle => GoogleFonts.poppins(
+  static TextStyle get appBarTitle => const TextStyle(
+        fontFamily: 'Google Sans',
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: textOnPrimary,
@@ -250,6 +259,6 @@ class AppTheme {
     if (languageCode == 'te') {
       return GoogleFonts.notoSansTeluguTextTheme();
     }
-    return GoogleFonts.poppinsTextTheme();
+    return GoogleFonts.openSansTextTheme(); // Fallback to Open Sans if Google Sans is unavailable via font family
   }
 }

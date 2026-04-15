@@ -1,6 +1,8 @@
 import 'package:cropsync/screens/home_screen.dart';
+import 'package:cropsync/screens/operator/operator_dashboard.dart';
 import 'package:cropsync/welcome_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/services/location_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -19,8 +21,11 @@ Future<void> main() async {
     // .env file is optional now
   }
 
-  // Load user session if exists
-  await AuthService.loadUserSession();
+  // Load both farmer and operator sessions if they exist
+  await Future.wait([
+    AuthService.loadUserSession(),
+    OperatorAuthService.loadSession(),
+  ]);
 
   // Request location permission early (non-blocking)
   LocationService.requestPermission();
@@ -117,8 +122,8 @@ class MyApp extends StatelessWidget {
       ),
       debugShowCheckedModeBanner: false,
       title: 'CropSync',
-      home: FutureBuilder<bool>(
-        future: AuthService.isLoggedIn(),
+      home: FutureBuilder<Map<String, bool>>(
+        future: _checkSessions(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
@@ -130,13 +135,33 @@ class MyApp extends StatelessWidget {
             );
           }
 
-          // If user is logged in, go to home screen, otherwise language selection
-          if (snapshot.data == true) {
+          final data = snapshot.data ?? {};
+
+          // Operator session takes priority if operator is logged in
+          if (data['operator'] == true) {
+            return const OperatorDashboard();
+          }
+
+          // Regular farmer session
+          if (data['farmer'] == true) {
             return const HomeScreen();
           }
+
           return const SplashScreen();
         },
       ),
     );
   }
+
+  static Future<Map<String, bool>> _checkSessions() async {
+    final results = await Future.wait([
+      AuthService.isLoggedIn(),
+      OperatorAuthService.isLoggedIn(),
+    ]);
+    return {
+      'farmer': results[0],
+      'operator': results[1],
+    };
+  }
 }
+
