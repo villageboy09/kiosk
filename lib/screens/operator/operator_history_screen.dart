@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import 'package:cropsync/models/chc_operator.dart';
 import 'package:cropsync/services/api_service.dart';
@@ -15,7 +16,7 @@ class OperatorHistoryScreen extends StatefulWidget {
 class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
   List<Map<String, dynamic>> _all = [];
   bool _isLoading = true;
-  String _filter = 'All';
+  String _filter = 'operator_filter_all';
 
   static const Color _green = Color(0xFF059669);
 
@@ -53,8 +54,11 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
   }
 
   List<Map<String, dynamic>> get _filtered {
-    if (_filter == 'All') return _all;
-    return _all.where((b) => b['booking_status'] == _filter).toList();
+    if (_filter == 'operator_filter_all') return _all;
+    if (_filter == 'operator_filter_completed') {
+      return _all.where((b) => b['booking_status'] == 'Completed').toList();
+    }
+    return _all.where((b) => b['booking_status'] == 'Cancelled').toList();
   }
 
   @override
@@ -71,7 +75,7 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  Text('Booking History',
+                  Text('operator_booking_history'.tr(),
                       style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
@@ -100,7 +104,7 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                     Icon(Icons.inbox_outlined,
                         size: 60, color: Colors.grey[300]),
                     const SizedBox(height: 16),
-                    Text('No history found',
+                    Text('operator_no_history_found'.tr(),
                         style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -130,7 +134,11 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
-        children: ['All', 'Completed', 'Cancelled'].map((f) {
+        children: [
+          'operator_filter_all',
+          'operator_filter_completed',
+          'operator_filter_cancelled'
+        ].map((f) {
           final active = _filter == f;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -149,7 +157,7 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                   ),
                 ),
                 child: Text(
-                  f,
+                  f.tr(),
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -205,7 +213,7 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    b['equipment_type'] ?? 'Equipment',
+                    b['equipment_type'] ?? 'operator_equipment_fallback'.tr(),
                     style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,

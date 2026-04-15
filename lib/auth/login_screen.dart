@@ -33,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   String? _pressedButton;
+  Timer? _errorTimer;
 
   @override
   void initState() {
@@ -44,6 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _errorTimer?.cancel();
     _pinController.dispose();
     super.dispose();
   }
@@ -59,13 +61,14 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final isRegistered = await ApiService.checkUser(pin);
       if (isRegistered == null) {
-        _showError('User not registered. Redirecting to Signup...');
+        _showError('login_user_not_registered_redirect'.tr());
         // Add a slight delay so user can see the message
         await Future.delayed(const Duration(milliseconds: 1500));
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => SignupScreen(initialPhoneNumber: pin)),
+          MaterialPageRoute(
+              builder: (_) => SignupScreen(initialPhoneNumber: pin)),
         );
         return;
       }
@@ -84,8 +87,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showError(String msg) {
+    _errorTimer?.cancel();
     setState(() => _errorMessage = msg);
-    Timer(const Duration(seconds: 4), () {
+    _errorTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _errorMessage = null);
     });
   }
@@ -111,33 +115,47 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      resizeToAvoidBottomInset: false, // Prevent keyboard from jumping view
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Stack(
           children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 450),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Spacer(flex: 2),
-                      _buildBranding(),
-                      const Spacer(flex: 1),
-                      _buildSingleInputDisplay(),
-                      const SizedBox(height: 12),
-                      _buildHintChip(),
-                      const SizedBox(height: 24),
-                      _buildKeypad(),
-                      const Spacer(flex: 1),
-                      _buildSignupLink(),
-                      const Spacer(flex: 2),
-                    ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: ConstrainedBox(
+                    constraints:
+                        BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 450),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const SizedBox(height: 16),
+                              _buildBranding(),
+                              const SizedBox(height: 24),
+                              _buildSingleInputDisplay(),
+                              const SizedBox(height: 12),
+                              _buildHintChip(),
+                              const SizedBox(height: 24),
+                              _buildKeypad(),
+                              const SizedBox(height: 24),
+                              _buildSignupLink(),
+                              const SizedBox(height: 16),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
             if (_errorMessage != null)
               Positioned(
@@ -191,6 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildSingleInputDisplay() {
     final hasInput = _pinController.text.isNotEmpty;
+    final displayText = hasInput ? _pinController.text : '------';
     return Container(
       constraints: const BoxConstraints(maxWidth: 320),
       width: double.infinity,
@@ -199,22 +218,22 @@ class _LoginScreenState extends State<LoginScreen> {
         color: const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: hasInput
-              ? const Color(0xFF059669)
-              : const Color(0xFFD1D5DB),
+          color: hasInput ? const Color(0xFF059669) : const Color(0xFFD1D5DB),
           width: 2.0,
         ),
       ),
       alignment: Alignment.center,
-      child: Text(
-        hasInput ? _pinController.text : '------',
-        style: GoogleFonts.poppins(
-          fontSize: 28,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 8,
-          color: hasInput
-              ? const Color(0xFF111827)
-              : const Color(0xFF9CA3AF), 
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          displayText,
+          maxLines: 1,
+          style: GoogleFonts.poppins(
+            fontSize: hasInput ? 24 : 28,
+            fontWeight: FontWeight.w700,
+            letterSpacing: hasInput ? 4 : 8,
+            color: hasInput ? const Color(0xFF111827) : const Color(0xFF9CA3AF),
+          ),
         ),
       ),
     );
@@ -378,12 +397,15 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const SignupScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const SignupScreen(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
               const begin = Offset(1.0, 0.0);
               const end = Offset.zero;
               const curve = Curves.easeInOutCubic;
-              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              var tween =
+                  Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
               return SlideTransition(
                 position: animation.drive(tween),
                 child: child,
@@ -407,12 +429,16 @@ class _LoginScreenState extends State<LoginScreen> {
             color: Color(0xFF047857),
           ),
           const SizedBox(width: 8),
-          Text(
-            'signup_create_account'.tr(),
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              color: const Color(0xFF047857),
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              'signup_create_account'.tr(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: const Color(0xFF047857),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           const SizedBox(width: 4),
@@ -446,7 +472,8 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, color: Colors.white, size: 22),
+            const Icon(Icons.error_outline_rounded,
+                color: Colors.white, size: 22),
             const SizedBox(width: 12),
             Expanded(
               child: Text(

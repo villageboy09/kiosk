@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import 'package:cropsync/models/chc_operator.dart';
 
@@ -73,7 +74,7 @@ class OperatorProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            op?.name ?? 'Operator',
+            op?.name ?? 'operator_label'.tr(),
             style: GoogleFonts.poppins(
               fontSize: 22,
               fontWeight: FontWeight.w800,
@@ -82,7 +83,8 @@ class OperatorProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Zone: ${op?.zoneDisplay ?? 'N/A'}',
+            'operator_zone'
+                .tr(namedArgs: {'zone': op?.zoneDisplay ?? 'not_set'.tr()}),
             style: GoogleFonts.inter(
               fontSize: 14,
               color: Colors.white.withValues(alpha: 0.85),
@@ -94,8 +96,7 @@ class OperatorProfileScreen extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.star_rounded,
-                    color: Colors.amber, size: 20),
+                const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
                 const SizedBox(width: 4),
                 Text(
                   op!.rating!,
@@ -118,17 +119,17 @@ class OperatorProfileScreen extends StatelessWidget {
       if (op.phoneNumber.isNotEmpty)
         _InfoRow(
             icon: Icons.phone_rounded,
-            label: 'Phone',
+            label: 'phone_number'.tr(),
             value: op.phoneNumber),
       if (op.baseVillage != null)
         _InfoRow(
             icon: Icons.location_on_rounded,
-            label: 'Base Village',
+            label: 'operator_base_village'.tr(),
             value: op.baseVillage!),
       if (op.equipmentType != null)
         _InfoRow(
             icon: Icons.agriculture_rounded,
-            label: 'Equipment',
+            label: 'chc_equipment'.tr(),
             value: op.equipmentType!),
     ];
 
@@ -150,7 +151,7 @@ class OperatorProfileScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Details',
+          Text('details'.tr(),
               style: GoogleFonts.poppins(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -217,7 +218,7 @@ class OperatorProfileScreen extends StatelessWidget {
                   color: Color(0xFFDC2626), size: 20),
               const SizedBox(width: 10),
               Text(
-                'Sign Out',
+                'operator_sign_out'.tr(),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import 'package:cropsync/models/chc_operator.dart';
 import 'package:cropsync/services/operator_auth_service.dart';
@@ -35,8 +36,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
     setState(() => _isLoading = true);
     _operator = await OperatorAuthService.getCurrentOperator();
     if (_operator != null) {
-      _bookings =
-          await ApiService.getOperatorBookings(_operator!.operatorId);
+      _bookings = await ApiService.getOperatorBookings(_operator!.operatorId);
     }
     if (mounted) setState(() => _isLoading = false);
   }
@@ -55,21 +55,20 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Sign Out',
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('operator_sign_out'.tr(),
             style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
-        content: Text('Are you sure you want to sign out?',
+        content: Text('operator_sign_out_confirm'.tr(),
             style: GoogleFonts.inter(color: const Color(0xFF4B5563))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
+            child: Text('cancel'.tr(),
                 style: GoogleFonts.inter(color: const Color(0xFF6B7280))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Sign Out',
+            child: Text('operator_sign_out'.tr(),
                 style: GoogleFonts.inter(
                     color: const Color(0xFFDC2626),
                     fontWeight: FontWeight.w700)),
@@ -152,7 +151,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                       ),
                     ),
                     Text(
-                      'Zone: ${op.zoneDisplay}',
+                      'operator_zone'.tr(namedArgs: {'zone': op.zoneDisplay}),
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: const Color(0xFF6B7280),
@@ -164,7 +163,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
               )
             else
               Expanded(
-                child: Text('Operator Dashboard',
+                child: Text('operator_dashboard_title'.tr(),
                     style: GoogleFonts.poppins(
                         fontSize: 15, fontWeight: FontWeight.w700)),
               ),
@@ -217,7 +216,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'Active Tasks',
+                'operator_active_tasks'.tr(),
                 style: GoogleFonts.poppins(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
@@ -234,8 +233,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
             )
           else
             SliverPadding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (_, i) => _buildBookingCard(active[i]),
@@ -266,7 +264,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
           ),
           const SizedBox(height: 20),
           Text(
-            'All Caught Up!',
+            'operator_all_caught_up'.tr(),
             style: GoogleFonts.poppins(
               fontSize: 20,
               fontWeight: FontWeight.w700,
@@ -275,7 +273,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
           ),
           const SizedBox(height: 6),
           Text(
-            'No pending jobs assigned.\nUse the + button to log a walk-in job.',
+            'operator_no_pending_jobs'.tr(),
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               fontSize: 14,
@@ -341,7 +339,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        b['equipment_type'] ?? 'Equipment',
+                        b['equipment_type'] ??
+                            'operator_equipment_fallback'.tr(),
                         style: GoogleFonts.poppins(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -349,7 +348,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                         ),
                       ),
                       Text(
-                        'Booking #${b['booking_id'] ?? ''}',
+                        'operator_booking_number'
+                            .tr(namedArgs: {'id': '${b['booking_id'] ?? ''}'}),
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           color: const Color(0xFF9CA3AF),
@@ -359,8 +359,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: statusBg,
                     borderRadius: BorderRadius.circular(20),
@@ -388,7 +388,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                     Icons.grass_rounded,
                     b['crop_type']?.toString().isNotEmpty == true
                         ? b['crop_type'].toString()
-                        : 'N/A'),
+                        : 'not_set'.tr()),
                 const Spacer(),
                 Text(
                   '₹${b['total_cost'] ?? '—'}',
@@ -423,9 +423,9 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
 
   Widget _buildBottomNav() {
     const items = [
-      {'icon': Icons.home_rounded, 'label': 'Home'},
-      {'icon': Icons.history_rounded, 'label': 'History'},
-      {'icon': Icons.person_rounded, 'label': 'Profile'},
+      {'icon': Icons.home_rounded, 'label': 'operator_nav_home'},
+      {'icon': Icons.history_rounded, 'label': 'operator_nav_history'},
+      {'icon': Icons.person_rounded, 'label': 'operator_nav_profile'},
     ];
 
     return Container(
@@ -449,7 +449,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
               items.length,
               (i) => _navItem(
                 icon: items[i]['icon'] as IconData,
-                label: items[i]['label'] as String,
+                label: (items[i]['label'] as String).tr(),
                 isActive: _currentTab == i,
                 onTap: () => setState(() => _currentTab = i),
               ),
@@ -471,8 +471,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -486,8 +485,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
               label,
               style: GoogleFonts.inter(
                 fontSize: 11,
-                fontWeight:
-                    isActive ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                 color: isActive ? _green : const Color(0xFF9CA3AF),
               ),
             ),

@@ -45,6 +45,8 @@ class _SignupScreenState extends State<SignupScreen>
   String? _successMessage;
 
   bool _otpSent = false;
+  Timer? _errorTimer;
+  Timer? _successTimer;
 
   @override
   void initState() {
@@ -76,6 +78,8 @@ class _SignupScreenState extends State<SignupScreen>
 
   @override
   void dispose() {
+    _errorTimer?.cancel();
+    _successTimer?.cancel();
     _nameController.dispose();
     _phoneController.dispose();
     _otpController.dispose();
@@ -86,16 +90,24 @@ class _SignupScreenState extends State<SignupScreen>
 
   void _showError(String msg) {
     if (!mounted) return;
-    setState(() => _errorMessage = msg);
-    Timer(const Duration(seconds: 4), () {
+    _errorTimer?.cancel();
+    setState(() {
+      _errorMessage = msg;
+      _successMessage = null;
+    });
+    _errorTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _errorMessage = null);
     });
   }
 
   void _showSuccess(String msg) {
     if (!mounted) return;
-    setState(() => _successMessage = msg);
-    Timer(const Duration(seconds: 4), () {
+    _successTimer?.cancel();
+    setState(() {
+      _successMessage = msg;
+      _errorMessage = null;
+    });
+    _successTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _successMessage = null);
     });
   }
@@ -157,7 +169,7 @@ class _SignupScreenState extends State<SignupScreen>
           });
         }
       } else {
-        _showError(res['error'] ?? 'Unknown error occurred');
+        _showError(res['error'] ?? 'signup_unknown_error'.tr());
         if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
@@ -171,7 +183,7 @@ class _SignupScreenState extends State<SignupScreen>
     final phone = _phoneController.text.trim();
     final otp = _otpController.text.trim();
 
-    if (otp.length < 4) {
+    if (otp.length < 6) {
       _showError('login_pin_length_error'.tr());
       return;
     }
@@ -181,14 +193,14 @@ class _SignupScreenState extends State<SignupScreen>
     try {
       final verifyRes = await ApiService.verifyOtp(phone, otp);
       if (verifyRes['success'] != true) {
-        _showError(verifyRes['error'] ?? 'Invalid OTP');
+        _showError(verifyRes['error'] ?? 'signup_invalid_otp'.tr());
         if (mounted) setState(() => _isLoading = false);
         return;
       }
 
       final regRes = await ApiService.registerUser(name, phone);
       if (regRes['success'] != true) {
-        _showError(regRes['error'] ?? 'Registration failed');
+        _showError(regRes['error'] ?? 'signup_registration_failed'.tr());
         if (mounted) setState(() => _isLoading = false);
         return;
       }
@@ -438,6 +450,9 @@ class _SignupScreenState extends State<SignupScreen>
                 maxLength: 6,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 onChanged: (val) {
+                  if (mounted) {
+                    setState(() {});
+                  }
                   if (val.length == 6) {
                     FocusScope.of(context).unfocus();
                   }
@@ -496,14 +511,18 @@ class _SignupScreenState extends State<SignupScreen>
     return Container(
       height: 64,
       decoration: BoxDecoration(
-        color: isButtonDisabled ? const Color(0xFF94A3B8) : const Color(0xFF059669),
+        color: isButtonDisabled
+            ? const Color(0xFF94A3B8)
+            : const Color(0xFF059669),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: isButtonDisabled ? null : (_otpSent ? _verifyAndRegister : _sendOtp),
+          onTap: isButtonDisabled
+              ? null
+              : (_otpSent ? _verifyAndRegister : _sendOtp),
           child: Center(
             child: _isLoading
                 ? const SizedBox(
@@ -558,12 +577,16 @@ class _SignupScreenState extends State<SignupScreen>
             color: Color(0xFF4B5563),
           ),
           const SizedBox(width: 8),
-          Text(
-            'signup_already_have_account'.tr(),
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              color: const Color(0xFF4B5563),
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              'signup_already_have_account'.tr(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: const Color(0xFF4B5563),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           const SizedBox(width: 4),
@@ -623,12 +646,14 @@ class _SignupScreenState extends State<SignupScreen>
             const SizedBox(width: 12),
             Flexible(
               child: Text(
-                'Are you a CHC Operator? Sign In →',
+                'signup_operator_signin'.tr(),
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: const Color(0xFF047857),
                   fontWeight: FontWeight.w700,
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

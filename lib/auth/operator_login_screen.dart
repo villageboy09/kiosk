@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
+import 'package:easy_localization/easy_localization.dart';
 
 import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/screens/operator/operator_dashboard.dart';
@@ -76,11 +77,11 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
     final password = _passwordController.text;
 
     if (phone.length < 10) {
-      _showError('Please enter a valid 10-digit phone number.');
+      _showError('operator_login_error_phone'.tr());
       return;
     }
     if (password.isEmpty) {
-      _showError('Please enter your password.');
+      _showError('operator_login_error_password'.tr());
       return;
     }
 
@@ -191,7 +192,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
         ),
         const SizedBox(height: 20),
         Text(
-          'Operator Portal',
+          'operator_login_title'.tr(),
           textAlign: TextAlign.center,
           style: GoogleFonts.poppins(
             fontSize: 28,
@@ -203,7 +204,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          'Sign in to manage your CHC assignments',
+          'operator_login_subtitle'.tr(),
           textAlign: TextAlign.center,
           style: GoogleFonts.inter(
             fontSize: 15,
@@ -230,12 +231,16 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
           const Icon(Icons.verified_rounded,
               size: 16, color: Color(0xFF047857)),
           const SizedBox(width: 8),
-          Text(
-            'Custom Hiring Centre (CHC) Operator',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: _darkGreen,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              'operator_login_badge'.tr(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: _darkGreen,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -260,7 +265,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
         style: GoogleFonts.inter(
             fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
-          hintText: 'Phone number',
+          hintText: 'operator_phone_hint'.tr(),
           hintStyle: GoogleFonts.inter(
               color: const Color(0xFF9CA3AF),
               fontSize: 16,
@@ -290,7 +295,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
         style: GoogleFonts.inter(
             fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
-          hintText: 'Password',
+          hintText: 'operator_password_hint'.tr(),
           hintStyle: GoogleFonts.inter(
               color: const Color(0xFF9CA3AF),
               fontSize: 16,
@@ -351,7 +356,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
                         color: Colors.white, strokeWidth: 2.5),
                   )
                 : Text(
-                    'Sign In as Operator',
+                    'operator_login_button'.tr(),
                     style: GoogleFonts.inter(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
@@ -387,7 +392,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
               size: 18, color: Color(0xFF4B5563)),
           const SizedBox(width: 8),
           Text(
-            'Back to Farmer Login',
+            'operator_back_to_farmer_login'.tr(),
             style: GoogleFonts.inter(
               fontSize: 15,
               color: _textSub,

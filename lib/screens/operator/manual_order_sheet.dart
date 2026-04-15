@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'package:easy_localization/easy_localization.dart';
 
 import 'package:cropsync/models/chc_operator.dart';
 import 'package:cropsync/services/api_service.dart';
@@ -174,7 +175,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   }
 
   String _formatDate(DateTime? d) {
-    if (d == null) return 'Select service date';
+    if (d == null) return 'operator_select_service_date'.tr();
     final day = d.day.toString().padLeft(2, '0');
     final month = d.month.toString().padLeft(2, '0');
     return '$day/$month/${d.year}';
@@ -346,7 +347,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   Future<void> _submit() async {
     if (!_canPreview) {
-      _showMsg('Please fill all fields correctly.', isError: true);
+      _showMsg('operator_fill_required_fields'.tr(), isError: true);
       return;
     }
 
@@ -375,15 +376,15 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       );
 
       if (res['success'] == true) {
-        _showMsg('Job logged successfully!');
+        _showMsg('operator_job_logged_success'.tr());
         await Future.delayed(const Duration(milliseconds: 1200));
         if (mounted) Navigator.pop(context);
       } else {
-        _showMsg(res['error'] ?? 'Failed to log job.', isError: true);
+        _showMsg(res['error'] ?? 'operator_log_job_failed'.tr(), isError: true);
         if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
-      _showMsg('Network error. Try again.', isError: true);
+      _showMsg('operator_network_error_try_again'.tr(), isError: true);
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -437,13 +438,13 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                       color: Color(0xFF059669), size: 22),
                 ),
                 const SizedBox(width: 14),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Log Walk-in Job',
-                        style: TextStyle(
+                        'operator_log_walk_in_job'.tr(),
+                        style: const TextStyle(
                           fontFamily: 'Google Sans',
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -451,8 +452,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                         ),
                       ),
                       Text(
-                        'Enter farmer details to generate a bill for a completed job.',
-                        style: TextStyle(
+                        'operator_log_walk_in_subtitle'.tr(),
+                        style: const TextStyle(
                           fontFamily: 'Google Sans',
                           fontSize: 12,
                           color: _textSub,
@@ -479,7 +480,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _fieldLabel('PHONE NUMBER'),
+                      _fieldLabel('operator_phone_number_label'.tr()),
                       if (_isFoundMember)
                         _memberBadge(true)
                       else if (_phoneController.text.length == 10 &&
@@ -490,7 +491,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                   const SizedBox(height: 6),
                   _buildTextField(
                     controller: _phoneController,
-                    hint: '10-digit mobile number',
+                    hint: 'signup_phone_hint'.tr(),
                     icon: Icons.phone_rounded,
                     type: TextInputType.phone,
                     suffixIcon: _isFetchingUser
@@ -509,65 +510,65 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _fieldLabel('FARMER NAME'),
+                  _fieldLabel('operator_farmer_name_label'.tr()),
                   const SizedBox(height: 6),
                   _buildTextField(
                     controller: _nameController,
-                    hint: 'Full name',
+                    hint: 'signup_name_hint'.tr(),
                     icon: Icons.person_rounded,
                     type: TextInputType.name,
                     onChanged: (_) => setState(() => _showPreview = false),
                   ),
                   const SizedBox(height: 16),
-                  _fieldLabel('VILLAGE'),
+                  _fieldLabel('village'.tr()),
                   const SizedBox(height: 6),
                   _buildTextField(
                     controller: _villageController,
-                    hint: 'Village',
+                    hint: 'village'.tr(),
                     icon: Icons.location_on_rounded,
                     type: TextInputType.text,
                     onChanged: (_) => setState(() => _showPreview = false),
                   ),
                   const SizedBox(height: 16),
-                  _fieldLabel('SERVICE DATE'),
+                  _fieldLabel('operator_service_date_label'.tr()),
                   const SizedBox(height: 6),
                   _buildDateField(),
                   const SizedBox(height: 16),
-                  _fieldLabel('CROP TYPE'),
+                  _fieldLabel('operator_crop_type_label'.tr()),
                   const SizedBox(height: 6),
                   _buildTextField(
                     controller: _cropController,
-                    hint: 'Crop type (optional)',
+                    hint: 'operator_crop_type_optional'.tr(),
                     icon: Icons.grass_rounded,
                     type: TextInputType.text,
                     onChanged: (_) => setState(() => _showPreview = false),
                   ),
                   const SizedBox(height: 16),
-                  _fieldLabel('LAND SIZE (ACRES)'),
+                  _fieldLabel('operator_land_size_acres_label'.tr()),
                   const SizedBox(height: 6),
                   _buildTextField(
                     controller: _landSizeController,
-                    hint: 'Enter land size',
+                    hint: 'operator_enter_land_size'.tr(),
                     icon: Icons.square_foot_rounded,
                     type: const TextInputType.numberWithOptions(decimal: true),
                     onChanged: (_) => setState(() => _showPreview = false),
                   ),
                   const SizedBox(height: 16),
-                  _fieldLabel('EQUIPMENT USED'),
+                  _fieldLabel('operator_equipment_used_label'.tr()),
                   const SizedBox(height: 6),
                   _buildEquipmentPicker(),
                   const SizedBox(height: 16),
                   if (_selectedEquipment != null) ...[
                     if (_isTimeBased) ...[
-                      _fieldLabel('OPERATION TIME (START → END)'),
+                      _fieldLabel('operator_operation_time_label'.tr()),
                       const SizedBox(height: 6),
                       _buildTimePickers(),
                     ] else if (_isTractorTrolley) ...[
-                      _fieldLabel('DISTANCE PER TRIP (KMs)'),
+                      _fieldLabel('operator_distance_per_trip_label'.tr()),
                       const SizedBox(height: 6),
                       _buildTextField(
                         controller: _distanceController,
-                        hint: 'Enter distance in KMs',
+                        hint: 'operator_enter_distance_km'.tr(),
                         icon: Icons.add_road_rounded,
                         type: const TextInputType.numberWithOptions(
                             decimal: true),
@@ -577,11 +578,11 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      _fieldLabel('TOTAL TRIPS'),
+                      _fieldLabel('operator_total_trips_label'.tr()),
                       const SizedBox(height: 6),
                       _buildTextField(
                         controller: _qtyController,
-                        hint: 'Enter total trips',
+                        hint: 'operator_enter_total_trips'.tr(),
                         icon: Icons.repeat_rounded,
                         type: const TextInputType.numberWithOptions(
                             decimal: true),
@@ -590,12 +591,14 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                         },
                       ),
                     ] else ...[
-                      _fieldLabel(
-                          'QUANTITY (${_selectedEquipment!['unit'] ?? 'Units'})'),
+                      _fieldLabel('operator_quantity_label'.tr(namedArgs: {
+                        'unit':
+                            '${_selectedEquipment!['unit'] ?? 'operator_units'.tr()}'
+                      })),
                       const SizedBox(height: 6),
                       _buildTextField(
                         controller: _qtyController,
-                        hint: 'Enter quantity',
+                        hint: 'operator_enter_quantity'.tr(),
                         icon: Icons.calculate_rounded,
                         type: const TextInputType.numberWithOptions(
                             decimal: true),
@@ -652,7 +655,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
           ),
           const SizedBox(width: 6),
           Text(
-            isMember ? 'Member' : 'Non-Member',
+            isMember ? 'member'.tr() : 'non_member'.tr(),
             style: TextStyle(
               fontFamily: 'Google Sans',
               fontSize: 11,
@@ -781,11 +784,11 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.all(16),
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Text(
-                'Select Equipment',
-                style: TextStyle(
+                'operator_select_equipment'.tr(),
+                style: const TextStyle(
                   fontFamily: 'Google Sans',
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -795,10 +798,10 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
             ),
             Expanded(
               child: _equipmentList.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
-                        'No equipment found',
-                        style: TextStyle(
+                        'operator_no_equipment_found'.tr(),
+                        style: const TextStyle(
                             fontFamily: 'Google Sans',
                             fontSize: 16,
                             color: _textSub),
@@ -823,7 +826,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                       children: _equipmentList.map((e) {
                         return Center(
                           child: Text(
-                            e['name_en'] ?? 'Equipment',
+                            e['name_en'] ?? 'operator_equipment_fallback'.tr(),
                             style: const TextStyle(
                               fontFamily: 'Google Sans',
                               fontSize: 18,
@@ -839,7 +842,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: _buildActionButton(
-                  text: 'Confirm',
+                  text: 'operator_confirm'.tr(),
                   onTap: () {
                     if (tempSelected != null) {
                       setState(() {
@@ -900,7 +903,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                _selectedEquipment?['name_en'] ?? 'Select Equipment',
+                _selectedEquipment?['name_en'] ??
+                    'operator_select_equipment'.tr(),
                 style: const TextStyle(
                     fontFamily: 'Google Sans',
                     fontSize: 15,
@@ -933,8 +937,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Start Time',
-                        style: TextStyle(
+                    Text('operator_start_time'.tr(),
+                        style: const TextStyle(
                             fontFamily: 'Google Sans',
                             fontSize: 11,
                             color: _textSub,
@@ -971,8 +975,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('End Time',
-                          style: TextStyle(
+                      Text('operator_end_time'.tr(),
+                          style: const TextStyle(
                               fontFamily: 'Google Sans',
                               fontSize: 11,
                               color: _textSub,
@@ -1017,12 +1021,27 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         const SizedBox(width: 6),
         Text(
           _isTimeBased
-              ? '${_totalHours.toStringAsFixed(1)} hrs  ×  ₹${_ratePerUnit.toInt()}/hr'
+              ? 'operator_rate_row_time'.tr(namedArgs: {
+                  'hours': _totalHours.toStringAsFixed(1),
+                  'rate': _ratePerUnit.toInt().toString(),
+                })
               : _isTractorTrolley
                   ? _isFetchingRate
-                      ? 'Fetching price for ${_distance.toStringAsFixed(1)} km...'
-                      : '${_distance.toStringAsFixed(1)} km/trip  ×  ${_totalTrips.toStringAsFixed(0)} trips  ×  ₹${_ratePerUnit.toInt()}/trip'
-                  : '${_quantity.toStringAsFixed(1)} ${_selectedEquipment?['unit'] ?? ''}  ×  ₹${_ratePerUnit.toInt()}/${_selectedEquipment?['unit'] ?? 'unit'}',
+                      ? 'operator_fetching_price_for_distance'.tr(namedArgs: {
+                          'distance': _distance.toStringAsFixed(1),
+                        })
+                      : 'operator_rate_row_trip'.tr(namedArgs: {
+                          'distance': _distance.toStringAsFixed(1),
+                          'trips': _totalTrips.toStringAsFixed(0),
+                          'rate': _ratePerUnit.toInt().toString(),
+                        })
+                  : 'operator_rate_row_quantity'.tr(namedArgs: {
+                      'qty': _quantity.toStringAsFixed(1),
+                      'unit': '${_selectedEquipment?['unit'] ?? ''}',
+                      'rate': _ratePerUnit.toInt().toString(),
+                      'rateUnit':
+                          '${_selectedEquipment?['unit'] ?? 'operator_unit'.tr()}',
+                    }),
           style: const TextStyle(
               fontFamily: 'Google Sans',
               fontSize: 13,
@@ -1049,8 +1068,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
               color: const Color(0xFFF0FDF4),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text('Edit Rate',
-                style: TextStyle(
+            child: Text('operator_edit_rate'.tr(),
+                style: const TextStyle(
                     fontFamily: 'Google Sans',
                     fontSize: 12,
                     color: _green,
@@ -1075,12 +1094,13 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.receipt_long_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 8),
-              Text('Bill Preview',
-                  style: TextStyle(
+              const Icon(Icons.receipt_long_rounded,
+                  color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text('operator_bill_preview'.tr(),
+                  style: const TextStyle(
                       fontFamily: 'Google Sans',
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -1088,28 +1108,42 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
             ],
           ),
           const SizedBox(height: 16),
-          _billRow('Farmer', _nameController.text.trim()),
-          _billRow('Village', _villageController.text.trim()),
-          _billRow('Service Date', _formatDate(_serviceDate)),
+          _billRow('operator_farmer'.tr(), _nameController.text.trim()),
+          _billRow('village'.tr(), _villageController.text.trim()),
+          _billRow('operator_service_date'.tr(), _formatDate(_serviceDate)),
           if (_cropController.text.trim().isNotEmpty)
-            _billRow('Crop', _cropController.text.trim()),
+            _billRow('detail_crop'.tr(), _cropController.text.trim()),
           if (_landSizeAcres > 0)
-            _billRow('Land Size', '${_landSizeAcres.toStringAsFixed(2)} acres'),
-          _billRow('Equipment', _selectedEquipment?['name_en'] ?? ''),
+            _billRow('operator_land_size'.tr(),
+                '${_landSizeAcres.toStringAsFixed(2)} ${'acres'.tr()}'),
+          _billRow('chc_equipment'.tr(), _selectedEquipment?['name_en'] ?? ''),
           if (_isTimeBased)
-            _billRow('Duration',
-                '${_formatTime(_startTime)} → ${_formatTime(_endTime)} (${_totalHours.toStringAsFixed(1)} hrs)')
+            _billRow(
+                'operator_duration'.tr(),
+                'operator_duration_value'.tr(namedArgs: {
+                  'start': _formatTime(_startTime),
+                  'end': _formatTime(_endTime),
+                  'hours': _totalHours.toStringAsFixed(1),
+                }))
           else if (_isTractorTrolley) ...[
-            _billRow('Distance', '${_distance.toStringAsFixed(1)} km/trip'),
-            _billRow('Trips', _totalTrips.toStringAsFixed(0)),
+            _billRow('operator_distance'.tr(),
+                '${_distance.toStringAsFixed(1)} ${'operator_km_per_trip'.tr()}'),
+            _billRow('operator_trips'.tr(), _totalTrips.toStringAsFixed(0)),
           ] else
-            _billRow('Quantity',
+            _billRow('operator_quantity'.tr(),
                 '${_quantity.toStringAsFixed(1)} ${_selectedEquipment?['unit'] ?? ''}'),
           _billRow(
-            'Rate',
+            'chc_rate'.tr(),
             _isTractorTrolley
-                ? '₹${_ratePerUnit.toInt()}/trip (for ${_distance.toStringAsFixed(1)} km)'
-                : '₹${_ratePerUnit.toInt()}/${_selectedEquipment?['unit'] ?? 'unit'}',
+                ? 'operator_rate_trip_value'.tr(namedArgs: {
+                    'rate': _ratePerUnit.toInt().toString(),
+                    'distance': _distance.toStringAsFixed(1),
+                  })
+                : 'operator_rate_unit_value'.tr(namedArgs: {
+                    'rate': _ratePerUnit.toInt().toString(),
+                    'unit':
+                        '${_selectedEquipment?['unit'] ?? 'operator_unit'.tr()}',
+                  }),
           ),
           Container(
               margin: const EdgeInsets.symmetric(vertical: 10),
@@ -1118,8 +1152,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('TOTAL AMOUNT',
-                  style: TextStyle(
+              Text('operator_total_amount'.tr(),
+                  style: const TextStyle(
                       fontFamily: 'Google Sans',
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -1185,14 +1219,14 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                 onTap: _canPreview
                     ? () => setState(() => _showPreview = true)
                     : null,
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.visibility_rounded,
+                    const Icon(Icons.visibility_rounded,
                         color: Colors.white, size: 20),
-                    SizedBox(width: 10),
-                    Text('Preview Bill',
-                        style: TextStyle(
+                    const SizedBox(width: 10),
+                    Text('operator_preview_bill'.tr(),
+                        style: const TextStyle(
                             fontFamily: 'Google Sans',
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -1231,14 +1265,14 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2.5),
                         )
-                      : const Row(
+                      : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.check_circle_rounded,
+                            const Icon(Icons.check_circle_rounded,
                                 color: Colors.white, size: 20),
-                            SizedBox(width: 10),
-                            Text('Confirm & Submit',
-                                style: TextStyle(
+                            const SizedBox(width: 10),
+                            Text('operator_confirm_submit'.tr(),
+                                style: const TextStyle(
                                     fontFamily: 'Google Sans',
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
@@ -1253,8 +1287,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         Center(
           child: TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(
+            child: Text('cancel'.tr(),
+                style: const TextStyle(
                     fontFamily: 'Google Sans',
                     fontSize: 15,
                     color: _textSub,
@@ -1381,8 +1415,8 @@ class _RateDialogState extends State<_RateDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text('Set Rate Per Hour',
-          style: TextStyle(
+      title: Text('operator_set_rate_per_hour'.tr(),
+          style: const TextStyle(
               fontFamily: 'Google Sans', fontWeight: FontWeight.w700)),
       content: TextField(
         controller: _c,
@@ -1390,7 +1424,7 @@ class _RateDialogState extends State<_RateDialog> {
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         decoration: InputDecoration(
           prefixText: '₹ ',
-          suffixText: '/hr',
+          suffixText: '/${'operator_hour'.tr()}',
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -1401,8 +1435,8 @@ class _RateDialogState extends State<_RateDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel',
-              style: TextStyle(
+          child: Text('cancel'.tr(),
+              style: const TextStyle(
                   fontFamily: 'Google Sans', color: Color(0xFF6B7280))),
         ),
         TextButton(
@@ -1410,8 +1444,8 @@ class _RateDialogState extends State<_RateDialog> {
             final v = double.tryParse(_c.text);
             if (v != null && v > 0) Navigator.pop(context, v);
           },
-          child: const Text('Set',
-              style: TextStyle(
+          child: Text('operator_set'.tr(),
+              style: const TextStyle(
                   fontFamily: 'Google Sans',
                   color: Color(0xFF059669),
                   fontWeight: FontWeight.w700)),

@@ -59,8 +59,32 @@ Future<void> main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+
+  static Future<Map<String, bool>> checkSessions() async {
+    final results = await Future.wait([
+      AuthService.isLoggedIn(),
+      OperatorAuthService.isLoggedIn(),
+    ]);
+    return {
+      'farmer': results[0],
+      'operator': results[1],
+    };
+  }
+}
+
+class _MyAppState extends State<MyApp> {
+  late final Future<Map<String, bool>> _sessionFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _sessionFuture = MyApp.checkSessions();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +147,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'CropSync',
       home: FutureBuilder<Map<String, bool>>(
-        future: _checkSessions(),
+        future: _sessionFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
@@ -152,16 +176,4 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
-
-  static Future<Map<String, bool>> _checkSessions() async {
-    final results = await Future.wait([
-      AuthService.isLoggedIn(),
-      OperatorAuthService.isLoggedIn(),
-    ]);
-    return {
-      'farmer': results[0],
-      'operator': results[1],
-    };
-  }
 }
-
