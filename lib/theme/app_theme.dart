@@ -15,11 +15,11 @@ class AppTheme {
 
   /// Surface colors
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color background = Color(0xFFFAFAFA);
+  static const Color background = Color(0xFFF9FAFB); // Slightly cooler, modern grey
   static const Color card = Color(0xFFFFFFFF);
 
   /// Text colors
-  static const Color textPrimary = Color(0xFF1A1A1A);
+  static const Color textPrimary = Color(0xFF111827); // Darker, crisper contrast
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color textHint = Color(0xFF9CA3AF);
   static const Color textOnPrimary = Color(0xFFFFFFFF);
@@ -67,43 +67,46 @@ class AppTheme {
 
   // ============ BORDER RADIUS ============
 
-  static const double radiusSm = 8.0;
-  static const double radiusMd = 12.0;
-  static const double radiusLg = 16.0;
-  static const double radiusXl = 20.0;
+  static const double radiusSm = 12.0;
+  static const double radiusMd = 16.0;
+  static const double radiusLg = 24.0;
+  static const double radiusXl = 32.0;
   static const double radiusFull = 100.0;
 
   // ============ SHADOWS ============
 
   static List<BoxShadow> get shadowSm => [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.04),
-          blurRadius: 4,
+          color: const Color(0xFF000000).withValues(alpha: 0.03),
+          blurRadius: 8,
           offset: const Offset(0, 2),
         ),
       ];
 
   static List<BoxShadow> get shadowMd => [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.06),
-          blurRadius: 10,
-          offset: const Offset(0, 4),
+          color: const Color(0xFF111827).withValues(alpha: 0.05),
+          blurRadius: 16,
+          spreadRadius: -4,
+          offset: const Offset(0, 8),
         ),
       ];
 
   static List<BoxShadow> get shadowLg => [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.08),
-          blurRadius: 15,
-          offset: const Offset(0, 8),
+          color: const Color(0xFF111827).withValues(alpha: 0.08),
+          blurRadius: 24,
+          spreadRadius: -4,
+          offset: const Offset(0, 12),
         ),
       ];
 
   static List<BoxShadow> get shadowPrimary => [
         BoxShadow(
-          color: primary.withValues(alpha: 0.3),
-          blurRadius: 15,
-          offset: const Offset(0, 8),
+          color: primary.withValues(alpha: 0.25),
+          blurRadius: 20,
+          spreadRadius: -2,
+          offset: const Offset(0, 10),
         ),
       ];
 
@@ -113,69 +116,69 @@ class AppTheme {
   /// Headline 1 - Large titles
   static TextStyle get h1 => const TextStyle(
         fontFamily: 'Google Sans',
-        fontSize: 24,
-        fontWeight: FontWeight.w700,
+        fontSize: 32, // larger
+        fontWeight: FontWeight.w800, // bolder
         color: textPrimary,
-        height: 1.3,
-        letterSpacing: 0.2,
+        height: 1.1, // tighter 
+        letterSpacing: -0.5, // tighter
       );
 
   /// Headline 2 - Section titles
   static TextStyle get h2 => const TextStyle(
         fontFamily: 'Google Sans',
-        fontSize: 20,
-        fontWeight: FontWeight.w600,
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
         color: textPrimary,
-        height: 1.3,
-        letterSpacing: 0.2,
+        height: 1.2,
+        letterSpacing: -0.3,
       );
 
   /// Headline 3 - Card titles
   static TextStyle get h3 => const TextStyle(
         fontFamily: 'Google Sans',
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
         color: textPrimary,
-        height: 1.4,
-        letterSpacing: 0.2,
+        height: 1.3,
+        letterSpacing: -0.2,
       );
 
   /// Body text
   static TextStyle get body => const TextStyle(
         fontFamily: 'Google Sans',
-        fontSize: 14,
+        fontSize: 16, // slightly larger base
         fontWeight: FontWeight.w400,
-        color: textPrimary,
-        height: 1.5,
-        letterSpacing: 0.2,
+        color: textSecondary, // Subtler default body color
+        height: 1.6,
+        letterSpacing: 0,
       );
 
   /// Body medium
   static TextStyle get bodyMedium => const TextStyle(
         fontFamily: 'Google Sans',
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-        color: textPrimary,
+        fontSize: 15,
+        fontWeight: FontWeight.w600, // Punchier labels
+        color: textPrimary, // Stronger
         height: 1.5,
-        letterSpacing: 0.2,
+        letterSpacing: 0,
       );
 
   /// Caption text
   static TextStyle get caption => const TextStyle(
         fontFamily: 'Google Sans',
-        fontSize: 12,
-        fontWeight: FontWeight.w400,
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
         color: textSecondary,
         height: 1.4,
-        letterSpacing: 0.3,
+        letterSpacing: 0.1,
       );
 
   /// Small text
   static TextStyle get small => const TextStyle(
         fontFamily: 'Google Sans',
-        fontSize: 11,
-        fontWeight: FontWeight.w400,
-        color: textSecondary,
+        fontSize: 12,
+        fontWeight: FontWeight.w600, // Bolder tiny text for legibility
+        color: textHint,
         height: 1.4,
         letterSpacing: 0.3,
       );
@@ -183,20 +186,20 @@ class AppTheme {
   /// Button text
   static TextStyle get button => const TextStyle(
         fontFamily: 'Google Sans',
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
+        fontSize: 16, // larger button text
+        fontWeight: FontWeight.w700,
         color: textOnPrimary,
-        height: 1.4,
-        letterSpacing: 0.3,
+        height: 1.2,
+        letterSpacing: 0.1,
       );
 
   /// AppBar title
   static TextStyle get appBarTitle => const TextStyle(
         fontFamily: 'Google Sans',
-        fontSize: 18,
-        fontWeight: FontWeight.w600,
-        color: textOnPrimary,
-        letterSpacing: 0.2,
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        color: textPrimary, // Changed to dark text
+        letterSpacing: -0.2,
       );
 
   /// Telugu text style helper
@@ -217,13 +220,20 @@ class AppTheme {
   static BoxDecoration get cardDecoration => BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(radiusLg),
-        boxShadow: shadowMd,
+        border: Border.all(color: border.withValues(alpha: 0.3)), // Subtle edge
+        boxShadow: [
+           BoxShadow(
+             color: Colors.black.withValues(alpha: 0.02),
+             blurRadius: 10,
+             offset: const Offset(0, 4)
+           )
+        ], // Lighter shadow
       );
 
   static BoxDecoration get primaryCardDecoration => BoxDecoration(
-        gradient: headerGradient,
+        color: textPrimary, // Dark contrast instead of green gradient
         borderRadius: BorderRadius.circular(radiusXl),
-        boxShadow: shadowPrimary,
+        boxShadow: shadowMd,
       );
 
   // ============ COMMON WIDGETS ============
@@ -233,20 +243,23 @@ class AppTheme {
     return Padding(
       padding: const EdgeInsets.all(8),
       child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(radiusMd),
+        color: Colors.transparent, // transparent background
+        shape: const CircleBorder(), // Circular touch effect
+        clipBehavior: Clip.hardEdge,
         child: InkWell(
           onTap: () => Navigator.pop(context),
-          borderRadius: BorderRadius.circular(radiusMd),
+          borderRadius: BorderRadius.circular(50),
           child: Container(
+             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(radiusMd),
-              border: Border.all(color: const Color(0xFFE8E8E8)),
+              shape: BoxShape.circle,
+              color: Colors.black.withValues(alpha: 0.03), // very subtle backgrround
+              // No border
             ),
             child: const Icon(
               Icons.arrow_back_ios_new,
-              size: 18,
-              color: Color(0xFF1A1A1A),
+              size: 20, // slightly larger
+              color: textPrimary,
             ),
           ),
         ),

@@ -425,7 +425,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
             'crop_id': _selectedCrop!.id,
             'variety_id': _selectedVariety!.id,
             'sowing_date': formattedDate,
-            'variety_name': _selectedVariety!.name, // Helpful extra
+            'variety_name': _selectedVariety!.name,
           };
 
           setState(() {
@@ -638,11 +638,108 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
   }
 
   Widget _buildSimpleDateSelector() {
-    return EasyDateTimeLine(
-      locale: context.locale.toString(),
-      initialDate: _selectedDate,
-      onDateChange: (date) => setState(() => _selectedDate = date),
-      activeColor: Colors.green[600],
+    return _buildEnhancedDateSelector(
+      selectedDate: _selectedDate,
+      onDateChanged: (date) => setState(() => _selectedDate = date),
+    );
+  }
+
+  Widget _buildEnhancedDateSelector({
+    required DateTime selectedDate,
+    required ValueChanged<DateTime> onDateChanged,
+  }) {
+    return SizedBox(
+      height: 170,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: _buildYearSelector(selectedDate, onDateChanged),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: SizedBox(
+              height: 170,
+              child: EasyDateTimeLine(
+                locale: context.locale.toString(),
+                initialDate: selectedDate,
+                onDateChange: onDateChanged,
+                activeColor: Colors.green[600],
+                headerProps: const EasyHeaderProps(
+                  monthPickerType: MonthPickerType.switcher,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildYearSelector(
+      DateTime selectedDate, ValueChanged<DateTime> onDateChanged) {
+    final currentYear = DateTime.now().year;
+    final startYear = currentYear - 1;
+    final endYear = currentYear + 2;
+    final yearCount = endYear - startYear;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.vertical,
+      child: Column(
+        children: [
+          Text('year_label'.tr(),
+              style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[600])),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 140,
+            child: ListView.builder(
+              scrollDirection: Axis.vertical,
+              shrinkWrap: true,
+              itemCount: yearCount,
+              itemBuilder: (context, index) {
+                final year = startYear + index;
+                final isSelected = year == selectedDate.year;
+                return GestureDetector(
+                  onTap: () {
+                    final newDate =
+                        DateTime(year, selectedDate.month, selectedDate.day);
+                    onDateChanged(newDate);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color:
+                          isSelected ? Colors.green[100] : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color:
+                            isSelected ? Colors.green[600]! : Colors.grey[300]!,
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: Text(
+                      '$year',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color:
+                            isSelected ? Colors.green[700] : Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -695,20 +792,17 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       child: GestureDetector(
         onTap: isDisabled ? null : onTap,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(
-              50), // Match AnimatedContainer's border radius
+          borderRadius: BorderRadius.circular(50),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(
-                vertical: 8.0, horizontal: 4.0), // Added padding
+            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
             decoration: BoxDecoration(
               color: isDisabled
                   ? Colors.grey[200]
                   : isSelected
-                      ? const Color(0xFF1B5E20).withOpacity(
-                          0.05) // Corrected withValues to withOpacity
+                      ? const Color(0xFF1B5E20).withOpacity(0.05)
                       : Colors.white,
-              borderRadius: BorderRadius.circular(50), // Pill/Capsule shape
+              borderRadius: BorderRadius.circular(50),
               border: Border.all(
                 color: isDisabled
                     ? Colors.grey[400]!
@@ -721,11 +815,27 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (imageUrl != null) ...[
-                  CircleAvatar(
-                    radius: isSmall ? 18 : 28,
-                    backgroundImage: CachedNetworkImageProvider(imageUrl),
-                    backgroundColor: Colors.grey[200],
+                if (imageUrl != null && imageUrl.isNotEmpty) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(isSmall ? 18 : 28),
+                    child: SizedBox(
+                      width: isSmall ? 36 : 56,
+                      height: isSmall ? 36 : 56,
+                      child: CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: Colors.grey[200],
+                          child: Icon(Icons.image_not_supported,
+                              size: 16, color: Colors.grey[400]),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: Colors.grey[200],
+                          child: Icon(Icons.landscape,
+                              size: isSmall ? 12 : 20, color: Colors.grey[400]),
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ] else if (isSmall) ...[
@@ -736,9 +846,15 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
                         isSelected ? const Color(0xFF1B5E20) : Colors.grey[400],
                   ),
                   const SizedBox(height: 4),
+                ] else ...[
+                  Icon(
+                    Icons.image_not_supported,
+                    size: 28,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 8),
                 ],
                 Expanded(
-                  // Use Expanded to prevent text overflow
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4.0),
                     child: Text(
@@ -796,7 +912,6 @@ class _MyFieldsViewState extends State<MyFieldsView>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Always fetch if force refresh flag is set or first time
     if (!_didFetchSelections || _shouldForceRefresh) {
       _fetchSelections();
       _didFetchSelections = true;
@@ -869,7 +984,6 @@ class _MyFieldsViewState extends State<MyFieldsView>
         return EditSelectionSheet(
           initialSelection: selection,
           onCompleted: () {
-            // Force refresh to get updated data
             if (mounted) {
               _fetchSelections();
             }
@@ -899,7 +1013,7 @@ class _MyFieldsViewState extends State<MyFieldsView>
         builder: (context, child) {
           return ListView.builder(
               padding: const EdgeInsets.all(20),
-              cacheExtent: 300, // Pre-render items for smoother scrolling
+              cacheExtent: 300,
               itemCount: selections.length,
               itemBuilder: (context, index) {
                 final selection = selections[index];
@@ -950,19 +1064,38 @@ class _MyFieldsViewState extends State<MyFieldsView>
                 child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(children: [
-                      CircleAvatar(
+                      if (selection.cropImageUrl != null &&
+                          selection.cropImageUrl!.isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(28),
+                          child: SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: CachedNetworkImage(
+                              imageUrl: selection.cropImageUrl!,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: Colors.green[50],
+                                alignment: Alignment.center,
+                                child: Icon(Icons.eco,
+                                    color: Colors.green[600], size: 28),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: Colors.green[50],
+                                alignment: Alignment.center,
+                                child: Icon(Icons.eco,
+                                    color: Colors.green[600], size: 28),
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        CircleAvatar(
                           radius: 28,
                           backgroundColor: Colors.green[50],
-                          backgroundImage: selection.cropImageUrl != null
-                              ? CachedNetworkImageProvider(
-                                  selection.cropImageUrl!,
-                                  maxWidth: 60,
-                                  maxHeight: 60)
-                              : null,
-                          child: selection.cropImageUrl == null
-                              ? Icon(Icons.eco,
-                                  color: Colors.green[600], size: 28)
-                              : null),
+                          child: Icon(Icons.eco,
+                              color: Colors.green[600], size: 28),
+                        ),
                       const SizedBox(width: 16),
                       Expanded(
                           child: Column(
@@ -1174,10 +1307,8 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        // Force refresh My Fields on next view
         _MyFieldsViewState._shouldForceRefresh = true;
 
-        // Emit optimistic update event
         GlobalNotifiers.selectionUpdated.value = {
           'id': widget.initialSelection.selectionId,
           'field_name': _selectedFieldName,
@@ -1233,12 +1364,10 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
         if (!mounted) return;
 
         if (result['success'] == true) {
-          // Update Cache & Notifiers
           if (_AddNewCropSelectionViewState._cachedUsedFields != null) {
             _AddNewCropSelectionViewState._cachedUsedFields!
                 .remove(widget.initialSelection.fieldName);
           }
-          // Force refresh My Fields on next view
           _MyFieldsViewState._shouldForceRefresh = true;
           GlobalNotifiers.selectionDeleted.value =
               widget.initialSelection.selectionId;
@@ -1427,11 +1556,109 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
   }
 
   Widget _buildSimpleDateSelector() {
-    return EasyDateTimeLine(
-        locale: context.locale.toString(),
-        initialDate: _selectedDate ?? DateTime.now(),
-        onDateChange: (date) => setState(() => _selectedDate = date),
-        activeColor: Colors.green[600]);
+    return _buildEnhancedDateSelectorSheet(
+      selectedDate: _selectedDate ?? DateTime.now(),
+      onDateChanged: (date) => setState(() => _selectedDate = date),
+    );
+  }
+
+  Widget _buildEnhancedDateSelectorSheet({
+    required DateTime selectedDate,
+    required ValueChanged<DateTime> onDateChanged,
+  }) {
+    return SizedBox(
+      height: 170,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: _buildYearSelectorSheet(selectedDate, onDateChanged),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: SizedBox(
+              height: 170,
+              child: EasyDateTimeLine(
+                locale: context.locale.toString(),
+                initialDate: selectedDate,
+                onDateChange: onDateChanged,
+                activeColor: Colors.green[600],
+                headerProps: const EasyHeaderProps(
+                  monthPickerType: MonthPickerType.switcher,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildYearSelectorSheet(
+      DateTime selectedDate, ValueChanged<DateTime> onDateChanged) {
+    final currentYear = DateTime.now().year;
+    final startYear = currentYear - 1;
+    final endYear = currentYear + 2;
+    final yearCount = endYear - startYear;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.vertical,
+      child: Column(
+        children: [
+          Text('year_label'.tr(),
+              style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[600])),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 140,
+            child: ListView.builder(
+              scrollDirection: Axis.vertical,
+              shrinkWrap: true,
+              itemCount: yearCount,
+              itemBuilder: (context, index) {
+                final year = startYear + index;
+                final isSelected = year == selectedDate.year;
+                return GestureDetector(
+                  onTap: () {
+                    final newDate =
+                        DateTime(year, selectedDate.month, selectedDate.day);
+                    onDateChanged(newDate);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color:
+                          isSelected ? Colors.green[100] : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color:
+                            isSelected ? Colors.green[600]! : Colors.grey[300]!,
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: Text(
+                      '$year',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color:
+                            isSelected ? Colors.green[700] : Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSelectionCard(
@@ -1451,7 +1678,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
             color: isSelected
                 ? const Color(0xFF1B5E20).withValues(alpha: 0.05)
                 : Colors.white,
-            borderRadius: BorderRadius.circular(50), // Pill Shape
+            borderRadius: BorderRadius.circular(50),
             border: Border.all(
                 color: isSelected ? const Color(0xFF1B5E20) : Colors.grey[300]!,
                 width: isSelected ? 2.0 : 1.0),
@@ -1463,13 +1690,13 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                   const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min, // Important for scaling
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (imageUrl != null) ...[
+                  if (imageUrl != null && imageUrl.isNotEmpty) ...[
                     CircleAvatar(
                         radius: isSmall ? 18 : 28,
-                        backgroundImage: CachedNetworkImageProvider(imageUrl),
-                        backgroundColor: Colors.grey[200]),
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: CachedNetworkImageProvider(imageUrl)),
                     const SizedBox(height: 8)
                   ] else if (isSmall) ...[
                     Icon(
@@ -1480,9 +1707,15 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                           : Colors.grey[400],
                     ),
                     const SizedBox(height: 4),
+                  ] else ...[
+                    Icon(
+                      Icons.image_not_supported,
+                      size: 24,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 8),
                   ],
                   Flexible(
-                    // Use Flexible instead of Padding/Expanded to allow shrink
                     child: Text(
                       title,
                       textAlign: TextAlign.center,
@@ -1491,8 +1724,8 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                       style: GoogleFonts.poppins(
                         fontWeight:
                             isSelected ? FontWeight.w700 : FontWeight.w500,
-                        fontSize: 11, // Slightly smaller font
-                        height: 1.1, // Tighter line height
+                        fontSize: 11,
+                        height: 1.1,
                         color: isSelected
                             ? const Color(0xFF1B5E20)
                             : const Color(0xFF4A4A4A),

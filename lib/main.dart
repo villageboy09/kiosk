@@ -99,46 +99,74 @@ class _MyAppState extends State<MyApp> {
         primaryColor: AppTheme.primary,
         scaffoldBackgroundColor: AppTheme.background,
         appBarTheme: const AppBarTheme(
-          backgroundColor: AppTheme.primary,
-          foregroundColor: Colors.white,
+          backgroundColor:
+              Colors.transparent, // Modern prominent transparent app bars!
+          foregroundColor: AppTheme.textPrimary,
           elevation: 0,
           centerTitle: true,
+          iconTheme: IconThemeData(color: AppTheme.textPrimary),
+          titleTextStyle: TextStyle(
+            fontFamily: 'Google Sans',
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+            letterSpacing: -0.2, // Tighter letter spacing
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.primary,
+            backgroundColor: AppTheme.textPrimary, // Stark contrast buttons
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 24, vertical: 16), // Taller
+            elevation:
+                0, // Flat design with shadows handles separately when needed
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius:
+                  BorderRadius.circular(AppTheme.radiusLg), // Pill/large radius
             ),
-            textStyle: AppTheme.button,
+            textStyle: AppTheme.button
+                .copyWith(fontWeight: FontWeight.w700, fontSize: 15),
           ),
         ),
+        textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(
+          foregroundColor: AppTheme.textPrimary,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          textStyle: AppTheme.button.copyWith(fontWeight: FontWeight.w600),
+        )),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppTheme.card,
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 15),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            borderSide: const BorderSide(color: AppTheme.border, width: 1.5),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppTheme.border),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            borderSide: BorderSide(
+                color: AppTheme.border.withValues(alpha: 0.5), width: 1.5),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppTheme.primary, width: 2),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            borderSide: const BorderSide(
+                color: AppTheme.textPrimary, width: 2), // High contrast focus
           ),
         ),
-        cardTheme: const CardThemeData(
-          color: Colors.white,
-          elevation: 0,
+        cardTheme: CardThemeData(
+          color: AppTheme.card,
+          elevation: 0, // rely on containers with custom boxshadow
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
+            borderRadius:
+                const BorderRadius.all(Radius.circular(AppTheme.radiusLg)),
+            side: BorderSide(
+                color:
+                    AppTheme.border.withValues(alpha: 0.3)), // Subtle outline
           ),
+          margin: EdgeInsets.zero,
         ),
         dividerTheme: const DividerThemeData(
           color: AppTheme.divider,

@@ -414,5 +414,6 @@
   "operator_confirm_submit": "Confirm & Submit",
   "operator_set_rate_per_hour": "Set Rate Per Hour",
   "operator_hour": "hr",
-  "operator_set": "Set"
+  "operator_set": "Set",
+  "year_label": "Year"
 }
