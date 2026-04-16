@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cropsync/navigation/app_routes.dart';
+import 'package:cropsync/widgets/auth/auth_alert_banner.dart';
+import 'package:cropsync/widgets/auth/auth_logo_header.dart';
 
 import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/screens/operator/operator_dashboard.dart';
@@ -92,13 +95,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const OperatorDashboard(),
-          transitionsBuilder: (_, animation, __, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 400),
-        ),
+        AppRoutes.fade(const OperatorDashboard()),
       );
     } catch (e) {
       _showError(e.toString().replaceFirst('Exception: ', ''));
@@ -128,7 +125,11 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildHeader(),
+                          AuthLogoHeader(
+                            title: 'operator_login_title'.tr(),
+                            subtitle: 'operator_login_subtitle'.tr(),
+                            logoHeight: 72,
+                          ),
                           const SizedBox(height: 36),
                           _buildOperatorBadge(),
                           const SizedBox(height: 28),
@@ -146,52 +147,10 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
                 ),
               ),
             ),
-            _buildErrorBanner(),
+            AuthAlertBanner(message: _errorMessage),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Column(
-      children: [
-        // Logo
-        Image.asset(
-          'assets/images/logo_t.png',
-          height: 72,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const Icon(
-            Icons.agriculture_rounded,
-            size: 64,
-            color: Color(0xFF1B5E20),
-          ),
-        ),
-        const SizedBox(height: 28),
-        // Icon badge
-        const SizedBox(height: 20),
-        Text(
-          'operator_login_title'.tr(),
-          textAlign: TextAlign.center,
-          style: GoogleFonts.poppins(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            color: _textPrimary,
-            letterSpacing: -0.5,
-            height: 1.2,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'operator_login_subtitle'.tr(),
-          textAlign: TextAlign.center,
-          style: GoogleFonts.inter(
-            fontSize: 15,
-            color: _textSub,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
     );
   }
 
@@ -353,11 +312,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
     return TextButton(
       onPressed: () => Navigator.pushReplacement(
         context,
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const SignupScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-        ),
+        AppRoutes.noAnimation(const SignupScreen()),
       ),
       style: TextButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -379,43 +334,6 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildErrorBanner() {
-    final show = _errorMessage != null;
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutBack,
-      top: show ? MediaQuery.of(context).padding.top + 16 : -100,
-      left: 24,
-      right: 24,
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFDC2626),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.error_outline_rounded,
-                  color: Colors.white, size: 22),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  _errorMessage ?? '',
-                  style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

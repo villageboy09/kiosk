@@ -3,23 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cropsync/navigation/app_routes.dart';
+import 'package:cropsync/widgets/auth/auth_alert_banner.dart';
+import 'package:cropsync/widgets/auth/auth_logo_header.dart';
 
 import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/auth/login_screen.dart';
 import 'package:cropsync/auth/operator_login_screen.dart';
-
-extension ColorExtension on Color {
-  Color withValues({double? alpha, int? red, int? green, int? blue}) {
-    return Color.fromARGB(
-      alpha != null ? (alpha * 255).round() : (a * 255.0).round().clamp(0, 255),
-      red ?? (r * 255.0).round().clamp(0, 255),
-      green ?? (g * 255.0).round().clamp(0, 255),
-      blue ?? (b * 255.0).round().clamp(0, 255),
-    );
-  }
-}
 
 class SignupScreen extends StatefulWidget {
   final String? initialPhoneNumber;
@@ -135,23 +127,7 @@ class _SignupScreenState extends State<SignupScreen>
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                const LoginScreen(),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-              const begin = Offset(-1.0, 0.0);
-              const end = Offset.zero;
-              const curve = Curves.easeInOutCubic;
-              var tween =
-                  Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-              return SlideTransition(
-                position: animation.drive(tween),
-                child: child,
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 400),
-          ),
+          AppRoutes.slideFromLeft(const LoginScreen()),
         );
         return;
       }
@@ -241,7 +217,10 @@ class _SignupScreenState extends State<SignupScreen>
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _buildHeader(),
+                            AuthLogoHeader(
+                              title: 'signup_title'.tr(),
+                              subtitle: 'signup_subtitle'.tr(),
+                            ),
                             const SizedBox(height: 32),
                             _buildMainCard(),
                             const SizedBox(height: 32),
@@ -256,51 +235,11 @@ class _SignupScreenState extends State<SignupScreen>
                 ),
               ),
             ),
-            _buildTopNotification(_errorMessage, isError: true),
-            _buildTopNotification(_successMessage, isError: false),
+            AuthAlertBanner(message: _errorMessage),
+            AuthAlertBanner(message: _successMessage, isError: false),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Column(
-      children: [
-        Image.asset(
-          'assets/images/logo_t.png',
-          height: 80,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const Icon(
-            Icons.agriculture_rounded,
-            size: 64,
-            color: Color(0xFF1B5E20),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'signup_title'.tr(),
-          textAlign: TextAlign.center,
-          style: GoogleFonts.poppins(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF111827),
-            letterSpacing: -0.5,
-            height: 1.2,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'signup_subtitle'.tr(),
-          textAlign: TextAlign.center,
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            color: const Color(0xFF4B5563),
-            fontWeight: FontWeight.w500,
-            height: 1.4,
-          ),
-        ),
-      ],
     );
   }
 
@@ -555,12 +494,7 @@ class _SignupScreenState extends State<SignupScreen>
       onPressed: () {
         Navigator.pushReplacement(
           context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                const LoginScreen(),
-            transitionDuration: Duration.zero,
-            reverseTransitionDuration: Duration.zero,
-          ),
+          AppRoutes.noAnimation(const LoginScreen()),
         );
       },
       style: TextButton.styleFrom(
@@ -605,20 +539,7 @@ class _SignupScreenState extends State<SignupScreen>
       onTap: () {
         Navigator.pushReplacement(
           context,
-          PageRouteBuilder(
-            pageBuilder: (_, __, ___) => const OperatorLoginScreen(),
-            transitionsBuilder: (_, animation, __, child) {
-              return SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, 1),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(
-                    parent: animation, curve: Curves.easeOutCubic)),
-                child: child,
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 400),
-          ),
+          AppRoutes.slideFromBottom(const OperatorLoginScreen()),
         );
       },
       child: Container(
@@ -657,51 +578,6 @@ class _SignupScreenState extends State<SignupScreen>
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopNotification(String? message, {required bool isError}) {
-    final bool show = message != null;
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutBack,
-      top: show ? MediaQuery.of(context).padding.top + 16 : -100,
-      left: 24,
-      right: 24,
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          decoration: BoxDecoration(
-            color: isError ? const Color(0xFFDC2626) : const Color(0xFF059669),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isError
-                    ? Icons.error_outline_rounded
-                    : Icons.check_circle_outline_rounded,
-                color: Colors.white,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message ?? '',
-                  style: GoogleFonts.poppins(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

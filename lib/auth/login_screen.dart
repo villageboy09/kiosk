@@ -2,23 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cropsync/navigation/app_routes.dart';
+import 'package:cropsync/widgets/auth/auth_alert_banner.dart';
+import 'package:cropsync/widgets/auth/auth_logo_header.dart';
 
 import 'package:cropsync/screens/home_screen.dart';
 
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/auth/signup_screen.dart';
-
-extension ColorExtension on Color {
-  Color withValues({double? alpha, int? red, int? green, int? blue}) {
-    return Color.fromARGB(
-      alpha != null ? (alpha * 255).round() : (a * 255.0).round().clamp(0, 255),
-      red ?? (r * 255.0).round().clamp(0, 255),
-      green ?? (g * 255.0).round().clamp(0, 255),
-      blue ?? (b * 255.0).round().clamp(0, 255),
-    );
-  }
-}
 
 class LoginScreen extends StatefulWidget {
   final String? initialPhoneNumber;
@@ -138,7 +130,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const SizedBox(height: 16),
-                              _buildBranding(),
+                              AuthLogoHeader(
+                                title: 'login_welcome_back'.tr(),
+                                subtitle: 'enter_field'
+                                    .tr(namedArgs: {'field': 'user_id'.tr()}),
+                                textAlign: TextAlign.center,
+                              ),
                               const SizedBox(height: 24),
                               _buildSingleInputDisplay(),
                               const SizedBox(height: 12),
@@ -157,53 +154,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 );
               },
             ),
-            if (_errorMessage != null)
-              Positioned(
-                top: 16,
-                left: 24,
-                right: 24,
-                child: _buildErrorNotification(),
-              ),
+            AuthAlertBanner(message: _errorMessage),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildBranding() {
-    return Column(
-      children: [
-        Image.asset(
-          'assets/images/logo_t.png',
-          height: 80,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) => const Icon(
-            Icons.agriculture_rounded,
-            size: 64,
-            color: Color(0xFF1B5E20),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'login_welcome_back'.tr(),
-          style: GoogleFonts.poppins(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF111827),
-            letterSpacing: -0.5,
-            height: 1.2,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'enter_field'.tr(namedArgs: {'field': 'user_id'.tr()}),
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            color: const Color(0xFF4B5563),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
     );
   }
 
@@ -396,23 +350,7 @@ class _LoginScreenState extends State<LoginScreen> {
       onPressed: () {
         Navigator.pushReplacement(
           context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                const SignupScreen(),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-              const begin = Offset(1.0, 0.0);
-              const end = Offset.zero;
-              const curve = Curves.easeInOutCubic;
-              var tween =
-                  Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-              return SlideTransition(
-                position: animation.drive(tween),
-                child: child,
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 400),
-          ),
+          AppRoutes.slideFromRight(const SignupScreen()),
         );
       },
       style: TextButton.styleFrom(
@@ -448,46 +386,6 @@ class _LoginScreenState extends State<LoginScreen> {
             color: Color(0xFF047857),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildErrorNotification() {
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutBack,
-      tween: Tween(begin: -100, end: 0),
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, value),
-          child: child,
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFDC2626),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded,
-                color: Colors.white, size: 22),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                _errorMessage ?? '',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

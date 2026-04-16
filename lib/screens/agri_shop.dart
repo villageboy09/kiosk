@@ -343,8 +343,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
         return AnimationLimiter(
           child: GridView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 280,
               childAspectRatio: 0.7,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
@@ -448,8 +448,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
       highlightColor: Colors.grey[50]!,
       child: GridView.builder(
         padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 280,
           childAspectRatio: 0.7,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,

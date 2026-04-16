@@ -248,8 +248,8 @@ class _ServicesGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 240,
         crossAxisSpacing: 20,
         mainAxisSpacing: 20,
         childAspectRatio:
@@ -259,28 +259,28 @@ class _ServicesGrid extends StatelessWidget {
         _ServiceCard(
           title: 'home_feature_market_title'.tr(),
           subtitle: 'home_feature_market_subtitle'.tr(),
-          imagePath: 'assets/images/market_prices.png',
+          imagePath: 'assets/images/market_prices.jpg',
           color: AppTheme.accentOrange,
           onTap: () => _navigateTo(context, const MarketPricesScreen()),
         ),
         _ServiceCard(
           title: 'home_feature_shop_title'.tr(),
           subtitle: 'home_feature_shop_subtitle'.tr(),
-          imagePath: 'assets/images/agri_shop.png',
+          imagePath: 'assets/images/agri_shop.jpg',
           color: AppTheme.accentBrown,
           onTap: () => _navigateTo(context, const AgriShopScreen()),
         ),
         _ServiceCard(
           title: 'home_feature_seeds_title'.tr(),
           subtitle: 'home_feature_seeds_subtitle'.tr(),
-          imagePath: 'assets/images/seed_varieties.png',
+          imagePath: 'assets/images/seed_varieties.jpg',
           color: AppTheme.accentBlue,
           onTap: () => _navigateTo(context, const SeedVarietiesScreen()),
         ),
         _ServiceCard(
           title: 'chc_title'.tr(),
           subtitle: 'chc_book_now'.tr(),
-          imagePath: 'assets/images/custom_hiring_center.png',
+          imagePath: 'assets/images/custom_hiring_center.jpg',
           color: AppTheme.accentPurple,
           onTap: () => _navigateTo(context, const CHCBookingScreen()),
         ),

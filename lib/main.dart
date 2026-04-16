@@ -5,6 +5,7 @@ import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/services/location_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
+import 'package:cropsync/widgets/responsive/app_viewport.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -146,6 +147,10 @@ class _MyAppState extends State<MyApp> {
       ),
       debugShowCheckedModeBanner: false,
       title: 'CropSync',
+      builder: (context, child) {
+        if (child == null) return const SizedBox.shrink();
+        return AppViewport(child: child);
+      },
       home: FutureBuilder<Map<String, bool>>(
         future: _sessionFuture,
         builder: (context, snapshot) {

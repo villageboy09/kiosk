@@ -20,7 +20,12 @@ class WeatherBottomSheet extends StatefulWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black54,
-      builder: (_) => const WeatherBottomSheet(),
+      builder: (_) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: const WeatherBottomSheet(),
+        ),
+      ),
     );
   }
 

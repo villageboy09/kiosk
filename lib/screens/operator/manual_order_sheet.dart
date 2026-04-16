@@ -34,188 +34,134 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
   double _ratePerUnit = 0.0;
-  bool _isLoading = false;
   bool _showPreview = false;
+  bool _isLoading = false;
   String? _errorMsg;
   String? _successMsg;
+  Timer? _phoneDebounce;
 
   static const Color _green = Color(0xFF059669);
-  static const Color _surface = Color(0xFFF4F6FA);
-  static const Color _border = Color(0xFFE5E7EB);
   static const Color _textPrimary = Color(0xFF111827);
   static const Color _textSub = Color(0xFF6B7280);
+  static const Color _surface = Color(0xFFF9FAFB);
+  static const Color _border = Color(0xFFE5E7EB);
 
   @override
   void initState() {
     super.initState();
-    _loadEquipments();
     _phoneController.addListener(_onPhoneChanged);
+    unawaited(_loadEquipments());
   }
 
   void _onPhoneChanged() {
+    if (!mounted) return;
+    setState(() => _showPreview = false);
+
+    _phoneDebounce?.cancel();
     final phone = _phoneController.text.trim();
-    if (phone.length == 10 && !_isFetchingUser) {
-      _fetchUser(phone);
-    } else if (phone.length < 10 && _isFoundMember) {
-      setState(() {
-        _isFoundMember = false;
-        _nameController.clear();
-        _villageController.clear();
-        _showPreview = false;
-      });
-      unawaited(_updateRate());
+
+    if (phone.length != 10) {
+      if (_isFetchingUser || _isFoundMember) {
+        setState(() {
+          _isFetchingUser = false;
+          _isFoundMember = false;
+        });
+        unawaited(_loadEquipments());
+      }
+      return;
     }
+
+    _phoneDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      unawaited(_lookupUserByPhone(phone));
+    });
   }
 
-  Future<void> _fetchUser(String phone) async {
-    setState(() => _isFetchingUser = true);
-    final user = await ApiService.checkUser(phone);
-
+  Future<void> _lookupUserByPhone(String phone) async {
     if (!mounted) return;
+    setState(() => _isFetchingUser = true);
 
-    setState(() {
-      if (user != null) {
-        _isFoundMember =
-            user['card_uid'] != null && user['card_uid'].toString().isNotEmpty;
-        _nameController.text = user['name']?.toString() ?? '';
-        _villageController.text = user['village']?.toString() ?? '';
-      } else {
+    try {
+      final user = await ApiService.checkUser(phone);
+      if (!mounted || _phoneController.text.trim() != phone) return;
+
+      final isMember = user != null &&
+          ('${user['is_member'] ?? '0'}' == '1' ||
+              '${user['membership_status'] ?? ''}'.toLowerCase() == 'member');
+
+      setState(() {
+        _isFoundMember = isMember;
+        _isFetchingUser = false;
+
+        if (user != null) {
+          final name = (user['name'] ?? '').toString().trim();
+          final village = (user['village'] ?? user['region'] ?? '').toString();
+          if (name.isNotEmpty && _nameController.text.trim().isEmpty) {
+            _nameController.text = name;
+          }
+          if (village.isNotEmpty && _villageController.text.trim().isEmpty) {
+            _villageController.text = village;
+          }
+        }
+      });
+
+      await _loadEquipments();
+      await _updateRate();
+    } catch (_) {
+      if (!mounted || _phoneController.text.trim() != phone) return;
+      setState(() {
+        _isFetchingUser = false;
         _isFoundMember = false;
-        _nameController.clear();
-        _villageController.clear();
-      }
-      _isFetchingUser = false;
-      _showPreview = false;
-    });
-
-    unawaited(_updateRate());
+      });
+      await _loadEquipments();
+    }
   }
 
   Future<void> _loadEquipments() async {
+    if (!mounted) return;
     setState(() => _isFetchingEquipments = true);
-    final list = await ApiService.getCHCEquipments(
-      clientCode: widget.operator.clientCode,
-    );
-    if (!mounted) return;
 
-    setState(() {
-      _equipmentList = list;
-      if (_equipmentList.isNotEmpty) {
-        _selectedEquipment = _equipmentList.first;
-        _ratePerUnit = 0.0;
-      }
-      _isFetchingEquipments = false;
-    });
+    try {
+      final list = await ApiService.getCHCEquipments(
+        isMember: _isFoundMember,
+        clientCode: widget.operator.clientCode,
+      );
 
-    unawaited(_updateRate());
-  }
-
-  double get _totalHours {
-    if (_startTime == null || _endTime == null) return 0;
-    final startMins = _startTime!.hour * 60 + _startTime!.minute;
-    final endMins = _endTime!.hour * 60 + _endTime!.minute;
-    final diff = endMins - startMins;
-    return diff > 0 ? diff / 60.0 : 0;
-  }
-
-  double get _quantity => double.tryParse(_qtyController.text) ?? 0;
-  double get _distance => double.tryParse(_distanceController.text) ?? 0;
-  double get _totalTrips => double.tryParse(_qtyController.text) ?? 0;
-  double get _landSizeAcres => double.tryParse(_landSizeController.text) ?? 0;
-
-  double get _billedQty {
-    if (_isTimeBased) return _totalHours;
-    if (_isTractorTrolley) return _totalTrips;
-    return _quantity;
-  }
-
-  String get _measuredUnit {
-    if (_isTimeBased) return 'Hour';
-    if (_isTractorTrolley) return 'Trip';
-
-    final unit = _selectedEquipment?['unit']?.toString().trim() ?? '';
-    return unit.isEmpty ? 'Unit' : unit;
-  }
-
-  bool get _isTimeBased =>
-      _selectedEquipment?['unit']?.toString().toLowerCase().contains('hour') ??
-      true;
-
-  bool get _isTractorTrolley {
-    final equipment = _selectedEquipment;
-    if (equipment == null) return false;
-
-    final name = equipment['name_en']?.toString().toLowerCase() ?? '';
-    final normalizedName = name.replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
-    final hasTrolleySlabs =
-        equipment['slabs'] is List && (equipment['slabs'] as List).isNotEmpty;
-
-    return hasTrolleySlabs ||
-        (normalizedName.contains('tractor') &&
-            normalizedName.contains('trolley'));
-  }
-
-  double get _finalAmount {
-    if (_isTimeBased) {
-      return _totalHours * _ratePerUnit;
+      if (!mounted) return;
+      setState(() {
+        _equipmentList = list;
+        if (_selectedEquipment != null) {
+          final stillExists =
+              _equipmentList.any((e) => e['id'] == _selectedEquipment!['id']);
+          if (!stillExists) {
+            _selectedEquipment =
+                _equipmentList.isNotEmpty ? _equipmentList.first : null;
+          }
+        } else {
+          _selectedEquipment =
+              _equipmentList.isNotEmpty ? _equipmentList.first : null;
+        }
+        _isFetchingEquipments = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _equipmentList = [];
+        _selectedEquipment = null;
+        _isFetchingEquipments = false;
+      });
     }
-
-    if (_isTractorTrolley) {
-      return _totalTrips * _ratePerUnit;
-    }
-
-    return _quantity * _ratePerUnit;
-  }
-
-  String _formatTime(TimeOfDay? t) {
-    if (t == null) return '--:--';
-    final h = t.hour.toString().padLeft(2, '0');
-    final m = t.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-
-  String _formatDate(DateTime? d) {
-    if (d == null) return 'operator_select_service_date'.tr();
-    final day = d.day.toString().padLeft(2, '0');
-    final month = d.month.toString().padLeft(2, '0');
-    return '$day/$month/${d.year}';
-  }
-
-  String _formatApiDate(DateTime? d) {
-    if (d == null) return '';
-    final day = d.day.toString().padLeft(2, '0');
-    final month = d.month.toString().padLeft(2, '0');
-    return '${d.year}-$month-$day';
-  }
-
-  void _showMsg(String msg, {bool isError = false}) {
-    if (!mounted) return;
-    setState(() {
-      if (isError) {
-        _errorMsg = msg;
-        _successMsg = null;
-      } else {
-        _successMsg = msg;
-        _errorMsg = null;
-      }
-    });
-    Timer(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          _errorMsg = null;
-          _successMsg = null;
-        });
-      }
-    });
   }
 
   Future<void> _pickServiceDate() async {
     final now = DateTime.now();
+    final initialDate = _serviceDate ?? now;
+
     final picked = await showDatePicker(
       context: context,
-      initialDate: _serviceDate ?? now,
+      initialDate: initialDate,
       firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 1),
+      lastDate: DateTime(now.year + 2),
     );
 
     if (picked != null && mounted) {
@@ -227,31 +173,106 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   }
 
   Future<void> _pickTime(bool isStart) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: isStart
-          ? (_startTime ?? TimeOfDay.now())
-          : (_endTime ?? TimeOfDay.now()),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: Color(0xFF059669)),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
+    final initial = isStart
+        ? (_startTime ?? TimeOfDay.now())
+        : (_endTime ?? _startTime ?? TimeOfDay.now());
+
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked == null || !mounted) return;
+
+    setState(() {
       if (isStart) {
-        setState(() {
-          _startTime = picked;
-          _showPreview = false;
-        });
+        _startTime = picked;
       } else {
-        setState(() {
-          _endTime = picked;
-          _showPreview = false;
-        });
+        _endTime = picked;
       }
+      _showPreview = false;
+    });
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'operator_select_date'.tr();
+    return MaterialLocalizations.of(context).formatMediumDate(date);
+  }
+
+  String? _formatApiDate(DateTime? date) {
+    if (date == null) return null;
+    final y = date.year.toString().padLeft(4, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  String _formatTime(TimeOfDay? time) {
+    if (time == null) return '--:--';
+    final h = time.hour.toString().padLeft(2, '0');
+    final m = time.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  void _showMsg(String message, {bool isError = false}) {
+    if (!mounted) return;
+    setState(() {
+      if (isError) {
+        _errorMsg = message;
+        _successMsg = null;
+      } else {
+        _successMsg = message;
+        _errorMsg = null;
+      }
+    });
+  }
+
+  bool get _isTimeBased {
+    final unit = (_selectedEquipment?['unit'] ?? '').toString().toLowerCase();
+    final name =
+        (_selectedEquipment?['name_en'] ?? '').toString().toLowerCase();
+    return unit.contains('hour') || name.contains('harvester');
+  }
+
+  bool get _isTractorTrolley {
+    final unit = (_selectedEquipment?['unit'] ?? '').toString().toLowerCase();
+    final name =
+        (_selectedEquipment?['name_en'] ?? '').toString().toLowerCase();
+    return unit.contains('trip') || name.contains('trolley');
+  }
+
+  double get _quantity => double.tryParse(_qtyController.text.trim()) ?? 0.0;
+  double get _distance =>
+      double.tryParse(_distanceController.text.trim()) ?? 0.0;
+  double get _totalTrips => _quantity;
+
+  double get _totalHours {
+    if (_startTime == null || _endTime == null) return 0.0;
+
+    final startMins = _startTime!.hour * 60 + _startTime!.minute;
+    final endMins = _endTime!.hour * 60 + _endTime!.minute;
+    final diffMins = endMins >= startMins
+        ? endMins - startMins
+        : (endMins + 24 * 60) - startMins;
+    return diffMins / 60.0;
+  }
+
+  double get _landSizeAcres =>
+      double.tryParse(_landSizeController.text.trim()) ?? 0.0;
+
+  double get _billedQty {
+    if (_isTimeBased) return _totalHours;
+    if (_isTractorTrolley) return _totalTrips;
+    return _quantity;
+  }
+
+  String get _measuredUnit {
+    if (_isTimeBased) return 'hour';
+    if (_isTractorTrolley) return 'trip';
+    return (_selectedEquipment?['unit'] ?? 'unit').toString();
+  }
+
+  double get _finalAmount {
+    if (_isTractorTrolley) {
+      return _ratePerUnit * _totalTrips;
     }
+    return _ratePerUnit * _billedQty;
   }
 
   bool get _canPreview {
@@ -391,6 +412,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   @override
   void dispose() {
+    _phoneDebounce?.cancel();
     _phoneController.removeListener(_onPhoneChanged);
     _phoneController.dispose();
     _nameController.dispose();

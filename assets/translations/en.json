@@ -372,6 +372,7 @@
   "operator_phone_number_label": "PHONE NUMBER",
   "operator_farmer_name_label": "FARMER NAME",
   "operator_service_date_label": "SERVICE DATE",
+  "operator_select_date": "SERVICE DATE",
   "operator_crop_type_label": "CROP TYPE",
   "operator_crop_type_optional": "Crop type (optional)",
   "operator_land_size_acres_label": "LAND SIZE (ACRES)",

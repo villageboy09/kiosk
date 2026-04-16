@@ -3,12 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cropsync/widgets/skeletons/shimmer_grid_skeleton.dart';
+import 'package:cropsync/widgets/states/app_empty_state.dart';
 import '../models/farmer_crop.dart';
 import '../models/crop_problem.dart';
 import '../services/api_service.dart';
 import 'advisory_details.dart';
 import 'crop_stages_screen.dart';
-import 'package:shimmer/shimmer.dart';
 
 class CropProblemsScreen extends StatefulWidget {
   final FarmerCrop crop;
@@ -145,62 +146,18 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
     );
   }
 
-
-
   Widget _buildLoadingState() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.75,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: 6,
-      itemBuilder: (_, i) => Shimmer.fromColors(
-        baseColor: Colors.grey[300]!,
-        highlightColor: Colors.grey[100]!,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-          ),
-        ),
-      ),
+    return const ShimmerGridSkeleton(
+      childAspectRatio: 0.75,
     );
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle_outline,
-                size: 80, color: Colors.green[300]),
-            const SizedBox(height: 16),
-            Text(
-              context.tr('no_problems_found'),
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF111B21),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your crop looks healthy at this stage.',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return AppEmptyState(
+      icon: Icons.check_circle_outline,
+      iconColor: Colors.green.shade300,
+      title: context.tr('no_problems_found'),
+      subtitle: 'Your crop looks healthy at this stage.',
     );
   }
 
@@ -221,8 +178,8 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
   Widget _buildProblemsGrid() {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 280,
         childAspectRatio: 0.7,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,

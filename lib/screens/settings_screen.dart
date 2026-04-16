@@ -96,20 +96,25 @@ class _SettingsScreenState extends State<SettingsScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            _buildSegmentedControl(),
-            Expanded(
-              child: FadeTransition(
-                opacity: _viewSwitchController,
-                child: IndexedStack(
-                  index: _selectedIndex,
-                  children: _views,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 820),
+            child: Column(
+              children: [
+                const SizedBox(height: 20),
+                _buildSegmentedControl(),
+                Expanded(
+                  child: FadeTransition(
+                    opacity: _viewSwitchController,
+                    child: IndexedStack(
+                      index: _selectedIndex,
+                      children: _views,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -495,39 +500,44 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
   }
 
   Widget _buildLoadingState() {
-    return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 24,
-              width: 150,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 120,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: 4,
-                itemBuilder: (context, index) => Container(
-                  width: 120,
-                  margin: const EdgeInsets.only(right: 12),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 820),
+        child: Shimmer.fromColors(
+          baseColor: Colors.grey[300]!,
+          highlightColor: Colors.grey[100]!,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 24,
+                  width: 150,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 120,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: 4,
+                    itemBuilder: (context, index) => Container(
+                      width: 120,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -976,6 +986,7 @@ class _MyFieldsViewState extends State<MyFieldsView>
                       const Icon(Icons.chevron_right, color: Colors.grey)
                     ])))));
   }
+
   Widget _buildSimpleLoadingList() {
     return Shimmer.fromColors(
         baseColor: Colors.grey[300]!,

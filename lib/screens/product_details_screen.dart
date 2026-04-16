@@ -98,19 +98,28 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: CustomScrollView(
-        slivers: [
-          _buildMediaAppBar(),
-          _buildProductInfo(),
-        ],
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 960),
+          child: CustomScrollView(
+            slivers: [
+              _buildMediaAppBar(),
+              _buildProductInfo(),
+            ],
+          ),
+        ),
       ),
       bottomNavigationBar: _buildBottomBar(),
     );
   }
 
   SliverAppBar _buildMediaAppBar() {
+    final expandedHeight = (MediaQuery.of(context).size.height * 0.35)
+        .clamp(280.0, 420.0)
+        .toDouble();
+
     return SliverAppBar(
-      expandedHeight: MediaQuery.of(context).size.height * 0.4,
+      expandedHeight: expandedHeight,
       pinned: true,
       floating: false,
       stretch: true,
@@ -242,57 +251,112 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Widget _buildBottomBar() {
     return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            )
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(context.tr('price'),
-                    style: GoogleFonts.lexend(
-                        color: Colors.grey.shade500, fontSize: 12)),
-                Text('₹${widget.product.price}',
-                    style: GoogleFonts.lexend(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87)),
-              ],
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _showEnquiryBottomSheet,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade600,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+      top: false,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 960),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isCompact = constraints.maxWidth < 420;
+
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -2),
+                    )
+                  ],
                 ),
-                child: Text(
-                  context.tr('enquire_now'),
-                  style: GoogleFonts.lexend(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
+                child: isCompact
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(context.tr('price'),
+                                  style: GoogleFonts.lexend(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 12)),
+                              Text('₹${widget.product.price}',
+                                  style: GoogleFonts.lexend(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87)),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            onPressed: _showEnquiryBottomSheet,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green.shade600,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              context.tr('enquire_now'),
+                              style: GoogleFonts.lexend(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(context.tr('price'),
+                                  style: GoogleFonts.lexend(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 12)),
+                              Text('₹${widget.product.price}',
+                                  style: GoogleFonts.lexend(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87)),
+                            ],
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _showEnquiryBottomSheet,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade600,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                context.tr('enquire_now'),
+                                style: GoogleFonts.lexend(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -309,178 +373,203 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setSheetState) {
-            Future<void> submitEnquiry() async {
-              if (isLoading) return;
+        return SafeArea(
+          top: false,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: StatefulBuilder(
+                builder: (BuildContext context, StateSetter setSheetState) {
+                  Future<void> submitEnquiry() async {
+                    if (isLoading) return;
 
-              final navigator = Navigator.of(context);
-              final scaffoldMessenger = ScaffoldMessenger.of(context);
+                    final navigator = Navigator.of(context);
+                    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-              setSheetState(() => isLoading = true);
+                    setSheetState(() => isLoading = true);
 
-              try {
-                final currentUser = AuthService.currentUser;
-                if (currentUser == null) throw Exception('User not logged in');
+                    try {
+                      final currentUser = AuthService.currentUser;
+                      if (currentUser == null) {
+                        throw Exception('User not logged in');
+                      }
 
-                // Create enquiry in the enquiries table
-                final result = await ApiService.createEnquiry(
-                  productId: widget.product.id,
-                  farmerId: currentUser.userId,
-                  advertiserId: widget.product.advertiserId,
-                );
+                      final result = await ApiService.createEnquiry(
+                        productId: widget.product.id,
+                        farmerId: currentUser.userId,
+                        advertiserId: widget.product.advertiserId,
+                      );
 
-                if (result['success'] != true) {
-                  throw Exception(result['error'] ?? 'Failed to send enquiry');
-                }
+                      if (result['success'] != true) {
+                        throw Exception(
+                            result['error'] ?? 'Failed to send enquiry');
+                      }
 
-                if (!mounted) return;
-                navigator.pop();
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(
-                      content: Text(context.tr('enquiry_sent_success')),
-                      backgroundColor: Colors.green),
-                );
-              } catch (e) {
-                if (!mounted) return;
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(
-                      content: Text('${context.tr('error')}: ${e.toString()}'),
-                      backgroundColor: Colors.red),
-                );
-              } finally {
-                if (mounted) {
-                  setSheetState(() => isLoading = false);
-                }
-              }
-            }
+                      if (!mounted) return;
+                      navigator.pop();
+                      scaffoldMessenger.showSnackBar(
+                        SnackBar(
+                          content: Text(context.tr('enquiry_sent_success')),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      scaffoldMessenger.showSnackBar(
+                        SnackBar(
+                          content:
+                              Text('${context.tr('error')}: ${e.toString()}'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    } finally {
+                      if (mounted) {
+                        setSheetState(() => isLoading = false);
+                      }
+                    }
+                  }
 
-            return Padding(
-              padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(2)),
-                      ),
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).viewInsets.bottom,
                     ),
-                    const SizedBox(height: 24),
-                    Text(context.tr('send_enquiry'),
-                        style: GoogleFonts.lexend(
-                            fontSize: 20, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 16),
-
-                    // Product summary card
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Row(
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: CachedNetworkImage(
-                              imageUrl: widget.product.imageUrl1 ?? '',
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                width: 60,
-                                height: 60,
-                                color: Colors.grey.shade200,
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                width: 60,
-                                height: 60,
-                                color: Colors.grey.shade200,
-                                child: Icon(Icons.eco_outlined,
-                                    color: Colors.grey.shade400),
+                          Center(
+                            child: Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(2),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          const SizedBox(height: 24),
+                          Text(
+                            context.tr('send_enquiry'),
+                            style: GoogleFonts.lexend(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Row(
                               children: [
-                                Text(
-                                  widget.product.name,
-                                  style: GoogleFonts.lexend(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: CachedNetworkImage(
+                                    imageUrl: widget.product.imageUrl1 ?? '',
+                                    width: 60,
+                                    height: 60,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => Container(
+                                      width: 60,
+                                      height: 60,
+                                      color: Colors.grey.shade200,
+                                    ),
+                                    errorWidget: (context, url, error) =>
+                                        Container(
+                                      width: 60,
+                                      height: 60,
+                                      color: Colors.grey.shade200,
+                                      child: Icon(
+                                        Icons.eco_outlined,
+                                        color: Colors.grey.shade400,
+                                      ),
+                                    ),
                                   ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '₹${widget.product.price}',
-                                  style: GoogleFonts.lexend(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green.shade700,
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        widget.product.name,
+                                        style: GoogleFonts.lexend(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '₹${widget.product.price}',
+                                        style: GoogleFonts.lexend(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green.shade700,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
+                          const SizedBox(height: 16),
+                          Text(
+                            context.tr('enquiry_description'),
+                            style: GoogleFonts.lexend(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: submitEnquiry,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade600,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: isLoading
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 3,
+                                      ),
+                                    )
+                                  : Text(
+                                      context.tr('confirm_enquiry'),
+                                      style: GoogleFonts.lexend(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-
-                    const SizedBox(height: 16),
-                    Text(
-                      context.tr('enquiry_description'),
-                      style: GoogleFonts.lexend(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: submitEnquiry,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade600,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: isLoading
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 3,
-                                ))
-                            : Text(
-                                context.tr('confirm_enquiry'),
-                                style: GoogleFonts.lexend(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
-            );
-          },
+            ),
+          ),
         );
       },
     );

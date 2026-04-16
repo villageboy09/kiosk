@@ -346,12 +346,16 @@ class _NavItem extends StatelessWidget {
                 ),
                 if (isActive) ...[
                   const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: activeColor,
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: activeColor,
+                      ),
                     ),
                   ),
                 ],
@@ -455,19 +459,19 @@ class _HomeShimmer extends StatelessWidget {
             const SizedBox(height: 20),
             // Grid
             Expanded(
-              child: GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.1,
+              child: GridView.builder(
                 physics: const NeverScrollableScrollPhysics(),
-                children: List.generate(
-                  4,
-                  (_) => Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 240,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.1,
+                ),
+                itemCount: 4,
+                itemBuilder: (_, __) => Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
               ),
