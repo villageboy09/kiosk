@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 /// Centralized design system for CropSync
 /// Provides consistent colors, typography, and spacing across the app
@@ -214,6 +215,34 @@ class AppTheme {
         color: color,
         letterSpacing: 0.3,
       );
+
+  /// Dynamic locale-aware text style
+  static TextStyle getTextStyle(
+    BuildContext context, {
+    double? fontSize,
+    FontWeight? fontWeight,
+    Color? color,
+    double? height,
+    double? letterSpacing,
+  }) {
+    if (EasyLocalization.of(context)?.locale.languageCode == 'te') {
+      return GoogleFonts.notoSansTelugu(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color ?? textPrimary,
+        height: height,
+        letterSpacing: letterSpacing ?? 0.3,
+      );
+    }
+    return TextStyle(
+      fontFamily: 'Google Sans',
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color ?? textPrimary,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+  }
 
   // ============ DECORATIONS ============
 

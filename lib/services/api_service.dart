@@ -123,7 +123,7 @@ class ApiService {
 
   /// Register a new user
   static Future<Map<String, dynamic>> registerUser(
-      String name, String phoneNumber) async {
+      String name, String phoneNumber, String clientCode) async {
     final url = Uri.parse('$baseUrl/api.php?action=register_user');
 
     try {
@@ -133,6 +133,7 @@ class ApiService {
         body: jsonEncode({
           'name': name,
           'phone_number': phoneNumber,
+          'client_code': clientCode,
         }),
       );
 
@@ -966,11 +967,27 @@ class ApiService {
 
   /// Get all CHC bookings assigned to a specific operator.
   static Future<List<Map<String, dynamic>>> getOperatorBookings(
-      String operatorId) async {
+    String operatorId, {
+    List<String>? assignmentStatuses,
+  }) async {
     try {
+      final trimmedOperatorId = operatorId.trim();
+      if (trimmedOperatorId.isEmpty) return [];
+
+      final statuses = (assignmentStatuses ?? [])
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+
+      final query = StringBuffer(
+          '$baseUrl/api.php?action=get_operator_bookings&operator_id=${Uri.encodeComponent(trimmedOperatorId)}');
+      if (statuses.isNotEmpty) {
+        query.write(
+            '&assignment_statuses=${Uri.encodeComponent(statuses.join(','))}');
+      }
+
       final response = await http.get(
-        Uri.parse(
-            '$baseUrl/api.php?action=get_operator_bookings&operator_id=${Uri.encodeComponent(operatorId)}'),
+        Uri.parse(query.toString()),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -984,9 +1001,41 @@ class ApiService {
     }
   }
 
+  /// Update booking and/or assignment status from operator dashboard.
+  static Future<Map<String, dynamic>> updateOperatorBookingStatus({
+    required String bookingId,
+    String? bookingStatus,
+    String? assignmentStatus,
+    String? rescheduledDate,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api.php?action=update_operator_booking_status'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'booking_id': bookingId,
+          'booking_status': bookingStatus,
+          'assignment_status': assignmentStatus,
+          'rescheduled_date': rescheduledDate,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {
+        'success': false,
+        'error': 'Server error: ${response.statusCode}'
+      };
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
   /// Manually complete/log a walk-in booking by an operator.
   static Future<Map<String, dynamic>> completeBookingManual({
     required String operatorId,
+    String? bookingId,
     required String farmerPhone,
     required String farmerName,
     required String village,
@@ -1011,6 +1060,7 @@ class ApiService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'operator_id': operatorId,
+          'booking_id': bookingId,
           'farmer_phone': farmerPhone,
           'farmer_name': farmerName,
           'village': village,

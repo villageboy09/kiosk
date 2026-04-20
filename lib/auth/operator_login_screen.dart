@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/navigation/app_routes.dart';
+import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/widgets/auth/auth_alert_banner.dart';
 import 'package:cropsync/widgets/auth/auth_logo_header.dart';
 
@@ -31,8 +32,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
   bool _obscurePassword = true;
   String? _errorMessage;
 
-  static const Color _green = Color(0xFF059669);
-  static const Color _darkGreen = Color(0xFF047857);
+  static const Color _accent = Color(0xFF111827);
   static const Color _surface = Color(0xFFF9FAFB);
   static const Color _border = Color(0xFFD1D5DB);
   static const Color _textPrimary = Color(0xFF111827);
@@ -167,16 +167,16 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(Icons.verified_rounded,
-              size: 16, color: Color(0xFF047857)),
+              size: 16, color: Color(0xFF111827)),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               'operator_login_badge'.tr(),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
+              style: AppTheme.getTextStyle(context, 
                 fontSize: 13,
-                color: _darkGreen,
+                color: const Color(0xFF111827),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -200,17 +200,17 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
           FilteringTextInputFormatter.digitsOnly,
           LengthLimitingTextInputFormatter(10),
         ],
-        style: GoogleFonts.inter(
+        style: AppTheme.getTextStyle(context, 
             fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: 'operator_phone_hint'.tr(),
-          hintStyle: GoogleFonts.inter(
+          hintStyle: AppTheme.getTextStyle(context, 
               color: const Color(0xFF9CA3AF),
               fontSize: 16,
               fontWeight: FontWeight.w500),
           prefixIcon: const Padding(
             padding: EdgeInsets.only(left: 16, right: 12),
-            child: Icon(Icons.phone_rounded, color: _green, size: 22),
+            child: Icon(Icons.phone_rounded, color: _accent, size: 22),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 50),
           border: InputBorder.none,
@@ -230,17 +230,17 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
       child: TextField(
         controller: _passwordController,
         obscureText: _obscurePassword,
-        style: GoogleFonts.inter(
+        style: AppTheme.getTextStyle(context, 
             fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: 'operator_password_hint'.tr(),
-          hintStyle: GoogleFonts.inter(
+          hintStyle: AppTheme.getTextStyle(context, 
               color: const Color(0xFF9CA3AF),
               fontSize: 16,
               fontWeight: FontWeight.w500),
           prefixIcon: const Padding(
             padding: EdgeInsets.only(left: 16, right: 12),
-            child: Icon(Icons.lock_rounded, color: _green, size: 22),
+            child: Icon(Icons.lock_rounded, color: _accent, size: 22),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 50),
           suffixIcon: Padding(
@@ -268,13 +268,13 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
     return Container(
       height: 60,
       decoration: BoxDecoration(
-        color: _isLoading ? const Color(0xFF94A3B8) : _green,
+        color: _isLoading ? const Color(0xFF94A3B8) : _accent,
         borderRadius: BorderRadius.circular(16),
         boxShadow: _isLoading
             ? []
             : [
                 BoxShadow(
-                  color: _green.withValues(alpha: 0.35),
+                  color: _accent.withValues(alpha: 0.35),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 )
@@ -295,7 +295,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
                   )
                 : Text(
                     'operator_login_button'.tr(),
-                    style: GoogleFonts.inter(
+                    style: AppTheme.getTextStyle(context, 
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
@@ -327,7 +327,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
           const SizedBox(width: 8),
           Text(
             'operator_back_to_farmer_login'.tr(),
-            style: GoogleFonts.inter(
+            style: AppTheme.getTextStyle(context, 
               fontSize: 15,
               color: _textSub,
               fontWeight: FontWeight.w600,

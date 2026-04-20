@@ -9,7 +9,9 @@ import 'package:cropsync/services/api_service.dart';
 
 class ManualOrderSheet extends StatefulWidget {
   final ChcOperator operator;
-  const ManualOrderSheet({super.key, required this.operator});
+  final Map<String, dynamic>? prefillBooking;
+  const ManualOrderSheet(
+      {super.key, required this.operator, this.prefillBooking});
 
   @override
   State<ManualOrderSheet> createState() => _ManualOrderSheetState();
@@ -30,6 +32,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   bool _isFetchingEquipments = false;
   bool _isFetchingRate = false;
   bool _isFoundMember = false;
+  bool _isCrossClientMember = false;
+  bool _isNewUser = true;
   DateTime? _serviceDate;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
@@ -40,7 +44,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   String? _successMsg;
   Timer? _phoneDebounce;
 
-  static const Color _green = Color(0xFF059669);
+  static const Color _green = Color(0xFF111827);
   static const Color _textPrimary = Color(0xFF111827);
   static const Color _textSub = Color(0xFF6B7280);
   static const Color _surface = Color(0xFFF9FAFB);
@@ -50,7 +54,52 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   void initState() {
     super.initState();
     _phoneController.addListener(_onPhoneChanged);
-    unawaited(_loadEquipments());
+
+    if (widget.prefillBooking != null) {
+      final b = widget.prefillBooking!;
+
+      if (b['farmer_phone'] != null) {
+        _phoneController.text = b['farmer_phone'].toString();
+      }
+      if (b['farmer_name'] != null) {
+        _nameController.text = b['farmer_name'].toString();
+      }
+      if (b['farmer_village'] != null) {
+        _villageController.text = b['farmer_village'].toString();
+      }
+      if (b['service_date'] != null) {
+        try {
+          _serviceDate = DateTime.parse(b['service_date'].toString());
+        } catch (_) {}
+      }
+      if (b['crop_type'] != null) {
+        _cropController.text = b['crop_type'].toString();
+      }
+      if (b['land_size_acres'] != null) {
+        _landSizeController.text = b['land_size_acres'].toString();
+      }
+
+      unawaited(_loadEquipments().then((_) {
+        if (b['equipment_type'] != null && mounted) {
+          try {
+            final eq = _equipmentList.firstWhere(
+              (e) =>
+                  e['name_en'] == b['equipment_type'] ||
+                  e['name_te'] == b['equipment_type'],
+            );
+            setState(() {
+              _selectedEquipment = eq;
+              if (b['billed_qty'] != null) {
+                _qtyController.text = b['billed_qty'].toString();
+              }
+            });
+            _updateRate();
+          } catch (_) {}
+        }
+      }));
+    } else {
+      unawaited(_loadEquipments());
+    }
   }
 
   void _onPhoneChanged() {
@@ -61,10 +110,12 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     final phone = _phoneController.text.trim();
 
     if (phone.length != 10) {
-      if (_isFetchingUser || _isFoundMember) {
+      if (_isFetchingUser || _isFoundMember || !_isNewUser) {
         setState(() {
           _isFetchingUser = false;
           _isFoundMember = false;
+          _isCrossClientMember = false;
+          _isNewUser = true;
         });
         unawaited(_loadEquipments());
       }
@@ -85,23 +136,34 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       final user = await ApiService.checkUser(phone);
       if (!mounted || _phoneController.text.trim() != phone) return;
 
-      final isMember = user != null &&
-          ('${user['is_member'] ?? '0'}' == '1' ||
-              '${user['membership_status'] ?? ''}'.toLowerCase() == 'member');
+      final bool hasUid = user != null &&
+          user['card_uid'] != null &&
+          user['card_uid'].toString().trim().isNotEmpty;
+      final bool matchesClient =
+          user != null && user['client_code'] == widget.operator.clientCode;
+
+      final isMember = hasUid && matchesClient;
+      final isCrossClientMember = hasUid && !matchesClient;
 
       setState(() {
         _isFoundMember = isMember;
+        _isCrossClientMember = isCrossClientMember;
+        _isNewUser = user == null;
         _isFetchingUser = false;
 
         if (user != null) {
           final name = (user['name'] ?? '').toString().trim();
           final village = (user['village'] ?? user['region'] ?? '').toString();
-          if (name.isNotEmpty && _nameController.text.trim().isEmpty) {
+
+          if (name.isNotEmpty) {
             _nameController.text = name;
           }
-          if (village.isNotEmpty && _villageController.text.trim().isEmpty) {
+          if (village.isNotEmpty) {
             _villageController.text = village;
           }
+        } else {
+          _nameController.clear();
+          _villageController.clear();
         }
       });
 
@@ -112,6 +174,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       setState(() {
         _isFetchingUser = false;
         _isFoundMember = false;
+        _isCrossClientMember = false;
+        _isNewUser = true;
       });
       await _loadEquipments();
     }
@@ -285,19 +349,33 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     if (!baseValid) return false;
 
     if (_isTimeBased) {
-      return _startTime != null && _endTime != null && _totalHours > 0;
+      return _startTime != null &&
+          _endTime != null &&
+          _totalHours > 0 &&
+          _ratePerUnit > 0;
     } else if (_isTractorTrolley) {
       return _distance > 0 &&
           _totalTrips > 0 &&
           !_isFetchingRate &&
           _ratePerUnit > 0;
     } else {
-      return _quantity > 0;
+      return _quantity > 0 && _ratePerUnit > 0;
     }
   }
 
   Future<void> _updateRate() async {
     if (_selectedEquipment == null) return;
+
+    if (widget.operator.clientCode != 'SDP001' ||
+        _isCrossClientMember ||
+        _isNewUser) {
+      if (!mounted) return;
+      setState(() {
+        _ratePerUnit = 0.0;
+        _isFetchingRate = false;
+      });
+      return;
+    }
 
     if (_isTractorTrolley) {
       final equipmentId = _selectedEquipment!['id'];
@@ -367,6 +445,53 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   }
 
   Future<void> _submit() async {
+    if (widget.prefillBooking != null &&
+        widget.prefillBooking!['booking_id'] != null) {
+      if (!_canPreview) {
+        _showMsg('operator_fill_required_fields'.tr(), isError: true);
+        return;
+      }
+      setState(() => _isLoading = true);
+
+      try {
+        final res = await ApiService.completeBookingManual(
+          operatorId: widget.operator.operatorId,
+          bookingId: widget.prefillBooking!['booking_id'].toString(),
+          farmerPhone: _phoneController.text.trim(),
+          farmerName: _nameController.text.trim(),
+          village: _villageController.text.trim(),
+          equipmentUsed: _selectedEquipment!['name_en'] ?? 'Equipment',
+          equipmentId: _selectedEquipment!['id'],
+          startTime: _isTimeBased ? _formatTime(_startTime) : '00:00',
+          endTime: _isTimeBased ? _formatTime(_endTime) : '00:00',
+          distance: _isTractorTrolley ? _distance : 0,
+          serviceDate: _formatApiDate(_serviceDate),
+          cropType: _cropController.text.trim().isEmpty
+              ? null
+              : _cropController.text.trim(),
+          landSizeAcres: _landSizeAcres,
+          billedQty: _billedQty,
+          unitType: _measuredUnit,
+          rate: _ratePerUnit,
+          finalAmount: _finalAmount,
+        );
+
+        if (res['success'] == true) {
+          _showMsg('operator_job_logged_success'.tr());
+          await Future.delayed(const Duration(milliseconds: 1200));
+          if (mounted) Navigator.pop(context);
+        } else {
+          _showMsg(res['error'] ?? 'operator_log_job_failed'.tr(),
+              isError: true);
+          if (mounted) setState(() => _isLoading = false);
+        }
+      } catch (e) {
+        _showMsg('operator_network_error_try_again'.tr(), isError: true);
+        if (mounted) setState(() => _isLoading = false);
+      }
+      return;
+    }
+
     if (!_canPreview) {
       _showMsg('operator_fill_required_fields'.tr(), isError: true);
       return;
@@ -427,243 +552,257 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   @override
   Widget build(BuildContext context) {
     final keyboardH = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
-      margin: EdgeInsets.only(bottom: keyboardH),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE5E7EB),
-              borderRadius: BorderRadius.circular(2),
-            ),
+    return ConstrainedBox(
+        constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.88),
+        child: Container(
+          margin: EdgeInsets.only(bottom: keyboardH),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
-          const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.add_task_rounded,
-                      color: Color(0xFF059669), size: 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'operator_log_walk_in_job'.tr(),
-                        style: const TextStyle(
-                          fontFamily: 'Google Sans',
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: _textPrimary,
-                        ),
+              ),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
-                      Text(
-                        'operator_log_walk_in_subtitle'.tr(),
-                        style: const TextStyle(
-                          fontFamily: 'Google Sans',
-                          fontSize: 12,
-                          color: _textSub,
-                        ),
+                      child: const Icon(Icons.add_task_rounded,
+                          color: Color(0xFF111827), size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'operator_log_walk_in_job'.tr(),
+                            style: const TextStyle(
+                              fontFamily: 'Google Sans',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: _textPrimary,
+                            ),
+                          ),
+                          Text(
+                            'operator_log_walk_in_subtitle'.tr(),
+                            style: const TextStyle(
+                              fontFamily: 'Google Sans',
+                              fontSize: 12,
+                              color: _textSub,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Divider(height: 1, color: Color(0xFFF3F4F6)),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_errorMsg != null || _successMsg != null) ...[
-                    _buildBanner(),
-                    const SizedBox(height: 14),
+                    ),
                   ],
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Divider(height: 1, color: Color(0xFFF3F4F6)),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _fieldLabel('operator_phone_number_label'.tr()),
-                      if (_isFoundMember)
-                        _memberBadge(true)
-                      else if (_phoneController.text.length == 10 &&
-                          !_isFetchingUser)
-                        _memberBadge(false),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  _buildTextField(
-                    controller: _phoneController,
-                    hint: 'signup_phone_hint'.tr(),
-                    icon: Icons.phone_rounded,
-                    type: TextInputType.phone,
-                    suffixIcon: _isFetchingUser
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: _green)),
-                          )
-                        : null,
-                    formatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(10),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _fieldLabel('operator_farmer_name_label'.tr()),
-                  const SizedBox(height: 6),
-                  _buildTextField(
-                    controller: _nameController,
-                    hint: 'signup_name_hint'.tr(),
-                    icon: Icons.person_rounded,
-                    type: TextInputType.name,
-                    onChanged: (_) => setState(() => _showPreview = false),
-                  ),
-                  const SizedBox(height: 16),
-                  _fieldLabel('village'.tr()),
-                  const SizedBox(height: 6),
-                  _buildTextField(
-                    controller: _villageController,
-                    hint: 'village'.tr(),
-                    icon: Icons.location_on_rounded,
-                    type: TextInputType.text,
-                    onChanged: (_) => setState(() => _showPreview = false),
-                  ),
-                  const SizedBox(height: 16),
-                  _fieldLabel('operator_service_date_label'.tr()),
-                  const SizedBox(height: 6),
-                  _buildDateField(),
-                  const SizedBox(height: 16),
-                  _fieldLabel('operator_crop_type_label'.tr()),
-                  const SizedBox(height: 6),
-                  _buildTextField(
-                    controller: _cropController,
-                    hint: 'operator_crop_type_optional'.tr(),
-                    icon: Icons.grass_rounded,
-                    type: TextInputType.text,
-                    onChanged: (_) => setState(() => _showPreview = false),
-                  ),
-                  const SizedBox(height: 16),
-                  _fieldLabel('operator_land_size_acres_label'.tr()),
-                  const SizedBox(height: 6),
-                  _buildTextField(
-                    controller: _landSizeController,
-                    hint: 'operator_enter_land_size'.tr(),
-                    icon: Icons.square_foot_rounded,
-                    type: const TextInputType.numberWithOptions(decimal: true),
-                    onChanged: (_) => setState(() => _showPreview = false),
-                  ),
-                  const SizedBox(height: 16),
-                  _fieldLabel('operator_equipment_used_label'.tr()),
-                  const SizedBox(height: 6),
-                  _buildEquipmentPicker(),
-                  const SizedBox(height: 16),
-                  if (_selectedEquipment != null) ...[
-                    if (_isTimeBased) ...[
-                      _fieldLabel('operator_operation_time_label'.tr()),
-                      const SizedBox(height: 6),
-                      _buildTimePickers(),
-                    ] else if (_isTractorTrolley) ...[
-                      _fieldLabel('operator_distance_per_trip_label'.tr()),
+                      if (_errorMsg != null || _successMsg != null) ...[
+                        _buildBanner(),
+                        const SizedBox(height: 14),
+                      ],
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _fieldLabel('operator_phone_number_label'.tr()),
+                          if (_isFoundMember)
+                            _memberBadge(1)
+                          else if (_isCrossClientMember)
+                            _memberBadge(2)
+                          else if (_phoneController.text.length == 10 &&
+                              !_isFetchingUser)
+                            _memberBadge(0),
+                        ],
+                      ),
                       const SizedBox(height: 6),
                       _buildTextField(
-                        controller: _distanceController,
-                        hint: 'operator_enter_distance_km'.tr(),
-                        icon: Icons.add_road_rounded,
-                        type: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        onChanged: (_) {
-                          unawaited(_updateRate());
-                          setState(() => _showPreview = false);
-                        },
+                        controller: _phoneController,
+                        hint: 'signup_phone_hint'.tr(),
+                        icon: Icons.phone_rounded,
+                        type: TextInputType.phone,
+                        suffixIcon: _isFetchingUser
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: _green)),
+                              )
+                            : null,
+                        formatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(10),
+                        ],
                       ),
                       const SizedBox(height: 16),
-                      _fieldLabel('operator_total_trips_label'.tr()),
+                      _fieldLabel('operator_farmer_name_label'.tr()),
                       const SizedBox(height: 6),
                       _buildTextField(
-                        controller: _qtyController,
-                        hint: 'operator_enter_total_trips'.tr(),
-                        icon: Icons.repeat_rounded,
-                        type: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        onChanged: (_) {
-                          setState(() => _showPreview = false);
-                        },
+                        controller: _nameController,
+                        hint: 'signup_name_hint'.tr(),
+                        icon: Icons.person_rounded,
+                        type: TextInputType.name,
+                        onChanged: (_) => setState(() => _showPreview = false),
                       ),
-                    ] else ...[
-                      _fieldLabel('operator_quantity_label'.tr(namedArgs: {
-                        'unit':
-                            '${_selectedEquipment!['unit'] ?? 'operator_units'.tr()}'
-                      })),
+                      const SizedBox(height: 16),
+                      _fieldLabel('village'.tr()),
                       const SizedBox(height: 6),
                       _buildTextField(
-                        controller: _qtyController,
-                        hint: 'operator_enter_quantity'.tr(),
-                        icon: Icons.calculate_rounded,
+                        controller: _villageController,
+                        hint: 'village'.tr(),
+                        icon: Icons.location_on_rounded,
+                        type: TextInputType.text,
+                        onChanged: (_) => setState(() => _showPreview = false),
+                      ),
+                      const SizedBox(height: 16),
+                      _fieldLabel('operator_service_date_label'.tr()),
+                      const SizedBox(height: 6),
+                      _buildDateField(),
+                      const SizedBox(height: 16),
+                      _fieldLabel('operator_crop_type_label'.tr()),
+                      const SizedBox(height: 6),
+                      _buildTextField(
+                        controller: _cropController,
+                        hint: 'operator_crop_type_optional'.tr(),
+                        icon: Icons.grass_rounded,
+                        type: TextInputType.text,
+                        onChanged: (_) => setState(() => _showPreview = false),
+                      ),
+                      const SizedBox(height: 16),
+                      _fieldLabel('operator_land_size_acres_label'.tr()),
+                      const SizedBox(height: 6),
+                      _buildTextField(
+                        controller: _landSizeController,
+                        hint: 'operator_enter_land_size'.tr(),
+                        icon: Icons.square_foot_rounded,
                         type: const TextInputType.numberWithOptions(
                             decimal: true),
-                        onChanged: (_) {
-                          unawaited(_updateRate());
-                          setState(() => _showPreview = false);
-                        },
+                        onChanged: (_) => setState(() => _showPreview = false),
                       ),
+                      const SizedBox(height: 16),
+                      _fieldLabel('operator_equipment_used_label'.tr()),
+                      const SizedBox(height: 6),
+                      _buildEquipmentPicker(),
+                      const SizedBox(height: 16),
+                      if (_selectedEquipment != null) ...[
+                        if (_isTimeBased) ...[
+                          _fieldLabel('operator_operation_time_label'.tr()),
+                          const SizedBox(height: 6),
+                          _buildTimePickers(),
+                        ] else if (_isTractorTrolley) ...[
+                          _fieldLabel('operator_distance_per_trip_label'.tr()),
+                          const SizedBox(height: 6),
+                          _buildTextField(
+                            controller: _distanceController,
+                            hint: 'operator_enter_distance_km'.tr(),
+                            icon: Icons.add_road_rounded,
+                            type: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (_) {
+                              unawaited(_updateRate());
+                              setState(() => _showPreview = false);
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          _fieldLabel('operator_total_trips_label'.tr()),
+                          const SizedBox(height: 6),
+                          _buildTextField(
+                            controller: _qtyController,
+                            hint: 'operator_enter_total_trips'.tr(),
+                            icon: Icons.repeat_rounded,
+                            type: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (_) {
+                              setState(() => _showPreview = false);
+                            },
+                          ),
+                        ] else ...[
+                          _fieldLabel('operator_quantity_label'.tr(namedArgs: {
+                            'unit':
+                                '${_selectedEquipment!['unit'] ?? 'operator_units'.tr()}'
+                          })),
+                          const SizedBox(height: 6),
+                          _buildTextField(
+                            controller: _qtyController,
+                            hint: 'operator_enter_quantity'.tr(),
+                            icon: Icons.calculate_rounded,
+                            type: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (_) {
+                              unawaited(_updateRate());
+                              setState(() => _showPreview = false);
+                            },
+                          ),
+                        ],
+                        if ((_isTractorTrolley &&
+                                (_distance > 0 || _totalTrips > 0)) ||
+                            (!_isTractorTrolley && _billedQty > 0)) ...[
+                          const SizedBox(height: 12),
+                          _buildRateRow(),
+                        ],
+                        const SizedBox(height: 20),
+                      ],
+                      if (_showPreview && _canPreview) ...[
+                        _buildBillPreview(),
+                        const SizedBox(height: 16),
+                      ],
                     ],
-                    if ((_isTractorTrolley &&
-                            (_distance > 0 || _totalTrips > 0)) ||
-                        (!_isTractorTrolley && _finalAmount > 0)) ...[
-                      const SizedBox(height: 12),
-                      _buildRateRow(),
-                    ],
-                    const SizedBox(height: 20),
-                  ],
-                  if (_showPreview && _canPreview) ...[
-                    _buildBillPreview(),
-                    const SizedBox(height: 16),
-                  ],
-                ],
+                  ),
+                ),
               ),
-            ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+                child: _buildBottomActions(),
+              ),
+              const SizedBox(height: 8),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
-            child: _buildBottomActions(),
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
+        ));
   }
 
-  Widget _memberBadge(bool isMember) {
+  Widget _memberBadge(int state) {
+    final isMember = state == 1;
+    final isCross = state == 2;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: isMember ? const Color(0xFFF0FDF4) : const Color(0xFFF9FAFB),
+        color: isMember
+            ? const Color(0xFFF1F5F9)
+            : (isCross ? const Color(0xFFFFFBEB) : const Color(0xFFF9FAFB)),
         borderRadius: BorderRadius.circular(100),
         border: Border.all(
-          color: isMember ? const Color(0xFFA7F3D0) : const Color(0xFFE5E7EB),
+          color: isMember
+              ? const Color(0xFFA7F3D0)
+              : (isCross ? const Color(0xFFFDE68A) : const Color(0xFFE5E7EB)),
           width: 1,
         ),
       ),
@@ -671,19 +810,28 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            isMember ? Icons.verified_rounded : Icons.person_outline_rounded,
+            isMember
+                ? Icons.verified_rounded
+                : (isCross
+                    ? Icons.swap_horiz_rounded
+                    : Icons.person_outline_rounded),
             size: 14,
-            color: isMember ? const Color(0xFF059669) : const Color(0xFF6B7280),
+            color: isMember
+                ? const Color(0xFF111827)
+                : (isCross ? const Color(0xFFD97706) : const Color(0xFF6B7280)),
           ),
           const SizedBox(width: 6),
           Text(
-            isMember ? 'member'.tr() : 'non_member'.tr(),
+            isMember ? 'member'.tr() : (isCross ? 'Other Client' : 'New User'),
             style: TextStyle(
               fontFamily: 'Google Sans',
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color:
-                  isMember ? const Color(0xFF047857) : const Color(0xFF4B5563),
+              color: isMember
+                  ? const Color(0xFF047857)
+                  : (isCross
+                      ? const Color(0xFFB45309)
+                      : const Color(0xFF4B5563)),
             ),
           ),
         ],
@@ -1085,17 +1233,27 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
             }
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0FDF4),
+              color: widget.operator.clientCode != 'SDP001' && _ratePerUnit == 0
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFFF0FDF4),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text('operator_edit_rate'.tr(),
-                style: const TextStyle(
-                    fontFamily: 'Google Sans',
-                    fontSize: 12,
-                    color: _green,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              widget.operator.clientCode != 'SDP001' && _ratePerUnit == 0
+                  ? 'Enter Standard Rate'
+                  : 'operator_edit_rate'.tr(),
+              style: TextStyle(
+                fontFamily: 'Google Sans',
+                fontSize: 12,
+                color:
+                    widget.operator.clientCode != 'SDP001' && _ratePerUnit == 0
+                        ? Colors.white
+                        : _green,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ),
       ],
@@ -1104,32 +1262,37 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   Widget _buildBillPreview() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF059669), Color(0xFF10B981)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(10),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.receipt_long_rounded,
-                  color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text('operator_bill_preview'.tr(),
-                  style: const TextStyle(
-                      fontFamily: 'Google Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white)),
-            ],
+          const Icon(Icons.receipt_long_rounded,
+              color: Color(0xFF64748B), size: 28),
+          const SizedBox(height: 8),
+          Text(
+            'operator_bill_preview'.tr().toUpperCase(),
+            style: const TextStyle(
+              fontFamily: 'Google Sans',
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.5,
+              color: Color(0xFF475569),
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           _billRow('operator_farmer'.tr(), _nameController.text.trim()),
           _billRow('village'.tr(), _villageController.text.trim()),
           _billRow('operator_service_date'.tr(), _formatDate(_serviceDate)),
@@ -1138,6 +1301,21 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
           if (_landSizeAcres > 0)
             _billRow('operator_land_size'.tr(),
                 '${_landSizeAcres.toStringAsFixed(2)} ${'acres'.tr()}'),
+          const SizedBox(height: 12),
+          Row(
+            children: List.generate(
+              30,
+              (index) => Expanded(
+                child: Container(
+                  height: 1.5,
+                  color: index % 2 == 0
+                      ? const Color(0xFFCBD5E1)
+                      : Colors.transparent,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           _billRow('chc_equipment'.tr(), _selectedEquipment?['name_en'] ?? ''),
           if (_isTimeBased)
             _billRow(
@@ -1167,25 +1345,36 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                         '${_selectedEquipment?['unit'] ?? 'operator_unit'.tr()}',
                   }),
           ),
-          Container(
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              height: 1,
-              color: Colors.white.withValues(alpha: 0.3)),
+          const SizedBox(height: 12),
+          Row(
+            children: List.generate(
+              30,
+              (index) => Expanded(
+                child: Container(
+                  height: 1.5,
+                  color: index % 2 == 0
+                      ? const Color(0xFFCBD5E1)
+                      : Colors.transparent,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('operator_total_amount'.tr(),
                   style: const TextStyle(
                       fontFamily: 'Google Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white70)),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF334155))),
               Text('₹${_finalAmount.toStringAsFixed(0)}',
                   style: const TextStyle(
                       fontFamily: 'Google Sans',
-                      fontSize: 24,
+                      fontSize: 26,
                       fontWeight: FontWeight.w900,
-                      color: Colors.white)),
+                      color: Color(0xFF0F172A))),
             ],
           ),
         ],
@@ -1195,26 +1384,28 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   Widget _billRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 90,
+          Expanded(
+            flex: 2,
             child: Text(label,
                 style: const TextStyle(
                     fontFamily: 'Google Sans',
-                    fontSize: 12,
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w500)),
+                    fontSize: 13,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600)),
           ),
           Expanded(
+            flex: 3,
             child: Text(value,
+                textAlign: TextAlign.right,
                 style: const TextStyle(
                     fontFamily: 'Google Sans',
-                    fontSize: 12,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600)),
+                    fontSize: 13,
+                    color: Color(0xFF334155),
+                    fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -1326,7 +1517,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: isError ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+        color: isError ? const Color(0xFFFEF2F2) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isError ? const Color(0xFFFCA5A5) : const Color(0xFFA7F3D0),
@@ -1339,7 +1530,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                 ? Icons.error_outline_rounded
                 : Icons.check_circle_outline_rounded,
             size: 18,
-            color: isError ? const Color(0xFFDC2626) : const Color(0xFF059669),
+            color: isError ? const Color(0xFFDC2626) : const Color(0xFF111827),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1350,7 +1541,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color:
-                    isError ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                    isError ? const Color(0xFFDC2626) : const Color(0xFF111827),
               ),
             ),
           ),
@@ -1450,7 +1641,7 @@ class _RateDialogState extends State<_RateDialog> {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF059669), width: 2),
+            borderSide: const BorderSide(color: Color(0xFF111827), width: 2),
           ),
         ),
       ),
@@ -1469,7 +1660,7 @@ class _RateDialogState extends State<_RateDialog> {
           child: Text('operator_set'.tr(),
               style: const TextStyle(
                   fontFamily: 'Google Sans',
-                  color: Color(0xFF059669),
+                  color: Color(0xFF111827),
                   fontWeight: FontWeight.w700)),
         ),
       ],

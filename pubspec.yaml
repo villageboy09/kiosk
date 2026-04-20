@@ -2,7 +2,7 @@ name: cropsync
 description: "A new Flutter project."
 publish_to: 'none' 
 
-version: 1.0.12+22
+version: 1.0.12+25
 
 
 environment:
@@ -29,6 +29,7 @@ dependencies:
   webview_flutter: ^4.13.0
   # Added for local session management
   shared_preferences: ^2.2.2
+  salomon_bottom_bar: ^3.3.2
 
 
 dev_dependencies:
