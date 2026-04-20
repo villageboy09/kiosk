@@ -154,7 +154,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     try {
       final encodedDistrict = Uri.encodeComponent(_currentDistrict);
       final url = Uri.parse(
-          '$_apiUrl?api-key=$_apiKey&format=json&filters[district]=$encodedDistrict&limit=1000');
+          '$_apiUrl?api-key=$_apiKey&format=json&filters[district]=$encodedDistrict&limit=200');
 
       final response = await http.get(url);
 
@@ -436,8 +436,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                 ),
               ),
               const Divider(height: 1, color: Color(0xFFF0F0F0)),
-              // List of Price Items
-              ...prices.map((price) => _buildPriceItem(price)),
+              // List of Price Items (limit to top 5 recent)
+              ...prices.take(5).map((price) => _buildPriceItem(price)),
               // Card Footer
               Container(
                 width: double.infinity,
