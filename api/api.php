@@ -104,6 +104,9 @@ switch ($action) {
     case 'operator_login':
         operatorLogin($pdo);
         break;
+    case 'get_operator_details':
+        getOperatorDetails($pdo);
+        break;
     case 'get_operator_bookings':
         getOperatorBookings($pdo);
         break;
@@ -1430,6 +1433,39 @@ function getAnnouncements($pdo) {
 
 // ===================== OPERATOR FUNCTIONS =====================
 
+function getOperatorDetails($pdo) {
+    // Only phone number or ID is needed. Since login uses phone_number, we can use operator_id for refreshing
+    $operatorId = $_GET['operator_id'] ?? '';
+    if (empty($operatorId)) {
+        echo json_encode(['success' => false, 'message' => 'Operator ID required']);
+        return;
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT o.*, 
+                   (SELECT COUNT(*) FROM chc_bookings b 
+                    WHERE b.assigned_operator_id = o.operator_id 
+                      AND (b.booking_status = 'Completed' OR b.assignment_status = 'Completed')
+                   ) AS jobs_completed
+            FROM chc_operators o 
+            WHERE o.operator_id = ?
+        ");
+        $stmt->execute([$operatorId]);
+        $operator = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$operator) {
+            echo json_encode(['success' => false, 'message' => 'Operator not found.']);
+            return;
+        }
+
+        unset($operator['password']);
+        echo json_encode(['success' => true, 'operator' => $operator]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+}
+
 function operatorLogin($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     $phone = $input['phone_number'] ?? '';
@@ -1441,7 +1477,15 @@ function operatorLogin($pdo) {
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT * FROM chc_operators WHERE phone_number = ?");
+        $stmt = $pdo->prepare("
+            SELECT o.*, 
+                   (SELECT COUNT(*) FROM chc_bookings b 
+                    WHERE b.assigned_operator_id = o.operator_id 
+                      AND (b.booking_status = 'Completed' OR b.assignment_status = 'Completed')
+                   ) AS jobs_completed
+            FROM chc_operators o 
+            WHERE o.phone_number = ?
+        ");
         $stmt->execute([$phone]);
         $operator = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -1574,9 +1618,29 @@ function updateOperatorBookingStatus($pdo) {
         $stmtFetch->execute([$bookingId]);
         $booking = $stmtFetch->fetch(PDO::FETCH_ASSOC);
 
+        // Relieve operator from this booking if they were bound to it
         if ($bookingStatus === 'Completed' || $bookingStatus === 'Cancelled' || $assignmentStatus === 'Completed' || $assignmentStatus === 'Cancelled') {
             $stmtOpUpdate = $pdo->prepare("UPDATE chc_operators SET availability = 'Available', current_booking_id = NULL WHERE current_booking_id = ?");
             $stmtOpUpdate->execute([$bookingId]);
+        }
+
+        // Fetch assigned operator ID first to avoid MySQL 1093 error pattern
+        $stmtOpId = $pdo->prepare("SELECT assigned_operator_id FROM chc_bookings WHERE booking_id = ?");
+        $stmtOpId->execute([$bookingId]);
+        $opId = $stmtOpId->fetchColumn();
+
+        if ($opId) {
+            // Recalculate jobs_completed
+            $stmtJobs = $pdo->prepare("
+                UPDATE chc_operators o
+                SET o.jobs_completed = (
+                    SELECT COUNT(*) FROM chc_bookings 
+                    WHERE assigned_operator_id = ? 
+                    AND (booking_status = 'Completed' OR assignment_status = 'Completed')
+                )
+                WHERE o.operator_id = ?
+            ");
+            $stmtJobs->execute([$opId, $opId]);
         }
 
         echo json_encode([
@@ -1714,6 +1778,18 @@ function completeBookingManual($pdo) {
         // Relieve operator from this booking if they were bound to it
         $stmtOpUpdate = $pdo->prepare("UPDATE chc_operators SET availability = 'Available', current_booking_id = NULL WHERE operator_id = ?");
         $stmtOpUpdate->execute([$operatorId]);
+
+        // Recalculate jobs_completed
+        $stmtJobs = $pdo->prepare("
+            UPDATE chc_operators o
+            SET o.jobs_completed = (
+                SELECT COUNT(*) FROM chc_bookings 
+                WHERE assigned_operator_id = ? 
+                AND (booking_status = 'Completed' OR assignment_status = 'Completed')
+            )
+            WHERE o.operator_id = ?
+        ");
+        $stmtJobs->execute([$operatorId, $operatorId]);
 
         $pdo->commit();
 
