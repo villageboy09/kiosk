@@ -369,6 +369,7 @@
   "operator_filter_cancelled": "Cancelled",
   "operator_label": "Operator",
   "operator_base_village": "Base Village",
+  "total_jobs_completed": "Total Jobs Completed",
   "operator_select_service_date": "Select service date",
   "operator_fill_required_fields": "Please fill all fields correctly.",
   "operator_job_logged_success": "Job logged successfully!",

@@ -189,10 +189,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     const url = 'https://cropsync.in/privacy.html';
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) => _buildResponsiveBottomSheet(
         child: SingleChildScrollView(
           child: Padding(
@@ -290,16 +288,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showContactUs() {
-    const email = 'support@cropsync.in';
-    const phone = '+91 9876543210';
+    const email = 'info@cropsync.in';
+    const phone = '9247541741';
     const location = 'Hyderabad, Telangana';
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) => _buildResponsiveBottomSheet(
         child: SingleChildScrollView(
           child: Padding(

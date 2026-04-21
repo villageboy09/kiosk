@@ -84,7 +84,7 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
               child: Row(
                 children: [
                   Text('operator_booking_history'.tr(),
-                      style: AppTheme.getTextStyle(context, 
+                      style: AppTheme.getTextStyle(context,
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF111827))),
@@ -127,7 +127,7 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                         size: 60, color: Colors.grey[300]),
                     const SizedBox(height: 16),
                     Text('operator_no_history_found'.tr(),
-                        style: AppTheme.getTextStyle(context, 
+                        style: AppTheme.getTextStyle(context,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: const Color(0xFF9CA3AF))),
@@ -180,7 +180,8 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                 ),
                 child: Text(
                   f.tr(),
-                  style: AppTheme.getTextStyle(context, 
+                  style: AppTheme.getTextStyle(
+                    context,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: active ? Colors.white : const Color(0xFF4B5563),
@@ -202,8 +203,12 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
     final statusBg =
         isCompleted ? const Color(0xFFF1F5F9) : const Color(0xFFF8FAFC);
 
-    final farmerName = b['farmer_name']?.toString().isNotEmpty == true ? b['farmer_name'].toString() : 'operator_unknown_farmer'.tr();
-    final village = b['farmer_village']?.toString().isNotEmpty == true ? b['farmer_village'].toString() : 'operator_unknown_location'.tr();
+    final farmerName = b['farmer_name']?.toString().isNotEmpty == true
+        ? b['farmer_name'].toString()
+        : 'Unknown Farmer';
+    final village = b['farmer_village']?.toString().isNotEmpty == true
+        ? b['farmer_village'].toString()
+        : 'Unknown Location';
     final billedQty = b['billed_qty']?.toString() ?? '-';
     final unitType = b['unit_type']?.toString() ?? '';
 
@@ -242,8 +247,10 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        b['equipment_type'] ?? 'operator_equipment_fallback'.tr(),
-                        style: AppTheme.getTextStyle(context, 
+                        b['equipment_type'] ??
+                            'operator_equipment_fallback'.tr(),
+                        style: AppTheme.getTextStyle(
+                          context,
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF111827),
@@ -252,11 +259,13 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          const Icon(Icons.calendar_today_rounded, size: 12, color: Color(0xFF9CA3AF)),
+                          const Icon(Icons.calendar_today_rounded,
+                              size: 12, color: Color(0xFF9CA3AF)),
                           const SizedBox(width: 4),
                           Text(
                             b['service_date']?.toString() ?? '—',
-                            style: AppTheme.getTextStyle(context, 
+                            style: AppTheme.getTextStyle(
+                              context,
                               fontSize: 12,
                               color: const Color(0xFF6B7280),
                             ),
@@ -274,7 +283,8 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(status,
-                      style: AppTheme.getTextStyle(context, 
+                      style: AppTheme.getTextStyle(
+                        context,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: statusColor,
@@ -295,14 +305,18 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.person_outline_rounded, size: 14, color: Color(0xFF9CA3AF)),
+                          const Icon(Icons.person_outline_rounded,
+                              size: 14, color: Color(0xFF9CA3AF)),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               farmerName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTheme.getTextStyle(context, fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF334155)),
+                              style: AppTheme.getTextStyle(context,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF334155)),
                             ),
                           ),
                         ],
@@ -310,14 +324,16 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF9CA3AF)),
+                          const Icon(Icons.location_on_outlined,
+                              size: 14, color: Color(0xFF9CA3AF)),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               village,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTheme.getTextStyle(context, fontSize: 13, color: const Color(0xFF64748B)),
+                              style: AppTheme.getTextStyle(context,
+                                  fontSize: 13, color: const Color(0xFF64748B)),
                             ),
                           ),
                         ],
@@ -325,18 +341,26 @@ class _OperatorHistoryScreenState extends State<OperatorHistoryScreen> {
                     ],
                   ),
                 ),
-                Container(width: 1, height: 32, color: const Color(0xFFE2E8F0), margin: const EdgeInsets.symmetric(horizontal: 16)),
+                Container(
+                    width: 1,
+                    height: 32,
+                    color: const Color(0xFFE2E8F0),
+                    margin: const EdgeInsets.symmetric(horizontal: 16)),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
                       '$billedQty $unitType',
-                      style: AppTheme.getTextStyle(context, fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF64748B)),
+                      style: AppTheme.getTextStyle(context,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF64748B)),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '₹${b['final_amount'] ?? b['total_cost'] ?? '0'}',
-                      style: AppTheme.getTextStyle(context, 
+                      style: AppTheme.getTextStyle(
+                        context,
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: const Color(0xFF111827),

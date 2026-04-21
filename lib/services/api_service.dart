@@ -965,6 +965,24 @@ class ApiService {
     }
   }
 
+  /// Fetches an operator's full profile info from the server by ID.
+  static Future<ChcOperator> getOperatorDetails(String operatorId) async {
+    final url = Uri.parse(
+        '$baseUrl/api.php?action=get_operator_details&operator_id=${Uri.encodeComponent(operatorId.trim())}');
+    try {
+      final response = await http.get(url);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['success'] == true) {
+        return ChcOperator.fromJson(data['operator'] as Map<String, dynamic>);
+      } else {
+        throw Exception(data['message'] ?? 'Failed to load operator details.');
+      }
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Please check your internet connection.');
+    }
+  }
+
   /// Get all CHC bookings assigned to a specific operator.
   static Future<List<Map<String, dynamic>>> getOperatorBookings(
     String operatorId, {

@@ -9,6 +9,7 @@ class ChcOperator {
   final String? profileImage;
   final String? equipmentType;
   final String? clientCode;
+  final int jobsCompleted;
 
   ChcOperator({
     required this.operatorId,
@@ -20,6 +21,7 @@ class ChcOperator {
     this.profileImage,
     this.equipmentType,
     this.clientCode,
+    this.jobsCompleted = 0,
   });
 
   factory ChcOperator.fromJson(Map<String, dynamic> json) {
@@ -33,6 +35,9 @@ class ChcOperator {
       profileImage: json['profile_image']?.toString(),
       equipmentType: json['equipment_type']?.toString(),
       clientCode: json['client_code']?.toString(),
+      jobsCompleted: json['jobs_completed'] != null
+          ? int.tryParse(json['jobs_completed'].toString()) ?? 0
+          : 0,
     );
   }
 
@@ -47,6 +52,7 @@ class ChcOperator {
       'profile_image': profileImage,
       'equipment_type': equipmentType,
       'client_code': clientCode,
+      'jobs_completed': jobsCompleted,
     };
   }
 

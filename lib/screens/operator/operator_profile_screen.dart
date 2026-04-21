@@ -61,7 +61,8 @@ class OperatorProfileScreen extends StatelessWidget {
                   ? DecorationImage(
                       image: op.profileImage!.startsWith('http')
                           ? NetworkImage(op.profileImage!)
-                          : NetworkImage('https://kiosk.cropsync.in/${op.profileImage!}'),
+                          : NetworkImage(
+                              'https://kiosk.cropsync.in/${op.profileImage!}'),
                       fit: BoxFit.cover,
                     )
                   : null,
@@ -70,10 +71,11 @@ class OperatorProfileScreen extends StatelessWidget {
             child: op?.profileImage == null || op!.profileImage!.isEmpty
                 ? Text(
                     op?.initial ?? 'O',
-                    style: AppTheme.getTextStyle(context, 
-                       fontSize: 32,
-                       fontWeight: FontWeight.w800,
-                       color: Colors.white,
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
                     ),
                   )
                 : null,
@@ -81,7 +83,8 @@ class OperatorProfileScreen extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             op?.name ?? 'operator_label'.tr(),
-            style: AppTheme.getTextStyle(context, 
+            style: AppTheme.getTextStyle(
+              context,
               fontSize: 22,
               fontWeight: FontWeight.w800,
               color: Colors.white,
@@ -92,7 +95,8 @@ class OperatorProfileScreen extends StatelessWidget {
           Text(
             'operator_zone'
                 .tr(namedArgs: {'zone': op?.zoneDisplay ?? 'not_set'.tr()}),
-            style: AppTheme.getTextStyle(context, 
+            style: AppTheme.getTextStyle(
+              context,
               fontSize: 14,
               color: Colors.white.withValues(alpha: 0.6),
               fontWeight: FontWeight.w500,
@@ -115,7 +119,8 @@ class OperatorProfileScreen extends StatelessWidget {
                   const SizedBox(width: 6),
                   Text(
                     op!.rating!,
-                    style: AppTheme.getTextStyle(context, 
+                    style: AppTheme.getTextStyle(
+                      context,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
@@ -147,6 +152,10 @@ class OperatorProfileScreen extends StatelessWidget {
             icon: Icons.agriculture_rounded,
             label: 'chc_equipment'.tr(),
             value: op.equipmentType!),
+      _InfoRow(
+          icon: Icons.check_circle_outline_rounded,
+          label: 'Total Jobs Completed',
+          value: op.jobsCompleted.toString()),
     ];
 
     if (rows.isEmpty) return const SizedBox.shrink();
@@ -168,7 +177,7 @@ class OperatorProfileScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('details'.tr(),
-              style: AppTheme.getTextStyle(context, 
+              style: AppTheme.getTextStyle(context,
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF111827))),
@@ -199,12 +208,12 @@ class OperatorProfileScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(r.label,
-                  style: AppTheme.getTextStyle(context, 
+                  style: AppTheme.getTextStyle(context,
                       fontSize: 11,
                       color: const Color(0xFF9CA3AF),
                       fontWeight: FontWeight.w500)),
               Text(r.value,
-                  style: AppTheme.getTextStyle(context, 
+                  style: AppTheme.getTextStyle(context,
                       fontSize: 14,
                       color: const Color(0xFF111827),
                       fontWeight: FontWeight.w600)),
@@ -236,7 +245,8 @@ class OperatorProfileScreen extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 'operator_sign_out'.tr(),
-                style: AppTheme.getTextStyle(context, 
+                style: AppTheme.getTextStyle(
+                  context,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFFDC2626),

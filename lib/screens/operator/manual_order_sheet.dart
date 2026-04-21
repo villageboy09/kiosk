@@ -136,14 +136,11 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       final user = await ApiService.checkUser(phone);
       if (!mounted || _phoneController.text.trim() != phone) return;
 
-      final bool hasUid = user != null &&
-          user['card_uid'] != null &&
-          user['card_uid'].toString().trim().isNotEmpty;
       final bool matchesClient =
           user != null && user['client_code'] == widget.operator.clientCode;
 
-      final isMember = hasUid && matchesClient;
-      final isCrossClientMember = hasUid && !matchesClient;
+      final isMember = matchesClient;
+      final isCrossClientMember = user != null && !matchesClient;
 
       setState(() {
         _isFoundMember = isMember;

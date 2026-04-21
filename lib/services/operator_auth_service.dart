@@ -48,6 +48,22 @@ class OperatorAuthService {
     return await loadSession();
   }
 
+  /// Fetches fresh details from API and updates local session
+  static Future<ChcOperator?> refreshSession() async {
+    final op = await getCurrentOperator();
+    if (op != null) {
+      try {
+        final freshOp = await ApiService.getOperatorDetails(op.operatorId);
+        await _saveSession(freshOp);
+        _currentOperator = freshOp;
+        return freshOp;
+      } catch (_) {
+        // ignore fallback
+      }
+    }
+    return _currentOperator;
+  }
+
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_operatorKey);

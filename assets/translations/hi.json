@@ -364,6 +364,7 @@
   "operator_filter_cancelled": "रद्द",
   "operator_label": "ऑपरेटर",
   "operator_base_village": "आधार गांव",
+  "total_jobs_completed": "पूर्ण किए गए कुल कार्य",
   "operator_select_service_date": "सेवा तिथि चुनें",
   "operator_fill_required_fields": "कृपया सभी फ़ील्ड सही तरीके से भरें।",
   "operator_job_logged_success": "कार्य सफलतापूर्वक दर्ज हुआ!",

@@ -1538,7 +1538,7 @@ function getOperatorBookings($pdo) {
                 u.village AS farmer_village
 
             FROM chc_bookings b
-            LEFT JOIN users u ON b.user_id = u.user_id
+            LEFT JOIN users u ON b.user_id = u.user_id OR b.user_id = u.phone_number
             WHERE b.assigned_operator_id = ?
         ";
 

@@ -41,7 +41,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    _operator = await OperatorAuthService.getCurrentOperator();
+    _operator = await OperatorAuthService.refreshSession() ??
+        await OperatorAuthService.getCurrentOperator();
     if (_operator != null) {
       _bookings = await ApiService.getOperatorBookings(
         _operator!.operatorId,
@@ -157,13 +158,18 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 40),
+              const Icon(Icons.logout_rounded,
+                  color: Color(0xFFDC2626), size: 40),
               const SizedBox(height: 16),
               Text('operator_sign_out'.tr(),
-                  style: AppTheme.getTextStyle(context, fontSize: 20, fontWeight: FontWeight.w800, color: const Color(0xFF111827))),
+                  style: AppTheme.getTextStyle(context,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF111827))),
               const SizedBox(height: 8),
               Text('operator_sign_out_confirm'.tr(),
-                  style: AppTheme.getTextStyle(context, fontSize: 14, color: const Color(0xFF6B7280))),
+                  style: AppTheme.getTextStyle(context,
+                      fontSize: 14, color: const Color(0xFF6B7280))),
               const SizedBox(height: 32),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -175,10 +181,14 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           backgroundColor: const Color(0xFFF1F5F9),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
                         child: Text('cancel'.tr(),
-                            style: AppTheme.getTextStyle(context, fontSize: 16, fontWeight: FontWeight.w600, color: const Color(0xFF475569))),
+                            style: AppTheme.getTextStyle(context,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF475569))),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -188,10 +198,14 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           backgroundColor: const Color(0xFFFEF2F2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
                         child: Text('operator_sign_out'.tr(),
-                            style: AppTheme.getTextStyle(context, fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFFDC2626))),
+                            style: AppTheme.getTextStyle(context,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFFDC2626))),
                       ),
                     ),
                   ],
@@ -245,14 +259,16 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9), // Light slate instead of green gradient
+                color: const Color(
+                    0xFFF1F5F9), // Light slate instead of green gradient
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
                 image: op?.profileImage != null && op!.profileImage!.isNotEmpty
                     ? DecorationImage(
                         image: op.profileImage!.startsWith('http')
                             ? NetworkImage(op.profileImage!)
-                            : NetworkImage('https://kiosk.cropsync.in/${op.profileImage!}'),
+                            : NetworkImage(
+                                'https://kiosk.cropsync.in/${op.profileImage!}'),
                         fit: BoxFit.cover,
                       )
                     : null,
@@ -261,7 +277,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
               child: op?.profileImage == null || op!.profileImage!.isEmpty
                   ? Text(
                       op?.initial ?? 'O',
-                      style: AppTheme.getTextStyle(context, 
+                      style: AppTheme.getTextStyle(
+                        context,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: const Color(0xFF0F172A),
@@ -277,7 +294,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                   children: [
                     Text(
                       op.name,
-                      style: AppTheme.getTextStyle(context, 
+                      style: AppTheme.getTextStyle(
+                        context,
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF111827),
@@ -285,7 +303,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                     ),
                     Text(
                       'operator_zone'.tr(namedArgs: {'zone': op.zoneDisplay}),
-                      style: AppTheme.getTextStyle(context, 
+                      style: AppTheme.getTextStyle(
+                        context,
                         fontSize: 12,
                         color: const Color(0xFF6B7280),
                         fontWeight: FontWeight.w500,
@@ -297,7 +316,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
             else
               Expanded(
                 child: Text('operator_dashboard_title'.tr(),
-                    style: AppTheme.getTextStyle(context, 
+                    style: AppTheme.getTextStyle(context,
                         fontSize: 15, fontWeight: FontWeight.w700)),
               ),
           ],
@@ -362,7 +381,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 'operator_active_tasks'.tr(),
-                style: AppTheme.getTextStyle(context, 
+                style: AppTheme.getTextStyle(
+                  context,
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF111827),
@@ -410,7 +430,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
           const SizedBox(height: 20),
           Text(
             'operator_all_caught_up'.tr(),
-            style: AppTheme.getTextStyle(context, 
+            style: AppTheme.getTextStyle(
+              context,
               fontSize: 20,
               fontWeight: FontWeight.w700,
               color: const Color(0xFF111827),
@@ -420,7 +441,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
           Text(
             'operator_no_pending_jobs'.tr(),
             textAlign: TextAlign.center,
-            style: AppTheme.getTextStyle(context, 
+            style: AppTheme.getTextStyle(
+              context,
               fontSize: 14,
               color: const Color(0xFF6B7280),
               height: 1.5,
@@ -487,7 +509,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                       Text(
                         b['equipment_type'] ??
                             'operator_equipment_fallback'.tr(),
-                        style: AppTheme.getTextStyle(context, 
+                        style: AppTheme.getTextStyle(
+                          context,
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF111827),
@@ -496,7 +519,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                       Text(
                         'operator_booking_number'
                             .tr(namedArgs: {'id': '${b['booking_id'] ?? ''}'}),
-                        style: AppTheme.getTextStyle(context, 
+                        style: AppTheme.getTextStyle(
+                          context,
                           fontSize: 12,
                           color: const Color(0xFF9CA3AF),
                         ),
@@ -507,7 +531,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                 if (b['assignment_status'] == 'In Progress')
                   Container(
                     margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(20),
@@ -527,7 +552,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                         const SizedBox(width: 4),
                         Text(
                           'Active',
-                          style: AppTheme.getTextStyle(context, 
+                          style: AppTheme.getTextStyle(
+                            context,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             color: const Color(0xFF334155),
@@ -545,7 +571,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                   ),
                   child: Text(
                     status,
-                    style: AppTheme.getTextStyle(context, 
+                    style: AppTheme.getTextStyle(
+                      context,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: statusColor,
@@ -593,18 +620,23 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
             const SizedBox(height: 12),
             Row(
               children: [
-                _infoChip(Icons.calendar_today_rounded,
-                    b['service_date']?.toString() ?? '—'),
+                Expanded(
+                  child: _infoChip(Icons.calendar_today_rounded,
+                      b['service_date']?.toString() ?? '—'),
+                ),
                 const SizedBox(width: 12),
-                _infoChip(
-                    Icons.grass_rounded,
-                    b['crop_type']?.toString().isNotEmpty == true
-                        ? b['crop_type'].toString()
-                        : 'not_set'.tr()),
-                const Spacer(),
+                Expanded(
+                  child: _infoChip(
+                      Icons.grass_rounded,
+                      b['crop_type']?.toString().isNotEmpty == true
+                          ? b['crop_type'].toString()
+                          : 'not_set'.tr()),
+                ),
+                const SizedBox(width: 8),
                 Text(
                   '₹${b['total_cost'] ?? '—'}',
-                  style: AppTheme.getTextStyle(context, 
+                  style: AppTheme.getTextStyle(
+                    context,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: _accent,
@@ -629,7 +661,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                           builder: (ctx) => Container(
                             decoration: const BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                              borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(28)),
                             ),
                             child: SafeArea(
                               child: Column(
@@ -646,12 +679,14 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                                   ),
                                   const SizedBox(height: 20),
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 24),
                                     child: Align(
                                       alignment: Alignment.centerLeft,
                                       child: Text(
                                         'Update Action',
-                                        style: AppTheme.getTextStyle(context,
+                                        style: AppTheme.getTextStyle(
+                                          context,
                                           fontSize: 18,
                                           fontWeight: FontWeight.w800,
                                           color: const Color(0xFF111827),
@@ -704,19 +739,25 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
+                          border: Border.all(
+                              color: const Color(0xFFE5E7EB), width: 1.5),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Update Booking Status',
-                              style: AppTheme.getTextStyle(context, 
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF374151),
+                            Expanded(
+                              child: Text(
+                                b['booking_status'] ?? 'Update Booking Status',
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTheme.getTextStyle(
+                                  context,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF374151),
+                                ),
                               ),
                             ),
+                            const SizedBox(width: 8),
                             const Icon(Icons.keyboard_arrow_down_rounded,
                                 size: 20, color: Color(0xFF6B7280)),
                           ],
@@ -738,7 +779,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                           builder: (ctx) => Container(
                             decoration: const BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                              borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(28)),
                             ),
                             child: SafeArea(
                               child: Column(
@@ -755,12 +797,14 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                                   ),
                                   const SizedBox(height: 20),
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 24),
                                     child: Align(
                                       alignment: Alignment.centerLeft,
                                       child: Text(
                                         'Update Assignment',
-                                        style: AppTheme.getTextStyle(context,
+                                        style: AppTheme.getTextStyle(
+                                          context,
                                           fontSize: 18,
                                           fontWeight: FontWeight.w800,
                                           color: const Color(0xFF111827),
@@ -808,14 +852,19 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Update Assignment',
-                              style: AppTheme.getTextStyle(context, 
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF1F2937),
+                            Expanded(
+                              child: Text(
+                                b['assignment_status'] ?? 'Update Assignment',
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTheme.getTextStyle(
+                                  context,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF1F2937),
+                                ),
                               ),
                             ),
+                            const SizedBox(width: 8),
                             const Icon(Icons.keyboard_arrow_down_rounded,
                                 size: 18, color: Color(0xFF6B7280)),
                           ],
@@ -845,7 +894,9 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         decoration: BoxDecoration(
-          border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF3F4F6))),
+          border: isLast
+              ? null
+              : const Border(bottom: BorderSide(color: Color(0xFFF3F4F6))),
         ),
         child: Row(
           children: [
@@ -860,7 +911,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
             const SizedBox(width: 16),
             Text(
               label,
-              style: AppTheme.getTextStyle(context,
+              style: AppTheme.getTextStyle(
+                context,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: const Color(0xFF374151),
@@ -878,11 +930,14 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
       children: [
         Icon(icon, size: 14, color: const Color(0xFF9CA3AF)),
         const SizedBox(width: 4),
-        Text(label,
-            style: AppTheme.getTextStyle(context, 
-                fontSize: 12,
-                color: const Color(0xFF6B7280),
-                fontWeight: FontWeight.w500)),
+        Flexible(
+          child: Text(label,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.getTextStyle(context,
+                  fontSize: 12,
+                  color: const Color(0xFF6B7280),
+                  fontWeight: FontWeight.w500)),
+        ),
       ],
     );
   }
@@ -908,19 +963,26 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
             onTap: (i) => setState(() => _currentTab = i),
             selectedItemColor: _accent,
             unselectedItemColor: const Color(0xFF9CA3AF),
-            itemPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            itemPadding:
+                const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             items: [
               SalomonBottomBarItem(
                 icon: const Icon(Icons.home_rounded),
-                title: Text('operator_nav_home'.tr(), style: AppTheme.getTextStyle(context, fontWeight: FontWeight.w700)),
+                title: Text('operator_nav_home'.tr(),
+                    style: AppTheme.getTextStyle(context,
+                        fontWeight: FontWeight.w700)),
               ),
               SalomonBottomBarItem(
                 icon: const Icon(Icons.history_rounded),
-                title: Text('operator_nav_history'.tr(), style: AppTheme.getTextStyle(context, fontWeight: FontWeight.w700)),
+                title: Text('operator_nav_history'.tr(),
+                    style: AppTheme.getTextStyle(context,
+                        fontWeight: FontWeight.w700)),
               ),
               SalomonBottomBarItem(
                 icon: const Icon(Icons.person_rounded),
-                title: Text('operator_nav_profile'.tr(), style: AppTheme.getTextStyle(context, fontWeight: FontWeight.w700)),
+                title: Text('operator_nav_profile'.tr(),
+                    style: AppTheme.getTextStyle(context,
+                        fontWeight: FontWeight.w700)),
               ),
             ],
           ),
