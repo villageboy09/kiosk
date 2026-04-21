@@ -422,5 +422,7 @@
   "operator_set_rate_per_hour": "Set Rate Per Hour",
   "operator_hour": "hr",
   "operator_set": "Set",
-  "year_label": "Year"
+  "year_label": "Year",
+  "success": "Success",
+  "ok": "OK"
 }

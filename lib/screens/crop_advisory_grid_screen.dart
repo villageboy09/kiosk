@@ -62,11 +62,12 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
       final selectionsData = await ApiService.getUserSelections(
         currentUser.userId,
         lang: locale,
-      );
+      ).timeout(const Duration(seconds: 10));
 
       final List<FarmerCrop> loadedCrops = [];
 
       for (final s in selectionsData) {
+        if (!mounted) return;
         final cropId = int.tryParse(s['crop_id'].toString()) ?? 1;
         final varietyId = int.tryParse(s['variety_id'].toString()) ?? 1;
         final sowingDate =
@@ -78,8 +79,10 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
         int problemCount = 0;
 
         try {
-          final durations =
-              await ApiService.getStageDuration(cropId, varietyId: varietyId);
+          final durations = await ApiService.getStageDuration(
+            cropId,
+            varietyId: varietyId,
+          ).timeout(const Duration(seconds: 8));
           for (var d in durations) {
             final start = d['start_day_from_sowing'] as int? ?? 0;
             final end = d['end_day_from_sowing'] as int? ?? 999;
@@ -90,7 +93,10 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
           }
 
           if (currentStageId != null) {
-            final stages = await ApiService.getCropStages(cropId, lang: locale);
+            final stages = await ApiService.getCropStages(
+              cropId,
+              lang: locale,
+            ).timeout(const Duration(seconds: 8));
             for (var stage in stages) {
               if (stage['id'] == currentStageId) {
                 currentStageName = stage['name'] as String?;
@@ -101,7 +107,7 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
               cropId: cropId,
               stageId: currentStageId,
               lang: locale,
-            );
+            ).timeout(const Duration(seconds: 8));
             problemCount = problems.length;
           }
         } catch (e) {

@@ -265,7 +265,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
         equipmentName: _state.equipment!.nameEn,
         month: _calendarMonth.month,
         year: _calendarMonth.year,
-      );
+      ).timeout(const Duration(seconds: 10), onTimeout: () => []);
       final fullyBooked = <String, bool>{};
       for (final d in dates) {
         if (d['is_full'] == true) fullyBooked[d['date']] = true;
@@ -343,9 +343,10 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
       final availability = await ApiService.checkEquipmentAvailability(
         equipmentName: _state.equipment!.nameEn,
         serviceDate: dateStr,
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (availability['can_book'] != true) {
+        if (!mounted) return;
         setState(() => _isSubmitting = false);
         _showFullyBookedError(message: availability['message']);
         return;
@@ -374,7 +375,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
         billedQty: billedQty,
         notes: _state.getOperatorNotes(),
         bookingStatus: bookingStatus,
-      );
+      ).timeout(const Duration(seconds: 12));
 
       if (!mounted) return;
 

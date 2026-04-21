@@ -143,10 +143,20 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
       floating: true,
       snap: true,
       expandedHeight: 60,
-      leading: null,
+      leadingWidth: 56,
+      leading: Navigator.canPop(context)
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              color: Colors.black87,
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              onPressed: () => Navigator.pop(context),
+            )
+          : null,
       automaticallyImplyLeading: false,
       title: Text(
         context.tr('seed_varieties_title'),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: GoogleFonts.poppins(
           fontSize: 20,
           fontWeight: FontWeight.w700,
@@ -517,8 +527,6 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
     if (_isSubmitting) return;
 
     setState(() => _isSubmitting = true);
-    final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
 
     try {
       final user = AuthService.currentUser;
@@ -536,23 +544,100 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
       );
 
       if (result['success'] == true) {
-        navigator.pop();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(context.tr('purchase_request_sent')),
-            backgroundColor: AppTheme.primary,
-          ),
-        );
+        if (!mounted) return;
+        _showSuccessPopup(context.tr('purchase_request_sent'));
       } else {
         throw Exception(result['error'] ?? 'Failed');
       }
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('${context.tr('error')}: $e'),
+            backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  void _showSuccessPopup(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: const Icon(
+                        Icons.check_circle_rounded,
+                        color: AppTheme.primary,
+                        size: 80,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  context.tr('success'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop(); // close dialog
+                      Navigator.of(context).pop(); // close the bottom sheet
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      context.tr('ok'),
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -828,7 +913,7 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                                 backgroundColor: AppTheme.primary,
                                 foregroundColor: Colors.white,
                                 padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
+                                    const EdgeInsets.symmetric(vertical: 18),
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10)),
                                 textStyle: const TextStyle(

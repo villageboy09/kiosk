@@ -149,9 +149,11 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
       expandedHeight: 220,
       pinned: true,
       backgroundColor: const Color(0xFF075E54),
+      leadingWidth: 56,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
         onPressed: () => Navigator.pop(context),
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
       ),
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
@@ -189,6 +191,8 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
                       const SizedBox(width: 4),
                       Text(
                         widget.crop.fieldName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           color: Colors.white70,

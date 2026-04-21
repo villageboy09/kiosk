@@ -50,6 +50,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
     super.initState();
     // Only initialize the PageController here
     _pageController.addListener(() {
+      if (!mounted) return;
       setState(() {
         _currentPage = _pageController.page?.round() ?? 0;
       });
@@ -89,7 +90,11 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
 
       // Fetch advisory from MySQL API
       final advisoryData =
-          await ApiService.getAdvisories(widget.problem.id, lang: locale);
+          await ApiService.getAdvisories(widget.problem.id, lang: locale)
+              .timeout(const Duration(seconds: 10));
+      if (!mounted) {
+        throw StateError('Widget disposed before advisory loaded');
+      }
 
       if (advisoryData == null) {
         throw Exception('Advisory not found');
@@ -101,7 +106,11 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
 
       if (advisoryId != null) {
         final componentsData =
-            await ApiService.getAdvisoryComponents(advisoryId, lang: locale);
+            await ApiService.getAdvisoryComponents(advisoryId, lang: locale)
+                .timeout(const Duration(seconds: 10));
+        if (!mounted) {
+          throw StateError('Widget disposed before advisory components loaded');
+        }
         recommendations = componentsData
             .map((r) {
               return AdvisoryRecommendation.fromJson(r);
@@ -387,10 +396,12 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       backgroundColor: _UIColors.background,
       elevation: 0,
       pinned: true,
+      leadingWidth: 64,
       leading: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: GestureDetector(
+        padding: const EdgeInsetsDirectional.only(start: 12, top: 8, bottom: 8),
+        child: InkWell(
           onTap: () => Navigator.of(context).pop(),
+          borderRadius: BorderRadius.circular(24),
           child: Container(
             decoration: BoxDecoration(
               color: _UIColors.card.withValues(alpha: 0.8),
@@ -402,9 +413,13 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
         ),
       ),
       flexibleSpace: FlexibleSpaceBar(
-        centerTitle: true,
+        centerTitle: false,
+        titlePadding:
+            const EdgeInsetsDirectional.only(start: 72, end: 16, bottom: 16),
         title: Text(
           widget.problem.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: GoogleFonts.poppins(
             color: _UIColors.primaryText,
             fontWeight: FontWeight.bold,

@@ -2,8 +2,6 @@
 
 // ignore_for_file: use_build_context_synchronously
 
-import 'package:cached_network_image/cached_network_image.dart';
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cropsync/services/api_service.dart';
@@ -11,6 +9,7 @@ import 'package:cropsync/services/auth_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cropsync/widgets/safe_network_image.dart';
 import 'product_details_screen.dart';
 
 // Same Product model as before...
@@ -192,10 +191,21 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
             elevation: 0,
             pinned: true,
             centerTitle: false,
-            leadingWidth: 0,
-            leading: null,
+            leadingWidth: Navigator.canPop(context) ? 56 : 0,
+            leading: Navigator.canPop(context)
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: const Color(0xFF1A1A1A),
+                    tooltip:
+                        MaterialLocalizations.of(context).backButtonTooltip,
+                    onPressed: () => Navigator.pop(context),
+                  )
+                : null,
+            titleSpacing: Navigator.canPop(context) ? 4 : 16,
             title: Text(
               context.tr('crop_sync_market'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.lexend(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -388,16 +398,18 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                 child: ClipRRect(
                   borderRadius:
                       const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: CachedNetworkImage(
-                    imageUrl: product.imageUrl1 ?? '',
+                  child: SafeNetworkImage(
+                    imageUrl: product.imageUrl1,
                     width: double.infinity,
+                    height: double.infinity,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) =>
-                        Container(color: Colors.grey.shade100),
-                    errorWidget: (context, url, error) => Container(
+                    placeholder: Container(
                       color: Colors.grey.shade100,
-                      child: Icon(Icons.eco_outlined,
-                          color: Colors.grey.shade300, size: 40),
+                      child: Icon(
+                        Icons.eco_outlined,
+                        color: Colors.grey.shade300,
+                        size: 40,
+                      ),
                     ),
                   ),
                 ),

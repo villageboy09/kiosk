@@ -105,15 +105,26 @@ class _WelcomeCardState extends State<_WelcomeCard> {
       final apiKey = dotenv.env['WEATHER_API_KEY'];
       if (apiKey == null) return null;
 
-      final position = await Geolocator.getCurrentPosition();
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
       final url = Uri.parse(
         'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${position.latitude},${position.longitude}?unitGroup=metric&key=$apiKey&contentType=json',
       );
 
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return (data['days'][0]['temp'] as num).round();
+        final days = data['days'];
+        if (days is List && days.isNotEmpty) {
+          final temp = days.first['temp'];
+          if (temp is num) {
+            return temp.round();
+          }
+        }
       }
     } catch (_) {
       return null;

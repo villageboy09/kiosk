@@ -156,7 +156,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       final url = Uri.parse(
           '$_apiUrl?api-key=$_apiKey&format=json&filters[district]=$encodedDistrict&limit=200');
 
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 12));
 
       if (!mounted) return;
 
@@ -217,7 +217,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
 
     try {
       // Use LocationService instead of direct Geolocator calls
-      final hasPermission = await LocationService.requestPermission();
+      final hasPermission = await LocationService.requestPermission()
+          .timeout(const Duration(seconds: 8), onTimeout: () => false);
       if (!mounted) return;
 
       if (!hasPermission) {
@@ -225,7 +226,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
         return;
       }
 
-      final position = await LocationService.getCurrentPosition();
+      final position = await LocationService.getCurrentPosition()
+          .timeout(const Duration(seconds: 12), onTimeout: () => null);
       if (!mounted) return;
 
       if (position == null) {
@@ -233,8 +235,14 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
         return;
       }
 
-      final district = await LocationService.getDistrict();
-      final state = await LocationService.getState();
+      final district = await LocationService.getDistrict().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => 'Hyderabad',
+      );
+      final state = await LocationService.getState().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => 'Telangana',
+      );
 
       if (!mounted) return;
 
@@ -253,6 +261,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   }
 
   void _useDefaultLocation({required String reason}) {
+    if (!mounted) return;
     setState(() {
       _statusMessage = '$reason ${context.tr('using_default')}.';
       _currentDistrict = 'Hyderabad';
@@ -268,7 +277,16 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: null,
+        leadingWidth: 56,
+        titleSpacing: 4,
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                color: Colors.black87,
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         automaticallyImplyLeading: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,6 +294,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
           children: [
             Text(
               context.tr('market_prices_title'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -285,6 +305,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
             ),
             Text(
               '$_currentDistrict, $_currentState',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
                 fontSize: 12,
                 color: Colors.grey[600],

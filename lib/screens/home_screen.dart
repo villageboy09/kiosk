@@ -53,12 +53,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (!mounted) return;
 
       if (user != null) {
+        final currentUser = user;
         setState(() {
-          _farmerName = user!.name;
-          _profileImageUrl = user.profileImageUrl;
+          _farmerName = currentUser.name;
+          _profileImageUrl = currentUser.profileImageUrl;
         });
       }
 
+      if (!mounted) return;
       setState(() => _isLoading = false);
     } catch (error) {
       if (!mounted) return;

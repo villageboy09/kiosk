@@ -424,5 +424,7 @@
   "operator_set_rate_per_hour": "ప్రతి గంట రేటు సెట్ చేయండి",
   "operator_hour": "గంట",
   "operator_set": "సెట్ చేయండి",
-  "year_label": "సంవత్సరం"
+  "year_label": "సంవత్సరం",
+  "success": "విజయం",
+  "ok": "సరే"
 }

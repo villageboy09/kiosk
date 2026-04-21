@@ -59,9 +59,10 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
         lang: locale,
       );
 
-      final List<CropProblem> loadedProblems = problemsData.map((p) {
-        return CropProblem.fromJson(p);
-      }).toList();
+      final List<CropProblem> loadedProblems = problemsData
+          .whereType<Map<String, dynamic>>()
+          .map(CropProblem.fromJson)
+          .toList();
 
       // Deduplicate by problem ID
       final seenIds = <int>{};
@@ -99,21 +100,28 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
+        leadingWidth: 56,
+        titleSpacing: 4,
+        toolbarHeight: 72,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               widget.stage.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w700,
-                fontSize: 22,
+                fontSize: 20,
                 color: Colors.white,
                 letterSpacing: -0.5,
               ),
             ),
             Text(
               widget.crop.cropName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w500,
                 fontSize: 14,

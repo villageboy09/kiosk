@@ -416,5 +416,7 @@
   "operator_set_rate_per_hour": "प्रति घंटा रेट सेट करें",
   "operator_hour": "घंटा",
   "operator_set": "सेट करें",
-  "year_label": "साल"
+  "year_label": "साल",
+  "success": "सफलता",
+  "ok": "ठीक है"
 }
