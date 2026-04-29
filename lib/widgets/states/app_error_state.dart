@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 class AppErrorState extends StatelessWidget {
   final String message;
@@ -15,29 +15,38 @@ class AppErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: AppTheme.error.withValues(alpha: 0.05),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.error_outline_rounded, size: 80, color: AppTheme.error),
+            ),
+            const SizedBox(height: 32),
             Text(
               message,
-              style: GoogleFonts.poppins(color: Colors.grey[600]),
+              style: const TextStyle(
+                
+                fontSize: 16,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w600,
+                height: 1.5,
+              ),
               textAlign: TextAlign.center,
             ),
             if (onRetry != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 40),
               ElevatedButton.icon(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(Icons.refresh_rounded),
                 label: const Text('Retry'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF075E54),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  minimumSize: const Size(200, 56),
                 ),
               ),
             ],
@@ -47,3 +56,4 @@ class AppErrorState extends StatelessWidget {
     );
   }
 }
+

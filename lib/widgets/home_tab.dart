@@ -13,7 +13,6 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:google_fonts/google_fonts.dart';
 
 /// Home tab content - Zepto-inspired clean UI
 class HomeTab extends StatefulWidget {
@@ -140,7 +139,7 @@ class _WelcomeCardState extends State<_WelcomeCard> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1B5E20).withValues(alpha: 0.1),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -159,11 +158,10 @@ class _WelcomeCardState extends State<_WelcomeCard> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFFE8F5E9), // Light Green 50
+                    Color(0xFFF9FAFB),
                     Colors.white,
-                    Color(0xFFE3F2FD), // Light Blue 50
+                    Color(0xFFF3F4F6),
                   ],
-                  stops: [0.0, 0.5, 1.0],
                 ),
                 border: Border.all(
                   color: Colors.white,
@@ -179,20 +177,22 @@ class _WelcomeCardState extends State<_WelcomeCard> {
                       children: [
                         Text(
                           widget.greeting,
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF757575),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textHint,
+                            letterSpacing: 0.5,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           widget.farmerName,
-                          style: GoogleFonts.poppins(
-                            fontSize: 24,
+                          style: const TextStyle(
+                            fontSize: 28,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1A1A1A),
-                            height: 1.2,
+                            color: AppTheme.textPrimary,
+                            height: 1.1,
+                            letterSpacing: -1,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -213,8 +213,7 @@ class _WelcomeCardState extends State<_WelcomeCard> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF1B5E20)
-                                  .withValues(alpha: 0.05),
+                              color: Colors.black.withValues(alpha: 0.05),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -231,10 +230,11 @@ class _WelcomeCardState extends State<_WelcomeCard> {
                             const SizedBox(height: 4),
                             Text(
                               temp != null ? '$temp°' : '--',
-                              style: GoogleFonts.poppins(
+                              style: const TextStyle(
                                 fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF1A1A1A),
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.textPrimary,
+                                letterSpacing: -0.5,
                               ),
                             ),
                           ],
@@ -344,77 +344,76 @@ class _ServiceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        elevation: 2,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // 1. Full Cover Image
-              Image(
-                image: ResizeImage(
-                  AssetImage(imagePath),
-                  width: 400,
-                ),
-                fit: BoxFit.cover,
-              ),
-
-              // 2. Subtle Gradient Overlay (Less Dominant)
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent, // Completely clear at top
-                      Colors.black.withValues(alpha: 0.1), // Gentle fade start
-                      Colors.black.withValues(alpha: 0.8), // Dark only at text
-                    ],
-                    stops: const [0.0, 0.6, 1.0], // Push darkness to bottom 40%
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          boxShadow: AppTheme.shadowSm,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          child: Material(
+            color: Colors.white,
+            child: InkWell(
+              onTap: onTap,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // 1. Full Cover Image
+                  Image.asset(
+                    imagePath,
+                    fit: BoxFit.cover,
                   ),
-                ),
-              ),
-
-              // 3. Text Content
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white, // White font as requested
-                        letterSpacing: -0.3,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(0, 1),
-                            blurRadius: 3.0,
-                            color: Colors.black45,
-                          ),
+    
+                  // 2. Subtle Gradient Overlay
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.2),
+                          Colors.black.withValues(alpha: 0.85),
                         ],
+                        stops: const [0.0, 0.5, 1.0],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white.withValues(alpha: 0.9),
-                      ),
+                  ),
+    
+                  // 3. Text Content
+                  Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingLg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          title,
+                          style: AppTheme.getTextStyle(
+                            context,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: AppTheme.getTextStyle(
+                            context,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.9),
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 void showModernErrorToast(BuildContext context, String message) {
   // Get the overlay state
@@ -85,37 +85,39 @@ class _ToastWidgetState extends State<_ToastWidget>
 
     return Positioned(
       top: topPadding,
-      left: 16.0,
-      right: 16.0,
+      left: 20.0,
+      right: 20.0,
       child: SlideTransition(
         position: _offsetAnimation,
         child: Material(
           color: Colors.transparent,
           child: Container(
             padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
             decoration: BoxDecoration(
-              color: Colors.redAccent[700],
-              borderRadius: BorderRadius.circular(10.0),
-              boxShadow: const [
+              color: AppTheme.error,
+              borderRadius: BorderRadius.circular(20.0),
+              boxShadow: [
                 BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 10.0,
-                  offset: Offset(0, 4),
+                  color: AppTheme.error.withValues(alpha: 0.3),
+                  blurRadius: 24.0,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
             child: Row(
               children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 22),
-                const SizedBox(width: 12),
+                const Icon(Icons.error_outline_rounded, color: Colors.white, size: 24),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Text(
                     widget.message,
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w500,
+                    style: const TextStyle(
+                      
+                      fontWeight: FontWeight.w700,
                       color: Colors.white,
                       fontSize: 14,
+                      letterSpacing: -0.1,
                     ),
                   ),
                 ),
@@ -127,3 +129,4 @@ class _ToastWidgetState extends State<_ToastWidget>
     );
   }
 }
+

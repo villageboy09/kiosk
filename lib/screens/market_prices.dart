@@ -4,10 +4,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cropsync/services/location_service.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shimmer/shimmer.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 // 💡 PRO-TIP: How to get the slide-back animation
 // To achieve the slide-back gesture you wanted, you need to use
@@ -273,102 +273,84 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leadingWidth: 56,
-        titleSpacing: 4,
-        leading: Navigator.canPop(context)
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_rounded),
-                color: Colors.black87,
-                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                onPressed: () => Navigator.pop(context),
-              )
-            : null,
-        automaticallyImplyLeading: false,
         title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              context.tr('market_prices_title'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-                letterSpacing: 0.2,
-              ),
-            ),
+            Text(context.tr('market_prices_title'),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.textPrimary,
+                  letterSpacing: -0.5,
+                )),
             Text(
               '$_currentDistrict, $_currentState',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: Colors.grey[600],
-                letterSpacing: 0.3,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+                letterSpacing: 0.1,
               ),
             ),
           ],
         ),
+        leading: AppTheme.backButton(context),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh_rounded, color: Colors.grey[600]),
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: _getCurrentLocation,
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: SingleChildScrollView(
+            height: 56,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _allCommodities
-                    .map((commodity) => Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            label: Text(
-                              context.tr(commodity),
-                              style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  letterSpacing: 0.2,
-                                  color: _activeCommodities.contains(commodity)
-                                      ? Colors.green[800]
-                                      : Colors.black54),
-                            ),
-                            selected: _activeCommodities.contains(commodity),
-                            onSelected: (bool selected) {
-                              setState(() {
-                                if (selected) {
-                                  _activeCommodities.add(commodity);
-                                } else {
-                                  _activeCommodities.remove(commodity);
-                                }
-                                _applyFilters();
-                              });
-                            },
-                            selectedColor: Colors.green[100],
-                            checkmarkColor: Colors.green[800],
-                            backgroundColor: Colors.grey[100],
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              side: _activeCommodities.contains(commodity)
-                                  ? BorderSide(color: Colors.green[200]!)
-                                  : BorderSide(color: Colors.grey[300]!),
-                            ),
-                          ),
-                        ))
-                    .toList(),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _allCommodities.length,
+              itemBuilder: (context, index) {
+                final commodity = _allCommodities[index];
+                final isSelected = _activeCommodities.contains(commodity);
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text(context.tr(commodity)),
+                    selected: isSelected,
+                    onSelected: (bool selected) {
+                      setState(() {
+                        if (selected) {
+                          _activeCommodities.add(commodity);
+                        } else {
+                          _activeCommodities.remove(commodity);
+                        }
+                        _applyFilters();
+                      });
+                    },
+                    showCheckmark: false,
+                    labelStyle: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                      color: isSelected ? Colors.white : AppTheme.textPrimary,
+                      letterSpacing: 0.2,
+                    ),
+                    backgroundColor: Colors.white,
+                    selectedColor: AppTheme.textPrimary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(100),
+                      side: BorderSide(
+                        color: isSelected ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
+                        width: isSelected ? 1.5 : 1,
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -389,90 +371,85 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       groupedPrices.putIfAbsent(price.commodity, () => []).add(price);
     }
 
-    return ListView.separated(
+    return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: groupedPrices.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         String commodity = groupedPrices.keys.elementAt(index);
         List<MarketPrice> prices = groupedPrices[commodity]!;
 
-        return Card(
-          elevation: 2,
-          shadowColor: Colors.grey.withOpacity(0.1),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          color: Colors.white,
-          clipBehavior:
-              Clip.antiAlias, // Ensures children respect the border radius
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Card Header
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    _buildCommodityAvatar(commodity),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.tr(commodity),
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      _buildCommodityAvatar(commodity),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              context.tr(commodity),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.textPrimary,
+                                letterSpacing: -0.5,
+                              ),
                             ),
-                          ),
-                          Text(
-                            _currentDistrict,
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: Colors.grey[600],
+                            Text(
+                              _currentDistrict,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.textSecondary,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        context.tr('records_count',
-                            namedArgs: {'count': prices.length.toString()}),
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.green[800],
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Text(
+                          context.tr('records_count',
+                              namedArgs: {'count': prices.length.toString()}),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.textPrimary,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const Divider(height: 1, color: Color(0xFFF0F0F0)),
-              // List of Price Items (limit to top 5 recent)
-              ...prices.take(5).map((price) => _buildPriceItem(price)),
-              // Card Footer
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                color: Colors.white,
-                child: Text(
-                  context.tr('last_updated',
-                      namedArgs: {'date': prices.first.arrivalDate}),
-                  style: GoogleFonts.poppins(
-                      fontSize: 12, color: Colors.grey[500]),
+                const Divider(),
+                ...prices.take(5).map((price) => _buildPriceItem(price)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Text(
+                    context.tr('last_updated',
+                        namedArgs: {'date': prices.first.arrivalDate}),
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textHint,
+                        fontWeight: FontWeight.w500),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -481,39 +458,43 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
 
   Widget _buildPriceItem(MarketPrice price) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFFF0F0F0)))),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppTheme.border.withValues(alpha: 0.1)))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             price.market,
-            style:
-                GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
+                letterSpacing: -0.3),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 6),
           Text(
             '${context.tr('variety_label')} ${price.variety}',
-            style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[600]),
+            style: const TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: _buildPriceColumn(
-                    context.tr('min_price'), price.minPrice,
-                    color: Colors.orange[800]!),
+                    context.tr('min_price'), price.minPrice),
               ),
               Expanded(
                 child: _buildPriceColumn(
-                    context.tr('max_price'), price.maxPrice,
-                    color: Colors.red[700]!),
+                    context.tr('max_price'), price.maxPrice),
               ),
               Expanded(
                 child: _buildPriceColumn(
                     context.tr('modal_price'), price.modalPrice,
-                    isModal: true, color: Colors.green[700]!),
+                    isModal: true),
               ),
             ],
           ),
@@ -523,48 +504,56 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   }
 
   Widget _buildCommodityAvatar(String commodity) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.asset(
-        _getCommodityImagePath(commodity),
-        width: 50,
-        height: 50,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.agriculture, size: 28, color: Colors.grey[500]),
-          );
-        },
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.asset(
+          _getCommodityImagePath(commodity),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return const Icon(Icons.agriculture_rounded, size: 28, color: AppTheme.textHint);
+          },
+        ),
       ),
     );
   }
 
   Widget _buildPriceColumn(String title, String value,
-      {bool isModal = false, required Color color}) {
+      {bool isModal = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: GoogleFonts.poppins(
+          style: const TextStyle(
             fontSize: 11,
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w500,
+            color: AppTheme.textHint,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 4),
         Text(
-          '₹$value ${context.tr('per_quintal')}',
-          style: GoogleFonts.poppins(
-            fontSize: isModal ? 15 : 14,
-            fontWeight: FontWeight.bold,
-            color: color,
+          '₹$value',
+          style: TextStyle(
+            fontSize: isModal ? 18 : 16,
+            fontWeight: FontWeight.w900,
+            color: isModal ? AppTheme.textPrimary : AppTheme.textPrimary.withValues(alpha: 0.7),
+            letterSpacing: -0.5,
+          ),
+        ),
+        Text(
+          context.tr('per_quintal'),
+          style: const TextStyle(
+            fontSize: 9,
+            color: AppTheme.textHint,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
@@ -574,32 +563,45 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32.0),
+        padding: const EdgeInsets.all(40.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
+              padding: const EdgeInsets.all(32),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF3F4F6),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
+              child: const Icon(Icons.search_off_rounded, size: 56, color: AppTheme.textHint),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Text(
               context.tr('no_market_prices'),
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[700]),
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
               _statusMessage,
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey[500]),
+              style: const TextStyle(
+                  fontSize: 14,
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: _getCurrentLocation,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.textPrimary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: Text(context.tr('retry'), style: const TextStyle(fontWeight: FontWeight.w900)),
             ),
           ],
         ),
@@ -608,61 +610,18 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   }
 
   Widget _buildShimmerEffect() {
-    return ListView.separated(
+    return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: 3,
-      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (_, __) => Shimmer.fromColors(
-        baseColor: Colors.grey[300]!,
-        highlightColor: Colors.grey[100]!,
+        baseColor: const Color(0xFFE5E7EB),
+        highlightColor: const Color(0xFFF3F4F6),
         child: Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          height: 200,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(width: 50, height: 50, color: Colors.white),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                              width: 120, height: 18, color: Colors.white),
-                          const SizedBox(height: 6),
-                          Container(
-                              width: 140, height: 14, color: Colors.white),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(width: 200, height: 16, color: Colors.white),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Container(width: 70, height: 20, color: Colors.white),
-                        const SizedBox(width: 20),
-                        Container(width: 70, height: 20, color: Colors.white),
-                      ],
-                    )
-                  ],
-                ),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
       ),

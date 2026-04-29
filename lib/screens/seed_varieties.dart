@@ -6,7 +6,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chewie/chewie.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
-import 'package:google_fonts/google_fonts.dart'; // Ensure google_fonts is imported if not already
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cropsync/services/api_service.dart';
@@ -143,24 +142,18 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
       floating: true,
       snap: true,
       expandedHeight: 60,
-      leadingWidth: 56,
-      leading: Navigator.canPop(context)
-          ? IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
-              color: Colors.black87,
-              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              onPressed: () => Navigator.pop(context),
-            )
-          : null,
+      leadingWidth: 70,
+      leading: AppTheme.backButton(context),
       automaticallyImplyLeading: false,
       title: Text(
         context.tr('seed_varieties_title'),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: GoogleFonts.poppins(
+        style: const TextStyle(
           fontSize: 20,
-          fontWeight: FontWeight.w700,
-          color: Colors.black87,
+          fontWeight: FontWeight.w900,
+          color: AppTheme.textPrimary,
+          letterSpacing: -0.5,
         ),
       ),
       centerTitle: true,
@@ -250,29 +243,31 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             final isSelected = _selectedCrop == crop;
 
             return Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: 10),
               child: GestureDetector(
                 onTap: () => _filterByCrop(crop),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFF1A1A1A) : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
+                    color: isSelected ? AppTheme.textPrimary : Colors.white,
+                    borderRadius: BorderRadius.circular(100),
                     border: Border.all(
                       color: isSelected
-                          ? const Color(0xFF1A1A1A)
-                          : const Color(0xFFE8E8E8),
+                          ? AppTheme.textPrimary
+                          : const Color(0xFFE5E7EB),
+                      width: isSelected ? 1.5 : 1,
                     ),
                   ),
                   child: Text(
                     label,
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                       color:
-                          isSelected ? Colors.white : const Color(0xFF6B7280),
+                          isSelected ? Colors.white : AppTheme.textPrimary.withValues(alpha: 0.7),
+                      letterSpacing: 0.2,
                     ),
                   ),
                 ),
@@ -398,7 +393,7 @@ class _SeedCard extends StatelessWidget {
               Expanded(
                 flex: 1,
                 child: Padding(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -406,10 +401,11 @@ class _SeedCard extends StatelessWidget {
                       Text(
                         variety.varietyName,
                         style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1A1A1A),
-                          height: 1.2,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.textPrimary,
+                          height: 1.1,
+                          letterSpacing: -0.3,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -420,13 +416,13 @@ class _SeedCard extends StatelessWidget {
                           if (variety.growthDuration != null)
                             Row(
                               children: [
-                                Icon(Icons.schedule_rounded,
-                                    size: 10, color: Colors.grey[400]),
-                                const SizedBox(width: 2),
+                                const Icon(Icons.schedule_rounded,
+                                    size: 12, color: AppTheme.textHint),
+                                const SizedBox(width: 4),
                                 Text(
                                   '${variety.growthDuration}d',
-                                  style: TextStyle(
-                                      fontSize: 10, color: Colors.grey[500]),
+                                  style: const TextStyle(
+                                      fontSize: 11, color: AppTheme.textSecondary, fontWeight: FontWeight.w700),
                                 ),
                               ],
                             ),
@@ -434,9 +430,10 @@ class _SeedCard extends StatelessWidget {
                             Text(
                               '₹${variety.price}',
                               style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF2E7D32),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.textPrimary,
+                                letterSpacing: -0.5,
                               ),
                             ),
                         ],
@@ -592,7 +589,7 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                 const SizedBox(height: 24),
                 Text(
                   context.tr('success'),
-                  style: GoogleFonts.poppins(
+                  style: AppTheme.getTextStyle(context, 
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
@@ -602,7 +599,7 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                 Text(
                   message,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
+                  style: AppTheme.getTextStyle(context, 
                     fontSize: 16,
                     color: Colors.grey.shade600,
                   ),
@@ -624,7 +621,7 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                     ),
                     child: Text(
                       context.tr('ok'),
-                      style: GoogleFonts.poppins(
+                      style: AppTheme.getTextStyle(context, 
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -716,7 +713,7 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                                                 child: const Icon(
                                                     Icons.play_arrow_rounded,
                                                     size: 40,
-                                                    color: AppTheme.primary),
+                                                    color: AppTheme.textPrimary),
                                               ),
                                       ),
                                     ),
@@ -734,15 +731,16 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          color: AppTheme.textPrimary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           variety.cropName,
                           style: const TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.primary),
+                              fontWeight: FontWeight.w900,
+                              color: AppTheme.textPrimary,
+                              letterSpacing: 0.5),
                         ),
                       ),
                       if (variety.growthDuration != null) ...[
@@ -761,14 +759,15 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                   // Name
                   Text(variety.varietyName,
                       style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1A1A1A))),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.textPrimary,
+                          letterSpacing: -0.8)),
                   if (variety.varietyNameSecondary != null &&
                       variety.varietyNameSecondary != variety.varietyName)
                     Text(variety.varietyNameSecondary!,
                         style:
-                            TextStyle(fontSize: 15, color: Colors.grey[500])),
+                            const TextStyle(fontSize: 16, color: AppTheme.textSecondary, fontWeight: FontWeight.w700)),
 
                   // Info grid
                   const SizedBox(height: 16),
@@ -793,10 +792,10 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                   if (variety.price != null) ...[
                     const SizedBox(height: 24),
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
                       child: Column(
@@ -813,7 +812,7 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                                 style: const TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF2E7D32)),
+                                    color: AppTheme.textPrimary),
                               ),
                             ],
                           ),
@@ -910,14 +909,12 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                                       size: 18),
                               label: Text(context.tr('submit_request')),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primary,
+                                backgroundColor: AppTheme.textPrimary,
                                 foregroundColor: Colors.white,
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 18),
                                 shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                                textStyle: const TextStyle(
-                                    fontSize: 14, fontWeight: FontWeight.w600),
+                                    borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
                               ),
                             ),
                           ),

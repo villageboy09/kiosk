@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 // This is the new animated button widget
 class AnimatedKeypadButton extends StatefulWidget {
@@ -63,7 +63,7 @@ class _AnimatedKeypadButtonState extends State<AnimatedKeypadButton>
             child: widget.child ??
                 Text(
                   widget.text!,
-                  style: GoogleFonts.lexend(
+                  style: const TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
@@ -133,7 +133,7 @@ class NumericKeypad extends StatelessWidget {
             // Using the 'child' property for icons
             _buildButtonWithChild(
               onTap: onEnter,
-              child: const Icon(Icons.check, color: Colors.green, size: 28),
+              child: const Icon(Icons.check, color: AppTheme.textPrimary, size: 28),
             ),
             _buildButton('0'),
             _buildButtonWithChild(

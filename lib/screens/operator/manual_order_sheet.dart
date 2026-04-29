@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 
@@ -18,6 +16,9 @@ class ManualOrderSheet extends StatefulWidget {
 }
 
 class _ManualOrderSheetState extends State<ManualOrderSheet> {
+  final _pageController = PageController();
+  int _currentStep = 1; // 1: Farmer, 2: Usage, 3: Receipt
+
   final _phoneController = TextEditingController();
   final _nameController = TextEditingController();
   final _villageController = TextEditingController();
@@ -25,12 +26,12 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   final _distanceController = TextEditingController();
   final _cropController = TextEditingController();
   final _landSizeController = TextEditingController();
+  final _rateController = TextEditingController();
 
   Map<String, dynamic>? _selectedEquipment;
   List<Map<String, dynamic>> _equipmentList = [];
   bool _isFetchingUser = false;
   bool _isFetchingEquipments = false;
-  bool _isFetchingRate = false;
   bool _isFoundMember = false;
   bool _isCrossClientMember = false;
   bool _isNewUser = true;
@@ -38,26 +39,29 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
   double _ratePerUnit = 0.0;
-  bool _showPreview = false;
   bool _isLoading = false;
   String? _errorMsg;
-  String? _successMsg;
+  Map<String, dynamic>? _submissionResult;
   Timer? _phoneDebounce;
 
-  static const Color _green = Color(0xFF111827);
-  static const Color _textPrimary = Color(0xFF111827);
-  static const Color _textSub = Color(0xFF6B7280);
-  static const Color _surface = Color(0xFFF9FAFB);
-  static const Color _border = Color(0xFFE5E7EB);
+  static const Color _accent = Color(0xFF111827);
+  static const Color _bg = Color(0xFFFAFAFA);
+  static const Color _slate = Color(0xFF475569);
+  static const Color _border = Color(0xFFE2E8F0);
 
   @override
   void initState() {
     super.initState();
     _phoneController.addListener(_onPhoneChanged);
+    _rateController.addListener(() => setState(() {}));
+    _qtyController.addListener(() => setState(() {}));
+    _distanceController.addListener(() => setState(() {}));
+    _serviceDate = DateTime.now();
+    _startTime = TimeOfDay.now();
+    _endTime = TimeOfDay.now();
 
     if (widget.prefillBooking != null) {
       final b = widget.prefillBooking!;
-
       if (b['farmer_phone'] != null) {
         _phoneController.text = b['farmer_phone'].toString();
       }
@@ -104,11 +108,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   void _onPhoneChanged() {
     if (!mounted) return;
-    setState(() => _showPreview = false);
-
     _phoneDebounce?.cancel();
     final phone = _phoneController.text.trim();
-
     if (phone.length != 10) {
       if (_isFetchingUser || _isFoundMember || !_isNewUser) {
         setState(() {
@@ -121,9 +122,10 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       }
       return;
     }
-
     _phoneDebounce = Timer(const Duration(milliseconds: 350), () {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       unawaited(_lookupUserByPhone(phone));
     });
   }
@@ -131,658 +133,860 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   Future<void> _lookupUserByPhone(String phone) async {
     if (!mounted) return;
     setState(() => _isFetchingUser = true);
-
     try {
       final user = await ApiService.checkUser(phone);
       if (!mounted || _phoneController.text.trim() != phone) return;
-
       final bool matchesClient =
           user != null && user['client_code'] == widget.operator.clientCode;
-
-      final isMember = matchesClient;
-      final isCrossClientMember = user != null && !matchesClient;
-
       setState(() {
-        _isFoundMember = isMember;
-        _isCrossClientMember = isCrossClientMember;
+        _isFoundMember = matchesClient;
+        _isCrossClientMember = user != null && !matchesClient;
         _isNewUser = user == null;
         _isFetchingUser = false;
-
         if (user != null) {
-          final name = (user['name'] ?? '').toString().trim();
-          final village = (user['village'] ?? user['region'] ?? '').toString();
-
-          if (name.isNotEmpty) {
-            _nameController.text = name;
-          }
-          if (village.isNotEmpty) {
-            _villageController.text = village;
-          }
-        } else {
-          _nameController.clear();
-          _villageController.clear();
+          _nameController.text = (user['name'] ?? '').toString().trim();
+          _villageController.text =
+              (user['village'] ?? user['region'] ?? '').toString();
         }
       });
-
       await _loadEquipments();
       await _updateRate();
     } catch (_) {
-      if (!mounted || _phoneController.text.trim() != phone) return;
-      setState(() {
-        _isFetchingUser = false;
-        _isFoundMember = false;
-        _isCrossClientMember = false;
-        _isNewUser = true;
-      });
-      await _loadEquipments();
+      setState(() => _isFetchingUser = false);
     }
   }
 
   Future<void> _loadEquipments() async {
     if (!mounted) return;
     setState(() => _isFetchingEquipments = true);
-
     try {
       final list = await ApiService.getCHCEquipments(
         isMember: _isFoundMember,
         clientCode: widget.operator.clientCode,
       );
-
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _equipmentList = list;
-        if (_selectedEquipment != null) {
-          final stillExists =
-              _equipmentList.any((e) => e['id'] == _selectedEquipment!['id']);
-          if (!stillExists) {
-            _selectedEquipment =
-                _equipmentList.isNotEmpty ? _equipmentList.first : null;
-          }
-        } else {
+        if (_selectedEquipment == null ||
+            !_equipmentList.any((e) => e['id'] == _selectedEquipment?['id'])) {
           _selectedEquipment =
               _equipmentList.isNotEmpty ? _equipmentList.first : null;
         }
         _isFetchingEquipments = false;
       });
+      _updateRate();
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _equipmentList = [];
-        _selectedEquipment = null;
-        _isFetchingEquipments = false;
-      });
-    }
-  }
-
-  Future<void> _pickServiceDate() async {
-    final now = DateTime.now();
-    final initialDate = _serviceDate ?? now;
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 2),
-    );
-
-    if (picked != null && mounted) {
-      setState(() {
-        _serviceDate = picked;
-        _showPreview = false;
-      });
-    }
-  }
-
-  Future<void> _pickTime(bool isStart) async {
-    final initial = isStart
-        ? (_startTime ?? TimeOfDay.now())
-        : (_endTime ?? _startTime ?? TimeOfDay.now());
-
-    final picked = await showTimePicker(context: context, initialTime: initial);
-    if (picked == null || !mounted) return;
-
-    setState(() {
-      if (isStart) {
-        _startTime = picked;
-      } else {
-        _endTime = picked;
-      }
-      _showPreview = false;
-    });
-  }
-
-  String _formatDate(DateTime? date) {
-    if (date == null) return 'operator_select_date'.tr();
-    return MaterialLocalizations.of(context).formatMediumDate(date);
-  }
-
-  String? _formatApiDate(DateTime? date) {
-    if (date == null) return null;
-    final y = date.year.toString().padLeft(4, '0');
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
-  }
-
-  String _formatTime(TimeOfDay? time) {
-    if (time == null) return '--:--';
-    final h = time.hour.toString().padLeft(2, '0');
-    final m = time.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-
-  void _showMsg(String message, {bool isError = false}) {
-    if (!mounted) return;
-    setState(() {
-      if (isError) {
-        _errorMsg = message;
-        _successMsg = null;
-      } else {
-        _successMsg = message;
-        _errorMsg = null;
-      }
-    });
-  }
-
-  bool get _isTimeBased {
-    final unit = (_selectedEquipment?['unit'] ?? '').toString().toLowerCase();
-    final name =
-        (_selectedEquipment?['name_en'] ?? '').toString().toLowerCase();
-    return unit.contains('hour') || name.contains('harvester');
-  }
-
-  bool get _isTractorTrolley {
-    final unit = (_selectedEquipment?['unit'] ?? '').toString().toLowerCase();
-    final name =
-        (_selectedEquipment?['name_en'] ?? '').toString().toLowerCase();
-    return unit.contains('trip') || name.contains('trolley');
-  }
-
-  double get _quantity => double.tryParse(_qtyController.text.trim()) ?? 0.0;
-  double get _distance =>
-      double.tryParse(_distanceController.text.trim()) ?? 0.0;
-  double get _totalTrips => _quantity;
-
-  double get _totalHours {
-    if (_startTime == null || _endTime == null) return 0.0;
-
-    final startMins = _startTime!.hour * 60 + _startTime!.minute;
-    final endMins = _endTime!.hour * 60 + _endTime!.minute;
-    final diffMins = endMins >= startMins
-        ? endMins - startMins
-        : (endMins + 24 * 60) - startMins;
-    return diffMins / 60.0;
-  }
-
-  double get _landSizeAcres =>
-      double.tryParse(_landSizeController.text.trim()) ?? 0.0;
-
-  double get _billedQty {
-    if (_isTimeBased) return _totalHours;
-    if (_isTractorTrolley) return _totalTrips;
-    return _quantity;
-  }
-
-  String get _measuredUnit {
-    if (_isTimeBased) return 'hour';
-    if (_isTractorTrolley) return 'trip';
-    return (_selectedEquipment?['unit'] ?? 'unit').toString();
-  }
-
-  double get _finalAmount {
-    if (_isTractorTrolley) {
-      return _ratePerUnit * _totalTrips;
-    }
-    return _ratePerUnit * _billedQty;
-  }
-
-  bool get _canPreview {
-    final baseValid = _phoneController.text.length == 10 &&
-        _nameController.text.trim().isNotEmpty &&
-        _villageController.text.trim().isNotEmpty &&
-        _serviceDate != null &&
-        _selectedEquipment != null;
-
-    if (!baseValid) return false;
-
-    if (_isTimeBased) {
-      return _startTime != null &&
-          _endTime != null &&
-          _totalHours > 0 &&
-          _ratePerUnit > 0;
-    } else if (_isTractorTrolley) {
-      return _distance > 0 &&
-          _totalTrips > 0 &&
-          !_isFetchingRate &&
-          _ratePerUnit > 0;
-    } else {
-      return _quantity > 0 && _ratePerUnit > 0;
+      setState(() => _isFetchingEquipments = false);
     }
   }
 
   Future<void> _updateRate() async {
     if (_selectedEquipment == null) return;
-
     if (widget.operator.clientCode != 'SDP001' ||
         _isCrossClientMember ||
         _isNewUser) {
-      if (!mounted) return;
-      setState(() {
-        _ratePerUnit = 0.0;
-        _isFetchingRate = false;
-      });
+      setState(() => _ratePerUnit = 0.0);
       return;
     }
 
     if (_isTractorTrolley) {
-      final equipmentId = _selectedEquipment!['id'];
-      final distance = _distance;
-      final isMember = _isFoundMember;
-
-      if (distance <= 0) {
-        if (!mounted) return;
-        setState(() {
-          _ratePerUnit = 0.0;
-          _isFetchingRate = false;
-        });
+      if (_distance <= 0) {
+        setState(() => _ratePerUnit = 0.0);
         return;
       }
-
-      setState(() => _isFetchingRate = true);
-
       try {
         final res = await ApiService.calculateTrolleyPrice(
-          equipmentId: equipmentId,
+          equipmentId: _selectedEquipment!['id'],
           clientCode: widget.operator.clientCode,
-          distance: distance,
-          isMember: isMember,
+          distance: _distance,
+          isMember: _isFoundMember,
         );
-
-        if (!mounted) return;
-        if (_selectedEquipment?['id'] != equipmentId ||
-            _distance != distance ||
-            _isFoundMember != isMember) {
-          return;
+        if (mounted) {
+          setState(() {
+            _ratePerUnit = res['success'] == true
+                ? (double.tryParse(res['price']?.toString() ?? '0') ?? 0.0)
+                : 0.0;
+            if (_ratePerUnit > 0) {
+              _rateController.text = _ratePerUnit.toStringAsFixed(0);
+            }
+          });
         }
-
-        setState(() {
-          _ratePerUnit = res['success'] == true
-              ? (double.tryParse(res['price']?.toString() ?? '0') ?? 0.0)
-              : 0.0;
-          _isFetchingRate = false;
-        });
-      } catch (_) {
-        if (!mounted) return;
-        if (_selectedEquipment?['id'] != equipmentId ||
-            _distance != distance ||
-            _isFoundMember != isMember) {
-          return;
+      } catch (_) {}
+    } else {
+      final newRate = double.tryParse((_isFoundMember
+                      ? _selectedEquipment!['price_member']
+                      : _selectedEquipment!['price_non_member'])
+                  ?.toString() ??
+              '0') ??
+          0.0;
+      setState(() {
+        _ratePerUnit = newRate;
+        if (_ratePerUnit > 0) {
+          _rateController.text = _ratePerUnit.toStringAsFixed(0);
         }
+      });
+    }
+  }
 
-        setState(() {
-          _ratePerUnit = 0.0;
-          _isFetchingRate = false;
-        });
-      }
-      return;
+  bool get _isTimeBased => (_selectedEquipment?['unit'] ?? '')
+      .toString()
+      .toLowerCase()
+      .contains('hour');
+  bool get _isTractorTrolley => (_selectedEquipment?['name_en'] ?? '')
+      .toString()
+      .toLowerCase()
+      .contains('trolley');
+  double get _distance =>
+      double.tryParse(_distanceController.text.trim()) ?? 0.0;
+  double get _quantity => double.tryParse(_qtyController.text.trim()) ?? 0.0;
+  double get _totalHours {
+    if (_startTime == null || _endTime == null) return 0.0;
+    final start = _startTime!.hour * 60 + _startTime!.minute;
+    final end = _endTime!.hour * 60 + _endTime!.minute;
+    final diff = end >= start ? end - start : (end + 1440) - start;
+    return diff / 60.0;
+  }
+
+  double get _billedQty => _isTimeBased ? _totalHours : _quantity;
+  double get _finalAmount {
+    final rate = _ratePerUnit > 0
+        ? _ratePerUnit
+        : (double.tryParse(_rateController.text) ?? 0.0);
+    return rate * _billedQty;
+  }
+
+  String get _measuredUnit => _isTimeBased
+      ? 'hour'
+      : (_isTractorTrolley
+          ? 'trip'
+          : (_selectedEquipment?['unit'] ?? 'unit').toString());
+
+  bool get _canGoToStep2 =>
+      _phoneController.text.length == 10 &&
+      _nameController.text.isNotEmpty &&
+      _villageController.text.isNotEmpty;
+  bool get _canSubmit {
+    if (!_canGoToStep2 || _selectedEquipment == null) {
+      return false;
+    }
+    // If rate is still 0, operator MUST enter it manually
+    final manualRate = double.tryParse(_rateController.text) ?? 0.0;
+    if (_ratePerUnit <= 0 && manualRate <= 0) {
+      return false;
     }
 
-    final newRate = double.tryParse((_isFoundMember
-                    ? _selectedEquipment!['price_member']
-                    : _selectedEquipment!['price_non_member'])
-                ?.toString() ??
-            '0') ??
-        0.0;
-
-    if (!mounted) return;
-    setState(() {
-      _ratePerUnit = newRate;
-      _isFetchingRate = false;
-    });
+    if (_isTimeBased) return _totalHours > 0;
+    if (_isTractorTrolley) return _distance > 0 && _quantity > 0;
+    return _quantity > 0;
   }
 
   Future<void> _submit() async {
-    if (widget.prefillBooking != null &&
-        widget.prefillBooking!['booking_id'] != null) {
-      if (!_canPreview) {
-        _showMsg('operator_fill_required_fields'.tr(), isError: true);
-        return;
-      }
-      setState(() => _isLoading = true);
-
-      try {
-        final res = await ApiService.completeBookingManual(
-          operatorId: widget.operator.operatorId,
-          bookingId: widget.prefillBooking!['booking_id'].toString(),
-          farmerPhone: _phoneController.text.trim(),
-          farmerName: _nameController.text.trim(),
-          village: _villageController.text.trim(),
-          equipmentUsed: _selectedEquipment!['name_en'] ?? 'Equipment',
-          equipmentId: _selectedEquipment!['id'],
-          startTime: _isTimeBased ? _formatTime(_startTime) : '00:00',
-          endTime: _isTimeBased ? _formatTime(_endTime) : '00:00',
-          distance: _isTractorTrolley ? _distance : 0,
-          serviceDate: _formatApiDate(_serviceDate),
-          cropType: _cropController.text.trim().isEmpty
-              ? null
-              : _cropController.text.trim(),
-          landSizeAcres: _landSizeAcres,
-          billedQty: _billedQty,
-          unitType: _measuredUnit,
-          rate: _ratePerUnit,
-          finalAmount: _finalAmount,
-        );
-
-        if (res['success'] == true) {
-          _showMsg('operator_job_logged_success'.tr());
-          await Future.delayed(const Duration(milliseconds: 1200));
-          if (mounted) Navigator.pop(context);
-        } else {
-          _showMsg(res['error'] ?? 'operator_log_job_failed'.tr(),
-              isError: true);
-          if (mounted) setState(() => _isLoading = false);
-        }
-      } catch (e) {
-        _showMsg('operator_network_error_try_again'.tr(), isError: true);
-        if (mounted) setState(() => _isLoading = false);
-      }
-      return;
-    }
-
-    if (!_canPreview) {
-      _showMsg('operator_fill_required_fields'.tr(), isError: true);
-      return;
-    }
-
+    if (!_canSubmit) return;
     setState(() => _isLoading = true);
-
     try {
       final res = await ApiService.completeBookingManual(
         operatorId: widget.operator.operatorId,
+        bookingId: widget.prefillBooking?['booking_id']?.toString(),
         farmerPhone: _phoneController.text.trim(),
         farmerName: _nameController.text.trim(),
         village: _villageController.text.trim(),
         equipmentUsed: _selectedEquipment!['name_en'] ?? 'Equipment',
         equipmentId: _selectedEquipment!['id'],
-        startTime: _isTimeBased ? _formatTime(_startTime) : '00:00',
-        endTime: _isTimeBased ? _formatTime(_endTime) : '00:00',
+        startTime: _isTimeBased
+            ? '${_startTime!.hour}:${_startTime!.minute}'
+            : '00:00',
+        endTime:
+            _isTimeBased ? '${_endTime!.hour}:${_endTime!.minute}' : '00:00',
         distance: _isTractorTrolley ? _distance : 0,
-        serviceDate: _formatApiDate(_serviceDate),
-        cropType: _cropController.text.trim().isEmpty
-            ? null
-            : _cropController.text.trim(),
-        landSizeAcres: _landSizeAcres,
+        serviceDate:
+            '${_serviceDate!.year}-${_serviceDate!.month}-${_serviceDate!.day}',
+        cropType: _cropController.text.isNotEmpty ? _cropController.text : null,
+        landSizeAcres: double.tryParse(_landSizeController.text) ?? 0,
         billedQty: _billedQty,
         unitType: _measuredUnit,
-        rate: _ratePerUnit,
+        rate: _ratePerUnit > 0
+            ? _ratePerUnit
+            : (double.tryParse(_rateController.text) ?? 0.0),
         finalAmount: _finalAmount,
       );
 
       if (res['success'] == true) {
-        _showMsg('operator_job_logged_success'.tr());
-        await Future.delayed(const Duration(milliseconds: 1200));
-        if (mounted) Navigator.pop(context);
+        setState(() {
+          _submissionResult = res;
+          _currentStep = 4;
+          _isLoading = false;
+        });
+        _pageController.animateToPage(3,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOut);
       } else {
-        _showMsg(res['error'] ?? 'operator_log_job_failed'.tr(), isError: true);
-        if (mounted) setState(() => _isLoading = false);
+        setState(() {
+          _errorMsg = res['error'] ?? 'operator_log_job_failed'.tr();
+          _isLoading = false;
+        });
       }
-    } catch (e) {
-      _showMsg('operator_network_error_try_again'.tr(), isError: true);
-      if (mounted) setState(() => _isLoading = false);
+    } catch (_) {
+      setState(() {
+        _errorMsg = 'operator_network_error_try_again'.tr();
+        _isLoading = false;
+      });
     }
   }
 
   @override
-  void dispose() {
-    _phoneDebounce?.cancel();
-    _phoneController.removeListener(_onPhoneChanged);
-    _phoneController.dispose();
-    _nameController.dispose();
-    _villageController.dispose();
-    _qtyController.dispose();
-    _distanceController.dispose();
-    _cropController.dispose();
-    _landSizeController.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: _currentStep == 4
+          ? null
+          : AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                    color: _accent, size: 20),
+                onPressed: () {
+                  if (_currentStep > 1) {
+                    _pageController.previousPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOut);
+                    setState(() => _currentStep--);
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              title: Column(
+                children: [
+                  Text(_currentStep == 3
+                      ? 'operator_review_bill'.tr()
+                      : 'operator_job_completion_title'.tr(),
+                      style: const TextStyle(
+                          color: _accent,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                  if (_currentStep < 3)
+                    Text('${'step'.tr()} $_currentStep ${'of'.tr()} 2',
+                        style: const TextStyle(color: _slate, fontSize: 11)),
+                ],
+              ),
+              centerTitle: true,
+            ),
+      body: PageView(
+        controller: _pageController,
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          _buildStep1(),
+          _buildStep2(),
+          _buildStep3(),
+          _buildStep4(),
+        ],
+      ),
+      bottomNavigationBar: _currentStep < 3 ? _buildBottomNav() : null,
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final keyboardH = MediaQuery.of(context).viewInsets.bottom;
-    return ConstrainedBox(
-        constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.88),
-        child: Container(
-          margin: EdgeInsets.only(bottom: keyboardH),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  Widget _buildStep1() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Row(
+              _sectionTitle(
+                  Icons.person_pin_circle_rounded, 'operator_farmer'.tr()),
+              if (_phoneController.text.length == 10 && !_isFetchingUser)
+                _memberBadge(
+                    _isFoundMember ? 1 : (_isCrossClientMember ? 2 : 0)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildTextField(_phoneController, 'operator_phone_number_label'.tr(),
+              Icons.phone_rounded, TextInputType.phone,
+              suffixIcon: _isFetchingUser
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: _accent)),
+                    )
+                  : null),
+          const SizedBox(height: 16),
+          _buildTextField(_nameController, 'operator_farmer_name_label'.tr(),
+              Icons.person_rounded, TextInputType.name),
+          const SizedBox(height: 16),
+          _buildTextField(_villageController, 'village'.tr(),
+              Icons.location_on_rounded, TextInputType.text),
+          const SizedBox(height: 24),
+          _sectionTitle(
+              Icons.calendar_today_rounded, 'operator_service_date'.tr()),
+          const SizedBox(height: 12),
+          _buildDateButton(),
+          const SizedBox(height: 24),
+          _sectionTitle(Icons.grass_rounded, 'operator_crop_type_label'.tr()),
+          const SizedBox(height: 12),
+          _buildTextField(_cropController, 'operator_crop_type_optional'.tr(),
+              Icons.spa_rounded, TextInputType.text),
+          const SizedBox(height: 16),
+          _buildTextField(
+              _landSizeController,
+              'operator_land_size_acres_label'.tr(),
+              Icons.square_foot_rounded,
+              TextInputType.number,
+              suffix: 'acres'.tr()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep2() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _sectionTitle(
+            Icons.agriculture_rounded, 'operator_equipment_used_label'.tr()),
+        const SizedBox(height: 16),
+        _buildEquipmentGrid(),
+        const SizedBox(height: 24),
+        _sectionTitle(Icons.speed_rounded, 'operator_usage'.tr()),
+        const SizedBox(height: 16),
+        if (_isTimeBased)
+          _buildTimeSelectors()
+        else if (_isTractorTrolley) ...[
+          _buildTextField(
+              _distanceController,
+              'operator_distance_per_trip_label'.tr(),
+              Icons.add_road_rounded,
+              TextInputType.number,
+              suffix: 'KM'),
+          const SizedBox(height: 16),
+          _buildTextField(_qtyController, 'operator_total_trips_label'.tr(),
+              Icons.repeat_rounded, TextInputType.number),
+        ] else ...[
+          _buildTextField(
+              _qtyController,
+              'operator_quantity_label'.tr(namedArgs: {'unit': _measuredUnit}),
+              Icons.calculate_rounded,
+              TextInputType.number),
+        ],
+        const SizedBox(height: 24),
+        _sectionTitle(Icons.payments_rounded, 'chc_rate_label'.tr()),
+        const SizedBox(height: 16),
+        _buildTextField(
+          _rateController,
+          'chc_rate_label'.tr(),
+          Icons.currency_rupee_rounded,
+          TextInputType.number,
+          suffix: '/ ${_measuredUnit.tr()}',
+        ),
+        if (_errorMsg != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Text(_errorMsg!,
+                style: const TextStyle(color: Colors.red, fontSize: 13)),
+          ),
+        const SizedBox(height: 40),
+      ]),
+    );
+  }
+
+  Widget _buildStep3() {
+    final rate = _ratePerUnit > 0
+        ? _ratePerUnit
+        : (double.tryParse(_rateController.text) ?? 0.0);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+              Icons.receipt_long_rounded, 'operator_review_bill'.tr()),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _border),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4))
+              ],
+            ),
+            child: Column(
+              children: [
+                _receiptRow('operator_farmer'.tr(), _nameController.text),
+                _receiptRow('village'.tr(), _villageController.text),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: const Icon(Icons.add_task_rounded,
-                          color: Color(0xFF111827), size: 22),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'operator_log_walk_in_job'.tr(),
-                            style: const TextStyle(
-                              fontFamily: 'Google Sans',
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: _textPrimary,
-                            ),
-                          ),
-                          Text(
-                            'operator_log_walk_in_subtitle'.tr(),
-                            style: const TextStyle(
-                              fontFamily: 'Google Sans',
-                              fontSize: 12,
-                              color: _textSub,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    Text('operator_label'.tr(),
+                        style: const TextStyle(color: _slate, fontSize: 14)),
+                    _memberBadge(
+                        _isFoundMember ? 1 : (_isCrossClientMember ? 2 : 0)),
                   ],
                 ),
+                const Divider(height: 32, color: Color(0xFFF1F5F9)),
+                _receiptRow('operator_equipment_used_label'.tr(),
+                    _selectedEquipment?['name_en'] ?? ''),
+                if (_isTimeBased)
+                  _receiptRow('operator_duration'.tr(),
+                      '${_startTime?.format(context) ?? '--:--'} → ${_endTime?.format(context) ?? '--:--'} (${_totalHours.toStringAsFixed(1)} hrs)')
+                else if (_isTractorTrolley) ...[
+                  _receiptRow('operator_distance'.tr(), '$_distance KM'),
+                  _receiptRow('operator_trips'.tr(), _qtyController.text),
+                ] else
+                  _receiptRow('operator_quantity'.tr(),
+                      '${_qtyController.text} $_measuredUnit'),
+                _receiptRow('chc_rate_label'.tr(),
+                    '₹${rate.toStringAsFixed(0)} / ${_measuredUnit.tr()}'),
+                const Divider(height: 32, color: _border),
+                _receiptRow('operator_total_bill'.tr(),
+                    '₹${_finalAmount.toStringAsFixed(0)}',
+                    isTotal: true),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accent,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
               ),
-              const SizedBox(height: 20),
-              const Divider(height: 1, color: Color(0xFFF3F4F6)),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              onPressed: _isLoading ? null : _submit,
+              child: _isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : Text('operator_confirm_complete'.tr(),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: _border),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: () {
+                _pageController.previousPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut);
+                setState(() => _currentStep = 2);
+              },
+              child: Text('cancel'.tr(),
+                  style: const TextStyle(
+                      color: _slate, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep4() {
+    return Container(
+      color: _accent,
+      child: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              const SizedBox(height: 60),
+              const Icon(Icons.check_circle_outline_rounded,
+                  color: Colors.white, size: 80),
+              const SizedBox(height: 16),
+              Text('success'.tr(),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 32),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20)),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_errorMsg != null || _successMsg != null) ...[
-                        _buildBanner(),
-                        const SizedBox(height: 14),
+                      if (_submissionResult?['booking_id'] != null) ...[
+                        _receiptRow('detail_booking_id'.tr(),
+                            '#${_submissionResult!['booking_id']}'),
+                        const Divider(height: 24, color: Color(0xFFF1F5F9)),
                       ],
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _fieldLabel('operator_phone_number_label'.tr()),
-                          if (_isFoundMember)
-                            _memberBadge(1)
-                          else if (_isCrossClientMember)
-                            _memberBadge(2)
-                          else if (_phoneController.text.length == 10 &&
-                              !_isFetchingUser)
-                            _memberBadge(0),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      _buildTextField(
-                        controller: _phoneController,
-                        hint: 'signup_phone_hint'.tr(),
-                        icon: Icons.phone_rounded,
-                        type: TextInputType.phone,
-                        suffixIcon: _isFetchingUser
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: _green)),
-                              )
-                            : null,
-                        formatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(10),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _fieldLabel('operator_farmer_name_label'.tr()),
-                      const SizedBox(height: 6),
-                      _buildTextField(
-                        controller: _nameController,
-                        hint: 'signup_name_hint'.tr(),
-                        icon: Icons.person_rounded,
-                        type: TextInputType.name,
-                        onChanged: (_) => setState(() => _showPreview = false),
-                      ),
-                      const SizedBox(height: 16),
-                      _fieldLabel('village'.tr()),
-                      const SizedBox(height: 6),
-                      _buildTextField(
-                        controller: _villageController,
-                        hint: 'village'.tr(),
-                        icon: Icons.location_on_rounded,
-                        type: TextInputType.text,
-                        onChanged: (_) => setState(() => _showPreview = false),
-                      ),
-                      const SizedBox(height: 16),
-                      _fieldLabel('operator_service_date_label'.tr()),
-                      const SizedBox(height: 6),
-                      _buildDateField(),
-                      const SizedBox(height: 16),
-                      _fieldLabel('operator_crop_type_label'.tr()),
-                      const SizedBox(height: 6),
-                      _buildTextField(
-                        controller: _cropController,
-                        hint: 'operator_crop_type_optional'.tr(),
-                        icon: Icons.grass_rounded,
-                        type: TextInputType.text,
-                        onChanged: (_) => setState(() => _showPreview = false),
-                      ),
-                      const SizedBox(height: 16),
-                      _fieldLabel('operator_land_size_acres_label'.tr()),
-                      const SizedBox(height: 6),
-                      _buildTextField(
-                        controller: _landSizeController,
-                        hint: 'operator_enter_land_size'.tr(),
-                        icon: Icons.square_foot_rounded,
-                        type: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        onChanged: (_) => setState(() => _showPreview = false),
-                      ),
-                      const SizedBox(height: 16),
-                      _fieldLabel('operator_equipment_used_label'.tr()),
-                      const SizedBox(height: 6),
-                      _buildEquipmentPicker(),
-                      const SizedBox(height: 16),
-                      if (_selectedEquipment != null) ...[
-                        if (_isTimeBased) ...[
-                          _fieldLabel('operator_operation_time_label'.tr()),
-                          const SizedBox(height: 6),
-                          _buildTimePickers(),
-                        ] else if (_isTractorTrolley) ...[
-                          _fieldLabel('operator_distance_per_trip_label'.tr()),
-                          const SizedBox(height: 6),
-                          _buildTextField(
-                            controller: _distanceController,
-                            hint: 'operator_enter_distance_km'.tr(),
-                            icon: Icons.add_road_rounded,
-                            type: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            onChanged: (_) {
-                              unawaited(_updateRate());
-                              setState(() => _showPreview = false);
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          _fieldLabel('operator_total_trips_label'.tr()),
-                          const SizedBox(height: 6),
-                          _buildTextField(
-                            controller: _qtyController,
-                            hint: 'operator_enter_total_trips'.tr(),
-                            icon: Icons.repeat_rounded,
-                            type: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            onChanged: (_) {
-                              setState(() => _showPreview = false);
-                            },
-                          ),
-                        ] else ...[
-                          _fieldLabel('operator_quantity_label'.tr(namedArgs: {
-                            'unit':
-                                '${_selectedEquipment!['unit'] ?? 'operator_units'.tr()}'
-                          })),
-                          const SizedBox(height: 6),
-                          _buildTextField(
-                            controller: _qtyController,
-                            hint: 'operator_enter_quantity'.tr(),
-                            icon: Icons.calculate_rounded,
-                            type: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            onChanged: (_) {
-                              unawaited(_updateRate());
-                              setState(() => _showPreview = false);
-                            },
-                          ),
-                        ],
-                        if ((_isTractorTrolley &&
-                                (_distance > 0 || _totalTrips > 0)) ||
-                            (!_isTractorTrolley && _billedQty > 0)) ...[
-                          const SizedBox(height: 12),
-                          _buildRateRow(),
-                        ],
-                        const SizedBox(height: 20),
-                      ],
-                      if (_showPreview && _canPreview) ...[
-                        _buildBillPreview(),
-                        const SizedBox(height: 16),
-                      ],
+                      _receiptRow('operator_farmer'.tr(), _nameController.text),
+                      _receiptRow('village'.tr(), _villageController.text),
+                      _receiptRow('operator_equipment_used_label'.tr(),
+                          _selectedEquipment?['name_en'] ?? ''),
+                      const Divider(height: 32),
+                      _receiptRow('operator_total_bill'.tr(),
+                          '₹${_finalAmount.toStringAsFixed(0)}',
+                          isTotal: true),
                     ],
                   ),
                 ),
               ),
+              const SizedBox(height: 40),
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
-                child: _buildBottomActions(),
+                padding: const EdgeInsets.all(24),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: _accent,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('done_button'.tr(),
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 20),
             ],
           ),
-        ));
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNav() {
+    final canNext = _currentStep == 1 ? _canGoToStep2 : _canSubmit;
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
+          color: Colors.white, border: Border(top: BorderSide(color: _border))),
+      child: SizedBox(
+        height: 56,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _accent,
+            disabledBackgroundColor: _border,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          onPressed: !canNext || _isLoading
+              ? null
+              : () {
+                  if (_currentStep == 1) {
+                    _pageController.nextPage(
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeInOut);
+                    setState(() => _currentStep = 2);
+                  } else if (_currentStep == 2) {
+                    _pageController.nextPage(
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeInOut);
+                    setState(() => _currentStep = 3);
+                  }
+                },
+          child: Text(
+            _currentStep == 1
+                ? 'operator_next_usage'.tr()
+                : 'operator_preview_bill'.tr(),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label,
+      IconData icon, TextInputType type,
+      {String? suffix, Widget? suffixIcon}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                color: _slate, fontSize: 12, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          keyboardType: type,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+          onChanged: (_) {
+            if (controller == _distanceController) {
+              _updateRate();
+            }
+            setState(() {});
+          },
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, color: _slate, size: 20),
+            suffixText: suffix,
+            suffixIcon: suffixIcon,
+            hintText: 'enter_field'.tr(namedArgs: {'field': label}),
+            hintStyle: const TextStyle(
+                color: Color(0xFF94A3B8), fontWeight: FontWeight.normal),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: _border)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: _accent, width: 2)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionTitle(IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, color: _accent, size: 20),
+        const SizedBox(width: 8),
+        Text(title,
+            style: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.bold, color: _accent)),
+      ],
+    );
+  }
+
+  Widget _buildDateButton() {
+    return InkWell(
+      onTap: () async {
+        final picked = await showDatePicker(
+            context: context,
+            initialDate: _serviceDate ?? DateTime.now(),
+            firstDate: DateTime.now().subtract(const Duration(days: 30)),
+            lastDate: DateTime.now().add(const Duration(days: 30)));
+        if (picked != null) setState(() => _serviceDate = picked);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _border)),
+        child: Row(
+          children: [
+            const Icon(Icons.event_note_rounded, color: _slate, size: 20),
+            const SizedBox(width: 12),
+            Text(DateFormat('dd MMM, yyyy').format(_serviceDate!),
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const Spacer(),
+            const Icon(Icons.keyboard_arrow_down_rounded, color: _slate),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEquipmentGrid() {
+    return _isFetchingEquipments
+        ? const Center(child: CircularProgressIndicator())
+        : GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 0.85),
+            itemCount: _equipmentList.length,
+            itemBuilder: (ctx, i) {
+              final eq = _equipmentList[i];
+              final isSel =
+                  _selectedEquipment?['id']?.toString() == eq['id']?.toString();
+              return InkWell(
+                onTap: () {
+                  setState(() => _selectedEquipment = eq);
+                  _updateRate();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  clipBehavior: Clip.hardEdge,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: isSel ? _accent : _border, width: isSel ? 2 : 1),
+                    boxShadow: isSel
+                        ? [
+                            BoxShadow(
+                                color: _accent.withValues(alpha: 0.15),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4))
+                          ]
+                        : [
+                            BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.03),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2))
+                          ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSel ? _accent.withValues(alpha: 0.05) : const Color(0xFFF8FAFC),
+                            border: const Border(bottom: BorderSide(color: _border, width: 1)),
+                          ),
+                          child: Image.asset(
+                            _getImagePath(eq['name_en']),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          alignment: Alignment.center,
+                          child: Text(eq['name_en'] ?? '',
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: _accent,
+                                  fontSize: 13,
+                                  height: 1.1,
+                                  fontWeight: isSel ? FontWeight.w800 : FontWeight.w600)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+  }
+
+  String _getImagePath(String? name) {
+    name = name?.toLowerCase() ?? '';
+    if (name.contains('trolley')) return 'assets/chc_equipments/tractor_trolley.webp';
+    if (name.contains('tractor')) return 'assets/chc_equipments/tractor.webp';
+    if (name.contains('drone')) return 'assets/chc_equipments/agri_drone.webp';
+    if (name.contains('harvester')) return 'assets/chc_equipments/combined_harvester.webp';
+    if (name.contains('baler')) return 'assets/chc_equipments/balers.webp';
+    if (name.contains('sprayer')) return 'assets/chc_equipments/boom_sprayer.webp';
+    if (name.contains('seeder')) return 'assets/chc_equipments/manual_seeder.png';
+    if (name.contains('dryer')) return 'assets/chc_equipments/mobile_grain_dryer.webp';
+    if (name.contains('drill')) return 'assets/chc_equipments/seed_cum_fertilizer_drill.webp';
+    if (name.contains('shredder')) return 'assets/chc_equipments/shredder.webp';
+    return 'assets/chc_equipments/tractor.webp';
+  }
+
+  Widget _buildTimeSelectors() {
+    return Row(
+      children: [
+        Expanded(child: _timeBtn(true)),
+        const SizedBox(width: 12),
+        Expanded(child: _timeBtn(false)),
+      ],
+    );
+  }
+
+  Widget _timeBtn(bool isStart) {
+    final time = isStart ? _startTime : _endTime;
+    return InkWell(
+      onTap: () async {
+        final picked = await showTimePicker(
+          context: context,
+          initialTime: time ?? TimeOfDay.now(),
+          builder: (context, child) {
+            return Localizations.override(
+              context: context,
+              locale: const Locale('en', 'US'),
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+                child: child!,
+              ),
+            );
+          },
+        );
+        if (picked != null) {
+          setState(() {
+            if (isStart) {
+              _startTime = picked;
+            } else {
+              _endTime = picked;
+            }
+          });
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _border)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(isStart ? 'START' : 'END',
+                style: const TextStyle(
+                    fontSize: 10, color: _slate, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.access_time_rounded, size: 16, color: _accent),
+                const SizedBox(width: 8),
+                Text(
+                    time == null
+                        ? '--:--'
+                        : '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  Widget _receiptRow(String label, String value, {bool isTotal = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(
+                  color: isTotal ? _accent : _slate,
+                  fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                  fontSize: isTotal ? 16 : 14)),
+          Text(value,
+              style: TextStyle(
+                  color: _accent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: isTotal ? 20 : 14)),
+        ],
+      ),
+    );
   }
 
   Widget _memberBadge(int state) {
@@ -798,9 +1002,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         borderRadius: BorderRadius.circular(100),
         border: Border.all(
           color: isMember
-              ? const Color(0xFFA7F3D0)
+              ? const Color(0xFFCBD5E1)
               : (isCross ? const Color(0xFFFDE68A) : const Color(0xFFE5E7EB)),
-          width: 1,
         ),
       ),
       child: Row(
@@ -808,859 +1011,34 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         children: [
           Icon(
             isMember
-                ? Icons.verified_rounded
+                ? Icons.verified_user_rounded
                 : (isCross
-                    ? Icons.swap_horiz_rounded
-                    : Icons.person_outline_rounded),
+                    ? Icons.share_location_rounded
+                    : Icons.person_add_rounded),
             size: 14,
             color: isMember
-                ? const Color(0xFF111827)
-                : (isCross ? const Color(0xFFD97706) : const Color(0xFF6B7280)),
+                ? const Color(0xFF475569)
+                : (isCross ? const Color(0xFFB45309) : const Color(0xFF6B7280)),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
           Text(
-            isMember ? 'member'.tr() : (isCross ? 'Other Client' : 'New User'),
+            isMember
+                ? 'member'.tr()
+                : (isCross
+                    ? 'operator_other_client'.tr()
+                    : 'operator_new_user'.tr()),
             style: TextStyle(
-              fontFamily: 'Google Sans',
               fontSize: 11,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.bold,
               color: isMember
-                  ? const Color(0xFF047857)
+                  ? const Color(0xFF475569)
                   : (isCross
                       ? const Color(0xFFB45309)
-                      : const Color(0xFF4B5563)),
+                      : const Color(0xFF6B7280)),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _fieldLabel(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontFamily: 'Google Sans',
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: Color(0xFF9CA3AF),
-        letterSpacing: 0.8,
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    required TextInputType type,
-    List<TextInputFormatter>? formatters,
-    Function(String)? onChanged,
-    Widget? suffixIcon,
-    int maxLines = 1,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border, width: 1.5),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: type,
-        inputFormatters: formatters,
-        onChanged: onChanged,
-        minLines: maxLines > 1 ? maxLines : 1,
-        maxLines: maxLines,
-        style: const TextStyle(
-            fontFamily: 'Google Sans',
-            fontSize: 15,
-            color: _textPrimary,
-            fontWeight: FontWeight.w600),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(
-              fontFamily: 'Google Sans',
-              fontSize: 15,
-              color: Color(0xFF9CA3AF)),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 14, right: 10),
-            child: Icon(icon, color: _green, size: 20),
-          ),
-          suffixIcon: suffixIcon,
-          prefixIconConstraints: const BoxConstraints(minWidth: 46),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDateField() {
-    return GestureDetector(
-      onTap: _pickServiceDate,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _border, width: 1.5),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.calendar_today_rounded, color: _green, size: 20),
-            const SizedBox(width: 12),
-            Text(
-              _formatDate(_serviceDate),
-              style: TextStyle(
-                fontFamily: 'Google Sans',
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: _serviceDate != null
-                    ? _textPrimary
-                    : const Color(0xFF9CA3AF),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showEquipmentPicker() {
-    var tempSelected = _selectedEquipment ??
-        (_equipmentList.isNotEmpty ? _equipmentList.first : null);
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: 300,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'operator_select_equipment'.tr(),
-                style: const TextStyle(
-                  fontFamily: 'Google Sans',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: _textPrimary,
-                ),
-              ),
-            ),
-            Expanded(
-              child: _equipmentList.isEmpty
-                  ? Center(
-                      child: Text(
-                        'operator_no_equipment_found'.tr(),
-                        style: const TextStyle(
-                            fontFamily: 'Google Sans',
-                            fontSize: 16,
-                            color: _textSub),
-                      ),
-                    )
-                  : CupertinoPicker(
-                      scrollController: FixedExtentScrollController(
-                        initialItem: _equipmentList.isEmpty
-                            ? 0
-                            : (_selectedEquipment != null
-                                    ? _equipmentList.indexWhere((e) =>
-                                        e['id'] == _selectedEquipment!['id'])
-                                    : 0)
-                                .clamp(0, _equipmentList.length - 1),
-                      ),
-                      itemExtent: 45,
-                      useMagnifier: true,
-                      magnification: 1.1,
-                      onSelectedItemChanged: (index) {
-                        tempSelected = _equipmentList[index];
-                      },
-                      children: _equipmentList.map((e) {
-                        return Center(
-                          child: Text(
-                            e['name_en'] ?? 'operator_equipment_fallback'.tr(),
-                            style: const TextStyle(
-                              fontFamily: 'Google Sans',
-                              fontSize: 18,
-                              color: _textPrimary, // Explicitly use dark color
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-            ),
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: _buildActionButton(
-                  text: 'operator_confirm'.tr(),
-                  onTap: () {
-                    if (tempSelected != null) {
-                      setState(() {
-                        _selectedEquipment = tempSelected;
-                        _showPreview = false;
-                        _qtyController.clear();
-                        _distanceController.clear();
-                        _startTime = null;
-                        _endTime = null;
-                        _ratePerUnit = 0.0;
-                      });
-                      unawaited(_updateRate());
-                    }
-                    Navigator.pop(context);
-                  },
-                  color: _green,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEquipmentPicker() {
-    if (_isFetchingEquipments) {
-      return Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _border, width: 1.5),
-        ),
-        child: const Center(
-            child: SizedBox(
-                width: 20,
-                height: 20,
-                child:
-                    CircularProgressIndicator(strokeWidth: 2, color: _green))),
-      );
-    }
-
-    return GestureDetector(
-      onTap: _showEquipmentPicker,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _border, width: 1.5),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.precision_manufacturing_rounded,
-                color: _green, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _selectedEquipment?['name_en'] ??
-                    'operator_select_equipment'.tr(),
-                style: const TextStyle(
-                    fontFamily: 'Google Sans',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: _textPrimary),
-              ),
-            ),
-            const Icon(Icons.keyboard_arrow_down_rounded,
-                color: Color(0xFF9CA3AF)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimePickers() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('operator_start_time'.tr(),
-                        style: const TextStyle(
-                            fontFamily: 'Google Sans',
-                            fontSize: 11,
-                            color: _textSub,
-                            fontWeight: FontWeight.w500)),
-                    const SizedBox(height: 6),
-                    GestureDetector(
-                      onTap: () => _pickTime(true),
-                      child: Row(
-                        children: [
-                          Text(
-                            _formatTime(_startTime),
-                            style: TextStyle(
-                              fontFamily: 'Google Sans',
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              color: _startTime != null
-                                  ? _textPrimary
-                                  : const Color(0xFF9CA3AF),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.access_time_rounded,
-                              size: 18, color: _green),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(width: 1, height: 40, color: const Color(0xFFE5E7EB)),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('operator_end_time'.tr(),
-                          style: const TextStyle(
-                              fontFamily: 'Google Sans',
-                              fontSize: 11,
-                              color: _textSub,
-                              fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 6),
-                      GestureDetector(
-                        onTap: () => _pickTime(false),
-                        child: Row(
-                          children: [
-                            Text(
-                              _formatTime(_endTime),
-                              style: TextStyle(
-                                fontFamily: 'Google Sans',
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
-                                color: _endTime != null
-                                    ? _textPrimary
-                                    : const Color(0xFF9CA3AF),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.access_time_rounded,
-                                size: 18, color: _green),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRateRow() {
-    return Row(
-      children: [
-        const Icon(Icons.timer_outlined, size: 16, color: Color(0xFF9CA3AF)),
-        const SizedBox(width: 6),
-        Text(
-          _isTimeBased
-              ? 'operator_rate_row_time'.tr(namedArgs: {
-                  'hours': _totalHours.toStringAsFixed(1),
-                  'rate': _ratePerUnit.toInt().toString(),
-                })
-              : _isTractorTrolley
-                  ? _isFetchingRate
-                      ? 'operator_fetching_price_for_distance'.tr(namedArgs: {
-                          'distance': _distance.toStringAsFixed(1),
-                        })
-                      : 'operator_rate_row_trip'.tr(namedArgs: {
-                          'distance': _distance.toStringAsFixed(1),
-                          'trips': _totalTrips.toStringAsFixed(0),
-                          'rate': _ratePerUnit.toInt().toString(),
-                        })
-                  : 'operator_rate_row_quantity'.tr(namedArgs: {
-                      'qty': _quantity.toStringAsFixed(1),
-                      'unit': '${_selectedEquipment?['unit'] ?? ''}',
-                      'rate': _ratePerUnit.toInt().toString(),
-                      'rateUnit':
-                          '${_selectedEquipment?['unit'] ?? 'operator_unit'.tr()}',
-                    }),
-          style: const TextStyle(
-              fontFamily: 'Google Sans',
-              fontSize: 13,
-              color: _textSub,
-              fontWeight: FontWeight.w500),
-        ),
-        const Spacer(),
-        GestureDetector(
-          onTap: () async {
-            final val = await showDialog<double>(
-              context: context,
-              builder: (ctx) => _RateDialog(initial: _ratePerUnit),
-            );
-            if (val != null) {
-              setState(() {
-                _ratePerUnit = val;
-                _showPreview = false;
-              });
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: widget.operator.clientCode != 'SDP001' && _ratePerUnit == 0
-                  ? const Color(0xFF10B981)
-                  : const Color(0xFFF0FDF4),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              widget.operator.clientCode != 'SDP001' && _ratePerUnit == 0
-                  ? 'Enter Standard Rate'
-                  : 'operator_edit_rate'.tr(),
-              style: TextStyle(
-                fontFamily: 'Google Sans',
-                fontSize: 12,
-                color:
-                    widget.operator.clientCode != 'SDP001' && _ratePerUnit == 0
-                        ? Colors.white
-                        : _green,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBillPreview() {
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const Icon(Icons.receipt_long_rounded,
-              color: Color(0xFF64748B), size: 28),
-          const SizedBox(height: 8),
-          Text(
-            'operator_bill_preview'.tr().toUpperCase(),
-            style: const TextStyle(
-              fontFamily: 'Google Sans',
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.5,
-              color: Color(0xFF475569),
-            ),
-          ),
-          const SizedBox(height: 20),
-          _billRow('operator_farmer'.tr(), _nameController.text.trim()),
-          _billRow('village'.tr(), _villageController.text.trim()),
-          _billRow('operator_service_date'.tr(), _formatDate(_serviceDate)),
-          if (_cropController.text.trim().isNotEmpty)
-            _billRow('detail_crop'.tr(), _cropController.text.trim()),
-          if (_landSizeAcres > 0)
-            _billRow('operator_land_size'.tr(),
-                '${_landSizeAcres.toStringAsFixed(2)} ${'acres'.tr()}'),
-          const SizedBox(height: 12),
-          Row(
-            children: List.generate(
-              30,
-              (index) => Expanded(
-                child: Container(
-                  height: 1.5,
-                  color: index % 2 == 0
-                      ? const Color(0xFFCBD5E1)
-                      : Colors.transparent,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _billRow('chc_equipment'.tr(), _selectedEquipment?['name_en'] ?? ''),
-          if (_isTimeBased)
-            _billRow(
-                'operator_duration'.tr(),
-                'operator_duration_value'.tr(namedArgs: {
-                  'start': _formatTime(_startTime),
-                  'end': _formatTime(_endTime),
-                  'hours': _totalHours.toStringAsFixed(1),
-                }))
-          else if (_isTractorTrolley) ...[
-            _billRow('operator_distance'.tr(),
-                '${_distance.toStringAsFixed(1)} ${'operator_km_per_trip'.tr()}'),
-            _billRow('operator_trips'.tr(), _totalTrips.toStringAsFixed(0)),
-          ] else
-            _billRow('operator_quantity'.tr(),
-                '${_quantity.toStringAsFixed(1)} ${_selectedEquipment?['unit'] ?? ''}'),
-          _billRow(
-            'chc_rate'.tr(),
-            _isTractorTrolley
-                ? 'operator_rate_trip_value'.tr(namedArgs: {
-                    'rate': _ratePerUnit.toInt().toString(),
-                    'distance': _distance.toStringAsFixed(1),
-                  })
-                : 'operator_rate_unit_value'.tr(namedArgs: {
-                    'rate': _ratePerUnit.toInt().toString(),
-                    'unit':
-                        '${_selectedEquipment?['unit'] ?? 'operator_unit'.tr()}',
-                  }),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: List.generate(
-              30,
-              (index) => Expanded(
-                child: Container(
-                  height: 1.5,
-                  color: index % 2 == 0
-                      ? const Color(0xFFCBD5E1)
-                      : Colors.transparent,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('operator_total_amount'.tr(),
-                  style: const TextStyle(
-                      fontFamily: 'Google Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF334155))),
-              Text('₹${_finalAmount.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                      fontFamily: 'Google Sans',
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A))),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _billRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(label,
-                style: const TextStyle(
-                    fontFamily: 'Google Sans',
-                    fontSize: 13,
-                    color: Color(0xFF64748B),
-                    fontWeight: FontWeight.w600)),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(value,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    fontFamily: 'Google Sans',
-                    fontSize: 13,
-                    color: Color(0xFF334155),
-                    fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomActions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (!_showPreview)
-          Container(
-            height: 56,
-            decoration: BoxDecoration(
-              color: _canPreview
-                  ? const Color(0xFF111827)
-                  : const Color(0xFF94A3B8),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: _canPreview
-                    ? () => setState(() => _showPreview = true)
-                    : null,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.visibility_rounded,
-                        color: Colors.white, size: 20),
-                    const SizedBox(width: 10),
-                    Text('operator_preview_bill'.tr(),
-                        style: const TextStyle(
-                            fontFamily: 'Google Sans',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white)),
-                  ],
-                ),
-              ),
-            ),
-          )
-        else
-          Container(
-            height: 56,
-            decoration: BoxDecoration(
-              color: _isLoading ? const Color(0xFF94A3B8) : _green,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: _isLoading
-                  ? []
-                  : [
-                      BoxShadow(
-                        color: _green.withValues(alpha: 0.35),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: _isLoading ? null : _submit,
-                child: Center(
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2.5),
-                        )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.check_circle_rounded,
-                                color: Colors.white, size: 20),
-                            const SizedBox(width: 10),
-                            Text('operator_confirm_submit'.tr(),
-                                style: const TextStyle(
-                                    fontFamily: 'Google Sans',
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white)),
-                          ],
-                        ),
-                ),
-              ),
-            ),
-          ),
-        const SizedBox(height: 10),
-        Center(
-          child: TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('cancel'.tr(),
-                style: const TextStyle(
-                    fontFamily: 'Google Sans',
-                    fontSize: 15,
-                    color: _textSub,
-                    fontWeight: FontWeight.w500)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBanner() {
-    final isError = _errorMsg != null;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isError ? const Color(0xFFFEF2F2) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isError ? const Color(0xFFFCA5A5) : const Color(0xFFA7F3D0),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isError
-                ? Icons.error_outline_rounded
-                : Icons.check_circle_outline_rounded,
-            size: 18,
-            color: isError ? const Color(0xFFDC2626) : const Color(0xFF111827),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _errorMsg ?? _successMsg ?? '',
-              style: TextStyle(
-                fontFamily: 'Google Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color:
-                    isError ? const Color(0xFFDC2626) : const Color(0xFF111827),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required String text,
-    required VoidCallback onTap,
-    required Color color,
-    bool isLoading = false,
-  }) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: isLoading ? const Color(0xFF94A3B8) : color,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: isLoading
-            ? []
-            : [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.35),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: isLoading ? null : onTap,
-          child: Center(
-            child: isLoading
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2.5),
-                  )
-                : Text(
-                    text,
-                    style: const TextStyle(
-                      fontFamily: 'Google Sans',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Small dialog for editing rate per hour
-class _RateDialog extends StatefulWidget {
-  final double initial;
-  const _RateDialog({required this.initial});
-
-  @override
-  State<_RateDialog> createState() => _RateDialogState();
-}
-
-class _RateDialogState extends State<_RateDialog> {
-  late TextEditingController _c;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = TextEditingController(text: widget.initial.toInt().toString());
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text('operator_set_rate_per_hour'.tr(),
-          style: const TextStyle(
-              fontFamily: 'Google Sans', fontWeight: FontWeight.w700)),
-      content: TextField(
-        controller: _c,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: InputDecoration(
-          prefixText: '₹ ',
-          suffixText: '/${'operator_hour'.tr()}',
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF111827), width: 2),
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text('cancel'.tr(),
-              style: const TextStyle(
-                  fontFamily: 'Google Sans', color: Color(0xFF6B7280))),
-        ),
-        TextButton(
-          onPressed: () {
-            final v = double.tryParse(_c.text);
-            if (v != null && v > 0) Navigator.pop(context, v);
-          },
-          child: Text('operator_set'.tr(),
-              style: const TextStyle(
-                  fontFamily: 'Google Sans',
-                  color: Color(0xFF111827),
-                  fontWeight: FontWeight.w700)),
-        ),
-      ],
     );
   }
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/widgets/skeletons/shimmer_grid_skeleton.dart';
@@ -10,6 +9,7 @@ import '../models/crop_problem.dart';
 import '../services/api_service.dart';
 import 'advisory_details.dart';
 import 'crop_stages_screen.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 class CropProblemsScreen extends StatefulWidget {
   final FarmerCrop crop;
@@ -98,11 +98,28 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        leadingWidth: 56,
-        titleSpacing: 4,
-        toolbarHeight: 72,
+        leadingWidth: 72,
+        leading:
+            Center(child: AppTheme.backButton(context, color: Colors.white)),
+        toolbarHeight: 100,
+        centerTitle: false,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF111827), Color(0xFF1F2937)],
+            ),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(32),
+              bottomRight: Radius.circular(32),
+            ),
+          ),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -111,34 +128,28 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
               widget.stage.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
+              style: AppTheme.getTextStyle(
+                context,
                 fontWeight: FontWeight.w700,
-                fontSize: 20,
+                fontSize: 22,
                 color: Colors.white,
                 letterSpacing: -0.5,
               ),
             ),
+            const SizedBox(height: 4),
             Text(
               widget.crop.cropName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
+              style: AppTheme.getTextStyle(
+                context,
                 fontWeight: FontWeight.w500,
                 fontSize: 14,
-                color: Colors.white.withValues(alpha: 0.9),
+                color: Colors.white.withValues(alpha: 0.7),
               ),
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF66BB6A),
-        elevation: 4,
-        shadowColor: const Color(0xFF66BB6A).withValues(alpha: 0.4),
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            bottom: Radius.circular(24),
-          ),
-        ),
-        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Column(
         children: [
@@ -162,35 +173,36 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
 
   Widget _buildEmptyState() {
     return AppEmptyState(
-      icon: Icons.check_circle_outline,
-      iconColor: Colors.green.shade300,
+      icon: Icons.check_circle_outline_rounded,
       title: context.tr('no_problems_found'),
       subtitle: 'Your crop looks healthy at this stage.',
     );
   }
 
   Color _getCategoryColor(String? category) {
-    if (category == null) return Colors.grey;
+    if (category == null) return AppTheme.textHint;
     final cat = category.toLowerCase();
-    if (cat.contains('fung')) return Colors.purple;
-    if (cat.contains('insect') || cat.contains('pest')) return Colors.orange;
-    if (cat.contains('nutrient') || cat.contains('deficiency')) {
-      return Colors.blue;
+    if (cat.contains('fung')) return const Color(0xFF9333EA);
+    if (cat.contains('insect') || cat.contains('pest')) {
+      return const Color(0xFFEA580C);
     }
-    if (cat.contains('weed')) return Colors.brown;
-    if (cat.contains('nematode')) return Colors.teal;
-    if (cat.contains('disease')) return Colors.red;
-    return Colors.grey;
+    if (cat.contains('nutrient') || cat.contains('deficiency')) {
+      return const Color(0xFF2563EB);
+    }
+    if (cat.contains('weed')) return const Color(0xFF78350F);
+    if (cat.contains('nematode')) return const Color(0xFF0D9488);
+    if (cat.contains('disease')) return const Color(0xFFDC2626);
+    return AppTheme.textSecondary;
   }
 
   Widget _buildProblemsGrid() {
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 280,
-        childAspectRatio: 0.7,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
+        childAspectRatio: 0.72,
+        crossAxisSpacing: 20,
+        mainAxisSpacing: 20,
       ),
       itemCount: _problems.length,
       itemBuilder: (ctx, i) => _ProblemCard(
@@ -222,12 +234,13 @@ class _ProblemCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -239,28 +252,28 @@ class _ProblemCard extends StatelessWidget {
               flex: 5,
               child: ClipRRect(
                 borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
+                    const BorderRadius.vertical(top: Radius.circular(24)),
                 child: hasImage
                     ? CachedNetworkImage(
                         imageUrl: problem.imageUrl1!,
                         fit: BoxFit.cover,
                         placeholder: (_, __) => Container(
-                          color: Colors.grey[100],
+                          color: const Color(0xFFF3F4F6),
                           child: const Center(
-                              child:
-                                  Icon(Icons.bug_report, color: Colors.grey)),
+                              child: Icon(Icons.bug_report_rounded,
+                                  color: AppTheme.textHint)),
                         ),
                         errorWidget: (_, __, ___) => Container(
-                          color: Colors.grey[100],
+                          color: const Color(0xFFF3F4F6),
                           child: const Center(
-                              child:
-                                  Icon(Icons.bug_report, color: Colors.grey)),
+                              child: Icon(Icons.bug_report_rounded,
+                                  color: AppTheme.textHint)),
                         ),
                       )
                     : Container(
-                        color: categoryColor.withValues(alpha: 0.1),
+                        color: categoryColor.withValues(alpha: 0.05),
                         child: Center(
-                          child: Icon(Icons.bug_report,
+                          child: Icon(Icons.bug_report_rounded,
                               color: categoryColor, size: 40),
                         ),
                       ),
@@ -270,57 +283,62 @@ class _ProblemCard extends StatelessWidget {
             Expanded(
               flex: 4,
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Category Chip
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: categoryColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(100),
                       ),
                       child: Text(
                         problem.category ?? 'Other',
-                        style: GoogleFonts.poppins(
+                        style: TextStyle(
+                          
                           fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w900,
                           color: categoryColor,
+                          letterSpacing: 0.5,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     // Problem Name
                     Text(
                       problem.name,
-                      style: GoogleFonts.notoSansTelugu(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF111B21),
+                      style: const TextStyle(
+                        
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textPrimary,
+                        letterSpacing: -0.3,
+                        height: 1.2,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const Spacer(),
                     // Interaction hint
-                    Row(
+                    const Row(
                       children: [
                         Text(
                           'View Treatments',
-                          style: GoogleFonts.poppins(
+                          style: TextStyle(
+                            
                             fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF075E54),
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.textPrimary,
                           ),
                         ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.arrow_forward_ios,
-                            size: 10, color: Color(0xFF075E54)),
+                        SizedBox(width: 4),
+                        Icon(Icons.arrow_forward_ios_rounded,
+                            size: 10, color: AppTheme.textPrimary),
                       ],
                     ),
                   ],
@@ -333,3 +351,4 @@ class _ProblemCard extends StatelessWidget {
     );
   }
 }
+

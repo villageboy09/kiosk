@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 class PinInputField extends StatefulWidget {
   final TextEditingController controller;
@@ -22,11 +22,11 @@ class PinInputField extends StatefulWidget {
     this.fieldHeight = 60,
     this.spacing = 8,
     // NEW: Default list of colors for the fill effect
-    this.filledColors = const [Colors.green],
+    this.filledColors = const [AppTheme.textPrimary],
     // NEW: Default colors updated for a light theme
     this.emptyColor = const Color(0xFFF1F1F1),
     this.borderColor = const Color(0xFFD9D9D9),
-    this.activeBorderColor = Colors.green,
+    this.activeBorderColor = AppTheme.textPrimary,
     this.textColor = Colors.black87,
     this.borderRadius = 8.0,
     required bool autofocus,
@@ -102,7 +102,7 @@ class PinInputFieldState extends State<PinInputField> {
                     alignment: Alignment.center,
                     child: Text(
                       '-',
-                      style: GoogleFonts.lexend(
+                      style: TextStyle(
                           color: Colors.grey.shade400,
                           fontSize: 30,
                           fontWeight: FontWeight.w300),
@@ -120,7 +120,7 @@ class PinInputFieldState extends State<PinInputField> {
           const SizedBox(height: 8),
           Text(
             _errorText!,
-            style: GoogleFonts.lexend(
+            style: const TextStyle(
               color: Colors.redAccent,
               fontSize: 13,
             ),
@@ -163,7 +163,7 @@ class PinInputFieldState extends State<PinInputField> {
       child: isFilled
           ? Text(
               '●',
-              style: GoogleFonts.lexend(
+              style: TextStyle(
                 color: widget.textColor,
                 fontSize: 28,
                 fontWeight: FontWeight.w600,

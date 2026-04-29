@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/navigation/app_routes.dart';
@@ -11,7 +10,10 @@ import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/auth/login_screen.dart';
-import 'package:cropsync/auth/operator_login_screen.dart';
+import 'package:cropsync/services/operator_auth_service.dart';
+import 'package:cropsync/screens/operator/operator_dashboard.dart';
+import 'package:cropsync/theme/app_theme.dart';
+import 'package:smart_auth/smart_auth.dart';
 
 class SignupScreen extends StatefulWidget {
   final String? initialPhoneNumber;
@@ -23,15 +25,6 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen>
     with TickerProviderStateMixin {
-  static const Color _pageBackground = Color(0xFFEFF1F4);
-  static const Color _fieldBackground = Color(0xFFF7F7F8);
-  static const Color _fieldBorder = Color(0xFFD9DCE1);
-  static const Color _primaryText = Color(0xFF15171A);
-  static const Color _secondaryText = Color(0xFF6B7280);
-  static const Color _accentText = Color(0xFF1F2937);
-  static const Color _buttonColor = Color(0xFF111111);
-  static const Color _buttonDisabled = Color(0xFFB8BDC7);
-
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
@@ -48,9 +41,16 @@ class _SignupScreenState extends State<SignupScreen>
   String? _errorMessage;
   String? _successMessage;
 
+  bool _isOperator = false;
   bool _otpSent = false;
+  bool _obscurePassword = true;
+
+  final _operatorPhoneController = TextEditingController();
+  final _operatorPasswordController = TextEditingController();
+
   Timer? _errorTimer;
   Timer? _successTimer;
+  final smartAuth = SmartAuth.instance;
 
   static const List<MapEntry<String, String>> _fpoOptions = [
     MapEntry('signup_fpo_chinna_kodur', 'SDP001'),
@@ -105,7 +105,10 @@ class _SignupScreenState extends State<SignupScreen>
     _nameFocusNode.dispose();
     _phoneFocusNode.dispose();
     _fpoDropdownFocusNode.dispose();
+    _operatorPhoneController.dispose();
+    _operatorPasswordController.dispose();
     _entranceController.dispose();
+    smartAuth.removeUserConsentApiListener();
     super.dispose();
   }
 
@@ -119,6 +122,27 @@ class _SignupScreenState extends State<SignupScreen>
     _errorTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _errorMessage = null);
     });
+  }
+
+  void _listenForSms() async {
+    try {
+      final res = await smartAuth.getSmsWithUserConsentApi();
+      if (res.data?.code != null) {
+        if (mounted) {
+          setState(() {
+            _otpController.text = res.data!.code!;
+          });
+          // Auto-submit if the code length is exactly 6
+          if (_otpController.text.length == 6) {
+            FocusScope.of(context).unfocus();
+            HapticFeedback.mediumImpact();
+            _verifyAndRegister();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('SMS Autofill error: $e');
+    }
   }
 
   void _showSuccess(String msg) {
@@ -173,6 +197,7 @@ class _SignupScreenState extends State<SignupScreen>
           Future.delayed(const Duration(milliseconds: 300), () {
             if (mounted) FocusScope.of(context).requestFocus(_otpFocusNode);
           });
+          _listenForSms();
         }
       } else {
         _showError(res['error'] ?? 'signup_unknown_error'.tr());
@@ -229,19 +254,44 @@ class _SignupScreenState extends State<SignupScreen>
     }
   }
 
+  Future<void> _loginOperator() async {
+    final phone = _operatorPhoneController.text.trim();
+    final password = _operatorPasswordController.text;
+
+    if (phone.length < 10) {
+      _showError('operator_login_error_phone'.tr());
+      return;
+    }
+    if (password.isEmpty) {
+      _showError('operator_login_error_password'.tr());
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await OperatorAuthService.login(phone, password);
+      if (!mounted) return;
+      HapticFeedback.heavyImpact();
+      Navigator.pushReplacement(
+        context,
+        AppRoutes.fade(const OperatorDashboard()),
+      );
+    } catch (e) {
+      _showError(e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _pageBackground,
+      backgroundColor: AppTheme.background,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Stack(
           children: [
-            AnimatedPadding(
-              duration: const Duration(milliseconds: 300),
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom * 0.5,
-              ),
-              child: SingleChildScrollView(
+            SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Padding(
                   padding:
@@ -258,15 +308,39 @@ class _SignupScreenState extends State<SignupScreen>
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               AuthLogoHeader(
-                                title: 'signup_title'.tr(),
-                                subtitle: 'signup_subtitle'.tr(),
+                                title: _isOperator
+                                    ? 'operator_login_title'.tr()
+                                    : 'signup_title'.tr(),
+                                subtitle: _isOperator
+                                    ? 'operator_login_subtitle'.tr()
+                                    : 'signup_subtitle'.tr(),
                               ),
+                              const SizedBox(height: 24),
+                              _buildRoleToggle(),
                               const SizedBox(height: 26),
-                              _buildMainCard(),
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 500),
+                                transitionBuilder: (child, animation) {
+                                  return FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: Tween<Offset>(
+                                        begin: const Offset(0.05, 0),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: _isOperator
+                                    ? _buildOperatorCard(
+                                        key: const ValueKey('operator'))
+                                    : _buildMainCard(
+                                        key: const ValueKey('farmer')),
+                              ),
                               const SizedBox(height: 18),
-                              _buildLoginLink(),
+                              if (!_isOperator) _buildLoginLink(),
                               const SizedBox(height: 10),
-                              _buildOperatorLink(),
                               SizedBox(
                                   height:
                                       MediaQuery.of(context).viewInsets.bottom >
@@ -277,7 +351,6 @@ class _SignupScreenState extends State<SignupScreen>
                           ),
                         ),
                       ),
-                    ),
                   ),
                 ),
               ),
@@ -290,32 +363,130 @@ class _SignupScreenState extends State<SignupScreen>
     );
   }
 
-  Widget _buildMainCard() {
+  Widget _buildRoleToggle() {
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE5E7EB),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Stack(
+        children: [
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutBack,
+            alignment:
+                _isOperator ? Alignment.centerRight : Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: 0.5,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(100),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (_isOperator) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _isOperator = false);
+                    }
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Text(
+                      'farmer'.tr(),
+                      style: TextStyle(
+                        
+                        fontSize: 15,
+                        fontWeight:
+                            _isOperator ? FontWeight.w500 : FontWeight.w700,
+                        color: _isOperator
+                            ? AppTheme.textSecondary
+                            : AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (!_isOperator) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _isOperator = true);
+                    }
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Text(
+                      'operator'.tr(),
+                      style: TextStyle(
+                        
+                        fontSize: 15,
+                        fontWeight:
+                            _isOperator ? FontWeight.w700 : FontWeight.w500,
+                        color: _isOperator
+                            ? AppTheme.textPrimary
+                            : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMainCard({required Key key}) {
     return Column(
+      key: key,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildInputField(
+        TextField(
           controller: _nameController,
-          hintText: 'signup_name_hint'.tr(),
-          icon: Icons.person_rounded,
-          keyboardType: TextInputType.name,
-          enabled: !_otpSent,
           focusNode: _nameFocusNode,
-        ),
-        const SizedBox(height: 20),
-        _buildInputField(
-          controller: _phoneController,
-          hintText: 'signup_phone_hint'.tr(),
-          icon: Icons.phone_rounded,
-          keyboardType: TextInputType.phone,
           enabled: !_otpSent,
+          keyboardType: TextInputType.name,
+          decoration: InputDecoration(
+            hintText: 'signup_name_hint'.tr(),
+            prefixIcon: const Icon(Icons.person_rounded),
+          ),
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _phoneController,
           focusNode: _phoneFocusNode,
+          enabled: !_otpSent,
+          keyboardType: TextInputType.phone,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(10),
           ],
+          decoration: InputDecoration(
+            hintText: 'signup_phone_hint'.tr(),
+            prefixIcon: const Icon(Icons.phone_rounded),
+          ),
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         _buildClientCodePicker(),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 400),
@@ -332,9 +503,9 @@ class _SignupScreenState extends State<SignupScreen>
               ? Column(
                   key: const ValueKey('otp_section'),
                   children: [
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 24),
                     _buildOtpInputField(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     Center(child: _buildHintChip()),
                   ],
                 )
@@ -346,87 +517,47 @@ class _SignupScreenState extends State<SignupScreen>
     );
   }
 
-  Widget _buildInputField({
-    required TextEditingController controller,
-    required String hintText,
-    required IconData icon,
-    required TextInputType keyboardType,
-    required bool enabled,
-    List<TextInputFormatter>? inputFormatters,
-    FocusNode? focusNode,
-  }) {
-    return AnimatedBuilder(
-      animation: focusNode ?? const AlwaysStoppedAnimation(0),
-      builder: (context, child) {
-        final isFocused = focusNode?.hasFocus ?? false;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: enabled ? _fieldBackground : const Color(0xFFF1F3F6),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color:
-                  isFocused ? const Color(0xFF1F2430) : const Color(0xFFC7CDD6),
-              width: isFocused ? 1.6 : 1.1,
-            ),
-            boxShadow: isFocused
-                ? [
-                    const BoxShadow(
-                      color: Color(0x10000000),
-                      blurRadius: 4,
-                      offset: Offset(0, 1),
-                    ),
-                  ]
-                : [
-                    const BoxShadow(
-                      color: Color(0x06000000),
-                      blurRadius: 2,
-                      offset: Offset(0, 1),
-                    ),
-                  ],
+  Widget _buildOperatorCard({required Key key}) {
+    return Column(
+      key: key,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _operatorPhoneController,
+          keyboardType: TextInputType.phone,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(10),
+          ],
+          decoration: InputDecoration(
+            hintText: 'operator_phone_hint'.tr(),
+            prefixIcon: const Icon(Icons.phone_rounded),
           ),
-          child: TextField(
-            controller: controller,
-            focusNode: focusNode,
-            enabled: true,
-            readOnly: !enabled,
-            canRequestFocus: enabled,
-            keyboardType: keyboardType,
-            inputFormatters: inputFormatters,
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              color: _primaryText,
-              fontWeight: FontWeight.w600,
-            ),
-            decoration: InputDecoration(
-              hintText: hintText,
-              hintStyle: GoogleFonts.inter(
-                color: _secondaryText,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _operatorPasswordController,
+          obscureText: _obscurePassword,
+          decoration: InputDecoration(
+            hintText: 'operator_password_hint'.tr(),
+            prefixIcon: const Icon(Icons.lock_rounded),
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                color: AppTheme.textHint,
               ),
-              prefixIcon: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.only(left: 16, right: 10),
-                child: Icon(
-                  icon,
-                  color: isFocused
-                      ? _buttonColor
-                      : (enabled
-                          ? const Color(0xFF9AA1AB)
-                          : const Color(0xFFB1B7C1)),
-                  size: 22,
-                ),
-              ),
-              prefixIconConstraints: const BoxConstraints(minWidth: 50),
-              border: InputBorder.none,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 4, vertical: 20),
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
             ),
           ),
-        );
-      },
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 32),
+        _buildSubmitButton(), // Reuse common submit button style
+      ],
     );
   }
 
@@ -442,7 +573,7 @@ class _SignupScreenState extends State<SignupScreen>
           children: [
             LayoutBuilder(
               builder: (context, constraints) {
-                const double boxGap = 6;
+                const double boxGap = 8;
                 final double maxWidth = constraints.maxWidth;
                 final double calculated = (maxWidth - (5 * boxGap)) / 6;
                 final double boxSize = calculated.clamp(44.0, 58.0);
@@ -457,47 +588,39 @@ class _SignupScreenState extends State<SignupScreen>
                     return Padding(
                       padding: EdgeInsets.only(right: index == 5 ? 0 : boxGap),
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
+                        duration: const Duration(milliseconds: 200),
                         curve: Curves.easeOutCubic,
                         width: boxSize,
                         height: boxSize,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: hasChar ? Colors.white : _fieldBackground,
-                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isCurrentFocused
-                                ? _buttonColor
+                                ? AppTheme.textPrimary
                                 : (hasChar
-                                    ? const Color(0xFF4B5563)
-                                    : _fieldBorder),
-                            width: isCurrentFocused ? 2.0 : 1.2,
+                                    ? AppTheme.textSecondary
+                                    : const Color(0xFFE5E7EB)),
+                            width: isCurrentFocused ? 2.0 : 1.5,
                           ),
                           boxShadow: isCurrentFocused
                               ? [
-                                  const BoxShadow(
-                                    color: Color(0x18000000),
-                                    blurRadius: 8,
-                                    offset: Offset(0, 3),
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
                                   ),
                                 ]
                               : null,
                         ),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 130),
-                          transitionBuilder: (child, animation) =>
-                              ScaleTransition(
-                            scale: animation,
-                            child: child,
-                          ),
-                          child: Text(
-                            char,
-                            key: ValueKey('otp_char_$index$char'),
-                            style: GoogleFonts.poppins(
-                              fontSize: boxSize * 0.42,
-                              fontWeight: FontWeight.w700,
-                              color: _primaryText,
-                            ),
+                        child: Text(
+                          char,
+                          style: const TextStyle(
+                            
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
                           ),
                         ),
                       ),
@@ -517,8 +640,7 @@ class _SignupScreenState extends State<SignupScreen>
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
-                  filled: true,
-                  fillColor: Colors.transparent,
+                  filled: false,
                   counterText: '',
                 ),
                 maxLength: 6,
@@ -528,6 +650,7 @@ class _SignupScreenState extends State<SignupScreen>
                     FocusScope.of(context).unfocus();
                     HapticFeedback.mediumImpact();
                   }
+                  setState(() {}); // Refresh boxes
                 },
               ),
             ),
@@ -548,7 +671,7 @@ class _SignupScreenState extends State<SignupScreen>
         return Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -562,28 +685,27 @@ class _SignupScreenState extends State<SignupScreen>
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(Icons.apartment_rounded,
-                          color: Color(0xFF111827), size: 22),
+                          color: AppTheme.textPrimary, size: 24),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 16),
                     Text(
                       'signup_select_fpo'.tr(),
-                      style: GoogleFonts.inter(
-                        fontSize: 18,
+                      style: const TextStyle(
+                        fontSize: 20,
                         fontWeight: FontWeight.w800,
-                        color: _primaryText,
+                        color: AppTheme.textPrimary,
                       ),
                     ),
                   ],
@@ -593,7 +715,7 @@ class _SignupScreenState extends State<SignupScreen>
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
-                  padding: const EdgeInsets.only(bottom: 24),
+                  padding: const EdgeInsets.only(bottom: 32),
                   itemCount: _fpoOptions.length,
                   itemBuilder: (context, index) {
                     final item = _fpoOptions[index];
@@ -609,22 +731,36 @@ class _SignupScreenState extends State<SignupScreen>
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 16),
-                        color: isSelected ? const Color(0xFFF8FAFC) : Colors.transparent,
+                            horizontal: 24, vertical: 20),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFFF9FAFB)
+                              : Colors.transparent,
+                          border: isSelected
+                              ? const Border(
+                                  left: BorderSide(
+                                      color: AppTheme.textPrimary, width: 4))
+                              : null,
+                        ),
                         child: Row(
                           children: [
                             Expanded(
                               child: Text(
                                 item.key.tr(),
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   fontSize: 16,
-                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                  color: isSelected ? _primaryText : _secondaryText,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? AppTheme.textPrimary
+                                      : AppTheme.textSecondary,
                                 ),
                               ),
                             ),
                             if (isSelected)
-                              const Icon(Icons.check_circle_rounded, color: Color(0xFF111827), size: 20),
+                              const Icon(Icons.check_circle_rounded,
+                                  color: AppTheme.textPrimary, size: 22),
                           ],
                         ),
                       ),
@@ -645,44 +781,38 @@ class _SignupScreenState extends State<SignupScreen>
       borderRadius: BorderRadius.circular(16),
       child: Container(
         height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
-          color: _otpSent ? const Color(0xFFF1F3F6) : _fieldBackground,
+          color: _otpSent ? const Color(0xFFF3F4F6) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color(0xFFC7CDD6),
-            width: 1.1,
+            color: const Color(0xFFD9DCE1),
+            width: 1.5,
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Icon(
-                Icons.apartment_rounded,
-                size: 20,
-                color: _otpSent
-                    ? const Color(0xFFB1B7C1)
-                    : const Color(0xFF808894),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  _selectedFpoKey.tr(),
-                  style: GoogleFonts.inter(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: _primaryText,
-                  ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.apartment_rounded,
+              size: 22,
+              color: AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                _selectedFpoKey.tr(),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
                 ),
               ),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: _otpSent
-                    ? const Color(0xFFB1B7C1)
-                    : const Color(0xFF8A909A),
-              ),
-            ],
-          ),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: AppTheme.textHint,
+            ),
+          ],
         ),
       ),
     );
@@ -690,32 +820,26 @@ class _SignupScreenState extends State<SignupScreen>
 
   Widget _buildHintChip() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(
-          color: const Color(0xFFD1D5DB),
-          width: 1,
-        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(
-            Icons.lock_rounded,
+            Icons.info_outline_rounded,
             size: 16,
-            color: Color(0xFF4B5563),
+            color: AppTheme.textSecondary,
           ),
           const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              'signup_otp_hint'.tr(),
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: _accentText,
-                fontWeight: FontWeight.w600,
-              ),
+          Text(
+            'signup_otp_hint'.tr(),
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -725,202 +849,88 @@ class _SignupScreenState extends State<SignupScreen>
 
   Widget _buildSubmitButton() {
     bool canProceed = true;
-    if (_otpSent) {
+    if (_otpSent && !_isOperator) {
       canProceed = _otpController.text.length == 6;
+    } else if (_isOperator) {
+      canProceed = _operatorPhoneController.text.length == 10 &&
+          _operatorPasswordController.text.isNotEmpty;
+    } else {
+      canProceed =
+          _phoneController.text.length == 10 && _nameController.text.isNotEmpty;
     }
 
     final bool isButtonDisabled = _isLoading || !canProceed;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOutCubic,
-      height: 64,
-      decoration: BoxDecoration(
-        color: isButtonDisabled ? _buttonDisabled : _buttonColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: isButtonDisabled
-            ? null
-            : [
-                const BoxShadow(
-                  color: Color(0x33000000),
-                  blurRadius: 16,
-                  offset: Offset(0, 8),
-                ),
-              ],
+    return ElevatedButton(
+      onPressed: isButtonDisabled
+          ? null
+          : () {
+              HapticFeedback.mediumImpact();
+              if (_isOperator) {
+                _loginOperator();
+              } else if (_otpSent) {
+                _verifyAndRegister();
+              } else {
+                _sendOtp();
+              }
+            },
+      style: ElevatedButton.styleFrom(
+        backgroundColor:
+            isButtonDisabled ? const Color(0xFFD1D5DB) : AppTheme.textPrimary,
+        minimumSize: const Size(double.infinity, 64),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          splashColor: Colors.white24,
-          highlightColor: Colors.white10,
-          onTap: isButtonDisabled
-              ? null
-              : () {
-                  HapticFeedback.mediumImpact();
-                  if (_otpSent) {
-                    _verifyAndRegister();
-                  } else {
-                    _sendOtp();
-                  }
-                },
-          child: Center(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: _isLoading
-                  ? const SizedBox(
-                      key: ValueKey('loading'),
-                      width: 26,
-                      height: 26,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 3,
-                      ),
-                    )
-                  : Text(
-                      key: ValueKey(_otpSent ? 'verify' : 'send'),
-                      _otpSent
-                          ? 'signup_confirm_create'.tr()
-                          : 'signup_send_otp'.tr(),
-                      style: GoogleFonts.inter(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
+      child: _isLoading
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                  color: Colors.white, strokeWidth: 3),
+            )
+          : Text(
+              _isOperator
+                  ? 'operator_login_button'.tr()
+                  : (_otpSent
+                      ? 'signup_confirm_create'.tr()
+                      : 'signup_send_otp'.tr()),
             ),
-          ),
-        ),
-      ),
     );
   }
 
   Widget _buildLoginLink() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        splashColor: const Color(0x14000000),
-        highlightColor: const Color(0x08000000),
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.pushReplacement(
-            context,
-            AppRoutes.noAnimation(const LoginScreen()),
-          );
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF5F6F8),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFD8DCE3)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x12000000),
-                blurRadius: 8,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.person_rounded,
-                size: 20,
-                color: Color(0xFF6B7280),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  'signup_already_have_account'.tr(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    color: _accentText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.arrow_forward_rounded,
-                size: 18,
-                color: Color(0xFF6B7280),
-              ),
-            ],
-          ),
+    return InkWell(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.noAnimation(const LoginScreen()),
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
-      ),
-    );
-  }
-
-  Widget _buildOperatorLink() {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        splashColor: const Color(0x14000000),
-        highlightColor: const Color(0x08000000),
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.pushReplacement(
-            context,
-            AppRoutes.noAnimation(const OperatorLoginScreen()),
-          );
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF5F6F8),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: const Color(0xFFD4D8DF),
-              width: 1.2,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.login_rounded,
+                size: 20, color: AppTheme.textSecondary),
+            const SizedBox(width: 8),
+            Text(
+              'signup_already_have_account'.tr(),
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
             ),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x12000000),
-                blurRadius: 8,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: _buttonColor,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.agriculture_rounded,
-                    color: Colors.white, size: 16),
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  'signup_operator_signin'.tr(),
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: _accentText,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
   }
 }
+

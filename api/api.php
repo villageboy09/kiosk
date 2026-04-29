@@ -1533,9 +1533,9 @@ function getOperatorBookings($pdo) {
                 b.notes, b.booking_status, b.operator_notes,
                 b.assignment_status, b.created_at, b.updated_at,
 
-                u.name AS farmer_name,
-                u.phone_number AS farmer_phone,
-                u.village AS farmer_village
+                MAX(u.name) AS farmer_name,
+                MAX(u.phone_number) AS farmer_phone,
+                MAX(u.village) AS farmer_village
 
             FROM chc_bookings b
             LEFT JOIN users u ON b.user_id = u.user_id OR b.user_id = u.phone_number
@@ -1555,7 +1555,7 @@ function getOperatorBookings($pdo) {
             }
         }
 
-        $sql .= " ORDER BY b.created_at DESC";
+        $sql .= " GROUP BY b.id ORDER BY b.created_at DESC";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -1775,21 +1775,15 @@ function completeBookingManual($pdo) {
             ]);
         }
 
-        // Relieve operator from this booking if they were bound to it
-        $stmtOpUpdate = $pdo->prepare("UPDATE chc_operators SET availability = 'Available', current_booking_id = NULL WHERE operator_id = ?");
-        $stmtOpUpdate->execute([$operatorId]);
-
-        // Recalculate jobs_completed
-        $stmtJobs = $pdo->prepare("
-            UPDATE chc_operators o
-            SET o.jobs_completed = (
-                SELECT COUNT(*) FROM chc_bookings 
-                WHERE assigned_operator_id = ? 
-                AND (booking_status = 'Completed' OR assignment_status = 'Completed')
-            )
-            WHERE o.operator_id = ?
+        // Update operator status and increment jobs_completed atomically
+        $stmtOpUpdate = $pdo->prepare("
+            UPDATE chc_operators 
+            SET availability = 'Available', 
+                current_booking_id = NULL,
+                jobs_completed = jobs_completed + 1 
+            WHERE operator_id = ?
         ");
-        $stmtJobs->execute([$operatorId, $operatorId]);
+        $stmtOpUpdate->execute([$operatorId]);
 
         $pdo->commit();
 

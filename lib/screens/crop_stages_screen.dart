@@ -1,13 +1,13 @@
 import 'package:cropsync/models/farmer_crop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/widgets/states/app_empty_state.dart';
 import 'package:cropsync/widgets/skeletons/shimmer_grid_skeleton.dart';
 import '../services/api_service.dart';
 import 'crop_problems_screen.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 class CropStage {
   final int id;
@@ -146,76 +146,134 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
         widget.crop.cropImageUrl!.startsWith('http');
 
     return SliverAppBar(
-      expandedHeight: 220,
+      expandedHeight: 280,
       pinned: true,
-      backgroundColor: const Color(0xFF075E54),
-      leadingWidth: 56,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.white),
-        onPressed: () => Navigator.pop(context),
-        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (hasImage)
-              CachedNetworkImage(
-                imageUrl: widget.crop.cropImageUrl!,
-                fit: BoxFit.cover,
-                color: Colors.black.withValues(alpha: 0.4),
-                colorBlendMode: BlendMode.darken,
-              )
-            else
-              Container(color: const Color(0xFF075E54)),
-            Positioned(
-              bottom: 24,
-              left: 24,
-              right: 24,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.crop.cropName,
-                    style: GoogleFonts.notoSansTelugu(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on,
-                          color: Colors.white70, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        widget.crop.fieldName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          color: Colors.white70,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      const Icon(Icons.calendar_today,
-                          color: Colors.white70, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${widget.crop.daysSinceSowing} ${context.tr('days')}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+      backgroundColor: const Color(0xFF111827),
+      leadingWidth: 72,
+      leading: Center(child: AppTheme.backButton(context, color: Colors.white)),
+      flexibleSpace: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCollapsed = constraints.biggest.height <=
+              MediaQuery.of(context).padding.top + kToolbarHeight + 1;
+          return FlexibleSpaceBar(
+            centerTitle: true,
+            title: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: isCollapsed ? 1.0 : 0.0,
+              child: Text(
+                widget.crop.cropName,
+                style: AppTheme.getTextStyle(
+                  context,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
               ),
             ),
-          ],
-        ),
+            background: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (hasImage)
+                  CachedNetworkImage(
+                    imageUrl: widget.crop.cropImageUrl!,
+                    fit: BoxFit.cover,
+                    color: Colors.black.withValues(alpha: 0.5),
+                    colorBlendMode: BlendMode.darken,
+                  )
+                else
+                  Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF111827), Color(0xFF1F2937)],
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  bottom: 32,
+                  left: 24,
+                  right: 24,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: isCollapsed ? 0.0 : 1.0,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.crop.cropName,
+                          style: AppTheme.getTextStyle(
+                            context,
+                            fontSize: 36,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: -1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.location_on_rounded,
+                                      color: Colors.white, size: 14),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    widget.crop.fieldName,
+                                    style: AppTheme.getTextStyle(
+                                      context,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.calendar_today_rounded,
+                                      color: Colors.white, size: 14),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${widget.crop.daysSinceSowing} days',
+                                    style: AppTheme.getTextStyle(
+                                      context,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -233,28 +291,30 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
 
   Widget _buildEmptyState() {
     return const AppEmptyState(
-      icon: Icons.spa_outlined,
+      icon: Icons.spa_rounded,
       title: 'No stages available',
     );
   }
 
   Widget _buildStagesList() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
             child: Text(
               'Select Stage',
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF111B21),
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
+                letterSpacing: -0.5,
               ),
             ),
           ),
+          const SizedBox(height: 12),
           ..._stages.map((stage) => _StageCard(
                 stage: stage,
                 onTap: () => _openProblemsScreen(stage),
@@ -295,53 +355,38 @@ class _StageCardState extends State<_StageCard> {
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeOutCubic,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 16),
+          margin: const EdgeInsets.only(bottom: 20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(32),
             border: isCurrent
                 ? Border.all(
-                    color: const Color(0xFF66BB6A).withValues(alpha: 0.5),
+                    color: AppTheme.textPrimary.withValues(alpha: 0.1),
                     width: 2)
-                : Border.all(
-                    color: Colors.grey.withValues(alpha: 0.1), width: 1),
+                : Border.all(color: const Color(0xFFE5E7EB), width: 1),
             boxShadow: [
               BoxShadow(
                 color: isCurrent
-                    ? const Color(0xFF66BB6A).withValues(alpha: 0.15)
+                    ? AppTheme.textPrimary.withValues(alpha: 0.08)
                     : Colors.black.withValues(alpha: 0.04),
-                blurRadius: isCurrent ? 16 : 12,
-                offset: const Offset(0, 6),
+                blurRadius: isCurrent ? 24 : 16,
+                offset: const Offset(0, 8),
               ),
             ],
-            gradient: isCurrent
-                ? const LinearGradient(
-                    colors: [Color(0xFFF1F8E9), Colors.white],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
           ),
           child: Row(
             children: [
               // Image Section
               Container(
-                width: 110,
-                height: 110,
-                margin: const EdgeInsets.all(8),
+                width: 100,
+                height: 100,
+                margin: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  color: const Color(0xFFF5F5F5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  borderRadius: BorderRadius.circular(24),
+                  color: const Color(0xFFF3F4F6),
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(24),
                   child: widget.stage.imageUrl != null &&
                           widget.stage.imageUrl!.isNotEmpty
                       ? CachedNetworkImage(
@@ -349,23 +394,23 @@ class _StageCardState extends State<_StageCard> {
                           fit: BoxFit.cover,
                           placeholder: (_, __) => const Center(
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Color(0xFF66BB6A)),
+                                strokeWidth: 2, color: AppTheme.textPrimary),
                           ),
                           errorWidget: (_, __, ___) => const Center(
                             child: Icon(Icons.eco_rounded,
-                                color: Colors.grey, size: 32),
+                                color: AppTheme.textHint, size: 32),
                           ),
                         )
                       : const Center(
                           child: Icon(Icons.eco_rounded,
-                              color: Colors.grey, size: 40),
+                              color: AppTheme.textHint, size: 40),
                         ),
                 ),
               ),
               // Details Section
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 16, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(4, 16, 20, 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -375,11 +420,12 @@ class _StageCardState extends State<_StageCard> {
                           Expanded(
                             child: Text(
                               widget.stage.name,
-                              style: GoogleFonts.poppins(
+                              style: const TextStyle(
                                 fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF1F2937),
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.textPrimary,
                                 height: 1.2,
+                                letterSpacing: -0.4,
                               ),
                             ),
                           ),
@@ -389,22 +435,14 @@ class _StageCardState extends State<_StageCard> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF66BB6A),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF66BB6A)
-                                        .withValues(alpha: 0.3),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
+                                color: AppTheme.textPrimary,
+                                borderRadius: BorderRadius.circular(100),
                               ),
-                              child: Text(
+                              child: const Text(
                                 'Current',
-                                style: GoogleFonts.poppins(
+                                style: TextStyle(
                                   fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w900,
                                   color: Colors.white,
                                   letterSpacing: 0.5,
                                 ),
@@ -417,9 +455,10 @@ class _StageCardState extends State<_StageCard> {
                         const SizedBox(height: 8),
                         Text(
                           widget.stage.description!,
-                          style: GoogleFonts.poppins(
+                          style: const TextStyle(
                             fontSize: 13,
-                            color: const Color(0xFF6B7280),
+                            color: AppTheme.textSecondary,
+                            fontWeight: FontWeight.w600,
                             height: 1.4,
                           ),
                           maxLines: 2,
@@ -432,13 +471,11 @@ class _StageCardState extends State<_StageCard> {
               ),
               // Forward Arrow Indicator
               Padding(
-                padding: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.only(right: 20),
                 child: Icon(
                   Icons.arrow_forward_ios_rounded,
                   size: 16,
-                  color: isCurrent
-                      ? const Color(0xFF66BB6A)
-                      : const Color(0xFFD1D5DB),
+                  color: isCurrent ? AppTheme.textPrimary : AppTheme.textHint,
                 ),
               ),
             ],

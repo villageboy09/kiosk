@@ -6,12 +6,12 @@ import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/welcome_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -105,19 +105,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               Text(
                 context.tr('logout_title'),
-                style: GoogleFonts.poppins(
+                style: const TextStyle(
+                  
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF282C3F),
+                  color: Color(0xFF282C3F),
                 ),
               ),
               const SizedBox(height: 12),
               Text(
                 context.tr('logout_message'),
                 textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
+                style: const TextStyle(
+                  
                   fontSize: 14,
-                  color: const Color(0xFF7E808C),
+                  color: Color(0xFF7E808C),
                 ),
               ),
               const SizedBox(height: 32),
@@ -128,17 +130,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: const BorderSide(color: Color(0xFFE23846)),
+                        side: const BorderSide(color: AppTheme.error),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(100),
                         ),
                       ),
                       child: Text(
                         context.tr('cancel'),
-                        style: GoogleFonts.poppins(
+                        style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFFE23846),
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.error,
                         ),
                       ),
                     ),
@@ -159,17 +161,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xFFE23846),
+                        backgroundColor: AppTheme.error,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(100),
                         ),
                       ),
                       child: Text(
                         context.tr('logout'),
-                        style: GoogleFonts.poppins(
+                        style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w800,
                           color: Colors.white,
                         ),
                       ),
@@ -204,10 +206,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Expanded(
                       child: Text(
                         context.tr('privacy_policy_title'),
-                        style: GoogleFonts.poppins(
+                        style: const TextStyle(
                           fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF282C3F),
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.textPrimary,
+                          letterSpacing: -0.5,
                         ),
                       ),
                     ),
@@ -229,19 +232,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       Text(
                         context.tr('privacy_matters_title'),
-                        style: GoogleFonts.poppins(
+                        style: const TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF282C3F),
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 12),
                       Text(
                         context.tr('privacy_description'),
-                        style: GoogleFonts.poppins(
+                        style: const TextStyle(
                           fontSize: 14,
-                          color: const Color(0xFF7E808C),
-                          height: 1.4,
+                          color: AppTheme.textSecondary,
+                          height: 1.5,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -261,20 +265,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       );
                     },
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: const Color(0xFF60B246),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
                     child: Text(
                       context.tr('view_full_policy'),
-                      style: GoogleFonts.poppins(
+                      style: const TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
@@ -309,10 +304,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Expanded(
                       child: Text(
                         context.tr('contact_us_title'),
-                        style: GoogleFonts.poppins(
+                        style: const TextStyle(
                           fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF282C3F),
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.textPrimary,
+                          letterSpacing: -0.5,
                         ),
                       ),
                     ),
@@ -388,10 +384,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: const Color(0xFF60B246), size: 22),
+            child: Icon(icon, color: AppTheme.textPrimary, size: 22),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -400,18 +395,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   title,
-                  style: GoogleFonts.poppins(
+                  style: const TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF282C3F),
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: GoogleFonts.poppins(
+                  style: const TextStyle(
                     fontSize: 13,
-                    color: const Color(0xFF7E808C),
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -425,100 +421,94 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
-      ),
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8F9FA),
-        body: FutureBuilder<User?>(
-          future: _userFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return _buildShimmerLoading();
-            }
-            if (snapshot.hasError || snapshot.data == null) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline,
-                        size: 64, color: Color(0xFF93959F)),
-                    const SizedBox(height: 16),
-                    Text(
-                      context.tr('error_loading_profile'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        color: const Color(0xFF7E808C),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${snapshot.error ?? "User not found"}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: const Color(0xFF93959F),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            final user = snapshot.data!;
-
-            return Scaffold(
-              body: CustomScrollView(
-                controller: _scrollController,
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  SliverAppBar(
-                    expandedHeight: 280,
-                    pinned: true,
-                    backgroundColor: const Color(0xFF1B5E20),
-                    elevation: 0,
-                    automaticallyImplyLeading: false, // Ensure no back button
-                    title: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 300),
-                      opacity: _showTitle ? 1.0 : 0.0,
-                      child: Text(user.name,
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          )),
-                    ),
-                    centerTitle: false,
-                    flexibleSpace: FlexibleSpaceBar(
-                      background: _buildProfileHeader(user),
-                      collapseMode: CollapseMode.pin,
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      body: FutureBuilder<User?>(
+        future: _userFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return _buildShimmerLoading();
+          }
+          if (snapshot.hasError || snapshot.data == null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline_rounded,
+                      size: 64, color: AppTheme.textHint),
+                  const SizedBox(height: 16),
+                  Text(
+                    context.tr('error_loading_profile'),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textSecondary,
                     ),
                   ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          children: [
-                            _buildPremiumCard(),
-                            const SizedBox(height: 24),
-                            _buildUserDetailsList(user),
-                            const SizedBox(height: 12),
-                            _buildMenuCard(),
-                            const SizedBox(height: 12),
-                            _buildLogoutCard(),
-                            const SizedBox(height: 40),
-                          ],
-                        ),
-                      ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${snapshot.error ?? "User not found"}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textHint,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
             );
-          },
-        ),
+          }
+
+          final user = snapshot.data!;
+
+          return CustomScrollView(
+            controller: _scrollController,
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                expandedHeight: 280,
+                pinned: true,
+                backgroundColor: AppTheme.textPrimary,
+                elevation: 0,
+                automaticallyImplyLeading: false,
+                title: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 300),
+                  opacity: _showTitle ? 1.0 : 0.0,
+                  child: Text(user.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      )),
+                ),
+                centerTitle: true,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: _buildProfileHeader(user),
+                  collapseMode: CollapseMode.pin,
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        _buildPremiumCard(),
+                        const SizedBox(height: 24),
+                        _buildUserDetailsList(user),
+                        const SizedBox(height: 16),
+                        _buildMenuCard(),
+                        const SizedBox(height: 16),
+                        _buildLogoutCard(),
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -528,29 +518,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Background Image
           if (user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty)
             CachedNetworkImage(
               imageUrl: user.profileImageUrl!,
               fit: BoxFit.cover,
-              placeholder: (_, __) => Container(color: const Color(0xFF1B5E20)),
+              placeholder: (_, __) => Container(color: AppTheme.textPrimary),
               errorWidget: (_, __, ___) =>
-                  Container(color: const Color(0xFF1B5E20)),
+                  Container(color: AppTheme.textPrimary),
             )
           else
             Container(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: AppTheme.textPrimary,
               ),
               child: const Center(
-                  child: Icon(Icons.person, size: 80, color: Colors.white24)),
+                  child: Icon(Icons.person_rounded,
+                      size: 80, color: Colors.white12)),
             ),
-
-          // Black Gradient Overlay
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -558,60 +542,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  Colors.black.withValues(alpha: 0.3),
-                  Colors.black.withValues(alpha: 0.8),
+                  Colors.black.withValues(alpha: 0.2),
+                  Colors.black.withValues(alpha: 0.7),
                 ],
                 stops: const [0.4, 0.7, 1.0],
               ),
             ),
           ),
-
-          // Content
           Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
                   user.name,
-                  style: GoogleFonts.poppins(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
+                  style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
                     color: Colors.white,
-                    shadows: [
-                      Shadow(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        offset: const Offset(0, 2),
-                        blurRadius: 4,
+                    letterSpacing: -0.8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(100),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.phone_rounded,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 10),
+                      Text(
+                        user.phoneNumber ?? '',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.phone_outlined,
-                          color: Colors.white, size: 14),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      user.phoneNumber ?? '',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -621,164 +601,133 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildPremiumCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFE8F5E9),
-          width: 1,
-          style: BorderStyle
-              .none, // We want the dashed painter if we had one, but using simple border for now or clean look
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.green.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('CROPSYNC',
-                  style: GoogleFonts.poppins(
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('CROPSYNC',
+                    style: TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF2E7D32) // Green
-                      )),
-              Text(' PLUS',
-                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.textPrimary,
+                      letterSpacing: -0.5,
+                    )),
+                const Text(' PLUS',
+                    style: TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFFFF9800) // Orange
-                      )),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2E7D32),
-                  borderRadius: BorderRadius.circular(4),
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFFFFD700), // Premium Gold
+                      letterSpacing: -0.5,
+                    )),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.textPrimary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('FREE',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900)),
                 ),
-                child: Text('FREE',
-                    style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
+                const Spacer(),
+                const Icon(Icons.stars_rounded,
+                    color: Color(0xFFFFD700), size: 32)
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.tr('expert_advisory_anytime'),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
               ),
-              const Spacer(),
-              const Icon(Icons.emoji_events_rounded,
-                  color: Color(0xFFFFD700), size: 32)
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            context.tr('expert_advisory_anytime'),
-            style: GoogleFonts.poppins(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF3D4152),
             ),
-          ),
-          Text(
-            context.tr('unlimited_crop_support'),
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: const Color(0xFF7E808C),
+            const SizedBox(height: 4),
+            Text(
+              context.tr('unlimited_crop_support'),
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildUserDetailsList(User user) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return Card(
       child: Column(
         children: [
           _buildInfoTile(
-              context.tr('user_id'), user.userId, Icons.badge_outlined),
-          _buildDashedDivider(),
-          _buildInfoTile(context.tr('name'), user.name, Icons.person_outline),
-          _buildDashedDivider(),
+              context.tr('user_id'), user.userId, Icons.badge_rounded),
+          const Divider(indent: 64, endIndent: 20),
+          _buildInfoTile(context.tr('name'), user.name, Icons.person_rounded),
+          const Divider(indent: 64, endIndent: 20),
           _buildInfoTile(context.tr('phone'), user.phoneNumber ?? 'N/A',
-              Icons.phone_outlined),
-          _buildDashedDivider(),
-          _buildInfoTile(
-              context.tr('region'), user.region ?? 'N/A', Icons.map_outlined),
+              Icons.phone_rounded),
+          const Divider(indent: 64, endIndent: 20),
+          _buildInfoTile(context.tr('region'), user.region ?? 'N/A',
+              Icons.location_on_rounded),
           if (user.mandal != null && user.mandal!.isNotEmpty) ...[
-            _buildDashedDivider(),
+            const Divider(indent: 64, endIndent: 20),
             _buildInfoTile(
-                context.tr('mandal'), user.mandal!, Icons.business_outlined),
+                context.tr('mandal'), user.mandal!, Icons.apartment_rounded),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildDashedDivider() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 56, right: 24),
-      child: SizedBox(
-        height: 1,
-        child: CustomPaint(
-          size: const Size(double.infinity, 1),
-          painter: DashedLinePainter(),
-        ),
-      ),
-    );
-  }
-
   Widget _buildInfoTile(String title, String value, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F5E9),
-              borderRadius: BorderRadius.circular(10),
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: const Color(0xFF2E7D32), size: 20),
+            child: Icon(icon, color: AppTheme.textPrimary, size: 22),
           ),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: const Color(0xFF7E808C),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textHint,
+                    letterSpacing: 0.2,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF282C3F),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -806,13 +755,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         children: [
           _buildMenuTile(
-            icon: Icons.privacy_tip_outlined,
+            icon: Icons.privacy_tip_rounded,
             title: context.tr('privacy_policy'),
             onTap: _showPrivacyPolicy,
           ),
           const Divider(height: 1, indent: 56),
           _buildMenuTile(
-            icon: Icons.contact_support_outlined,
+            icon: Icons.contact_support_rounded,
             title: context.tr('contact_us'),
             onTap: _showContactUs,
           ),
@@ -827,13 +776,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required VoidCallback onTap,
   }) {
     return ListTile(
-      leading: Icon(icon, color: const Color(0xFF60B246)),
+      leading: Icon(icon, color: AppTheme.textPrimary),
       title: Text(
         title,
-        style: GoogleFonts.poppins(
+        style: const TextStyle(
+          
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: const Color(0xFF282C3F),
+          color: Color(0xFF282C3F),
         ),
       ),
       trailing: const Icon(Icons.chevron_right, color: Color(0xFF93959F)),
@@ -879,7 +829,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(width: 14),
                 Text(
                   context.tr('logout'),
-                  style: GoogleFonts.poppins(
+                  style: TextStyle(
+                    
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: Colors.red[700],
@@ -1016,11 +967,12 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
       appBar: AppBar(
         title: Text(
           context.tr('privacy_policy'),
-          style: GoogleFonts.poppins(
+          style: const TextStyle(
+            
             fontWeight: FontWeight.w600,
           ),
         ),
-        backgroundColor: const Color(0xFF60B246),
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -1041,7 +993,8 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                 children: [
                   Text(
                     context.tr('webview_not_supported'),
-                    style: GoogleFonts.poppins(fontSize: 16),
+                    style: const TextStyle(
+                         fontSize: 16),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
@@ -1069,3 +1022,4 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
     );
   }
 }
+

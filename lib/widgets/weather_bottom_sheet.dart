@@ -257,19 +257,9 @@ class _WeatherBottomSheetState extends State<WeatherBottomSheet> {
             width: double.infinity,
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4A90D9), Color(0xFF357ABD)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF357ABD).withValues(alpha: 0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+              gradient: AppTheme.headerGradient,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              boxShadow: AppTheme.shadowMd,
             ),
             child: Column(
               children: [
@@ -330,7 +320,7 @@ class _WeatherBottomSheetState extends State<WeatherBottomSheet> {
                 Icons.water_drop_rounded,
                 '${weather.humidity.round()}%',
                 'weather_humidity'.tr(),
-                const Color(0xFF4A90D9),
+                AppTheme.textSecondary,
               )),
               const SizedBox(width: 12),
               Expanded(
@@ -338,7 +328,7 @@ class _WeatherBottomSheetState extends State<WeatherBottomSheet> {
                 Icons.air_rounded,
                 '${weather.windSpeed.round()} km/h',
                 'weather_wind'.tr(),
-                const Color(0xFF00ACC1),
+                AppTheme.textSecondary,
               )),
               const SizedBox(width: 12),
               Expanded(
@@ -346,7 +336,7 @@ class _WeatherBottomSheetState extends State<WeatherBottomSheet> {
                 Icons.umbrella_rounded,
                 '${weather.precipProb.round()}%',
                 'weather_rain'.tr(),
-                const Color(0xFF5C6BC0),
+                AppTheme.textSecondary,
               )),
             ],
           ),
@@ -430,7 +420,7 @@ class _WeatherBottomSheetState extends State<WeatherBottomSheet> {
           Icon(
             _getIcon(hour.icon),
             size: 22,
-            color: isNow ? Colors.white : const Color(0xFF4A90D9),
+            color: isNow ? Colors.white : AppTheme.textPrimary,
           ),
           Text(
             '${hour.temp.round()}°',

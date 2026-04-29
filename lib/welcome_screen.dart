@@ -1,10 +1,13 @@
 import 'dart:async';
 
-import 'package:cropsync/auth/signup_screen.dart';
 import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/operator_auth_service.dart';
+import 'package:cropsync/screens/operator/operator_dashboard.dart';
+import 'package:cropsync/screens/onboarding/language_selection_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cropsync/auth/signup_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -58,26 +61,47 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _redirect() async {
     await Future.delayed(const Duration(seconds: 2));
 
-    // Check if user is logged in using AuthService
-    final isLoggedIn = await AuthService.isLoggedIn();
-    
+    // Check sessions
+    final sessions = await Future.wait([
+      AuthService.isLoggedIn(),
+      OperatorAuthService.isLoggedIn(),
+    ]);
+    final isFarmer = sessions[0];
+    final isOperator = sessions[1];
+
     // Add a small delay for splash screen animation
     await Future.delayed(const Duration(seconds: 1));
 
     if (!mounted) return;
 
-    if (isLoggedIn) {
-      // Load user session before navigating
+    final currentContext = context;
+    if (isOperator) {
+      await OperatorAuthService.loadSession();
+      if (!currentContext.mounted) return;
+      Navigator.of(currentContext).pushReplacement(
+        MaterialPageRoute(builder: (context) => const OperatorDashboard()),
+      );
+    } else if (isFarmer) {
       await AuthService.loadUserSession();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+      if (!currentContext.mounted) return;
+      Navigator.of(currentContext).pushReplacement(
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      final hasSelectedLanguage = prefs.getBool('language_selected') ?? false;
+
+      if (!currentContext.mounted) return;
+      if (hasSelectedLanguage) {
+        Navigator.of(currentContext).pushReplacement(
+          MaterialPageRoute(builder: (context) => const SignupScreen()),
+        );
+      } else {
+        Navigator.of(currentContext).pushReplacement(
+          MaterialPageRoute(
+              builder: (context) => const LanguageSelectionScreen()),
         );
       }
-    } else {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const SignupScreen()),
-      );
     }
   }
 
@@ -110,7 +134,8 @@ class _SplashScreenState extends State<SplashScreen>
                   opacity: _taglineFadeAnimation,
                   child: Text(
                     'splash_tagline'.tr(),
-                    style: GoogleFonts.poppins(
+                    style: const TextStyle(
+                      
                       fontSize: 18.0,
                       color: Colors.black54,
                     ),
@@ -134,7 +159,8 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                   child: Text(
                     "splash_connecting".tr(),
-                    style: GoogleFonts.poppins(
+                    style: TextStyle(
+                      
                       fontSize: 14,
                       color: Colors.grey[600],
                     ),
@@ -148,3 +174,4 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
+

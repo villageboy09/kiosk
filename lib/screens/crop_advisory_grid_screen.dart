@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/widgets/skeletons/shimmer_grid_skeleton.dart';
@@ -10,6 +9,8 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../models/farmer_crop.dart';
 import 'crop_stages_screen.dart';
+import 'package:cropsync/theme/app_theme.dart';
+import 'package:cropsync/services/global_notifiers.dart';
 
 class CropAdvisoryGridScreen extends StatefulWidget {
   const CropAdvisoryGridScreen({super.key});
@@ -23,6 +24,28 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
   List<FarmerCrop> _crops = [];
   String? _errorMessage;
   bool _hasLoadedOnce = false;
+
+  @override
+  void initState() {
+    super.initState();
+    GlobalNotifiers.selectionAdded.addListener(_onSelectionChanged);
+    GlobalNotifiers.selectionDeleted.addListener(_onSelectionChanged);
+    GlobalNotifiers.selectionUpdated.addListener(_onSelectionChanged);
+  }
+
+  void _onSelectionChanged() {
+    if (mounted) {
+      _loadCrops();
+    }
+  }
+
+  @override
+  void dispose() {
+    GlobalNotifiers.selectionAdded.removeListener(_onSelectionChanged);
+    GlobalNotifiers.selectionDeleted.removeListener(_onSelectionChanged);
+    GlobalNotifiers.selectionUpdated.removeListener(_onSelectionChanged);
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -181,43 +204,77 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
         24,
         MediaQuery.of(context).padding.top + 24,
         24,
-        24,
+        32,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFF075E54),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(32),
-          bottomRight: Radius.circular(32),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF111827), Color(0xFF1F2937)],
         ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(40),
+          bottomRight: Radius.circular(40),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 20,
+            offset: Offset(0, 10),
+          )
+        ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.tr('home_feature_advisory_title'),
-                  style: GoogleFonts.poppins(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.tr('home_feature_advisory_title'),
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: -1.2,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  context.tr('advisories_title'),
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.white.withValues(alpha: 0.8),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      context.tr('crop_advisories_label'),
+                      style: AppTheme.getTextStyle(
+                        context,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                    ),
                   ),
+                ],
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
                 ),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: _loadCrops,
-            icon: const Icon(Icons.refresh, color: Colors.white),
+                child: IconButton(
+                  onPressed: _loadCrops,
+                  icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                  tooltip: context.tr('refresh'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -239,7 +296,7 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
 
   Widget _buildEmptyState() {
     return AppEmptyState(
-      icon: Icons.grass_outlined,
+      icon: Icons.grass_rounded,
       title: context.tr('no_fields_yet'),
       subtitle: context.tr('add_first_crop'),
     );
@@ -248,14 +305,14 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
   Widget _buildCropGrid() {
     return RefreshIndicator(
       onRefresh: _loadCrops,
-      color: const Color(0xFF075E54),
+      color: AppTheme.textPrimary,
       child: GridView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: 280,
-          childAspectRatio: 0.8,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
+          childAspectRatio: 0.78,
+          crossAxisSpacing: 20,
+          mainAxisSpacing: 20,
         ),
         itemCount: _crops.length,
         itemBuilder: (ctx, i) => _CropCard(
@@ -284,12 +341,13 @@ class _CropCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -303,46 +361,47 @@ class _CropCard extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(20)),
+                        const BorderRadius.vertical(top: Radius.circular(24)),
                     child: hasImage
                         ? CachedNetworkImage(
                             imageUrl: crop.cropImageUrl!,
                             fit: BoxFit.cover,
                             width: double.infinity,
                             placeholder: (_, __) => Container(
-                              color: Colors.grey[100],
-                              child: Icon(Icons.grass, color: Colors.grey[400]),
+                              color: const Color(0xFFF3F4F6),
+                              child: const Icon(Icons.grass_rounded,
+                                  color: AppTheme.textHint),
                             ),
                             errorWidget: (_, __, ___) => Container(
-                              color: Colors.grey[100],
-                              child: Icon(Icons.grass, color: Colors.grey[400]),
+                              color: const Color(0xFFF3F4F6),
+                              child: const Icon(Icons.grass_rounded,
+                                  color: AppTheme.textHint),
                             ),
                           )
                         : Container(
-                            color:
-                                const Color(0xFF075E54).withValues(alpha: 0.1),
+                            color: AppTheme.textPrimary.withValues(alpha: 0.05),
                             child: const Center(
-                              child: Icon(Icons.grass,
-                                  color: Color(0xFF075E54), size: 40),
+                              child: Icon(Icons.grass_rounded,
+                                  color: AppTheme.textPrimary, size: 40),
                             ),
                           ),
                   ),
                   // Problem Badge
                   if (crop.problemCount > 0)
                     Positioned(
-                      top: 10,
-                      right: 10,
+                      top: 12,
+                      right: 12,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF25D366),
-                          borderRadius: BorderRadius.circular(20),
+                          color: AppTheme.textPrimary,
+                          borderRadius: BorderRadius.circular(100),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
                             ),
                           ],
                         ),
@@ -354,9 +413,9 @@ class _CropCard extends StatelessWidget {
                             const SizedBox(width: 4),
                             Text(
                               '${crop.problemCount}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
                                 color: Colors.white,
                               ),
                             ),
@@ -372,32 +431,34 @@ class _CropCard extends StatelessWidget {
               flex: 4,
               child: Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       crop.cropName,
-                      style: GoogleFonts.notoSansTelugu(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF111B21),
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textPrimary,
+                        letterSpacing: -0.4,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.location_on,
-                            size: 12, color: Colors.grey),
+                        const Icon(Icons.location_on_rounded,
+                            size: 13, color: AppTheme.textHint),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             crop.fieldName,
-                            style: GoogleFonts.poppins(
+                            style: const TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textSecondary,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -408,17 +469,17 @@ class _CropCard extends StatelessWidget {
                     const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                          horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(8),
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(100),
                       ),
                       child: Text(
                         crop.currentStageName ?? context.tr('stage'),
-                        style: GoogleFonts.notoSansTelugu(
+                        style: const TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF2E7D32),
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.textPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

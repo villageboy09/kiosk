@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Centralized design system for CropSync
 /// Provides consistent colors, typography, and spacing across the app
@@ -10,17 +10,21 @@ class AppTheme {
   // ============ COLORS ============
 
   /// Primary brand colors
-  static const Color primary = Color(0xFF2E7D32);
-  static const Color primaryLight = Color(0xFF4CAF50);
-  static const Color primaryDark = Color(0xFF1B5E20);
+  static const Color primary = Color(0xFF111827); // Dark Monochrome
+  static const Color primaryLight = Color(0xFF374151);
+  static const Color primaryDark = Color(0xFF000000);
 
   /// Surface colors
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color background = Color(0xFFF9FAFB); // Slightly cooler, modern grey
+  static const Color background =
+      Color(0xFFF9FAFB); // Slightly cooler, modern grey
+  static const Color bg = background; // Alias for backward compatibility
   static const Color card = Color(0xFFFFFFFF);
 
   /// Text colors
-  static const Color textPrimary = Color(0xFF111827); // Darker, crisper contrast
+  static const Color textPrimary =
+      Color(0xFF111827); // Darker, crisper contrast
+  static const Color text = textPrimary; // Alias for backward compatibility
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color textHint = Color(0xFF9CA3AF);
   static const Color textOnPrimary = Color(0xFFFFFFFF);
@@ -29,7 +33,11 @@ class AppTheme {
   static const Color success = Color(0xFF22C55E);
   static const Color warning = Color(0xFFF59E0B);
   static const Color error = Color(0xFFEF4444);
+  static const Color errorBg = Color(0xFFFEF2F2);
+  static const Color errorText = Color(0xFF991B1B);
   static const Color info = Color(0xFF3B82F6);
+  static const Color slotBooked =
+      Color(0xFF3B82F6); // Using info blue for booked slots
 
   /// Dividers and borders
   static const Color divider = Color(0xFFE5E7EB);
@@ -45,13 +53,13 @@ class AppTheme {
   // ============ GRADIENTS ============
 
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [primary, primaryLight],
+    colors: [Color(0xFF111827), Color(0xFF374151)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient headerGradient = LinearGradient(
-    colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)],
+    colors: [Color(0xFF111827), Color(0xFF1F2937)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -111,22 +119,17 @@ class AppTheme {
         ),
       ];
 
-  // ============ TYPOGRAPHY ============
-  // Using Google Sans as the primary font and Noto Sans Telugu for regional text
-
   /// Headline 1 - Large titles
-  static TextStyle get h1 => const TextStyle(
-        fontFamily: 'Google Sans',
-        fontSize: 32, // larger
-        fontWeight: FontWeight.w800, // bolder
+  static TextStyle get h1 => GoogleFonts.googleSans(
+        fontSize: 32,
+        fontWeight: FontWeight.w700,
         color: textPrimary,
-        height: 1.1, // tighter 
-        letterSpacing: -0.5, // tighter
+        height: 1.1,
+        letterSpacing: -0.5,
       );
 
   /// Headline 2 - Section titles
-  static TextStyle get h2 => const TextStyle(
-        fontFamily: 'Google Sans',
+  static TextStyle get h2 => GoogleFonts.googleSans(
         fontSize: 22,
         fontWeight: FontWeight.w700,
         color: textPrimary,
@@ -135,8 +138,7 @@ class AppTheme {
       );
 
   /// Headline 3 - Card titles
-  static TextStyle get h3 => const TextStyle(
-        fontFamily: 'Google Sans',
+  static TextStyle get h3 => GoogleFonts.googleSans(
         fontSize: 18,
         fontWeight: FontWeight.w700,
         color: textPrimary,
@@ -145,28 +147,25 @@ class AppTheme {
       );
 
   /// Body text
-  static TextStyle get body => const TextStyle(
-        fontFamily: 'Google Sans',
-        fontSize: 16, // slightly larger base
+  static TextStyle get body => GoogleFonts.googleSans(
+        fontSize: 16,
         fontWeight: FontWeight.w400,
-        color: textSecondary, // Subtler default body color
+        color: textSecondary,
         height: 1.6,
         letterSpacing: 0,
       );
 
   /// Body medium
-  static TextStyle get bodyMedium => const TextStyle(
-        fontFamily: 'Google Sans',
+  static TextStyle get bodyMedium => GoogleFonts.googleSans(
         fontSize: 15,
-        fontWeight: FontWeight.w600, // Punchier labels
-        color: textPrimary, // Stronger
+        fontWeight: FontWeight.w600,
+        color: textPrimary,
         height: 1.5,
         letterSpacing: 0,
       );
 
   /// Caption text
-  static TextStyle get caption => const TextStyle(
-        fontFamily: 'Google Sans',
+  static TextStyle get caption => GoogleFonts.googleSans(
         fontSize: 13,
         fontWeight: FontWeight.w500,
         color: textSecondary,
@@ -175,19 +174,17 @@ class AppTheme {
       );
 
   /// Small text
-  static TextStyle get small => const TextStyle(
-        fontFamily: 'Google Sans',
+  static TextStyle get small => GoogleFonts.googleSans(
         fontSize: 12,
-        fontWeight: FontWeight.w600, // Bolder tiny text for legibility
+        fontWeight: FontWeight.w600,
         color: textHint,
         height: 1.4,
         letterSpacing: 0.3,
       );
 
   /// Button text
-  static TextStyle get button => const TextStyle(
-        fontFamily: 'Google Sans',
-        fontSize: 16, // larger button text
+  static TextStyle get button => GoogleFonts.googleSans(
+        fontSize: 16,
         fontWeight: FontWeight.w700,
         color: textOnPrimary,
         height: 1.2,
@@ -195,15 +192,14 @@ class AppTheme {
       );
 
   /// AppBar title
-  static TextStyle get appBarTitle => const TextStyle(
-        fontFamily: 'Google Sans',
+  static TextStyle get appBarTitle => GoogleFonts.googleSans(
         fontSize: 20,
         fontWeight: FontWeight.w700,
-        color: textPrimary, // Changed to dark text
+        color: textPrimary,
         letterSpacing: -0.2,
       );
 
-  /// Telugu text style helper
+  /// Telugu text style helper — uses GoogleFonts.notoSansTelugu directly
   static TextStyle teluguText({
     double fontSize = 14,
     FontWeight fontWeight = FontWeight.w400,
@@ -225,7 +221,10 @@ class AppTheme {
     double? height,
     double? letterSpacing,
   }) {
-    if (EasyLocalization.of(context)?.locale.languageCode == 'te') {
+    final languageCode = EasyLocalization.of(context)?.locale.languageCode;
+    final isTelugu = languageCode == 'te';
+
+    if (isTelugu) {
       return GoogleFonts.notoSansTelugu(
         fontSize: fontSize,
         fontWeight: fontWeight,
@@ -234,8 +233,8 @@ class AppTheme {
         letterSpacing: letterSpacing ?? 0.3,
       );
     }
-    return TextStyle(
-      fontFamily: 'Google Sans',
+
+    return GoogleFonts.googleSans(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color ?? textPrimary,
@@ -249,18 +248,17 @@ class AppTheme {
   static BoxDecoration get cardDecoration => BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(radiusLg),
-        border: Border.all(color: border.withValues(alpha: 0.3)), // Subtle edge
+        border: Border.all(color: border.withValues(alpha: 0.3)),
         boxShadow: [
-           BoxShadow(
-             color: Colors.black.withValues(alpha: 0.02),
-             blurRadius: 10,
-             offset: const Offset(0, 4)
-           )
-        ], // Lighter shadow
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
       );
 
   static BoxDecoration get primaryCardDecoration => BoxDecoration(
-        color: textPrimary, // Dark contrast instead of green gradient
+        color: textPrimary,
         borderRadius: BorderRadius.circular(radiusXl),
         boxShadow: shadowMd,
       );
@@ -268,27 +266,26 @@ class AppTheme {
   // ============ COMMON WIDGETS ============
 
   /// Standard back button for app bars
-  static Widget backButton(BuildContext context) {
+  static Widget backButton(BuildContext context, {Color? color}) {
     return Padding(
       padding: const EdgeInsets.all(8),
       child: Material(
-        color: Colors.transparent, // transparent background
-        shape: const CircleBorder(), // Circular touch effect
+        color: Colors.transparent,
+        shape: const CircleBorder(),
         clipBehavior: Clip.hardEdge,
         child: InkWell(
           onTap: () => Navigator.pop(context),
           borderRadius: BorderRadius.circular(50),
           child: Container(
-             padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.black.withValues(alpha: 0.03), // very subtle backgrround
-              // No border
+              color: (color ?? textPrimary).withValues(alpha: 0.1),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.arrow_back_ios_new,
-              size: 20, // slightly larger
-              color: textPrimary,
+              size: 20,
+              color: color ?? textPrimary,
             ),
           ),
         ),
@@ -296,11 +293,128 @@ class AppTheme {
     );
   }
 
-  /// Get text theme based on locale
-  static TextTheme getTextTheme(String languageCode) {
-    if (languageCode == 'te') {
-      return GoogleFonts.notoSansTeluguTextTheme();
-    }
-    return GoogleFonts.openSansTextTheme(); // Fallback to Open Sans if Google Sans is unavailable via font family
+  /// Modern ThemeData for the entire app
+  static ThemeData lightTheme(BuildContext context) {
+    final languageCode =
+        EasyLocalization.of(context)?.locale.languageCode ?? 'en';
+    final isTelugu = languageCode == 'te';
+
+    // Base text theme driven by Google Fonts
+    final baseTextTheme = isTelugu
+        ? GoogleFonts.notoSansTeluguTextTheme()
+        : GoogleFonts.googleSansTextTheme();
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      primaryColor: primary,
+      scaffoldBackgroundColor: background,
+      textTheme: baseTextTheme.apply(
+        bodyColor: textPrimary,
+        displayColor: textPrimary,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        foregroundColor: textPrimary,
+        elevation: 0,
+        centerTitle: true,
+        scrolledUnderElevation: 0,
+        titleTextStyle: isTelugu
+            ? GoogleFonts.notoSansTelugu(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: textPrimary,
+                letterSpacing: -0.2,
+              )
+            : GoogleFonts.googleSans(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: textPrimary,
+                letterSpacing: -0.2,
+              ),
+        iconTheme: const IconThemeData(color: textPrimary, size: 22),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: textPrimary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(radiusFull)),
+          textStyle: isTelugu
+              ? GoogleFonts.notoSansTelugu(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.1,
+                )
+              : GoogleFonts.googleSans(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.1,
+                ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: textPrimary,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          textStyle: isTelugu
+              ? GoogleFonts.notoSansTelugu(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                )
+              : GoogleFonts.googleSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(radiusFull)),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: surface,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        hintStyle: isTelugu
+            ? GoogleFonts.notoSansTelugu(
+                color: textHint,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              )
+            : GoogleFonts.googleSans(
+                color: textHint,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: border, width: 1.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide:
+              BorderSide(color: border.withValues(alpha: 0.5), width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: textPrimary, width: 2),
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: surface,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusLg),
+          side: BorderSide(color: border.withValues(alpha: 0.3)),
+        ),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: divider,
+        thickness: 1,
+      ),
+    );
   }
 }

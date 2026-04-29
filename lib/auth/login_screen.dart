@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/navigation/app_routes.dart';
@@ -11,6 +10,7 @@ import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/auth/signup_screen.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? initialPhoneNumber;
@@ -106,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.background,
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Stack(
@@ -115,12 +115,10 @@ class _LoginScreenState extends State<LoginScreen> {
               builder: (context, constraints) {
                 return SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 24),
                   child: ConstrainedBox(
                     constraints:
-                        BoxConstraints(minHeight: constraints.maxHeight),
+                        BoxConstraints(minHeight: constraints.maxHeight - 48),
                     child: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 450),
@@ -129,20 +127,19 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const SizedBox(height: 16),
                               AuthLogoHeader(
                                 title: 'login_welcome_back'.tr(),
                                 subtitle: 'enter_field'
                                     .tr(namedArgs: {'field': 'user_id'.tr()}),
                                 textAlign: TextAlign.center,
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 32),
                               _buildSingleInputDisplay(),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
                               _buildHintChip(),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 32),
                               _buildKeypad(),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 32),
                               _buildSignupLink(),
                               const SizedBox(height: 16),
                             ],
@@ -167,14 +164,21 @@ class _LoginScreenState extends State<LoginScreen> {
     return Container(
       constraints: const BoxConstraints(maxWidth: 320),
       width: double.infinity,
-      height: 64,
+      height: 72,
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: hasInput ? const Color(0xFF059669) : const Color(0xFFD1D5DB),
+          color: hasInput ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
           width: 2.0,
         ),
+        boxShadow: hasInput ? [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ] : null,
       ),
       alignment: Alignment.center,
       child: FittedBox(
@@ -182,11 +186,12 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Text(
           displayText,
           maxLines: 1,
-          style: GoogleFonts.poppins(
-            fontSize: hasInput ? 24 : 28,
-            fontWeight: FontWeight.w700,
+          style: TextStyle(
+            
+            fontSize: hasInput ? 26 : 32,
+            fontWeight: FontWeight.w800,
             letterSpacing: hasInput ? 4 : 8,
-            color: hasInput ? const Color(0xFF111827) : const Color(0xFF9CA3AF),
+            color: hasInput ? AppTheme.textPrimary : AppTheme.textHint,
           ),
         ),
       ),
@@ -195,30 +200,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildHintChip() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F8E9),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFFC8E6C9),
-          width: 1,
-        ),
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(100),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(
-            Icons.lock_outline_rounded,
+            Icons.info_outline_rounded,
             size: 16,
-            color: Color(0xFF388E3C),
+            color: AppTheme.textSecondary,
           ),
           const SizedBox(width: 8),
           Text(
             'login_pin_hint'.tr(),
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: const Color(0xFF388E3C),
-              fontWeight: FontWeight.w500,
+            style: const TextStyle(
+              
+              fontSize: 14,
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -233,9 +235,9 @@ class _LoginScreenState extends State<LoginScreen> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         crossAxisCount: 3,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 1.25,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 1.2,
         children: [
           ...List.generate(9, (i) => i + 1)
               .map((number) => _buildKeyButton(number.toString())),
@@ -256,30 +258,34 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!_isLoading) _login();
       },
       onTapCancel: () => setState(() => _pressedButton = null),
-      child: AnimatedScale(
-        scale: isPressed ? 0.95 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF059669),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          alignment: Alignment.center,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2.5,
-                  ),
-                )
-              : const Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 32,
-                  color: Colors.white,
-                ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        decoration: BoxDecoration(
+          color: AppTheme.textPrimary,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isPressed ? null : [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            )
+          ],
         ),
+        alignment: Alignment.center,
+        child: _isLoading
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 3,
+                ),
+              )
+            : const Icon(
+                Icons.arrow_forward_rounded,
+                size: 32,
+                color: Colors.white,
+              ),
       ),
     );
   }
@@ -294,22 +300,23 @@ class _LoginScreenState extends State<LoginScreen> {
       },
       onTapCancel: () => setState(() => _pressedButton = null),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
+        duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
-          color: isPressed ? const Color(0xFFE5E7EB) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: isPressed ? const Color(0xFFF3F4F6) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: const Color(0xFFE5E7EB),
+            color: isPressed ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
             width: 1.5,
           ),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
-          style: GoogleFonts.poppins(
+          style: const TextStyle(
+            
             fontSize: 26,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF1F2937),
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
           ),
         ),
       ),
@@ -326,12 +333,12 @@ class _LoginScreenState extends State<LoginScreen> {
       },
       onTapCancel: () => setState(() => _pressedButton = null),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
+        duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
-          color: isPressed ? const Color(0xFFFEE2E2) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: isPressed ? const Color(0xFFFEF2F2) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: const Color(0xFFFCA5A5),
+            color: isPressed ? const Color(0xFFEF4444) : const Color(0xFFE5E7EB),
             width: 1.5,
           ),
         ),
@@ -346,47 +353,43 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildSignupLink() {
-    return TextButton(
-      onPressed: () {
+    return InkWell(
+      onTap: () {
         Navigator.pushReplacement(
           context,
           AppRoutes.slideFromRight(const SignupScreen()),
         );
       },
-      style: TextButton.styleFrom(
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: const Color(0xFFF0FDF4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.person_add_alt_1_rounded,
-            size: 20,
-            color: Color(0xFF047857),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.person_add_rounded,
+              size: 20,
+              color: AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 10),
+            Text(
               'signup_create_account'.tr(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
+              style: const TextStyle(
+                
                 fontSize: 16,
-                color: const Color(0xFF047857),
-                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-          const SizedBox(width: 4),
-          const Icon(
-            Icons.arrow_forward_rounded,
-            size: 18,
-            color: Color(0xFF047857),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
+

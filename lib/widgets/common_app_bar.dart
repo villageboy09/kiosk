@@ -31,21 +31,22 @@ class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
         style: AppTheme.appBarTitle,
       ),
       centerTitle: centerTitle,
-      backgroundColor: useGradient ? Colors.transparent : AppTheme.primary,
-      elevation: elevation,
-      systemOverlayStyle: SystemUiOverlayStyle.light,
-      flexibleSpace: useGradient
-          ? Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF2E7D32), Color(0xFF43A047)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-            )
-          : null,
-      leading: leading,
+      backgroundColor: AppTheme.surface,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
+      systemOverlayStyle: SystemUiOverlayStyle.dark,
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(
+          color: AppTheme.divider.withValues(alpha: 0.5),
+          height: 1,
+        ),
+      ),
+      leading: leading ?? (showBackButton ? IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppTheme.textPrimary),
+        onPressed: () => Navigator.maybePop(context),
+      ) : null),
       automaticallyImplyLeading: false,
       actions: actions,
     );
@@ -92,7 +93,7 @@ class CommonSliverAppBar extends StatelessWidget {
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF2E7D32), Color(0xFF43A047)],
+                colors: [AppTheme.textPrimary, Color(0xFF1F2937)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),

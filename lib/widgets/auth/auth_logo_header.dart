@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 class AuthLogoHeader extends StatelessWidget {
   final String title;
@@ -37,23 +37,26 @@ class AuthLogoHeader extends StatelessWidget {
           Text(
             title,
             textAlign: textAlign,
-            style: GoogleFonts.poppins(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF111827),
-              letterSpacing: -0.5,
-              height: 1.2,
+            style: const TextStyle(
+              
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+              color: AppTheme.textPrimary,
+              letterSpacing: -1,
+              height: 1.1,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             subtitle,
             textAlign: textAlign,
-            style: GoogleFonts.inter(
+            style: const TextStyle(
+              
               fontSize: 16,
-              color: const Color(0xFF4B5563),
-              fontWeight: FontWeight.w500,
-              height: 1.4,
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w600,
+              height: 1.5,
+              letterSpacing: 0.1,
             ),
           ),
         ],
@@ -61,3 +64,4 @@ class AuthLogoHeader extends StatelessWidget {
     );
   }
 }
+

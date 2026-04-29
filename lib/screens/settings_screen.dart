@@ -5,11 +5,19 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_date_timeline/easy_date_timeline.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/global_notifiers.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:cropsync/theme/app_theme.dart';
+
+String _getDisplayFieldName(String name) {
+  if (name == 'Field 1' || name == 'పొలం 1') return 'field_1'.tr();
+  if (name == 'Field 2' || name == 'పొలం 2') return 'field_2'.tr();
+  if (name == 'Field 3' || name == 'పొలం 3') return 'field_3'.tr();
+  if (name == 'Field 4' || name == 'పొలం 4') return 'field_4'.tr();
+  return name;
+}
 
 // --- DATA MODELS ---
 class Crop {
@@ -123,31 +131,31 @@ class _SettingsScreenState extends State<SettingsScreen>
   Widget _buildSegmentedControl() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      height: 56,
+      height: 52,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.grey[200],
-        borderRadius: BorderRadius.circular(28),
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(100),
       ),
       child: Stack(
         children: [
           AnimatedAlign(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.fastOutSlowIn,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutBack,
             alignment: _selectedIndex == 0
                 ? Alignment.centerLeft
                 : Alignment.centerRight,
             child: FractionallySizedBox(
               widthFactor: 0.5,
               child: Container(
-                margin: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(100),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
@@ -164,21 +172,22 @@ class _SettingsScreenState extends State<SettingsScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.add_circle_outline,
-                            size: 20,
+                        Icon(Icons.add_circle_outline_rounded,
+                            size: 18,
                             color: _selectedIndex == 0
-                                ? const Color(0xFF1B5E20)
-                                : Colors.grey[600]),
+                                ? AppTheme.textPrimary
+                                : AppTheme.textSecondary),
                         const SizedBox(width: 8),
                         Text(
                           'add_crop'.tr(),
-                          style: GoogleFonts.poppins(
+                          style: TextStyle(
+                            fontSize: 14,
                             fontWeight: _selectedIndex == 0
-                                ? FontWeight.w600
-                                : FontWeight.w500,
+                                ? FontWeight.w800
+                                : FontWeight.w600,
                             color: _selectedIndex == 0
-                                ? const Color(0xFF1B5E20)
-                                : Colors.grey[600],
+                                ? AppTheme.textPrimary
+                                : AppTheme.textSecondary,
                           ),
                         ),
                       ],
@@ -194,21 +203,22 @@ class _SettingsScreenState extends State<SettingsScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.grid_view_rounded,
-                            size: 20,
+                        Icon(Icons.auto_awesome_mosaic_rounded,
+                            size: 18,
                             color: _selectedIndex == 1
-                                ? const Color(0xFF1B5E20)
-                                : Colors.grey[600]),
+                                ? AppTheme.textPrimary
+                                : AppTheme.textSecondary),
                         const SizedBox(width: 8),
                         Text(
                           'my_fields'.tr(),
-                          style: GoogleFonts.poppins(
+                          style: TextStyle(
+                            fontSize: 14,
                             fontWeight: _selectedIndex == 1
-                                ? FontWeight.w600
-                                : FontWeight.w500,
+                                ? FontWeight.w800
+                                : FontWeight.w600,
                             color: _selectedIndex == 1
-                                ? const Color(0xFF1B5E20)
-                                : Colors.grey[600],
+                                ? AppTheme.textPrimary
+                                : AppTheme.textSecondary,
                           ),
                         ),
                       ],
@@ -244,6 +254,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
   // Static cache to prevent shimmer on revisit
   static List<Crop>? _cachedCrops;
   static Set<String>? _cachedUsedFields;
+  static String? _cachedUserId;
 
   Crop? _selectedCrop;
   CropVariety? _selectedVariety;
@@ -296,8 +307,13 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       _cachedUsedFields = null;
     }
 
+    final currentUserId = AuthService.currentUser?.userId;
+
     // Check cache first
-    if (!forceRefresh && _cachedCrops != null && _cachedUsedFields != null) {
+    if (!forceRefresh &&
+        _cachedCrops != null &&
+        _cachedUsedFields != null &&
+        _cachedUserId == currentUserId) {
       if (mounted) {
         setState(() {
           _crops = _cachedCrops!;
@@ -334,6 +350,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
         // Update cache
         _cachedCrops = loadedCrops;
         _cachedUsedFields = _usedFieldNames;
+        _cachedUserId = currentUserId;
 
         setState(() {
           _crops = loadedCrops;
@@ -456,8 +473,8 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
   void _showFeedbackSnackbar(String message, bool isSuccess) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(message, style: GoogleFonts.poppins()),
-        backgroundColor: isSuccess ? Colors.green : Colors.red,
+        content: Text(message, style: const TextStyle(fontWeight: FontWeight.w600)),
+        backgroundColor: isSuccess ? AppTheme.textPrimary : AppTheme.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(16)));
@@ -473,22 +490,22 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('crop_label'.tr(), Icons.eco_outlined, 0),
+          _buildSectionHeader('crop_label'.tr(), Icons.eco_rounded, 0),
           const SizedBox(height: 12),
           _buildCropGrid(),
           const SizedBox(height: 24),
           if (_selectedCrop != null) ...[
-            _buildSectionHeader('variety_label'.tr(), Icons.grain_outlined, 1),
+            _buildSectionHeader('variety_label'.tr(), Icons.grain_rounded, 1),
             const SizedBox(height: 12),
             _buildVarietyGrid(),
             const SizedBox(height: 24),
           ],
-          _buildSectionHeader('select_field'.tr(), Icons.landscape_outlined, 2),
+          _buildSectionHeader('select_field'.tr(), Icons.landscape_rounded, 2),
           const SizedBox(height: 12),
           _buildFieldGrid(),
           const SizedBox(height: 24),
           _buildSectionHeader(
-              'sowing_date_label'.tr(), Icons.calendar_today_outlined, 3),
+              'sowing_date_label'.tr(), Icons.calendar_today_rounded, 3),
           const SizedBox(height: 12),
           _buildSimpleDateSelector(),
           const SizedBox(height: 40),
@@ -504,8 +521,8 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 820),
         child: Shimmer.fromColors(
-          baseColor: Colors.grey[300]!,
-          highlightColor: Colors.grey[100]!,
+          baseColor: const Color(0xFFE5E7EB),
+          highlightColor: const Color(0xFFF3F4F6),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -548,14 +565,15 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF1B5E20), size: 20),
+          Icon(icon, color: AppTheme.textPrimary, size: 20),
           const SizedBox(width: 8),
           Text(
             title,
-            style: GoogleFonts.poppins(
+            style: const TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF2D2D2D),
+              fontWeight: FontWeight.w800,
+              color: AppTheme.textPrimary,
+              letterSpacing: -0.2,
             ),
           ),
         ],
@@ -592,7 +610,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       return SizedBox(
         height: 120,
         child: Center(
-          child: Text('no_varieties_found'.tr(), style: GoogleFonts.poppins()),
+          child: Text('no_varieties_found'.tr(), style: const TextStyle(fontWeight: FontWeight.w600)),
         ),
       );
     }
@@ -624,7 +642,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
           final fieldName = _fieldNames[index];
           final isUsed = _usedFieldNames.contains(fieldName);
           return _buildSelectionCard(
-            title: fieldName,
+            title: _getDisplayFieldName(fieldName),
             isSelected: _selectedFieldName == fieldName,
             isSmall: true,
             isDisabled: isUsed,
@@ -662,10 +680,11 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
             child: SizedBox(
               height: 170,
               child: EasyDateTimeLine(
+                key: ValueKey(context.locale.toString()),
                 locale: context.locale.toString(),
                 initialDate: selectedDate,
                 onDateChange: onDateChanged,
-                activeColor: Colors.green[600],
+                activeColor: AppTheme.textPrimary,
                 headerProps: const EasyHeaderProps(
                   monthPickerType: MonthPickerType.switcher,
                 ),
@@ -689,10 +708,10 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       child: Column(
         children: [
           Text('year_label'.tr(),
-              style: GoogleFonts.poppins(
+              style: const TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[600])),
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textHint)),
           const SizedBox(height: 8),
           SizedBox(
             height: 140,
@@ -714,23 +733,23 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color:
-                          isSelected ? Colors.green[100] : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
+                          isSelected ? AppTheme.textPrimary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color:
-                            isSelected ? Colors.green[600]! : Colors.grey[300]!,
-                        width: isSelected ? 2 : 1,
+                            isSelected ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
+                        width: 1.5,
                       ),
                     ),
                     child: Text(
                       '$year',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                            isSelected ? FontWeight.w800 : FontWeight.w600,
                         color:
-                            isSelected ? Colors.green[700] : Colors.grey[600],
+                            isSelected ? Colors.white : AppTheme.textSecondary,
                       ),
                     ),
                   ),
@@ -755,22 +774,15 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
           child: ElevatedButton.icon(
             onPressed: isReady && !_isSaving ? _saveCropSelection : null,
             icon: _isSaving
-                ? Container(
+                ? const SizedBox(
                     width: 24,
                     height: 24,
-                    padding: const EdgeInsets.all(2.0),
-                    child: const CircularProgressIndicator(
+                    child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 3))
-                : const Icon(Icons.save_outlined),
-            label: Text('save_selection'.tr(),
-                style: GoogleFonts.poppins(fontSize: 16)),
+                : const Icon(Icons.save_rounded),
+            label: Text('save_selection'.tr()),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[600],
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: Colors.grey[400],
-              minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+              minimumSize: const Size(double.infinity, 64),
             ),
           ),
         );
@@ -790,25 +802,26 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       width: isSmall ? 80 : 100,
       margin: const EdgeInsets.only(right: 12),
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: isDisabled ? null : onTap,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(50),
+          borderRadius: BorderRadius.circular(100),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 300),
             padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
             decoration: BoxDecoration(
               color: isDisabled
-                  ? Colors.grey[200]
+                  ? const Color(0xFFF3F4F6)
                   : isSelected
-                      ? const Color(0xFF1B5E20).withOpacity(0.05)
+                      ? AppTheme.textPrimary
                       : Colors.white,
-              borderRadius: BorderRadius.circular(50),
+              borderRadius: BorderRadius.circular(100),
               border: Border.all(
                 color: isDisabled
-                    ? Colors.grey[400]!
+                    ? const Color(0xFFE5E7EB)
                     : isSelected
-                        ? const Color(0xFF1B5E20)
-                        : Colors.grey[300]!,
+                        ? AppTheme.textPrimary
+                        : const Color(0xFFE5E7EB),
                 width: isSelected ? 2.0 : 1.0,
               ),
             ),
@@ -843,7 +856,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
                     Icons.landscape,
                     size: 24,
                     color:
-                        isSelected ? const Color(0xFF1B5E20) : Colors.grey[400],
+                        isSelected ? Colors.white : AppTheme.textHint,
                   ),
                   const SizedBox(height: 4),
                 ] else ...[
@@ -862,15 +875,15 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
                       textAlign: TextAlign.center,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
+                      style: TextStyle(
                         fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                            isSelected ? FontWeight.w900 : FontWeight.w700,
                         fontSize: 12,
                         color: isDisabled
-                            ? Colors.grey[600]
+                            ? AppTheme.textHint
                             : isSelected
-                                ? const Color(0xFF1B5E20)
-                                : const Color(0xFF4A4A4A),
+                                ? Colors.white
+                                : AppTheme.textPrimary,
                       ),
                     ),
                   ),
@@ -907,6 +920,15 @@ class _MyFieldsViewState extends State<MyFieldsView>
     super.initState();
     _listEntranceController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 600));
+    GlobalNotifiers.selectionAdded.addListener(_onSelectionChanged);
+    GlobalNotifiers.selectionDeleted.addListener(_onSelectionChanged);
+    GlobalNotifiers.selectionUpdated.addListener(_onSelectionChanged);
+  }
+
+  void _onSelectionChanged() {
+    if (mounted) {
+      _fetchSelections();
+    }
   }
 
   @override
@@ -921,6 +943,9 @@ class _MyFieldsViewState extends State<MyFieldsView>
 
   @override
   void dispose() {
+    GlobalNotifiers.selectionAdded.removeListener(_onSelectionChanged);
+    GlobalNotifiers.selectionDeleted.removeListener(_onSelectionChanged);
+    GlobalNotifiers.selectionUpdated.removeListener(_onSelectionChanged);
     _listEntranceController.dispose();
     super.dispose();
   }
@@ -1048,82 +1073,100 @@ class _MyFieldsViewState extends State<MyFieldsView>
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey[200]!),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2))
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4))
             ]),
         child: Material(
             color: Colors.transparent,
             child: InkWell(
                 onTap: () => _showEditSheet(selection),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(children: [
                       if (selection.cropImageUrl != null &&
                           selection.cropImageUrl!.isNotEmpty)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(28),
-                          child: SizedBox(
-                            width: 56,
-                            height: 56,
-                            child: CachedNetworkImage(
-                              imageUrl: selection.cropImageUrl!,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: Colors.green[50],
-                                alignment: Alignment.center,
-                                child: Icon(Icons.eco,
-                                    color: Colors.green[600], size: 28),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.green[50],
-                                alignment: Alignment.center,
-                                child: Icon(Icons.eco,
-                                    color: Colors.green[600], size: 28),
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFFF3F4F6), width: 1.5),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(28),
+                            child: SizedBox(
+                              width: 56,
+                              height: 56,
+                              child: CachedNetworkImage(
+                                imageUrl: selection.cropImageUrl!,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: const Color(0xFFF3F4F6),
+                                  alignment: Alignment.center,
+                                  child: const Icon(Icons.eco_rounded,
+                                      color: AppTheme.textHint, size: 28),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  color: const Color(0xFFF3F4F6),
+                                  alignment: Alignment.center,
+                                  child: const Icon(Icons.eco_rounded,
+                                      color: AppTheme.textHint, size: 28),
+                                ),
                               ),
                             ),
                           ),
                         )
                       else
-                        CircleAvatar(
+                        const CircleAvatar(
                           radius: 28,
-                          backgroundColor: Colors.green[50],
-                          child: Icon(Icons.eco,
-                              color: Colors.green[600], size: 28),
+                          backgroundColor: Color(0xFFF3F4F6),
+                          child: Icon(Icons.eco_rounded,
+                              color: AppTheme.textHint, size: 28),
                         ),
                       const SizedBox(width: 16),
                       Expanded(
                           child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                            Text(selection.fieldName,
-                                style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.green[800])),
+                            Text(_getDisplayFieldName(selection.fieldName),
+                                style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.textPrimary,
+                                    letterSpacing: -0.3)),
                             const SizedBox(height: 4),
                             Text(
                                 '${selection.cropName} - ${selection.varietyName}',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 14, color: Colors.grey[700])),
-                            const SizedBox(height: 4),
-                            Text(formattedSownDate,
-                                style: GoogleFonts.poppins(
-                                    fontSize: 12, color: Colors.grey[500]))
+                                style: const TextStyle(
+                                    fontSize: 14, 
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textSecondary)),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3F4F6),
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Text(formattedSownDate,
+                                  style: const TextStyle(
+                                      fontSize: 11, 
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.textSecondary)),
+                            )
                           ])),
-                      const Icon(Icons.chevron_right, color: Colors.grey)
+                      const Icon(Icons.chevron_right_rounded, color: AppTheme.textHint)
                     ])))));
   }
 
   Widget _buildSimpleLoadingList() {
     return Shimmer.fromColors(
-        baseColor: Colors.grey[300]!,
-        highlightColor: Colors.grey[100]!,
+        baseColor: const Color(0xFFE5E7EB),
+        highlightColor: const Color(0xFFF3F4F6),
         child: ListView.builder(
             padding: const EdgeInsets.all(20),
             itemCount: 3,
@@ -1132,7 +1175,7 @@ class _MyFieldsViewState extends State<MyFieldsView>
                 height: 100,
                 decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16)))));
+                    borderRadius: BorderRadius.circular(20)))));
   }
 
   Widget _buildSimpleErrorState(String error) {
@@ -1140,23 +1183,23 @@ class _MyFieldsViewState extends State<MyFieldsView>
         child: Padding(
             padding: const EdgeInsets.all(32),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-              const SizedBox(height: 16),
+              const Icon(Icons.error_outline_rounded, size: 64, color: Color(0xFFEF4444)),
+              const SizedBox(height: 20),
               Text('error_loading'.tr(),
-                  style: GoogleFonts.poppins(
-                      fontSize: 18, fontWeight: FontWeight.w600)),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
               Text(error,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(color: Colors.grey[600])),
-              const SizedBox(height: 24),
+                  style: const TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 32),
               ElevatedButton.icon(
                   onPressed: _fetchSelections,
-                  icon: const Icon(Icons.refresh),
-                  label: Text('retry'.tr(), style: GoogleFonts.poppins()),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text('retry'.tr()),
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green[600],
-                      foregroundColor: Colors.white))
+                      backgroundColor: AppTheme.textPrimary,
+                      minimumSize: const Size(200, 56))),
             ])));
   }
 
@@ -1166,19 +1209,19 @@ class _MyFieldsViewState extends State<MyFieldsView>
             padding: const EdgeInsets.all(32),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                      color: Colors.green[50], shape: BoxShape.circle),
-                  child: Icon(Icons.agriculture_outlined,
-                      size: 64, color: Colors.green[400])),
+                  padding: const EdgeInsets.all(32),
+                  decoration: const BoxDecoration(
+                      color: Color(0xFFF3F4F6), shape: BoxShape.circle),
+                  child: const Icon(Icons.agriculture_rounded,
+                      size: 64, color: AppTheme.textHint)),
               const SizedBox(height: 24),
               Text('no_fields_yet'.tr(),
-                  style: GoogleFonts.poppins(
-                      fontSize: 20, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 12),
               Text('add_first_field'.tr(),
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(color: Colors.grey[600]))
+                  style: const TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 15))
             ])));
   }
 }
@@ -1340,17 +1383,17 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
         context: context,
         builder: (context) => AlertDialog(
                 title:
-                    Text('confirm_deletion'.tr(), style: GoogleFonts.poppins()),
+                    Text('confirm_deletion'.tr(), style: const TextStyle(fontWeight: FontWeight.w800)),
                 content:
-                    Text('delete_warning'.tr(), style: GoogleFonts.poppins()),
+                    Text('delete_warning'.tr(), style: const TextStyle(fontWeight: FontWeight.w600)),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(context, false),
-                      child: Text('cancel'.tr(), style: GoogleFonts.poppins())),
+                      child: Text('cancel'.tr())),
                   TextButton(
                       onPressed: () => Navigator.pop(context, true),
-                      style: TextButton.styleFrom(foregroundColor: Colors.red),
-                      child: Text('delete'.tr(), style: GoogleFonts.poppins()))
+                      style: TextButton.styleFrom(foregroundColor: AppTheme.error),
+                      child: Text('delete'.tr(), style: const TextStyle(fontWeight: FontWeight.w900)))
                 ]));
 
     if (!mounted) return;
@@ -1393,85 +1436,82 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
     return FractionallySizedBox(
       heightFactor: 0.9,
       child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         child: Scaffold(
+          backgroundColor: AppTheme.background,
           appBar: AppBar(
             title:
-                Text('edit_field_selection'.tr(), style: GoogleFonts.poppins()),
+                Text('edit_field_selection'.tr(), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
             automaticallyImplyLeading: false,
+            centerTitle: true,
             actions: [
-              IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close))
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded, size: 28)),
+              )
             ],
           ),
           body: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
-                  padding: const EdgeInsets.all(20.0),
+                  padding: const EdgeInsets.all(24.0),
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildSectionHeader(
-                            'crop_label'.tr(), Icons.eco_outlined),
+                            'crop_label'.tr(), Icons.eco_rounded),
                         const SizedBox(height: 12),
                         _buildCropGrid(),
                         const SizedBox(height: 24),
                         if (_selectedCrop != null) ...[
                           _buildSectionHeader(
-                              'variety_label'.tr(), Icons.grain_outlined),
+                              'variety_label'.tr(), Icons.grain_rounded),
                           const SizedBox(height: 12),
                           _buildVarietyGrid(),
                           const SizedBox(height: 24)
                         ],
                         _buildSectionHeader(
-                            'select_field'.tr(), Icons.landscape_outlined),
+                            'select_field'.tr(), Icons.landscape_rounded),
                         const SizedBox(height: 12),
                         _buildFieldGrid(),
                         const SizedBox(height: 24),
                         _buildSectionHeader('sowing_date_label'.tr(),
-                            Icons.calendar_today_outlined),
+                            Icons.calendar_today_rounded),
                         const SizedBox(height: 12),
                         _buildSimpleDateSelector(),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 48),
                         ElevatedButton.icon(
                             onPressed:
                                 _isUpdating ? null : _updateCropSelection,
                             icon: _isUpdating
-                                ? Container(
+                                ? const SizedBox(
                                     width: 24,
                                     height: 24,
-                                    padding: const EdgeInsets.all(2.0),
-                                    child: const CircularProgressIndicator(
+                                    child: CircularProgressIndicator(
                                         color: Colors.white, strokeWidth: 3))
-                                : const Icon(Icons.update),
-                            label: Text('update_selection'.tr(),
-                                style: GoogleFonts.poppins(fontSize: 16)),
+                                : const Icon(Icons.check_circle_rounded),
+                            label: Text('update_selection'.tr()),
                             style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green[600],
-                                foregroundColor: Colors.white,
-                                minimumSize: const Size(double.infinity, 50),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)))),
+                                backgroundColor: AppTheme.textPrimary,
+                                minimumSize: const Size(double.infinity, 64))),
                         const SizedBox(height: 16),
                         OutlinedButton.icon(
                             onPressed: _isDeleting ? null : _deleteSelection,
                             icon: _isDeleting
-                                ? Container(
+                                ? const SizedBox(
                                     width: 24,
                                     height: 24,
-                                    padding: const EdgeInsets.all(2.0),
-                                    child: const CircularProgressIndicator(
-                                        color: Colors.red, strokeWidth: 3))
-                                : const Icon(Icons.delete_outline),
-                            label: Text('delete_entry'.tr(),
-                                style: GoogleFonts.poppins(fontSize: 16)),
+                                    child: CircularProgressIndicator(
+                                        color: Color(0xFFEF4444), strokeWidth: 3))
+                                : const Icon(Icons.delete_outline_rounded),
+                            label: Text('delete_entry'.tr()),
                             style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red,
-                                side: const BorderSide(color: Colors.red),
-                                minimumSize: const Size(double.infinity, 50),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12))))
+                                foregroundColor: AppTheme.error,
+                                side: const BorderSide(color: AppTheme.error, width: 2),
+                                minimumSize: const Size(double.infinity, 64))),
+                        const SizedBox(height: 32),
                       ])),
         ),
       ),
@@ -1481,17 +1521,17 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
   void _showFeedbackSnackbar(String message, bool isSuccess) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(message, style: GoogleFonts.poppins()),
-        backgroundColor: isSuccess ? Colors.green : Colors.red,
+        content: Text(message, style: const TextStyle(fontWeight: FontWeight.w600)),
+        backgroundColor: isSuccess ? AppTheme.textPrimary : AppTheme.error,
         behavior: SnackBarBehavior.floating));
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Row(children: [
-      Icon(icon, color: Colors.green[700], size: 22),
+      Icon(icon, color: AppTheme.textPrimary, size: 20),
       const SizedBox(width: 8),
       Text(title,
-          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600))
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.3))
     ]);
   }
 
@@ -1519,10 +1559,14 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
   Widget _buildVarietyGrid() {
     if (_varieties.isEmpty) {
       return SizedBox(
-          height: 120,
-          child: Center(
-              child: Text("no_varieties_found".tr(),
-                  style: GoogleFonts.poppins())));
+        height: 120,
+        child: Center(
+          child: Text(
+            "no_varieties_found".tr(),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
     }
     return SizedBox(
         height: 120,
@@ -1548,7 +1592,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
             itemBuilder: (context, index) {
               final fieldName = _fieldNames[index];
               return _buildSelectionCard(
-                  title: fieldName,
+                  title: _getDisplayFieldName(fieldName),
                   isSelected: _selectedFieldName == fieldName,
                   isSmall: true,
                   onTap: () => setState(() => _selectedFieldName = fieldName));
@@ -1580,10 +1624,11 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
             child: SizedBox(
               height: 170,
               child: EasyDateTimeLine(
+                key: ValueKey(context.locale.toString()),
                 locale: context.locale.toString(),
                 initialDate: selectedDate,
                 onDateChange: onDateChanged,
-                activeColor: Colors.green[600],
+                activeColor: AppTheme.textPrimary,
                 headerProps: const EasyHeaderProps(
                   monthPickerType: MonthPickerType.switcher,
                 ),
@@ -1607,7 +1652,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
       child: Column(
         children: [
           Text('year_label'.tr(),
-              style: GoogleFonts.poppins(
+              style: AppTheme.getTextStyle(context, 
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: Colors.grey[600])),
@@ -1632,23 +1677,23 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color:
-                          isSelected ? Colors.green[100] : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
+                          isSelected ? AppTheme.textPrimary.withValues(alpha: 0.1) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color:
-                            isSelected ? Colors.green[600]! : Colors.grey[300]!,
+                            isSelected ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
                         width: isSelected ? 2 : 1,
                       ),
                     ),
                     child: Text(
                       '$year',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight:
                             isSelected ? FontWeight.w700 : FontWeight.w500,
                         color:
-                            isSelected ? Colors.green[700] : Colors.grey[600],
+                            isSelected ? AppTheme.textPrimary : AppTheme.textSecondary,
                       ),
                     ),
                   ),
@@ -1721,7 +1766,7 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
                       textAlign: TextAlign.center,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
+                      style: AppTheme.getTextStyle(context, 
                         fontWeight:
                             isSelected ? FontWeight.w700 : FontWeight.w500,
                         fontSize: 11,

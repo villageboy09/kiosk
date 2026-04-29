@@ -3,7 +3,6 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:shimmer/shimmer.dart';
@@ -11,6 +10,7 @@ import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/widgets/safe_network_image.dart';
 import 'product_details_screen.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 // Same Product model as before...
 class Product {
@@ -191,26 +191,17 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
             elevation: 0,
             pinned: true,
             centerTitle: false,
-            leadingWidth: Navigator.canPop(context) ? 56 : 0,
-            leading: Navigator.canPop(context)
-                ? IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    color: const Color(0xFF1A1A1A),
-                    tooltip:
-                        MaterialLocalizations.of(context).backButtonTooltip,
-                    onPressed: () => Navigator.pop(context),
-                  )
-                : null,
+            leading: AppTheme.backButton(context),
             titleSpacing: Navigator.canPop(context) ? 4 : 16,
             title: Text(
               context.tr('crop_sync_market'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.lexend(
+              style: const TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF1A1A1A),
-                letterSpacing: -0.5,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
+                letterSpacing: -0.8,
               ),
             ),
           ),
@@ -243,16 +234,17 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
           Expanded(
             child: TextField(
               controller: _searchController,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
               decoration: InputDecoration(
                 hintText: context.tr('search_products'),
-                hintStyle: GoogleFonts.lexend(color: Colors.grey[500]),
+                hintStyle: const TextStyle(color: AppTheme.textHint, fontWeight: FontWeight.w500),
                 prefixIcon:
-                    Icon(Icons.search, color: Colors.grey[500], size: 20),
+                    const Icon(Icons.search_rounded, color: AppTheme.textPrimary, size: 22),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: const Color(0xFFF3F4F6),
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(100),
                   borderSide: BorderSide.none,
                 ),
               ),
@@ -267,13 +259,13 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
           const SizedBox(width: 12),
           IconButton(
             style: IconButton.styleFrom(
-              backgroundColor: Colors.white,
+              backgroundColor: AppTheme.textPrimary,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(100),
               ),
               fixedSize: const Size(50, 50),
             ),
-            icon: Icon(Icons.tune_rounded, color: Colors.green.shade700),
+            icon: const Icon(Icons.tune_rounded, color: Colors.white),
             onPressed: _showFilterBottomSheet,
           ),
         ],
@@ -311,17 +303,19 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                 padding: const EdgeInsets.only(right: 8),
                 child: ChoiceChip(
                   label: Text(category),
-                  labelStyle: GoogleFonts.lexend(
-                    color: isSelected ? Colors.white : Colors.black87,
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.white : AppTheme.textPrimary,
                     fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                        isSelected ? FontWeight.w900 : FontWeight.w700,
+                    fontSize: 12,
+                    letterSpacing: 0.2,
                   ),
                   selected: isSelected,
-                  selectedColor: Colors.green.shade600,
+                  selectedColor: AppTheme.textPrimary,
                   backgroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: Colors.grey.shade200),
+                    borderRadius: BorderRadius.circular(100),
+                    side: BorderSide(color: isSelected ? AppTheme.textPrimary : const Color(0xFFE5E7EB)),
                   ),
                   onSelected: (selected) {
                     if (selected) {
@@ -422,10 +416,12 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                 children: [
                   Text(
                     product.name,
-                    style: GoogleFonts.lexend(
+                    style: const TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.textPrimary,
+                      height: 1.1,
+                      letterSpacing: -0.3,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -433,16 +429,17 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   const SizedBox(height: 4),
                   Text(
                     context.tr('per_unit', namedArgs: {'unit': product.unit}),
-                    style: GoogleFonts.lexend(
-                        fontSize: 12, color: Colors.grey.shade500),
+                    style: const TextStyle(
+                        fontSize: 12, color: AppTheme.textSecondary, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '₹${product.price}',
-                    style: GoogleFonts.lexend(
+                    style: const TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green.shade800,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.textPrimary,
+                      letterSpacing: -0.5,
                     ),
                   ),
                 ],
@@ -512,8 +509,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   ),
                   const SizedBox(height: 24),
                   Text(context.tr('sort_by'),
-                      style: GoogleFonts.lexend(
-                          fontSize: 20, fontWeight: FontWeight.bold)),
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
                   const SizedBox(height: 12),
                   RadioGroup<String>(
                     groupValue: _sortOrder,
@@ -526,21 +523,21 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                       children: [
                         RadioListTile<String>(
                           title: Text(context.tr('relevance'),
-                              style: GoogleFonts.lexend()),
+                              style: const TextStyle(fontWeight: FontWeight.w700)),
                           value: 'default',
-                          activeColor: Colors.green.shade600,
+                          activeColor: AppTheme.textPrimary,
                         ),
                         RadioListTile<String>(
                           title: Text(context.tr('price_low_to_high'),
-                              style: GoogleFonts.lexend()),
+                              style: const TextStyle(fontWeight: FontWeight.w700)),
                           value: 'price_asc',
-                          activeColor: Colors.green.shade600,
+                          activeColor: AppTheme.textPrimary,
                         ),
                         RadioListTile<String>(
                           title: Text(context.tr('price_high_to_low'),
-                              style: GoogleFonts.lexend()),
+                              style: const TextStyle(fontWeight: FontWeight.w700)),
                           value: 'price_desc',
-                          activeColor: Colors.green.shade600,
+                          activeColor: AppTheme.textPrimary,
                         ),
                       ],
                     ),
@@ -554,16 +551,16 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                         _loadProducts();
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade600,
+                        backgroundColor: AppTheme.textPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(100)),
                       ),
                       child: Text(context.tr('apply_filters'),
-                          style: GoogleFonts.lexend(
+                          style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
-                              fontWeight: FontWeight.bold)),
+                              fontWeight: FontWeight.w900)),
                     ),
                   ),
                 ],

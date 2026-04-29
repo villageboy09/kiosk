@@ -285,6 +285,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
+        CacheService.invalidatePrefix(CacheKeys.userSelections);
         return jsonDecode(response.body);
       }
       return {'success': false, 'error': 'Server error'};
@@ -313,6 +314,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
+        CacheService.invalidatePrefix(CacheKeys.userSelections);
         return jsonDecode(response.body);
       }
       return {'success': false, 'error': 'Server error'};

@@ -2,7 +2,7 @@ name: cropsync
 description: "A new Flutter project."
 publish_to: 'none' 
 
-version: 1.0.12+26
+version: 1.0.12+31
 
 
 environment:
@@ -14,7 +14,7 @@ dependencies:
   
   # Removed supabase_flutter - now using MySQL backend via HTTP API
   flutter_dotenv: ^6.0.0
-  google_fonts: ^6.3.0
+  google_fonts: ^8.1.0
   shimmer: ^3.0.0
   cached_network_image: ^3.4.1
   easy_date_timeline: ^2.0.9
@@ -30,6 +30,8 @@ dependencies:
   # Added for local session management
   shared_preferences: ^2.2.2
   salomon_bottom_bar: ^3.3.2
+  smart_auth: ^3.2.0
+  in_app_update: ^4.2.5
 
 
 dev_dependencies:
@@ -64,11 +66,4 @@ flutter:
     - .env
     - assets/images/
     - assets/translations/
-
-  fonts:
-    - family: Google Sans
-      fonts:
-        - asset: assets/fonts/GoogleSans-Regular.ttf
-    - family: Noto Sans Telugu
-      fonts:
-        - asset: assets/fonts/NotoSansTelugu-Regular.ttf
+    - assets/chc_equipments/

@@ -6,11 +6,11 @@ import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/widgets/safe_network_image.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final Product product;
@@ -56,15 +56,17 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           autoPlay: false,
           looping: false,
           errorBuilder: (context, errorMessage) {
-            return Center(
+            return const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 42),
-                  const SizedBox(height: 8),
+                  Icon(Icons.error_outline, color: Colors.red, size: 42),
+                  SizedBox(height: 8),
                   Text(
                     'Video unavailable',
-                    style: GoogleFonts.lexend(color: Colors.grey[600]),
+                    style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -123,7 +125,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       scale: value,
                       child: const Icon(
                         Icons.check_circle_rounded,
-                        color: Colors.green,
+                        color: AppTheme.textPrimary,
                         size: 80,
                       ),
                     );
@@ -132,19 +134,21 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 const SizedBox(height: 24),
                 Text(
                   context.tr('success'),
-                  style: GoogleFonts.lexend(
+                  style: const TextStyle(
                     fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    fontWeight: FontWeight.w900,
+                    color: AppTheme.textPrimary,
+                    letterSpacing: -0.5,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   message,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.lexend(
+                  style: const TextStyle(
                     fontSize: 16,
-                    color: Colors.grey.shade600,
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -156,18 +160,18 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       Navigator.of(context).pop(); // go back to AgriShop
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade600,
+                      backgroundColor: AppTheme.textPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(100),
                       ),
                     ),
                     child: Text(
                       context.tr('ok'),
-                      style: GoogleFonts.lexend(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                   ),
@@ -250,20 +254,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       stretch: true,
       backgroundColor: Colors.grey.shade100,
       elevation: 0,
-      leading: Center(
-        child: InkWell(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha(180),
-              shape: BoxShape.circle,
-            ),
-            child:
-                const Icon(Icons.arrow_back, color: Colors.black87, size: 20),
-          ),
-        ),
-      ),
+      leading: AppTheme.backButton(context),
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,
@@ -340,18 +331,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           children: [
             Text(
               widget.product.category,
-              style: GoogleFonts.lexend(
+              style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.green.shade700),
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.textPrimary,
+                  letterSpacing: 0.5),
             ),
             const SizedBox(height: 8),
             Text(
               widget.product.name,
-              style: GoogleFonts.lexend(
+              style: const TextStyle(
                 fontSize: 26,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
+                letterSpacing: -1,
               ),
             ),
             const SizedBox(height: 16),
@@ -362,8 +355,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 const SizedBox(width: 8),
                 Text(
                   '${context.tr('sold_by')}: ${widget.product.advertiserName}',
-                  style: GoogleFonts.lexend(
-                      fontSize: 14, color: Colors.grey.shade600),
+                  style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -372,18 +367,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             const SizedBox(height: 16),
             Text(
               context.tr('description'),
-              style: GoogleFonts.lexend(
+              style: const TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               widget.product.description,
-              style: GoogleFonts.lexend(
+              style: const TextStyle(
                 fontSize: 15,
-                color: Colors.grey.shade700,
+                color: AppTheme.textSecondary,
                 height: 1.5,
+                fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 24),
@@ -431,9 +428,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       children: [
                         Text(
                           widget.product.name,
-                          style: GoogleFonts.lexend(
+                          style: const TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.textPrimary,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -441,10 +439,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         const SizedBox(height: 4),
                         Text(
                           '₹${widget.product.price}',
-                          style: GoogleFonts.lexend(
+                          style: const TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green.shade700,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.textPrimary,
                           ),
                         ),
                       ],
@@ -456,9 +454,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             const SizedBox(height: 12),
             Text(
               context.tr('enquiry_description'),
-              style: GoogleFonts.lexend(
+              style: const TextStyle(
                 fontSize: 14,
-                color: Colors.grey.shade600,
+                color: AppTheme.textHint,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 100),
@@ -497,23 +496,26 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(context.tr('price'),
-                            style: GoogleFonts.lexend(
-                                color: Colors.grey.shade500, fontSize: 12)),
+                            style: const TextStyle(
+                                color: AppTheme.textHint,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700)),
                         Text('₹${widget.product.price}',
-                            style: GoogleFonts.lexend(
+                            style: const TextStyle(
                                 fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87)),
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.textPrimary,
+                                letterSpacing: -0.5)),
                       ],
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: _isSubmittingEnquiry ? null : _submitEnquiry,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade600,
+                        backgroundColor: AppTheme.textPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 18),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(100),
                         ),
                       ),
                       child: _isSubmittingEnquiry
@@ -527,10 +529,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             )
                           : Text(
                               context.tr('enquire_now'),
-                              style: GoogleFonts.lexend(
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
                     ),
@@ -544,13 +546,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(context.tr('price'),
-                            style: GoogleFonts.lexend(
-                                color: Colors.grey.shade500, fontSize: 12)),
+                            style: const TextStyle(
+                                color: AppTheme.textHint,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700)),
                         Text('₹${widget.product.price}',
-                            style: GoogleFonts.lexend(
+                            style: const TextStyle(
                                 fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87)),
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.textPrimary,
+                                letterSpacing: -0.5)),
                       ],
                     ),
                     const SizedBox(width: 16),
@@ -558,10 +563,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       child: ElevatedButton(
                         onPressed: _isSubmittingEnquiry ? null : _submitEnquiry,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade600,
+                          backgroundColor: AppTheme.textPrimary,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(100),
                           ),
                         ),
                         child: _isSubmittingEnquiry
@@ -575,10 +580,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               )
                             : Text(
                                 context.tr('enquire_now'),
-                                style: GoogleFonts.lexend(
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w900,
                                 ),
                               ),
                       ),

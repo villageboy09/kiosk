@@ -4,6 +4,7 @@ import 'package:cropsync/welcome_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/services/location_service.dart';
+import 'package:cropsync/services/update_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/widgets/responsive/app_viewport.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -53,7 +54,6 @@ Future<void> main() async {
         Locale('te'),
       ],
       path: 'assets/translations',
-      startLocale: const Locale('te'),
       fallbackLocale: const Locale('te'),
       child: const MyApp(),
     ),
@@ -85,6 +85,9 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _sessionFuture = MyApp.checkSessions();
+    
+    // Check for app updates in the background
+    UpdateService.checkForUpdates();
   }
 
   @override
@@ -93,86 +96,7 @@ class _MyAppState extends State<MyApp> {
       locale: context.locale,
       supportedLocales: context.supportedLocales,
       localizationsDelegates: context.localizationDelegates,
-      theme: ThemeData(
-        // Use locale-aware text theme
-        textTheme: AppTheme.getTextTheme(context.locale.languageCode),
-        primaryColor: AppTheme.primary,
-        scaffoldBackgroundColor: AppTheme.background,
-        appBarTheme: const AppBarTheme(
-          backgroundColor:
-              Colors.transparent, // Modern prominent transparent app bars!
-          foregroundColor: AppTheme.textPrimary,
-          elevation: 0,
-          centerTitle: true,
-          iconTheme: IconThemeData(color: AppTheme.textPrimary),
-          titleTextStyle: TextStyle(
-            fontFamily: 'Google Sans',
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.textPrimary,
-            letterSpacing: -0.2, // Tighter letter spacing
-          ),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.textPrimary, // Stark contrast buttons
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-                horizontal: 24, vertical: 16), // Taller
-            elevation:
-                0, // Flat design with shadows handles separately when needed
-            shape: RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.circular(AppTheme.radiusLg), // Pill/large radius
-            ),
-            textStyle: AppTheme.button
-                .copyWith(fontWeight: FontWeight.w700, fontSize: 15),
-          ),
-        ),
-        textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(
-          foregroundColor: AppTheme.textPrimary,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          textStyle: AppTheme.button.copyWith(fontWeight: FontWeight.w600),
-        )),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: AppTheme.card,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 15),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            borderSide: const BorderSide(color: AppTheme.border, width: 1.5),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            borderSide: BorderSide(
-                color: AppTheme.border.withValues(alpha: 0.5), width: 1.5),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            borderSide: const BorderSide(
-                color: AppTheme.textPrimary, width: 2), // High contrast focus
-          ),
-        ),
-        cardTheme: CardThemeData(
-          color: AppTheme.card,
-          elevation: 0, // rely on containers with custom boxshadow
-          shape: RoundedRectangleBorder(
-            borderRadius:
-                const BorderRadius.all(Radius.circular(AppTheme.radiusLg)),
-            side: BorderSide(
-                color:
-                    AppTheme.border.withValues(alpha: 0.3)), // Subtle outline
-          ),
-          margin: EdgeInsets.zero,
-        ),
-        dividerTheme: const DividerThemeData(
-          color: AppTheme.divider,
-          thickness: 1,
-        ),
-      ),
+      theme: AppTheme.lightTheme(context),
       debugShowCheckedModeBanner: false,
       title: 'CropSync',
       builder: (context, child) {

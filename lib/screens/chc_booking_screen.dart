@@ -2,48 +2,16 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+// google_fonts import removed — AppTheme.getTextStyle() handles font selection
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import 'package:cropsync/theme/app_theme.dart';
 
 // ============================================================================
 // DESIGN SYSTEM
 // ============================================================================
-class CHCTheme {
-  static const primary = Color(0xFF00A699);
-  static const primaryDark = Color(0xFF008C81);
-  static const accent = Color(0xFFFF385C);
-  static const bg = Color(0xFFF5F7FA);
-  static const surface = Color(0xFFFFFFFF);
-  static const text = Color(0xFF1A1A1A);
-  static const textSecondary = Color(0xFF6B7280);
-  static const border = Color(0xFFE0E0E0);
-  static const warning = Color(0xFF856404);
-  static const warningBg = Color(0xFFFFF3CD);
-  static const errorBg = Color(0xFFFFEBEE);
-  static const errorText = Color(0xFFC62828);
-  static const memberBadge = Color(0xFFFFD700);
-  static const slotBooked = Color(0xFFFFA000);
-
-  // Responsive breakpoints
-  static const double mobileBreakpoint = 600;
-  static const double tabletBreakpoint = 900;
-
-  // Spacing
-  static const double spacingXs = 4;
-  static const double spacingSm = 8;
-  static const double spacingMd = 16;
-  static const double spacingLg = 24;
-  static const double spacingXl = 32;
-
-  // Border radius
-  static const double radiusSm = 8;
-  static const double radiusMd = 12;
-  static const double radiusLg = 16;
-  static const double radiusXl = 24;
-}
 
 // ============================================================================
 // EQUIPMENT MODEL
@@ -157,7 +125,7 @@ class CHCBookingState {
   bool get isValid {
     if (equipment == null) return false;
     if (serviceDate == null) return false;
-    if (equipment!.requiresCropSelection && crop == null) return false;
+    if (crop == null) return false;
     if (acres <= 0) return false;
     return true;
   }
@@ -315,8 +283,10 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
   }
 
   void _changeAcres(double delta) {
-    final newValue = _state.acres + delta;
-    if (newValue >= 0.5 && newValue <= 100) {
+    // Round to nearest 0.25 to avoid floating point drift
+    final raw = _state.acres + delta;
+    final newValue = (raw * 4).round() / 4.0;
+    if (newValue >= 0.25 && newValue <= 100) {
       HapticFeedback.lightImpact();
       setState(() => _state = _state.copyWith(acres: newValue));
     }
@@ -429,11 +399,10 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: CHCTheme.errorText,
+        backgroundColor: AppTheme.error,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(CHCTheme.radiusMd)),
-        margin: const EdgeInsets.all(CHCTheme.spacingMd),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        margin: const EdgeInsets.all(24),
       ),
     );
   }
@@ -441,17 +410,14 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(
-        backgroundColor: CHCTheme.bg,
-        body: _buildSkeletonLoading(),
-      );
+      return const _CHCScreenSkeleton();
     }
 
     return Scaffold(
-      backgroundColor: CHCTheme.bg,
+      backgroundColor: AppTheme.background,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= CHCTheme.mobileBreakpoint;
+          final isWide = constraints.maxWidth >= 600;
           return isWide ? _buildWideLayout(constraints) : _buildNarrowLayout();
         },
       ),
@@ -474,12 +440,10 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
                       currentUser: currentUser,
                       onBookingsPressed: _showBookingsBottomSheet)),
               _buildEquipmentSection(locale),
-              if (_state.equipment?.requiresCropSelection == true)
-                _buildCropSection(),
+              _buildCropSection(),
               _buildAcresSection(),
               _buildCalendarSection(),
-              const SliverPadding(
-                  padding: EdgeInsets.only(bottom: CHCTheme.spacingMd)),
+              const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
             ],
           ),
         ),
@@ -510,12 +474,10 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
                       currentUser: currentUser,
                       onBookingsPressed: _showBookingsBottomSheet)),
               _buildEquipmentSection(locale),
-              if (_state.equipment?.requiresCropSelection == true)
-                _buildCropSection(),
+              _buildCropSection(),
               _buildAcresSection(),
               _buildCalendarSection(),
-              const SliverPadding(
-                  padding: EdgeInsets.only(bottom: CHCTheme.spacingXl)),
+              const SliverPadding(padding: EdgeInsets.only(bottom: 40)),
             ],
           ),
         ),
@@ -523,9 +485,9 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
         Container(
           width: 360,
           decoration: BoxDecoration(
-            color: CHCTheme.surface,
+            color: AppTheme.surface,
             border: Border(
-                left: BorderSide(color: CHCTheme.border.withOpacity(0.5))),
+                left: BorderSide(color: AppTheme.border.withOpacity(0.5))),
           ),
           child: _CHCSummaryPanel(
             state: _state,
@@ -540,10 +502,10 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
   // ==================== SECTION BUILDERS ====================
   SliverPadding _buildEquipmentSection(String locale) {
     return SliverPadding(
-      padding: const EdgeInsets.all(CHCTheme.spacingMd),
+      padding: const EdgeInsets.all(24),
       sliver: SliverToBoxAdapter(
         child: _CHCCard(
-          title: 'యంత్రాన్ని ఎంచుకోండి (Select Equipment)',
+          title: context.tr('chc_select_equipment'),
           icon: Icons.grid_view_rounded,
           child: _CHCEquipmentGrid(
             equipments: _equipments,
@@ -559,11 +521,11 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
 
   SliverPadding _buildCropSection() {
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: CHCTheme.spacingMd),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       sliver: SliverToBoxAdapter(
         child: _CHCCard(
-          title: 'పంట రకం (Select Crop)',
-          icon: Icons.grass,
+          title: context.tr('chc_select_crop'),
+          icon: Icons.grass_rounded,
           child: _CHCCropSelector(
             crops: _crops,
             selected: _state.crop,
@@ -576,11 +538,11 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
 
   SliverPadding _buildAcresSection() {
     return SliverPadding(
-      padding: const EdgeInsets.all(CHCTheme.spacingMd),
+      padding: const EdgeInsets.all(24),
       sliver: SliverToBoxAdapter(
         child: _CHCCard(
-          title: 'పొలం విస్తీర్ణం (Land Size)',
-          icon: Icons.straighten,
+          title: context.tr('chc_land_size'),
+          icon: Icons.straighten_rounded,
           child: _CHCAcresCounter(
             acres: _state.acres,
             equipment: _state.equipment,
@@ -593,11 +555,11 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
 
   SliverPadding _buildCalendarSection() {
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: CHCTheme.spacingMd),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       sliver: SliverToBoxAdapter(
         child: _CHCCard(
-          title: 'తేదీని ఎంచుకోండి (Select Date)',
-          icon: Icons.calendar_today,
+          title: context.tr('chc_select_date'),
+          icon: Icons.calendar_today_rounded,
           child: _CHCCalendar(
             calendarMonth: _calendarMonth,
             serviceDate: _state.serviceDate,
@@ -612,57 +574,185 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
   }
 
   // ==================== SKELETON LOADING ====================
-  Widget _buildSkeletonLoading() {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(CHCTheme.spacingMd),
+}
+
+// ============================================================================
+// SHIMMER LOADING WIDGET
+// ============================================================================
+class _CHCScreenSkeleton extends StatelessWidget {
+  const _CHCScreenSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      body: SingleChildScrollView(
         child: Column(
+          children: [
+            // 1. Header Skeleton — compact single row
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                12,
+                MediaQuery.of(context).padding.top + 8,
+                12,
+                12,
+              ),
+              decoration: const BoxDecoration(
+                color: Color(0xFF111827),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
+                ),
+              ),
+              child: const Row(
+                children: [
+                  // Back button placeholder
+                  _ShimmerBox(
+                      width: 36, height: 36, borderRadius: 18, isDark: true),
+                  SizedBox(width: 10),
+                  // Avatar
+                  _ShimmerBox(
+                      width: 34, height: 34, borderRadius: 17, isDark: true),
+                  SizedBox(width: 10),
+                  // Name + village
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ShimmerBox(
+                            width: 130,
+                            height: 14,
+                            borderRadius: 4,
+                            isDark: true),
+                        SizedBox(height: 6),
+                        _ShimmerBox(
+                            width: 80,
+                            height: 11,
+                            borderRadius: 4,
+                            isDark: true),
+                      ],
+                    ),
+                  ),
+                  // Member badge + bookings button
+                  _ShimmerBox(
+                      width: 72, height: 28, borderRadius: 14, isDark: true),
+                  SizedBox(width: 8),
+                  _ShimmerBox(
+                      width: 90, height: 32, borderRadius: 12, isDark: true),
+                ],
+              ),
+            ),
+
+            // 2. Equipment Grid Skeleton
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        _ShimmerBox(width: 24, height: 24, borderRadius: 6),
+                        SizedBox(width: 12),
+                        _ShimmerBox(width: 140, height: 18, borderRadius: 4),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 16,
+                        crossAxisSpacing: 16,
+                        childAspectRatio: 0.82,
+                      ),
+                      itemCount: 4,
+                      // Dark card skeleton matching new full-bleed design
+                      itemBuilder: (_, __) => ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // Dark background
+                            Container(color: const Color(0xFF1F2937)),
+                            // Shimmer overlay covering the whole card
+                            const _ShimmerBox(
+                                width: double.infinity,
+                                height: double.infinity,
+                                borderRadius: 0,
+                                isDark: true),
+                            // Bottom label strip placeholder
+                            const Positioned(
+                              left: 10,
+                              right: 10,
+                              bottom: 10,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _ShimmerBox(
+                                      width: 80,
+                                      height: 12,
+                                      borderRadius: 4,
+                                      isDark: true),
+                                  SizedBox(height: 6),
+                                  _ShimmerBox(
+                                      width: 52,
+                                      height: 22,
+                                      borderRadius: 11,
+                                      isDark: true),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // 3. Section Skeletons
+            _buildSectionSkeleton(),
+            _buildSectionSkeleton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionSkeleton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header skeleton
-            const _ShimmerBox(
-                width: double.infinity,
-                height: 120,
-                borderRadius: CHCTheme.radiusXl),
-            const SizedBox(height: CHCTheme.spacingLg),
-            // Equipment section skeleton
-            const _ShimmerBox(
-                width: 200, height: 20, borderRadius: CHCTheme.radiusSm),
-            const SizedBox(height: CHCTheme.spacingMd),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: CHCTheme.spacingMd,
-                crossAxisSpacing: CHCTheme.spacingMd,
-                childAspectRatio: 0.85,
-              ),
-              itemCount: 4,
-              itemBuilder: (_, __) => const _ShimmerBox(
-                width: double.infinity,
-                height: double.infinity,
-                borderRadius: CHCTheme.radiusLg,
-              ),
+            Row(
+              children: [
+                _ShimmerBox(width: 24, height: 24, borderRadius: 6),
+                SizedBox(width: 12),
+                _ShimmerBox(width: 120, height: 18, borderRadius: 4),
+              ],
             ),
-            const SizedBox(height: CHCTheme.spacingLg),
-            // Acres section skeleton
-            const _ShimmerBox(
-                width: 180, height: 20, borderRadius: CHCTheme.radiusSm),
-            const SizedBox(height: CHCTheme.spacingMd),
-            const Center(
-              child: _ShimmerBox(
-                  width: 200, height: 60, borderRadius: CHCTheme.radiusMd),
-            ),
-            const SizedBox(height: CHCTheme.spacingLg),
-            // Calendar skeleton
-            const _ShimmerBox(
-                width: 150, height: 20, borderRadius: CHCTheme.radiusSm),
-            const SizedBox(height: CHCTheme.spacingMd),
-            const _ShimmerBox(
-                width: double.infinity,
-                height: 250,
-                borderRadius: CHCTheme.radiusMd),
+            SizedBox(height: 24),
+            _ShimmerBox(width: double.infinity, height: 100, borderRadius: 16),
           ],
         ),
       ),
@@ -670,18 +760,17 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
   }
 }
 
-// ============================================================================
-// SHIMMER LOADING WIDGET
-// ============================================================================
 class _ShimmerBox extends StatefulWidget {
   final double width;
   final double height;
   final double borderRadius;
+  final bool isDark;
 
   const _ShimmerBox({
     required this.width,
     required this.height,
     this.borderRadius = 8,
+    this.isDark = false,
   });
 
   @override
@@ -713,6 +802,18 @@ class _ShimmerBoxState extends State<_ShimmerBox>
 
   @override
   Widget build(BuildContext context) {
+    final colors = widget.isDark
+        ? [
+            const Color(0xFF1F2937),
+            const Color(0xFF374151),
+            const Color(0xFF1F2937),
+          ]
+        : [
+            const Color(0xFFE8E8E8),
+            const Color(0xFFF5F5F5),
+            const Color(0xFFE8E8E8),
+          ];
+
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
@@ -724,11 +825,7 @@ class _ShimmerBoxState extends State<_ShimmerBox>
             gradient: LinearGradient(
               begin: Alignment(_animation.value - 1, 0),
               end: Alignment(_animation.value + 1, 0),
-              colors: const [
-                Color(0xFFE8E8E8),
-                Color(0xFFF5F5F5),
-                Color(0xFFE8E8E8),
-              ],
+              colors: colors,
               stops: const [0.0, 0.5, 1.0],
             ),
           ),
@@ -748,87 +845,141 @@ class _CHCHeader extends StatelessWidget {
   final dynamic currentUser;
   final VoidCallback? onBookingsPressed;
 
-  const _CHCHeader(
-      {required this.state, required this.currentUser, this.onBookingsPressed});
+  const _CHCHeader({
+    required this.state,
+    required this.currentUser,
+    this.onBookingsPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final name = currentUser?.name ?? 'Guest';
+    final initials = name.isNotEmpty ? name[0].toUpperCase() : 'G';
+    final village = currentUser?.village as String?;
+
     return Container(
       padding: EdgeInsets.fromLTRB(
-        CHCTheme.spacingLg,
-        MediaQuery.of(context).padding.top + CHCTheme.spacingMd,
-        CHCTheme.spacingLg,
-        CHCTheme.spacingLg,
+        12,
+        MediaQuery.of(context).padding.top + 8,
+        12,
+        12,
       ),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [CHCTheme.primary, CHCTheme.primaryDark],
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          colors: [Color(0xFF1F2937), Color(0xFF111827)],
         ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(CHCTheme.radiusXl),
-          bottomRight: Radius.circular(CHCTheme.radiusXl),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              const Icon(Icons.agriculture, color: Colors.white, size: 28),
-              const SizedBox(width: CHCTheme.spacingSm),
-              Expanded(
-                child: Text(
-                  'క్రాప్సింక్ CHC',
-                  style: GoogleFonts.notoSansTelugu(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+          // Back button
+          AppTheme.backButton(context, color: Colors.white),
+          // Avatar
+          Container(
+            width: 34,
+            height: 34,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4B5563), Color(0xFF374151)],
+              ),
+              shape: BoxShape.circle,
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.25), width: 1.5),
+            ),
+            child: Center(
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          // Name + village
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  style: AppTheme.getTextStyle(
+                    context,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                     color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (village != null && village.isNotEmpty)
+                  Text(
+                    village,
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 11,
+                      color: Colors.white60,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+          // Member badge
+          _MemberBadge(isMember: state.isMember),
+          const SizedBox(width: 8),
+          // My Bookings button — icon only on tight screens
+          if (onBookingsPressed != null)
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onBookingsPressed,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.receipt_long_rounded,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 5),
+                      Text(
+                        context.tr('chc_my_bookings'),
+                        style: AppTheme.getTextStyle(
+                          context,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              if (onBookingsPressed != null)
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: onBookingsPressed,
-                    borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.receipt_long,
-                              color: Colors.white, size: 20),
-                          const SizedBox(width: 4),
-                          Text(
-                            context.tr('chc_my_bookings'),
-                            style: GoogleFonts.notoSansTelugu(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: CHCTheme.spacingSm),
-          Text(
-            'రైతు: ${currentUser?.name ?? 'Guest'} (${currentUser?.village ?? ''})',
-            style:
-                GoogleFonts.notoSansTelugu(fontSize: 14, color: Colors.white70),
-          ),
-          const SizedBox(height: CHCTheme.spacingSm),
-          _MemberBadge(isMember: state.isMember),
+            ),
         ],
       ),
     );
@@ -842,21 +993,26 @@ class _MemberBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white24,
-        borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (isMember)
-            const Icon(Icons.star, color: CHCTheme.memberBadge, size: 16),
-          if (isMember) const SizedBox(width: 4),
+            const Icon(Icons.stars_rounded, color: Color(0xFFFFD700), size: 16),
+          if (isMember) const SizedBox(width: 6),
           Text(
-            isMember ? 'సభ్యులు (Member)' : 'సభ్యత్వం లేదు',
-            style: GoogleFonts.notoSansTelugu(
-                fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600),
+            isMember ? context.tr('member') : context.tr('non_member'),
+            style: AppTheme.getTextStyle(
+              context,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
           ),
         ],
       ),
@@ -876,17 +1032,17 @@ class _CHCCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: CHCTheme.spacingMd),
-      padding: const EdgeInsets.all(CHCTheme.spacingLg),
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: CHCTheme.surface,
-        borderRadius: BorderRadius.circular(CHCTheme.radiusLg),
-        border: Border.all(color: CHCTheme.border.withOpacity(0.5)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 6))
         ],
       ),
       child: Column(
@@ -894,16 +1050,19 @@ class _CHCCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: CHCTheme.primaryDark, size: 20),
-              const SizedBox(width: 10),
+              Icon(icon, color: AppTheme.textPrimary, size: 22),
+              const SizedBox(width: 12),
               Text(title,
-                  style: GoogleFonts.notoSansTelugu(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: CHCTheme.primaryDark)),
+                  style: AppTheme.getTextStyle(
+                    context,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                    letterSpacing: -0.4,
+                  )),
             ],
           ),
-          const SizedBox(height: CHCTheme.spacingMd),
+          const SizedBox(height: 24),
           child,
         ],
       ),
@@ -938,8 +1097,8 @@ class _CHCEquipmentGrid extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            mainAxisSpacing: CHCTheme.spacingMd,
-            crossAxisSpacing: CHCTheme.spacingMd,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
             childAspectRatio: 0.82,
           ),
           itemCount: equipments.length,
@@ -977,133 +1136,184 @@ class _EquipmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imageUrl = equipment.image.startsWith('http')
+        ? equipment.image
+        : 'https://kiosk.cropsync.in/custom_hiring_center/${equipment.image}';
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFE6FCF9) : Colors.white,
-          borderRadius: BorderRadius.circular(CHCTheme.radiusLg),
+          color: const Color(0xFF1F2937),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-              color: isSelected ? CHCTheme.primary : CHCTheme.border,
-              width: isSelected ? 2 : 1),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                      color: CHCTheme.primary.withOpacity(0.2),
-                      blurRadius: 10,
-                      spreadRadius: 2)
-                ]
-              : null,
+            color: isSelected
+                ? Colors.white.withValues(alpha: 0.9)
+                : Colors.transparent,
+            width: 2.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected
+                  ? Colors.black.withValues(alpha: 0.25)
+                  : Colors.black.withValues(alpha: 0.1),
+              blurRadius: isSelected ? 16 : 8,
+              offset: const Offset(0, 4),
+            )
+          ],
         ),
-        child: Stack(
-          children: [
-            // 1. Content (Image + Text) - Rendered FIRST (Bottom layer)
-            Column(
-              children: [
-                // Top: Equipment image
-                Expanded(
-                  flex: 3,
-                  child: Padding(
-                    padding: const EdgeInsets.all(
-                        12), // Increased padding for cleaner look
-                    child: Center(
-                      child: AspectRatio(
-                        aspectRatio: 1.2, // Enforce aspect ratio for uniformity
-                        child: CachedNetworkImage(
-                          imageUrl: equipment.image.startsWith('http')
-                              ? equipment.image
-                              : 'https://kiosk.cropsync.in/custom_hiring_center/${equipment.image}',
-                          fit: BoxFit
-                              .contain, // Maintain aspect ratio within the box
-                          memCacheHeight: 300,
-                          placeholder: (_, __) => const Center(
-                              child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2))),
-                          errorWidget: (_, __, ___) => const Icon(
-                              Icons.agriculture,
-                              size: 40,
-                              color: CHCTheme.textSecondary),
-                        ),
-                      ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(19),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // ── Full-bleed equipment image ──
+              CachedNetworkImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.cover,
+                memCacheHeight: 400,
+                placeholder: (_, __) => Container(
+                  color: const Color(0xFF1F2937),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white30),
                     ),
                   ),
                 ),
-                // Bottom: Name and price
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                errorWidget: (_, __, ___) => Container(
+                  color: const Color(0xFF1F2937),
+                  child: const Center(
+                    child: Icon(Icons.agriculture_rounded,
+                        size: 48, color: Colors.white24),
+                  ),
+                ),
+              ),
+
+              // ── Gradient overlay — top (subtle dark for badges) ──
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: const [0.0, 0.45, 1.0],
+                      colors: [
+                        Colors.black.withValues(alpha: 0.15),
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.75),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── Selected checkmark ──
+              if (isSelected)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.check_rounded,
+                        size: 16, color: Color(0xFF111827)),
+                  ),
+                ),
+
+              // ── Member badge ──
+              if (isMember)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFD700),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.stars_rounded,
+                            size: 10, color: Colors.black87),
+                        const SizedBox(width: 3),
+                        Text(
+                          context.tr('member').toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black87,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // ── Bottom label strip ──
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         equipment.getDisplayName(locale),
-                        style: GoogleFonts.notoSansTelugu(
-                            fontSize: 12, // Slightly larger font
-                            fontWeight: FontWeight.w700,
-                            color:
-                                isSelected ? CHCTheme.primary : CHCTheme.text),
-                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -0.2,
+                          shadows: [
+                            Shadow(
+                                color: Colors.black54,
+                                blurRadius: 4,
+                                offset: Offset(0, 1))
+                          ],
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 5),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                            color: CHCTheme.accent.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(20)),
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3)),
+                        ),
                         child: Text(
-                            '₹${equipment.displayPrice.toStringAsFixed(0)}/${equipment.unit}',
-                            style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: CHCTheme.accent)),
+                          '₹${equipment.displayPrice.toStringAsFixed(0)}/${equipment.unit}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            // 2. Member badge - Rendered LAST (Top layer)
-            if (isMember)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: CHCTheme.memberBadge,
-                    borderRadius: BorderRadius.circular(6),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      )
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.star, size: 10, color: Colors.black54),
-                      const SizedBox(width: 2),
-                      Text('MEMBER',
-                          style: GoogleFonts.poppins(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF333333))),
                     ],
                   ),
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1111,6 +1321,7 @@ class _EquipmentCard extends StatelessWidget {
 }
 
 // ---------------------------- Crop Selector ----------------------------
+
 class _CHCCropSelector extends StatelessWidget {
   final List<Crop> crops;
   final Crop? selected;
@@ -1130,79 +1341,172 @@ class _CHCCropSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 100,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: crops.length,
-        separatorBuilder: (_, __) => const SizedBox(width: CHCTheme.spacingSm),
-        itemBuilder: (ctx, i) {
-          final crop = crops[i];
-          final isSelected = selected?.id == crop.id;
-          final imageUrl = _getCropImageUrl(crop.imageUrl);
+    if (crops.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: Text(
+            'No crops available',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+          ),
+        ),
+      );
+    }
 
-          return GestureDetector(
-            onTap: () => onSelect(crop),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 80,
-              decoration: BoxDecoration(
-                color: isSelected ? CHCTheme.primary : Colors.white,
-                borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
-                border: Border.all(
-                    color: isSelected ? CHCTheme.primary : CHCTheme.border),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (imageUrl.isNotEmpty)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
-                      child: CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        width: 48,
-                        height: 48,
-                        memCacheHeight: 96, // Optimized for 48px * 2
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => const SizedBox(
-                          width: 48,
-                          height: 48,
-                          child: Center(
-                            child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Hint text
+        if (selected == null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEF4444),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  context.tr('chc_crop_required'),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFEF4444),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        // Horizontal scrollable crop tabs
+        SizedBox(
+          height: 116,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(bottom: 4),
+            itemCount: crops.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (ctx, i) {
+              final crop = crops[i];
+              final isSelected = selected?.id == crop.id;
+              final imageUrl = _getCropImageUrl(crop.imageUrl);
+
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onSelect(crop);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  width: 88,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? const Color(0xFF111827)
+                        : const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isSelected
+                          ? const Color(0xFF111827)
+                          : const Color(0xFFE5E7EB),
+                      width: isSelected ? 2 : 1,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: const Color(0xFF111827).withOpacity(0.18),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            )
+                          ]
+                        : null,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Image / icon
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Colors.white.withOpacity(0.12)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isSelected
+                                ? Colors.white.withOpacity(0.2)
+                                : const Color(0xFFE5E7EB),
                           ),
                         ),
-                        errorWidget: (_, __, ___) => Icon(Icons.grass,
-                            size: 40,
-                            color:
-                                isSelected ? Colors.white : CHCTheme.primary),
+                        child: imageUrl.isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(13),
+                                child: CachedNetworkImage(
+                                  imageUrl: imageUrl,
+                                  width: 52,
+                                  height: 52,
+                                  memCacheHeight: 104,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => Center(
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: isSelected
+                                            ? Colors.white54
+                                            : AppTheme.textHint,
+                                      ),
+                                    ),
+                                  ),
+                                  errorWidget: (_, __, ___) => Icon(
+                                    Icons.grass_rounded,
+                                    size: 28,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppTheme.textPrimary,
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                Icons.grass_rounded,
+                                size: 28,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppTheme.textPrimary,
+                              ),
                       ),
-                    )
-                  else
-                    Icon(Icons.grass,
-                        color: isSelected ? Colors.white : CHCTheme.primary,
-                        size: 40),
-                  const SizedBox(height: 4),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(crop.name,
-                        style: GoogleFonts.notoSansTelugu(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: isSelected ? Colors.white : CHCTheme.text),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Text(
+                          crop.name,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: isSelected
+                                ? Colors.white
+                                : AppTheme.textPrimary,
+                            letterSpacing: -0.1,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1216,6 +1520,14 @@ class _CHCAcresCounter extends StatelessWidget {
   const _CHCAcresCounter(
       {required this.acres, this.equipment, required this.onChanged});
 
+  String _formatAcres(double v) {
+    // Show as integer when whole number, else show 2 decimal places
+    if (v == v.roundToDouble()) return v.toInt().toString();
+    // Show up to 2 decimal places, stripping trailing zeros
+    final s = v.toStringAsFixed(2);
+    return s.endsWith('0') ? s.substring(0, s.length - 1) : s;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -1223,25 +1535,70 @@ class _CHCAcresCounter extends StatelessWidget {
         if (equipment != null && equipment!.billingType == 'Variable')
           _VariableBillingWarning(equipment: equipment!),
         if (equipment?.isTrolley == true) _TrolleyWarning(),
+        // Quick-select chips: 0.25, 0.5, 1, 2, 5
+        Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [0.25, 0.5, 1.0, 2.0, 5.0].map((v) {
+              final isActive = acres == v;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: GestureDetector(
+                  onTap: () => onChanged(v - acres),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? AppTheme.textPrimary
+                          : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(
+                        color: isActive
+                            ? AppTheme.textPrimary
+                            : const Color(0xFFE5E7EB),
+                      ),
+                    ),
+                    child: Text(
+                      _formatAcres(v),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: isActive ? Colors.white : AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _CounterButton(icon: Icons.remove, onTap: () => onChanged(-0.5)),
-            const SizedBox(width: CHCTheme.spacingLg),
+            _CounterButton(
+                icon: Icons.remove_rounded, onTap: () => onChanged(-0.25)),
+            const SizedBox(width: 32),
             Column(
               children: [
-                Text(acres.toStringAsFixed(1),
-                    style: GoogleFonts.poppins(
-                        fontSize: 36,
-                        fontWeight: FontWeight.w700,
-                        color: CHCTheme.text)),
-                Text('ఎకరాలు (Acres)',
-                    style: GoogleFonts.notoSansTelugu(
-                        fontSize: 12, color: CHCTheme.textSecondary)),
+                Text(_formatAcres(acres),
+                    style: const TextStyle(
+                        fontSize: 42,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textPrimary,
+                        letterSpacing: -1)),
+                Text(context.tr('acres'),
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w700)),
               ],
             ),
-            const SizedBox(width: CHCTheme.spacingLg),
-            _CounterButton(icon: Icons.add, onTap: () => onChanged(0.5)),
+            const SizedBox(width: 32),
+            _CounterButton(
+                icon: Icons.add_rounded, onTap: () => onChanged(0.25)),
           ],
         ),
       ],
@@ -1253,17 +1610,17 @@ class _VariableBillingWarning extends StatelessWidget {
   final Equipment equipment;
   const _VariableBillingWarning({required this.equipment});
 
-  String _getRateText() {
+  String _getRateText(BuildContext context) {
     final rate = equipment.displayPrice.toStringAsFixed(0);
     switch (equipment.unit) {
       case 'Hour':
-        return 'గంటకు ఛార్జీ (₹$rate/hr)';
+        return context.tr('chc_per_hour', namedArgs: {'rate': rate});
       case 'Bale':
-        return 'బేల్ కు ఛార్జీ (₹$rate/bale)';
+        return context.tr('chc_per_bale', namedArgs: {'rate': rate});
       case 'Trip':
-        return 'ట్రిప్పు కు ఛార్జీ (₹$rate/trip)';
+        return context.tr('chc_per_trip', namedArgs: {'rate': rate});
       case 'Ton':
-        return 'టన్ కు ఛార్జీ (₹$rate/ton)';
+        return context.tr('chc_per_ton', namedArgs: {'rate': rate});
       default:
         return '';
     }
@@ -1273,17 +1630,17 @@ class _VariableBillingWarning extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(CHCTheme.spacingSm),
-      margin: const EdgeInsets.only(bottom: CHCTheme.spacingMd),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-          color: CHCTheme.warningBg,
-          borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
-          border: Border.all(color: const Color(0xFFFFEEBA))),
-      child: Text(_getRateText(),
-          style: GoogleFonts.notoSansTelugu(
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFFEF3C7))),
+      child: Text(_getRateText(context),
+          style: const TextStyle(
               fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: CHCTheme.warning),
+              fontWeight: FontWeight.w900,
+              color: Color(0xFFB45309)),
           textAlign: TextAlign.center),
     );
   }
@@ -1294,17 +1651,19 @@ class _TrolleyWarning extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(CHCTheme.spacingSm),
-      margin: const EdgeInsets.only(bottom: CHCTheme.spacingMd),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-          color: CHCTheme.errorBg,
-          borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
-          border: Border.all(color: const Color(0xFFFFCDD2))),
-      child: Text('⚠️ 5 కి.మీ పరిధి వరకు మాత్రమే వర్తిస్తుంది',
-          style: GoogleFonts.notoSansTelugu(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: CHCTheme.errorText),
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFFEE2E2))),
+      child: Text(context.tr('chc_trolley_warning'),
+          style: AppTheme.getTextStyle(
+            context,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.error,
+          ),
           textAlign: TextAlign.center),
     );
   }
@@ -1325,10 +1684,14 @@ class _CounterButton extends StatelessWidget {
         decoration: BoxDecoration(
             color: Colors.white,
             shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFFE5E7EB)),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8)
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4))
             ]),
-        child: Icon(icon, color: CHCTheme.primary, size: 22),
+        child: Icon(icon, color: AppTheme.textPrimary, size: 24),
       ),
     );
   }
@@ -1367,9 +1730,14 @@ class _CHCCalendar extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-                '${monthNamesTe[calendarMonth.month - 1]} ${calendarMonth.year}',
-                style: GoogleFonts.notoSansTelugu(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
+                DateFormat.yMMMM(context.locale.languageCode)
+                    .format(calendarMonth),
+                style: AppTheme.getTextStyle(
+                  context,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                )),
             Row(
               children: [
                 IconButton(
@@ -1382,18 +1750,32 @@ class _CHCCalendar extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: CHCTheme.spacingSm),
+        const SizedBox(height: AppTheme.spacingSm),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: ['ఆ', 'సో', 'మం', 'బు', 'గు', 'శు', 'శ']
-              .map((d) => Expanded(
-                  child: Text(d,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 12))))
-              .toList(),
+          children: List.generate(7, (i) {
+            final date = DateTime(2024, 1, 7 + i); // 2024-01-07 was a Sunday
+            final dayName =
+                DateFormat.E(context.locale.languageCode).format(date);
+            // For Telugu, keep 2 characters for better readability (e.g., సో, మం)
+            final display = context.locale.languageCode == 'te'
+                ? (dayName.length > 2 ? dayName.substring(0, 2) : dayName)
+                : dayName.substring(0, 1).toUpperCase();
+            return Expanded(
+              child: Text(
+                display,
+                textAlign: TextAlign.center,
+                style: AppTheme.getTextStyle(
+                  context,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            );
+          }),
         ),
-        const SizedBox(height: CHCTheme.spacingSm),
+        const SizedBox(height: AppTheme.spacingSm),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -1418,33 +1800,33 @@ class _CHCCalendar extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? CHCTheme.primary
+                      ? AppTheme.textPrimary
                       : isPast
-                          ? const Color(0xFFF5F5F5)
+                          ? const Color(0xFFF9FAFB)
                           : Colors.white,
                   shape: BoxShape.circle,
                   border: Border.all(
                       color: isFullyBooked
-                          ? CHCTheme.accent
+                          ? AppTheme.error
                           : isSelected
-                              ? CHCTheme.primary
-                              : const Color(0xFFEEEEEE),
+                              ? AppTheme.textPrimary
+                              : const Color(0xFFE5E7EB),
                       width: isFullyBooked ? 2 : 1),
                 ),
                 child: Center(
                   child: Text(
                     day.toString(),
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 14,
                       color: isSelected
                           ? Colors.white
                           : isPast
-                              ? Colors.grey.shade400
+                              ? const Color(0xFFD1D5DB)
                               : isFullyBooked
-                                  ? CHCTheme.accent
-                                  : CHCTheme.text,
+                                  ? AppTheme.error
+                                  : AppTheme.textPrimary,
                       fontWeight:
-                          isSelected ? FontWeight.bold : FontWeight.normal,
+                          isSelected ? FontWeight.w900 : FontWeight.w700,
                     ),
                   ),
                 ),
@@ -1472,26 +1854,23 @@ class _CHCSummaryBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isVariableBilling = state.equipment?.billingType == 'Variable';
     final totalDisplay = isVariableBilling
-        ? 'పెండింగ్'
+        ? context.tr('chc_bill_pending')
         : '₹${state.totalCost.toStringAsFixed(0)}';
     final buttonText = state.equipment == null
-        ? 'యంత్రం ఎంచుకోండి'
+        ? context.tr('chc_select_equipment')
         : (state.equipment!.billingType == 'Fixed'
-            ? 'బుకింగ్ నిర్ధారించండి'
-            : 'స్లాట్ బుక్ చేయండి');
+            ? context.tr('chc_confirm_booking')
+            : context.tr('chc_book_slot'));
 
     return Container(
       padding: EdgeInsets.fromLTRB(
-          CHCTheme.spacingMd,
-          CHCTheme.spacingSm,
-          CHCTheme.spacingMd,
-          MediaQuery.of(context).padding.bottom + CHCTheme.spacingSm),
+          24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
       decoration: BoxDecoration(
-        color: CHCTheme.surface,
+        color: Colors.white,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 16,
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 20,
               offset: const Offset(0, -4))
         ],
       ),
@@ -1502,40 +1881,51 @@ class _CHCSummaryBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('మొత్తం:',
-                    style: GoogleFonts.notoSansTelugu(
-                        fontSize: 12, color: CHCTheme.textSecondary)),
+                Text(context.tr('total'),
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 13,
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    )),
                 Text(totalDisplay,
-                    style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: isVariableBilling
-                            ? CHCTheme.warning
-                            : CHCTheme.primary)),
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: isVariableBilling
+                          ? const Color(0xFFB45309)
+                          : AppTheme.textPrimary,
+                      letterSpacing: -0.5,
+                    )),
               ],
             ),
           ),
           SizedBox(
-            height: 48,
+            height: 56,
             child: FilledButton(
               onPressed: state.isValid && !isSubmitting ? onSubmit : null,
               style: FilledButton.styleFrom(
-                backgroundColor: CHCTheme.primary,
-                disabledBackgroundColor: Colors.grey.shade300,
+                backgroundColor: AppTheme.textPrimary,
+                disabledBackgroundColor: const Color(0xFFE5E7EB),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(CHCTheme.radiusMd)),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: CHCTheme.spacingLg),
+                    borderRadius: BorderRadius.circular(100)),
+                padding: const EdgeInsets.symmetric(horizontal: 32),
               ),
               child: isSubmitting
                   ? const SizedBox(
-                      width: 20,
-                      height: 20,
+                      width: 24,
+                      height: 24,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                          strokeWidth: 3, color: Colors.white))
                   : Text(buttonText,
-                      style: GoogleFonts.notoSansTelugu(
-                          fontSize: 14, fontWeight: FontWeight.w600)),
+                      style: AppTheme.getTextStyle(
+                        context,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                        color: Colors.white,
+                      )),
             ),
           ),
         ],
@@ -1558,8 +1948,8 @@ class _CHCSummaryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locale = context.locale.languageCode;
-    final equipmentName =
-        state.equipment?.getDisplayName(locale) ?? 'ఎంచుకోండి';
+    final equipmentName = state.equipment?.getDisplayName(locale) ??
+        context.tr('select_equipment');
     final rate = state.equipment != null
         ? '₹${state.equipment!.displayPrice.toStringAsFixed(0)}/${state.equipment!.unit}'
         : '-';
@@ -1568,54 +1958,75 @@ class _CHCSummaryPanel extends StatelessWidget {
         : '-';
     final isVariableBilling = state.equipment?.billingType == 'Variable';
     final totalDisplay = isVariableBilling
-        ? 'బిల్లు పెండింగ్'
+        ? context.tr('chc_bill_pending')
         : '₹${state.totalCost.toStringAsFixed(0)}';
     final buttonText = state.equipment == null
-        ? 'యంత్రం ఎంచుకోండి'
+        ? context.tr('chc_select_equipment')
         : (state.equipment!.billingType == 'Fixed'
-            ? 'బుకింగ్ నిర్ధారించండి (Confirm)'
-            : 'స్లాట్ బుక్ చేయండి (Book Slot)');
+            ? context.tr('chc_confirm_booking')
+            : context.tr('chc_book_slot'));
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(CHCTheme.spacingLg),
+        padding: const EdgeInsets.all(32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('బుకింగ్ సమ్మరీ',
-                style: GoogleFonts.notoSansTelugu(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: CHCTheme.primaryDark)),
-            const SizedBox(height: CHCTheme.spacingLg),
-            _SummaryRow(label: 'యంత్రం', value: equipmentName, highlight: true),
+            Text(context.tr('chc_summary_title'),
+                style: AppTheme.getTextStyle(
+                  context,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                  letterSpacing: -0.5,
+                )),
+            const SizedBox(height: AppTheme.spacingLg),
+            _SummaryRow(
+                label: context.tr('chc_equipment'),
+                value: equipmentName,
+                highlight: true),
             if (state.equipment?.requiresCropSelection == true)
-              _SummaryRow(label: 'పంట', value: state.crop?.name ?? '-'),
-            _SummaryRow(label: 'ధర (Rate)', value: rate),
-            _SummaryRow(label: 'విస్తీర్ణం', value: '${state.acres} ఎకరాలు'),
-            _SummaryRow(label: 'సేవ తేదీ', value: dateStr),
-            const Divider(height: CHCTheme.spacingXl),
+              _SummaryRow(
+                  label: context.tr('crop_label'),
+                  value: state.crop?.name ?? '-'),
+            _SummaryRow(label: context.tr('chc_rate_label'), value: rate),
+            _SummaryRow(
+                label: context.tr('chc_land_size'),
+                value: '${state.acres} ${context.tr("acres")}'),
+            _SummaryRow(label: context.tr('chc_service_date'), value: dateStr),
+            const Divider(height: 40),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('మొత్తం:',
-                    style: GoogleFonts.notoSansTelugu(
-                        fontSize: 16, fontWeight: FontWeight.w600)),
+                Text(context.tr('total'),
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    )),
                 Text(totalDisplay,
-                    style: GoogleFonts.poppins(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: isVariableBilling
-                            ? CHCTheme.warning
-                            : CHCTheme.primary)),
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: isVariableBilling
+                          ? const Color(0xFFB45309)
+                          : AppTheme.textPrimary,
+                      letterSpacing: -0.5,
+                    )),
               ],
             ),
             if (isVariableBilling)
               Padding(
-                padding: const EdgeInsets.only(top: CHCTheme.spacingXs),
-                child: Text('* సేవ పూర్తయ్యాక బిల్లు వస్తుంది',
-                    style: GoogleFonts.notoSansTelugu(
-                        fontSize: 11, color: CHCTheme.warning)),
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(context.tr('chc_bill_after_service'),
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 12,
+                      color: const Color(0xFFB45309),
+                      fontWeight: FontWeight.w600,
+                    )),
               ),
             const Spacer(),
             SizedBox(
@@ -1624,10 +2035,10 @@ class _CHCSummaryPanel extends StatelessWidget {
               child: FilledButton(
                 onPressed: state.isValid && !isSubmitting ? onSubmit : null,
                 style: FilledButton.styleFrom(
-                  backgroundColor: CHCTheme.primary,
-                  disabledBackgroundColor: Colors.grey.shade300,
+                  backgroundColor: AppTheme.textPrimary,
+                  disabledBackgroundColor: const Color(0xFFE5E7EB),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(CHCTheme.radiusMd)),
+                      borderRadius: BorderRadius.circular(100)),
                 ),
                 child: isSubmitting
                     ? const SizedBox(
@@ -1636,8 +2047,12 @@ class _CHCSummaryPanel extends StatelessWidget {
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white))
                     : Text(buttonText,
-                        style: GoogleFonts.notoSansTelugu(
-                            fontSize: 15, fontWeight: FontWeight.w600)),
+                        style: AppTheme.getTextStyle(
+                          context,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        )),
               ),
             ),
           ],
@@ -1658,20 +2073,25 @@ class _SummaryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: CHCTheme.spacingXs),
+      padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingXs),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style: GoogleFonts.notoSansTelugu(
-                  fontSize: 13, color: CHCTheme.textSecondary)),
+              style: AppTheme.getTextStyle(
+                context,
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+              )),
           Flexible(
               child: Text(value,
-                  style: GoogleFonts.notoSansTelugu(
-                      fontSize: 13,
-                      fontWeight:
-                          highlight ? FontWeight.w600 : FontWeight.normal,
-                      color: highlight ? CHCTheme.primary : CHCTheme.text),
+                  style: AppTheme.getTextStyle(
+                    context,
+                    fontSize: 13,
+                    fontWeight: highlight ? FontWeight.w700 : FontWeight.w500,
+                    color:
+                        highlight ? AppTheme.textPrimary : AppTheme.textPrimary,
+                  ),
                   textAlign: TextAlign.end)),
         ],
       ),
@@ -1696,9 +2116,9 @@ class _ErrorDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(CHCTheme.radiusXl)),
+          borderRadius: BorderRadius.circular(AppTheme.radiusXl)),
       child: Padding(
-        padding: const EdgeInsets.all(CHCTheme.spacingLg),
+        padding: const EdgeInsets.all(AppTheme.spacingLg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1706,36 +2126,44 @@ class _ErrorDialog extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: const BoxDecoration(
-                  color: CHCTheme.errorBg, shape: BoxShape.circle),
+                  color: AppTheme.errorBg, shape: BoxShape.circle),
               child: const Icon(Icons.error_outline,
-                  size: 40, color: CHCTheme.errorText),
+                  size: 40, color: AppTheme.errorText),
             ),
-            const SizedBox(height: CHCTheme.spacingMd),
+            const SizedBox(height: AppTheme.spacingMd),
             Text(equipment?.getDisplayName(locale) ?? '',
-                style: GoogleFonts.notoSansTelugu(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: CHCTheme.text)),
-            const SizedBox(height: CHCTheme.spacingSm),
+                style: AppTheme.getTextStyle(
+                  context,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.text,
+                )),
+            const SizedBox(height: AppTheme.spacingSm),
             Text(
                 message ??
                     'ఈ తేదీలో స్లాట్లు అన్నీ బుక్ అయిపోయాయి.\n(Fully Booked)',
-                style: GoogleFonts.notoSansTelugu(
-                    fontSize: 13, color: CHCTheme.errorText),
+                style: AppTheme.getTextStyle(
+                  context,
+                  fontSize: 13,
+                  color: AppTheme.errorText,
+                ),
                 textAlign: TextAlign.center),
-            const SizedBox(height: CHCTheme.spacingLg),
+            const SizedBox(height: AppTheme.spacingLg),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 onPressed: onClose,
                 style: FilledButton.styleFrom(
-                    backgroundColor: CHCTheme.primary,
+                    backgroundColor: AppTheme.primary,
                     shape: RoundedRectangleBorder(
                         borderRadius:
-                            BorderRadius.circular(CHCTheme.radiusMd))),
-                child: Text('వేరే తేదీ ఎంచుకోండి',
-                    style: GoogleFonts.notoSansTelugu(
-                        fontSize: 14, fontWeight: FontWeight.w600)),
+                            BorderRadius.circular(AppTheme.radiusMd))),
+                child: Text(context.tr('chc_select_another_date'),
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    )),
               ),
             ),
           ],
@@ -1768,9 +2196,9 @@ class _SuccessDialog extends StatelessWidget {
 
     return Dialog(
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(CHCTheme.radiusXl)),
+          borderRadius: BorderRadius.circular(AppTheme.radiusXl)),
       child: Padding(
-        padding: const EdgeInsets.all(CHCTheme.spacingLg),
+        padding: const EdgeInsets.all(AppTheme.spacingLg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1778,58 +2206,67 @@ class _SuccessDialog extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                  color: CHCTheme.primary.withOpacity(0.1),
+                  color: AppTheme.primary.withOpacity(0.1),
                   shape: BoxShape.circle),
-              child: const Icon(Icons.check, size: 40, color: CHCTheme.primary),
+              child: const Icon(Icons.check, size: 40, color: AppTheme.primary),
             ),
-            const SizedBox(height: CHCTheme.spacingMd),
-            Text('బుకింగ్ విజయవంతమైంది!',
-                style: GoogleFonts.notoSansTelugu(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: CHCTheme.primaryDark)),
-            const SizedBox(height: CHCTheme.spacingSm),
-            Text('Booking ID:',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+            const SizedBox(height: AppTheme.spacingMd),
+            Text(context.tr('chc_success_title'),
+                style: AppTheme.getTextStyle(
+                  context,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                )),
+            const SizedBox(height: AppTheme.spacingSm),
+            Text(context.tr('detail_booking_id'),
+                style: AppTheme.getTextStyle(context,
+                    fontSize: 12, color: AppTheme.textSecondary)),
             Text(bookingId,
-                style: GoogleFonts.poppins(
-                    fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: CHCTheme.spacingMd),
+                style: AppTheme.getTextStyle(context,
+                    fontSize: 22, fontWeight: FontWeight.w700)),
+            const SizedBox(height: AppTheme.spacingMd),
             Container(
-              padding: const EdgeInsets.all(CHCTheme.spacingMd),
+              padding: const EdgeInsets.all(AppTheme.spacingMd),
               decoration: BoxDecoration(
-                  color: CHCTheme.bg,
-                  borderRadius: BorderRadius.circular(CHCTheme.radiusMd)),
+                  color: AppTheme.bg,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
               child: Column(
                 children: [
-                  _ReceiptRow('యంత్రం:', equipmentName),
-                  if (state.crop != null) _ReceiptRow('పంట:', state.crop!.name),
-                  _ReceiptRow('విస్తీర్ణం:', '${state.acres} ఎకరాలు'),
-                  _ReceiptRow('తేదీ:', dateStr),
-                  const Divider(height: CHCTheme.spacingMd),
+                  _ReceiptRow(context.tr('chc_equipment'), equipmentName),
+                  if (state.crop != null)
+                    _ReceiptRow(context.tr('crop_label'), state.crop!.name),
+                  _ReceiptRow(context.tr('chc_land_size'),
+                      '${state.acres} ${context.tr("acres")}'),
+                  _ReceiptRow(context.tr('chc_service_date'), dateStr),
+                  const Divider(height: AppTheme.spacingMd),
                   _ReceiptRow(
-                      'మొత్తం:',
+                      context.tr('total'),
                       billingType == 'Fixed'
                           ? '₹${totalCost.toStringAsFixed(0)}'
-                          : 'బిల్లు పెండింగ్',
+                          : context.tr('chc_bill_pending'),
                       isTotal: true,
                       isPending: billingType != 'Fixed'),
                 ],
               ),
             ),
-            const SizedBox(height: CHCTheme.spacingLg),
+            const SizedBox(height: AppTheme.spacingLg),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 onPressed: onClose,
                 style: FilledButton.styleFrom(
-                    backgroundColor: CHCTheme.text,
+                    backgroundColor: AppTheme.text,
                     shape: RoundedRectangleBorder(
                         borderRadius:
-                            BorderRadius.circular(CHCTheme.radiusMd))),
-                child: Text('సరే (Done)',
-                    style: GoogleFonts.notoSansTelugu(
-                        fontSize: 14, fontWeight: FontWeight.w600)),
+                            BorderRadius.circular(AppTheme.radiusMd))),
+                child: Text(context.tr('ok'),
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    )),
               ),
             ),
           ],
@@ -1885,9 +2322,9 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
       case 'cancelled':
         return const Color(0xFFF44336);
       case 'slot booked':
-        return CHCTheme.slotBooked;
+        return AppTheme.slotBooked;
       default:
-        return CHCTheme.warning;
+        return AppTheme.warning;
     }
   }
 
@@ -1902,7 +2339,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
       case 'Completed':
         return const Color(0xFF4CAF50);
       default:
-        return CHCTheme.textSecondary;
+        return AppTheme.textSecondary;
     }
   }
 
@@ -1928,7 +2365,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
         maxHeight: MediaQuery.of(context).size.height * 0.85,
       ),
       decoration: const BoxDecoration(
-        color: CHCTheme.bg,
+        color: AppTheme.bg,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1945,20 +2382,21 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
           ),
           // Title
           Padding(
-            padding: const EdgeInsets.fromLTRB(CHCTheme.spacingLg,
-                CHCTheme.spacingMd, CHCTheme.spacingLg, CHCTheme.spacingSm),
+            padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg,
+                AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingSm),
             child: Row(
               children: [
                 const Icon(Icons.receipt_long,
-                    color: CHCTheme.primaryDark, size: 24),
-                const SizedBox(width: CHCTheme.spacingSm),
+                    color: AppTheme.primaryDark, size: 24),
+                const SizedBox(width: AppTheme.spacingSm),
                 Expanded(
                   child: Text(
                     context.tr('chc_my_bookings'),
-                    style: GoogleFonts.notoSansTelugu(
+                    style: AppTheme.getTextStyle(
+                      context,
                       fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: CHCTheme.text,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.text,
                     ),
                   ),
                 ),
@@ -1967,22 +2405,23 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                     decoration: BoxDecoration(
-                      color: CHCTheme.primary.withOpacity(0.1),
+                      color: AppTheme.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       '${_bookings.length}',
-                      style: GoogleFonts.poppins(
+                      style: AppTheme.getTextStyle(
+                        context,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: CHCTheme.primary,
+                        color: AppTheme.primary,
                       ),
                     ),
                   ),
                 const SizedBox(width: 4),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, color: CHCTheme.textSecondary),
+                  icon: const Icon(Icons.close, color: AppTheme.textSecondary),
                 ),
               ],
             ),
@@ -1994,16 +2433,19 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                 child: SingleChildScrollView(child: _buildShimmerLoading()))
           else if (_bookings.isEmpty)
             Padding(
-              padding: const EdgeInsets.all(CHCTheme.spacingXl),
+              padding: const EdgeInsets.all(AppTheme.spacingXl),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.event_busy, size: 64, color: Colors.grey.shade300),
-                  const SizedBox(height: CHCTheme.spacingMd),
+                  const SizedBox(height: AppTheme.spacingMd),
                   Text(
                     context.tr('chc_no_bookings'),
-                    style: GoogleFonts.notoSansTelugu(
-                        fontSize: 16, color: CHCTheme.textSecondary),
+                    style: AppTheme.getTextStyle(
+                      context,
+                      fontSize: 16,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -2012,7 +2454,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
             Flexible(
               child: ListView.builder(
                 shrinkWrap: true,
-                padding: const EdgeInsets.all(CHCTheme.spacingMd),
+                padding: const EdgeInsets.all(AppTheme.spacingMd),
                 itemCount: _bookings.length,
                 itemBuilder: (ctx, i) => _buildBookingCard(_bookings[i], i),
               ),
@@ -2025,17 +2467,17 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
   // ── Shimmer loading skeleton ──────────────────────────────────────
   Widget _buildShimmerLoading() {
     return Padding(
-      padding: const EdgeInsets.all(CHCTheme.spacingMd),
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
       child: Column(
         children: List.generate(
           3,
           (_) => Container(
-            margin: const EdgeInsets.only(bottom: CHCTheme.spacingMd),
-            padding: const EdgeInsets.all(CHCTheme.spacingMd),
+            margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
+            padding: const EdgeInsets.all(AppTheme.spacingMd),
             decoration: BoxDecoration(
-              color: CHCTheme.surface,
-              borderRadius: BorderRadius.circular(CHCTheme.radiusLg),
-              border: Border.all(color: CHCTheme.border.withOpacity(0.3)),
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              border: Border.all(color: AppTheme.border.withOpacity(0.3)),
             ),
             child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2122,11 +2564,11 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
     final isExpanded = _expandedIndex == index;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: CHCTheme.spacingMd),
+      margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
       decoration: BoxDecoration(
-        color: CHCTheme.surface,
-        borderRadius: BorderRadius.circular(CHCTheme.radiusLg),
-        border: Border.all(color: CHCTheme.border.withOpacity(0.5)),
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: AppTheme.border.withOpacity(0.5)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
@@ -2140,13 +2582,13 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
         children: [
           // ── Header ─────────────────────────────────────────────
           InkWell(
-            borderRadius: BorderRadius.circular(CHCTheme.radiusLg),
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
             onTap: () => setState(() {
               _expandedIndex = isExpanded ? null : index;
             }),
             child: Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: CHCTheme.spacingMd, vertical: CHCTheme.spacingSm),
+                  horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingSm),
               decoration: BoxDecoration(
                 color: _statusColor(status).withOpacity(0.08),
               ),
@@ -2160,13 +2602,13 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(equipmentType,
-                            style: GoogleFonts.poppins(
+                            style: AppTheme.getTextStyle(context,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                color: CHCTheme.text)),
+                                color: AppTheme.text)),
                         Text(bookingId,
-                            style: GoogleFonts.poppins(
-                                fontSize: 10, color: CHCTheme.textSecondary)),
+                            style: AppTheme.getTextStyle(context,
+                                fontSize: 10, color: AppTheme.textSecondary)),
                       ],
                     ),
                   ),
@@ -2175,10 +2617,10 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                     decoration: BoxDecoration(
                       color: _statusColor(status),
-                      borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                     ),
                     child: Text(status,
-                        style: GoogleFonts.poppins(
+                        style: AppTheme.getTextStyle(context,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: Colors.white)),
@@ -2188,7 +2630,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                     turns: isExpanded ? 0.5 : 0,
                     duration: const Duration(milliseconds: 200),
                     child: const Icon(Icons.expand_more,
-                        size: 20, color: CHCTheme.textSecondary),
+                        size: 20, color: AppTheme.textSecondary),
                   ),
                 ],
               ),
@@ -2236,9 +2678,9 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
           if (!isExpanded)
             Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: CHCTheme.spacingMd, vertical: 6),
+                  horizontal: AppTheme.spacingMd, vertical: 6),
               decoration: const BoxDecoration(
-                color: CHCTheme.bg,
+                color: AppTheme.bg,
               ),
               child: Row(
                 children: [
@@ -2246,14 +2688,14 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                       size: 12, color: Colors.grey.shade400),
                   const SizedBox(width: 4),
                   Text(_formatDate(serviceDate),
-                      style: GoogleFonts.poppins(
-                          fontSize: 11, color: CHCTheme.textSecondary)),
+                      style: AppTheme.getTextStyle(context,
+                          fontSize: 11, color: AppTheme.textSecondary)),
                   const SizedBox(width: 12),
                   Icon(Icons.straighten, size: 12, color: Colors.grey.shade400),
                   const SizedBox(width: 4),
                   Text('$acres ${context.tr("acres")}',
-                      style: GoogleFonts.poppins(
-                          fontSize: 11, color: CHCTheme.textSecondary)),
+                      style: AppTheme.getTextStyle(context,
+                          fontSize: 11, color: AppTheme.textSecondary)),
                   const Spacer(),
                   if (hasOperator) ...[
                     Icon(Icons.person, size: 12, color: Colors.grey.shade400),
@@ -2265,10 +2707,11 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                       finalAmount > 0)
                     Text(
                       '₹${finalAmount.toStringAsFixed(0)}',
-                      style: GoogleFonts.poppins(
+                      style: AppTheme.getTextStyle(
+                        context,
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: CHCTheme.primary,
+                        color: AppTheme.primary,
                       ),
                     )
                   else
@@ -2276,12 +2719,13 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                       billingType == 'Fixed'
                           ? '₹${totalCost.toStringAsFixed(0)}'
                           : context.tr('chc_bill_pending'),
-                      style: GoogleFonts.poppins(
+                      style: AppTheme.getTextStyle(
+                        context,
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: billingType == 'Fixed'
-                            ? CHCTheme.primary
-                            : CHCTheme.warning,
+                            ? AppTheme.primary
+                            : AppTheme.warning,
                       ),
                     ),
                 ],
@@ -2326,7 +2770,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
       children: [
         // Booking details
         Padding(
-          padding: const EdgeInsets.all(CHCTheme.spacingMd),
+          padding: const EdgeInsets.all(AppTheme.spacingMd),
           child: Column(
             children: [
               _bookingDetailRow(Icons.calendar_today,
@@ -2349,34 +2793,38 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                 Row(
                   children: [
                     const Icon(Icons.receipt,
-                        size: 16, color: CHCTheme.primary),
+                        size: 16, color: AppTheme.primary),
                     const SizedBox(width: 8),
                     Text(context.tr('total'),
-                        style: GoogleFonts.notoSansTelugu(
-                            fontSize: 12, color: CHCTheme.textSecondary)),
+                        style: AppTheme.getTextStyle(
+                          context,
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        )),
                     const Spacer(),
                     Text(
                       billingType == 'Fixed'
                           ? '₹${totalCost.toStringAsFixed(0)}'
                           : context.tr('chc_bill_pending'),
-                      style: GoogleFonts.poppins(
+                      style: AppTheme.getTextStyle(
+                        context,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: billingType == 'Fixed'
-                            ? CHCTheme.primary
-                            : CHCTheme.warning,
+                            ? AppTheme.primary
+                            : AppTheme.warning,
                       ),
                     ),
                   ],
                 ),
               if (notes != null && notes.isNotEmpty && notes != 'null') ...[
-                const SizedBox(height: CHCTheme.spacingSm),
+                const SizedBox(height: AppTheme.spacingSm),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(CHCTheme.spacingSm),
+                  padding: const EdgeInsets.all(AppTheme.spacingSm),
                   decoration: BoxDecoration(
-                    color: CHCTheme.bg,
-                    borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
+                    color: AppTheme.bg,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2385,9 +2833,11 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                       const SizedBox(width: 6),
                       Expanded(
                           child: Text(notes,
-                              style: GoogleFonts.notoSansTelugu(
-                                  fontSize: 11,
-                                  color: CHCTheme.textSecondary))),
+                              style: AppTheme.getTextStyle(
+                                context,
+                                fontSize: 11,
+                                color: AppTheme.textSecondary,
+                              ))),
                     ],
                   ),
                 ),
@@ -2400,22 +2850,22 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
         if (hasOperator) ...[
           const Divider(height: 1),
           Padding(
-            padding: const EdgeInsets.all(CHCTheme.spacingMd),
+            padding: const EdgeInsets.all(AppTheme.spacingMd),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(context.tr('chc_operator_assigned'),
-                    style: GoogleFonts.poppins(
+                    style: AppTheme.getTextStyle(context,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: CHCTheme.textSecondary,
+                        color: AppTheme.textSecondary,
                         letterSpacing: 0.5)),
-                const SizedBox(height: CHCTheme.spacingSm),
+                const SizedBox(height: AppTheme.spacingSm),
                 Container(
-                  padding: const EdgeInsets.all(CHCTheme.spacingSm + 2),
+                  padding: const EdgeInsets.all(AppTheme.spacingSm + 2),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF0F7FF),
-                    borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                     border: Border.all(
                         color: const Color(0xFF2196F3).withOpacity(0.15)),
                   ),
@@ -2430,7 +2880,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                             : null,
                         child: (!_isValidStr(operatorImage))
                             ? Text(operatorName![0].toUpperCase(),
-                                style: GoogleFonts.poppins(
+                                style: AppTheme.getTextStyle(context,
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
                                     color: const Color(0xFF2196F3)))
@@ -2442,15 +2892,17 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(operatorName!,
-                                style: GoogleFonts.poppins(
+                                style: AppTheme.getTextStyle(context,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: CHCTheme.text)),
+                                    color: AppTheme.text)),
                             if (_isValidStr(operatorVillage))
                               Text(operatorVillage!,
-                                  style: GoogleFonts.notoSansTelugu(
-                                      fontSize: 11,
-                                      color: CHCTheme.textSecondary)),
+                                  style: AppTheme.getTextStyle(
+                                    context,
+                                    fontSize: 11,
+                                    color: AppTheme.textSecondary,
+                                  )),
                           ],
                         ),
                       ),
@@ -2464,7 +2916,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                               decoration: BoxDecoration(
                                 color: const Color(0xFFFFF8E1),
                                 borderRadius:
-                                    BorderRadius.circular(CHCTheme.radiusSm),
+                                    BorderRadius.circular(AppTheme.radiusSm),
                               ),
                               child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -2473,7 +2925,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                                         size: 12, color: Color(0xFFFF9800)),
                                     const SizedBox(width: 2),
                                     Text(operatorRating.toStringAsFixed(1),
-                                        style: GoogleFonts.poppins(
+                                        style: AppTheme.getTextStyle(context,
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
                                             color: const Color(0xFFE65100))),
@@ -2489,9 +2941,9 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                                         size: 11, color: Colors.grey.shade500),
                                     const SizedBox(width: 3),
                                     Text(operatorPhone!,
-                                        style: GoogleFonts.poppins(
+                                        style: AppTheme.getTextStyle(context,
                                             fontSize: 10,
-                                            color: CHCTheme.textSecondary)),
+                                            color: AppTheme.textSecondary)),
                                   ]),
                             ),
                         ],
@@ -2508,17 +2960,17 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
         if (hasTaskInfo) ...[
           const Divider(height: 1),
           Padding(
-            padding: const EdgeInsets.all(CHCTheme.spacingMd),
+            padding: const EdgeInsets.all(AppTheme.spacingMd),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Text(context.tr('chc_work_progress'),
-                        style: GoogleFonts.poppins(
+                        style: AppTheme.getTextStyle(context,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: CHCTheme.textSecondary,
+                            color: AppTheme.textSecondary,
                             letterSpacing: 0.5)),
                     const Spacer(),
                     Container(
@@ -2526,14 +2978,14 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                           horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: _taskStatusColor(taskStatus).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       ),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(_taskStatusIcon(taskStatus),
                             size: 12, color: _taskStatusColor(taskStatus)),
                         const SizedBox(width: 4),
                         Text(taskStatus ?? '',
-                            style: GoogleFonts.poppins(
+                            style: AppTheme.getTextStyle(context,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: _taskStatusColor(taskStatus))),
@@ -2541,12 +2993,12 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                     ),
                   ],
                 ),
-                const SizedBox(height: CHCTheme.spacingSm),
+                const SizedBox(height: AppTheme.spacingSm),
                 Container(
-                  padding: const EdgeInsets.all(CHCTheme.spacingSm + 2),
+                  padding: const EdgeInsets.all(AppTheme.spacingSm + 2),
                   decoration: BoxDecoration(
-                    color: CHCTheme.bg,
-                    borderRadius: BorderRadius.circular(CHCTheme.radiusMd),
+                    color: AppTheme.bg,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),
                   child: Column(
                     children: [
@@ -2581,7 +3033,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                   ),
                 ),
                 if (_isValidStr(startReading) || _isValidStr(endReading)) ...[
-                  const SizedBox(height: CHCTheme.spacingSm),
+                  const SizedBox(height: AppTheme.spacingSm),
                   Row(
                     children: [
                       if (_isValidStr(startReading))
@@ -2589,7 +3041,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                             child: _readingChip(context.tr('chc_start_reading'),
                                 startReading!)),
                       if (_isValidStr(startReading) && _isValidStr(endReading))
-                        const SizedBox(width: CHCTheme.spacingSm),
+                        const SizedBox(width: AppTheme.spacingSm),
                       if (_isValidStr(endReading))
                         Expanded(
                             child: _readingChip(
@@ -2598,35 +3050,38 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                   ),
                 ],
                 if (finalAmount != null && finalAmount > 0) ...[
-                  const SizedBox(height: CHCTheme.spacingSm),
+                  const SizedBox(height: AppTheme.spacingSm),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: CHCTheme.spacingMd,
-                        vertical: CHCTheme.spacingSm),
+                        horizontal: AppTheme.spacingMd,
+                        vertical: AppTheme.spacingSm),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(colors: [
-                        CHCTheme.primary.withOpacity(0.08),
-                        CHCTheme.primary.withOpacity(0.03),
+                        AppTheme.primary.withOpacity(0.08),
+                        AppTheme.primary.withOpacity(0.03),
                       ]),
-                      borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       border:
-                          Border.all(color: CHCTheme.primary.withOpacity(0.2)),
+                          Border.all(color: AppTheme.primary.withOpacity(0.2)),
                     ),
                     child: Row(
                       children: [
                         const Icon(Icons.receipt_long,
-                            size: 16, color: CHCTheme.primary),
+                            size: 16, color: AppTheme.primary),
                         const SizedBox(width: 8),
                         Text(context.tr('chc_final_bill'),
-                            style: GoogleFonts.notoSansTelugu(
-                                fontSize: 12, color: CHCTheme.textSecondary)),
+                            style: AppTheme.getTextStyle(
+                              context,
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            )),
                         const Spacer(),
                         Text('₹${finalAmount.toStringAsFixed(0)}',
-                            style: GoogleFonts.poppins(
+                            style: AppTheme.getTextStyle(context,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
-                                color: CHCTheme.primary)),
+                                color: AppTheme.primary)),
                       ],
                     ),
                   ),
@@ -2639,11 +3094,11 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
         // ── Footer ─────────────────────────────────────────────────
         Container(
           padding: const EdgeInsets.symmetric(
-              horizontal: CHCTheme.spacingMd, vertical: CHCTheme.spacingXs),
+              horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingXs),
           decoration: const BoxDecoration(
-            color: CHCTheme.bg,
+            color: AppTheme.bg,
             borderRadius: BorderRadius.vertical(
-                bottom: Radius.circular(CHCTheme.radiusLg)),
+                bottom: Radius.circular(AppTheme.radiusLg)),
           ),
           child: Row(
             children: [
@@ -2651,7 +3106,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
               const SizedBox(width: 4),
               Text(
                   '${context.tr("chc_booked_on")} ${_formatDateTime(createdAt)}',
-                  style: GoogleFonts.poppins(
+                  style: AppTheme.getTextStyle(context,
                       fontSize: 10, color: Colors.grey.shade500)),
             ],
           ),
@@ -2676,13 +3131,16 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
           const SizedBox(width: 10),
           Expanded(
               child: Text(label,
-                  style: GoogleFonts.notoSansTelugu(
-                      fontSize: 11, color: CHCTheme.textSecondary))),
+                  style: AppTheme.getTextStyle(
+                    context,
+                    fontSize: 11,
+                    color: AppTheme.textSecondary,
+                  ))),
           Text(value,
-              style: GoogleFonts.poppins(
+              style: AppTheme.getTextStyle(context,
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
-                  color: CHCTheme.text)),
+                  color: AppTheme.text)),
         ],
       ),
     );
@@ -2696,14 +3154,17 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: CHCTheme.surface,
-        borderRadius: BorderRadius.circular(CHCTheme.radiusSm),
-        border: Border.all(color: CHCTheme.border.withOpacity(0.5)),
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+        border: Border.all(color: AppTheme.border.withOpacity(0.5)),
       ),
       child: Column(children: [
         Text(label,
-            style: GoogleFonts.notoSansTelugu(
-                fontSize: 10, color: CHCTheme.textSecondary)),
+            style: AppTheme.getTextStyle(
+              context,
+              fontSize: 10,
+              color: AppTheme.textSecondary,
+            )),
         const SizedBox(height: 4),
         if (isImage)
           ClipRRect(
@@ -2717,22 +3178,22 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                 height: 100,
                 child: Center(
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: CHCTheme.primary)),
+                        strokeWidth: 2, color: AppTheme.primary)),
               ),
               errorWidget: (_, __, ___) => const SizedBox(
                 height: 60,
                 child: Center(
                     child: Icon(Icons.broken_image,
-                        color: CHCTheme.textSecondary)),
+                        color: AppTheme.textSecondary)),
               ),
             ),
           )
         else
           Text(value,
-              style: GoogleFonts.poppins(
+              style: AppTheme.getTextStyle(context,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: CHCTheme.text)),
+                  color: AppTheme.text)),
       ]),
     );
   }
@@ -2743,17 +3204,20 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: CHCTheme.textSecondary),
+          Icon(icon, size: 16, color: AppTheme.textSecondary),
           const SizedBox(width: 8),
           Text(label,
-              style: GoogleFonts.notoSansTelugu(
-                  fontSize: 12, color: CHCTheme.textSecondary)),
+              style: AppTheme.getTextStyle(
+                context,
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+              )),
           const Spacer(),
           Text(value,
-              style: GoogleFonts.poppins(
+              style: AppTheme.getTextStyle(context,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: CHCTheme.text)),
+                  color: AppTheme.text)),
         ],
       ),
     );
@@ -2806,15 +3270,20 @@ class _ReceiptRow extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style: GoogleFonts.notoSansTelugu(
-                  fontSize: isTotal ? 14 : 12, color: Colors.grey.shade600)),
+              style: AppTheme.getTextStyle(
+                context,
+                fontSize: isTotal ? 14 : 12,
+                color: AppTheme.textSecondary,
+              )),
           Text(value,
-              style: GoogleFonts.notoSansTelugu(
-                  fontSize: isTotal ? 18 : 13,
-                  fontWeight: FontWeight.w700,
-                  color: isPending
-                      ? CHCTheme.warning
-                      : (isTotal ? CHCTheme.primary : CHCTheme.text))),
+              style: AppTheme.getTextStyle(
+                context,
+                fontSize: isTotal ? 18 : 13,
+                fontWeight: FontWeight.w700,
+                color: isPending
+                    ? AppTheme.warning
+                    : (isTotal ? AppTheme.textPrimary : AppTheme.textPrimary),
+              )),
         ],
       ),
     );

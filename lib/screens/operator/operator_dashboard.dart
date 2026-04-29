@@ -11,6 +11,7 @@ import 'package:cropsync/screens/operator/manual_order_sheet.dart';
 import 'package:cropsync/screens/operator/operator_history_screen.dart';
 import 'package:cropsync/screens/operator/operator_profile_screen.dart';
 import 'package:cropsync/auth/signup_screen.dart';
+import 'package:cropsync/widgets/language_selector.dart';
 
 class OperatorDashboard extends StatefulWidget {
   const OperatorDashboard({super.key});
@@ -39,8 +40,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
     _loadData();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadData({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
     _operator = await OperatorAuthService.refreshSession() ??
         await OperatorAuthService.getCurrentOperator();
     if (_operator != null) {
@@ -68,17 +69,34 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
     final bookingId = booking['booking_id']?.toString() ?? '';
     if (bookingId.isEmpty) return;
 
-    final res = await ApiService.updateOperatorBookingStatus(
-      bookingId: bookingId,
-      assignmentStatus: status,
-    );
+    // Optimistic Update
+    final oldStatus = booking['assignment_status'];
+    setState(() {
+      booking['assignment_status'] = status;
+    });
 
-    if (res['success'] == true) {
-      _showSnack('Assignment status updated to $status');
-      await _loadData();
-    } else {
-      _showSnack(res['error']?.toString() ?? 'Failed to update status',
-          isError: true);
+    try {
+      final res = await ApiService.updateOperatorBookingStatus(
+        bookingId: bookingId,
+        assignmentStatus: status,
+      );
+
+      if (res['success'] == true) {
+        _loadData(silent: true);
+      } else {
+        // Rollback
+        setState(() {
+          booking['assignment_status'] = oldStatus;
+        });
+        _showSnack(res['error']?.toString() ?? 'Failed to update status',
+            isError: true);
+      }
+    } catch (e) {
+      // Rollback on network error
+      setState(() {
+        booking['assignment_status'] = oldStatus;
+      });
+      _showSnack('operator_network_error_try_again'.tr(), isError: true);
     }
   }
 
@@ -106,31 +124,54 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
       assignmentStatus = 'Completed';
     }
 
-    final res = await ApiService.updateOperatorBookingStatus(
-      bookingId: bookingId,
-      bookingStatus: status,
-      assignmentStatus: assignmentStatus,
-      rescheduledDate: rescheduledDate,
-    );
+    // Optimistic Update
+    final oldBookingStatus = booking['booking_status'];
+    final oldAssignmentStatus = booking['assignment_status'];
+    setState(() {
+      booking['booking_status'] = status;
+      if (assignmentStatus != null) {
+        booking['assignment_status'] = assignmentStatus;
+      }
+    });
 
-    if (res['success'] == true) {
-      _showSnack('Booking status updated to $status');
-      await _loadData();
-    } else {
-      _showSnack(res['error']?.toString() ?? 'Failed to update status',
-          isError: true);
+    try {
+      final res = await ApiService.updateOperatorBookingStatus(
+        bookingId: bookingId,
+        bookingStatus: status,
+        assignmentStatus: assignmentStatus,
+        rescheduledDate: rescheduledDate,
+      );
+
+      if (res['success'] == true) {
+        _loadData(silent: true);
+      } else {
+        // Rollback
+        setState(() {
+          booking['booking_status'] = oldBookingStatus;
+          booking['assignment_status'] = oldAssignmentStatus;
+        });
+        _showSnack(res['error']?.toString() ?? 'Failed to update status',
+            isError: true);
+      }
+    } catch (e) {
+      // Rollback
+      setState(() {
+        booking['booking_status'] = oldBookingStatus;
+        booking['assignment_status'] = oldAssignmentStatus;
+      });
+      _showSnack('operator_network_error_try_again'.tr(), isError: true);
     }
   }
 
   void _showManualOrderSheet([Map<String, dynamic>? prefillBooking]) {
     if (_operator == null) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => ManualOrderSheet(
-        operator: _operator!,
-        prefillBooking: prefillBooking,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ManualOrderSheet(
+          operator: _operator!,
+          prefillBooking: prefillBooking,
+        ),
       ),
     ).then((_) => _loadData());
   }
@@ -323,6 +364,12 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
         ),
       ),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.translate_rounded,
+              color: AppTheme.textPrimary, size: 24),
+          onPressed: () => LanguageSelector.show(context),
+          splashRadius: 24,
+        ),
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: IconButton(
