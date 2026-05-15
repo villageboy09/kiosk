@@ -474,5 +474,12 @@
   "rain_chance_label": "Rain Chance",
   "wind_speed_label": "Wind Speed",
   "operator_no_operator_data": "No operator data found",
-  "history": "History"
+  "history": "History",
+  "operator_add_service_line": "सेवा लाइन जोड़ें",
+  "operator_service_type": "सेवा का प्रकार",
+  "operator_hours": "घंटे",
+  "operator_minutes": "मिनट",
+  "operator_select_hours": "घंटे",
+  "operator_select_minutes": "मिनट",
+  "operator_rate": "दर"
 }

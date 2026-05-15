@@ -475,5 +475,12 @@
   "rain_chance_label": "Rain Chance",
   "wind_speed_label": "Wind Speed",
   "operator_no_operator_data": "No operator data found",
-  "history": "History"
+  "history": "History",
+  "operator_add_service_line": "Add Service Line",
+  "operator_service_type": "Service Type",
+  "operator_hours": "Hours",
+  "operator_minutes": "Minutes",
+  "operator_select_hours": "Hrs",
+  "operator_select_minutes": "Mins",
+  "operator_rate": "Rate"
 }

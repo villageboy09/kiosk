@@ -87,7 +87,7 @@ class _WeatherBottomSheetState extends State<WeatherBottomSheet> {
     final response = await http.get(url);
     if (response.statusCode != 200) throw Exception('Weather API failed');
 
-    final data = json.decode(response.body);
+    final data = json.decode(utf8.decode(response.bodyBytes));
     final today = data['days'][0];
     final hours = (today['hours'] as List)
         .take(12)

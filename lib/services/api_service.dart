@@ -23,7 +23,7 @@ class ApiService {
         body: jsonEncode({'user_id': userId}),
       );
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && data['success'] == true) {
         final userData = data['user'] as Map<String, dynamic>;
@@ -51,7 +51,7 @@ class ApiService {
         body: jsonEncode({'user_id': userId}),
       );
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && data['success'] == true) {
         final userData = data['user'] as Map<String, dynamic>;
@@ -83,7 +83,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {
         'success': false,
@@ -110,7 +110,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {
         'success': false,
@@ -138,7 +138,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {
         'success': false,
@@ -159,7 +159,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true && data['exists'] == true) {
           return data['user'];
         }
@@ -186,7 +186,7 @@ class ApiService {
           );
 
           if (response.statusCode == 200) {
-            final data = jsonDecode(response.body);
+            final data = jsonDecode(utf8.decode(response.bodyBytes));
             if (data['success'] == true) {
               return List<Map<String, dynamic>>.from(data['crops']);
             }
@@ -207,7 +207,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true) {
           return List<Map<String, dynamic>>.from(data['varieties']);
         }
@@ -232,7 +232,7 @@ class ApiService {
         );
 
         if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
           if (data['success'] == true) {
             return List<Map<String, dynamic>>.from(data['selections']);
           }
@@ -252,7 +252,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true) {
           return Set<String>.from(data['used_fields']);
         }
@@ -286,7 +286,7 @@ class ApiService {
 
       if (response.statusCode == 200) {
         CacheService.invalidatePrefix(CacheKeys.userSelections);
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {'success': false, 'error': 'Server error'};
     } catch (e) {
@@ -315,7 +315,7 @@ class ApiService {
 
       if (response.statusCode == 200) {
         CacheService.invalidatePrefix(CacheKeys.userSelections);
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {'success': false, 'error': 'Server error'};
     } catch (e) {
@@ -332,7 +332,7 @@ class ApiService {
 
       if (response.statusCode == 200) {
         CacheService.invalidatePrefix(CacheKeys.userSelections);
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {'success': false, 'error': 'Server error'};
     } catch (e) {
@@ -354,7 +354,7 @@ class ApiService {
         );
 
         if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
           if (data['success'] == true) {
             return List<Map<String, dynamic>>.from(data['stages']);
           }
@@ -381,7 +381,7 @@ class ApiService {
         final response = await http.get(Uri.parse(url));
 
         if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
           if (data['success'] == true) {
             return List<Map<String, dynamic>>.from(data['durations']);
           }
@@ -406,7 +406,7 @@ class ApiService {
         final response = await http.get(Uri.parse(url));
 
         if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
           if (data['success'] == true) {
             final problems = List<Map<String, dynamic>>.from(data['problems']);
             return problems;
@@ -431,7 +431,7 @@ class ApiService {
         );
 
         if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
           if (data['success'] == true) {
             return data['advisory'] as Map<String, dynamic>?;
           }
@@ -456,7 +456,7 @@ class ApiService {
         );
 
         if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
           if (data['success'] == true) {
             return List<Map<String, dynamic>>.from(data['components']);
           }
@@ -486,7 +486,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {'success': false, 'error': 'Server error'};
     } catch (e) {
@@ -533,7 +533,7 @@ class ApiService {
           final response = await http.get(Uri.parse(url));
 
           if (response.statusCode == 200) {
-            final data = jsonDecode(response.body);
+            final data = jsonDecode(utf8.decode(response.bodyBytes));
             if (data['success'] == true) {
               return List<Map<String, dynamic>>.from(data['products']);
             }
@@ -562,7 +562,7 @@ class ApiService {
           );
 
           if (response.statusCode == 200) {
-            final data = jsonDecode(response.body);
+            final data = jsonDecode(utf8.decode(response.bodyBytes));
             if (data['success'] == true) {
               return List<String>.from(data['categories']);
             }
@@ -594,7 +594,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {'success': false, 'error': 'Server error'};
     } catch (e) {
@@ -625,7 +625,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {'success': false, 'error': 'Server error'};
     } catch (e) {
@@ -651,7 +651,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {'success': false, 'error': 'Server error'};
     } catch (e) {
@@ -685,7 +685,7 @@ class ApiService {
           final response = await http.get(Uri.parse(url));
 
           if (response.statusCode == 200) {
-            final data = jsonDecode(response.body);
+            final data = jsonDecode(utf8.decode(response.bodyBytes));
             if (data['success'] == true) {
               return List<Map<String, dynamic>>.from(data['varieties']);
             }
@@ -706,7 +706,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true) {
           return {
             'crop_names': List<String>.from(data['crop_names'] ?? []),
@@ -746,7 +746,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {
         'success': false,
@@ -799,7 +799,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {'success': false, 'error': 'Server error'};
     } catch (e) {
@@ -816,7 +816,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true) {
           return List<Map<String, dynamic>>.from(data['bookings']);
         }
@@ -841,7 +841,7 @@ class ApiService {
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true) {
           return List<Map<String, dynamic>>.from(data['equipments']);
         }
@@ -878,7 +878,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data is Map<String, dynamic>) {
           return data;
         }
@@ -909,7 +909,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {'success': false, 'error': 'Server error'};
     } catch (e) {
@@ -930,7 +930,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true) {
           return List<Map<String, dynamic>>.from(data['dates']);
         }
@@ -954,7 +954,7 @@ class ApiService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone_number': phoneNumber, 'password': password}),
       );
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (response.statusCode == 200 && data['success'] == true) {
         return ChcOperator.fromJson(data['operator'] as Map<String, dynamic>);
       } else {
@@ -973,7 +973,7 @@ class ApiService {
         '$baseUrl/api.php?action=get_operator_details&operator_id=${Uri.encodeComponent(operatorId.trim())}');
     try {
       final response = await http.get(url);
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (response.statusCode == 200 && data['success'] == true) {
         return ChcOperator.fromJson(data['operator'] as Map<String, dynamic>);
       } else {
@@ -1010,7 +1010,7 @@ class ApiService {
         Uri.parse(query.toString()),
       );
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true) {
           return List<Map<String, dynamic>>.from(data['bookings']);
         }
@@ -1041,7 +1041,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {
         'success': false,
@@ -1073,6 +1073,7 @@ class ApiService {
     String? notes,
     String? operatorNotes,
     double distance = 0,
+    String? services,
   }) async {
     try {
       final response = await http.post(
@@ -1098,10 +1099,11 @@ class ApiService {
           'notes': notes,
           'operator_notes': operatorNotes,
           'final_amount': finalAmount,
+          'services': services,
         }),
       );
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       }
       return {'success': false, 'error': 'Server error'};
     } catch (e) {
@@ -1120,7 +1122,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true) {
           return List<Map<String, dynamic>>.from(data['announcements']);
         }

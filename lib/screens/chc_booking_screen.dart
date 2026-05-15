@@ -414,7 +414,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Colors.white,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isWide = constraints.maxWidth >= 600;
@@ -862,42 +862,26 @@ class _CHCHeader extends StatelessWidget {
         12,
         MediaQuery.of(context).padding.top + 8,
         12,
-        12,
+        16,
       ),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1F2937), Color(0xFF111827)],
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
       ),
       child: Row(
         children: [
           // Back button
-          AppTheme.backButton(context, color: Colors.white),
+          AppTheme.backButton(context, color: AppTheme.textPrimary),
           // Avatar
           Container(
-            width: 34,
-            height: 34,
-            margin: const EdgeInsets.only(right: 10),
+            width: 36,
+            height: 36,
+            margin: const EdgeInsets.only(right: 12),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4B5563), Color(0xFF374151)],
-              ),
+              color: const Color(0xFFF3F4F6),
               shape: BoxShape.circle,
               border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.25), width: 1.5),
+                  color: const Color(0xFFE5E7EB), width: 1.5),
             ),
             child: Center(
               child: Text(
@@ -905,7 +889,7 @@ class _CHCHeader extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: AppTheme.textPrimary,
                 ),
               ),
             ),
@@ -920,9 +904,9 @@ class _CHCHeader extends StatelessWidget {
                   name,
                   style: AppTheme.getTextStyle(
                     context,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -932,8 +916,9 @@ class _CHCHeader extends StatelessWidget {
                     village,
                     style: AppTheme.getTextStyle(
                       context,
-                      fontSize: 11,
-                      color: Colors.white60,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textSecondary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -953,26 +938,25 @@ class _CHCHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.receipt_long_rounded,
-                          color: Colors.white, size: 16),
-                      const SizedBox(width: 5),
+                          color: AppTheme.textPrimary, size: 16),
+                      const SizedBox(width: 6),
                       Text(
                         context.tr('chc_my_bookings'),
                         style: AppTheme.getTextStyle(
                           context,
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
                     ],

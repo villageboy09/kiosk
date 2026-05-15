@@ -1,27 +1,34 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+
+import 'package:cropsync/auth/signup_screen.dart';
 import 'package:cropsync/navigation/app_routes.dart';
+import 'package:cropsync/screens/home_screen.dart';
+import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/widgets/auth/auth_alert_banner.dart';
 import 'package:cropsync/widgets/auth/auth_logo_header.dart';
 
-import 'package:cropsync/screens/home_screen.dart';
-
-import 'package:cropsync/services/auth_service.dart';
-import 'package:cropsync/services/api_service.dart';
-import 'package:cropsync/auth/signup_screen.dart';
-import 'package:cropsync/theme/app_theme.dart';
-
 class LoginScreen extends StatefulWidget {
   final String? initialPhoneNumber;
+
   const LoginScreen({super.key, this.initialPhoneNumber});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _pinController = TextEditingController();
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
+  final TextEditingController _pinController = TextEditingController();
+
+  late final AnimationController _animController;
+  late final Animation<double> _fadeAnimation;
+  late final Animation<Offset> _slideAnimation;
+
   bool _isLoading = false;
   String? _errorMessage;
   String? _pressedButton;
@@ -30,66 +37,50 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialPhoneNumber != null) {
-      _pinController.text = widget.initialPhoneNumber!;
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    ));
+    _animController.forward();
+
+    final digits = widget.initialPhoneNumber?.replaceAll(RegExp(r'\D'), '');
+    if (digits != null) {
+      _pinController.text =
+          digits.length > 10 ? digits.substring(0, 10) : digits;
     }
   }
 
   @override
   void dispose() {
     _errorTimer?.cancel();
+    _animController.dispose();
     _pinController.dispose();
     super.dispose();
   }
 
-  Future<void> _login() async {
-    final pin = _pinController.text.trim();
-    if (pin.length < 4) {
-      _showError('login_pin_length_error'.tr());
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      final isRegistered = await ApiService.checkUser(pin);
-      if (isRegistered == null) {
-        _showError('login_user_not_registered_redirect'.tr());
-        // Add a slight delay so user can see the message
-        await Future.delayed(const Duration(milliseconds: 1500));
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-              builder: (_) => SignupScreen(initialPhoneNumber: pin)),
-        );
-        return;
-      }
-
-      await AuthService.login(pin);
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    } catch (e) {
-      _showError(e.toString());
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _showError(String msg) {
+  void _showError(String message) {
     _errorTimer?.cancel();
-    setState(() => _errorMessage = msg);
+    setState(() => _errorMessage = message);
     _errorTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted) setState(() => _errorMessage = null);
+      if (mounted) {
+        setState(() => _errorMessage = null);
+      }
     });
   }
 
   void _appendDigit(String digit) {
-    if (_pinController.text.length >= 10) {
-      return;
-    }
+    if (_pinController.text.length >= 10) return;
     setState(() {
       _pinController.text += digit;
     });
@@ -101,6 +92,42 @@ class _LoginScreenState extends State<LoginScreen> {
       _pinController.text =
           _pinController.text.substring(0, _pinController.text.length - 1);
     });
+  }
+
+  Future<void> _login() async {
+    final pin = _pinController.text.trim();
+    if (pin.length != 10) {
+      _showError('login_pin_length_error'.tr());
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final user = await ApiService.checkUser(pin);
+      if (user == null) {
+        _showError('login_user_not_registered_redirect'.tr());
+        await Future.delayed(const Duration(milliseconds: 1200));
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.slideFromRight(
+            SignupScreen(initialPhoneNumber: pin),
+          ),
+        );
+        return;
+      }
+
+      await AuthService.login(pin);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        AppRoutes.fade(const HomeScreen()),
+      );
+    } catch (error) {
+      _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -123,26 +150,33 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 450),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              AuthLogoHeader(
-                                title: 'login_welcome_back'.tr(),
-                                subtitle: 'enter_field'
-                                    .tr(namedArgs: {'field': 'user_id'.tr()}),
-                                textAlign: TextAlign.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: SlideTransition(
+                              position: _slideAnimation,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  AuthLogoHeader(
+                                    title: 'login_welcome_back'.tr(),
+                                    subtitle: 'enter_field'.tr(
+                                      namedArgs: {'field': 'user_id'.tr()},
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 32),
+                                  _buildSingleInputDisplay(),
+                                  const SizedBox(height: 16),
+                                  _buildHintChip(),
+                                  const SizedBox(height: 32),
+                                  _buildKeypad(),
+                                  const SizedBox(height: 32),
+                                  _buildSignupLink(),
+                                  const SizedBox(height: 16),
+                                ],
                               ),
-                              const SizedBox(height: 32),
-                              _buildSingleInputDisplay(),
-                              const SizedBox(height: 16),
-                              _buildHintChip(),
-                              const SizedBox(height: 32),
-                              _buildKeypad(),
-                              const SizedBox(height: 32),
-                              _buildSignupLink(),
-                              const SizedBox(height: 16),
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -169,16 +203,18 @@ class _LoginScreenState extends State<LoginScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: hasInput ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
-          width: 2.0,
+          color: hasInput ? AppTheme.textPrimary : const Color(0xFFD1D5DB),
+          width: 2,
         ),
-        boxShadow: hasInput ? [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ] : null,
+        boxShadow: hasInput
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
       alignment: Alignment.center,
       child: FittedBox(
@@ -187,7 +223,6 @@ class _LoginScreenState extends State<LoginScreen> {
           displayText,
           maxLines: 1,
           style: TextStyle(
-            
             fontSize: hasInput ? 26 : 32,
             fontWeight: FontWeight.w800,
             letterSpacing: hasInput ? 4 : 8,
@@ -205,19 +240,16 @@ class _LoginScreenState extends State<LoginScreen> {
         color: const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(100),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.info_outline_rounded,
-            size: 16,
-            color: AppTheme.textSecondary,
-          ),
-          const SizedBox(width: 8),
+          Icon(Icons.info_outline_rounded,
+              size: 16, color: AppTheme.textSecondary),
+          SizedBox(width: 8),
           Text(
-            'login_pin_hint'.tr(),
-            style: const TextStyle(
-              
+            'Your phone number is your login pin',
+            textAlign: TextAlign.center,
+            style: TextStyle(
               fontSize: 14,
               color: AppTheme.textSecondary,
               fontWeight: FontWeight.w600,
@@ -239,7 +271,7 @@ class _LoginScreenState extends State<LoginScreen> {
         crossAxisSpacing: 12,
         childAspectRatio: 1.2,
         children: [
-          ...List.generate(9, (i) => i + 1)
+          ...List.generate(9, (index) => index + 1)
               .map((number) => _buildKeyButton(number.toString())),
           _buildSubmitButton(),
           _buildKeyButton('0'),
@@ -263,13 +295,15 @@ class _LoginScreenState extends State<LoginScreen> {
         decoration: BoxDecoration(
           color: AppTheme.textPrimary,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: isPressed ? null : [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            )
-          ],
+          boxShadow: isPressed
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
         ),
         alignment: Alignment.center,
         child: _isLoading
@@ -308,12 +342,20 @@ class _LoginScreenState extends State<LoginScreen> {
             color: isPressed ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
             width: 1.5,
           ),
+          boxShadow: isPressed
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: const TextStyle(
-            
             fontSize: 26,
             fontWeight: FontWeight.w700,
             color: AppTheme.textPrimary,
@@ -338,7 +380,8 @@ class _LoginScreenState extends State<LoginScreen> {
           color: isPressed ? const Color(0xFFFEF2F2) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isPressed ? const Color(0xFFEF4444) : const Color(0xFFE5E7EB),
+            color:
+                isPressed ? const Color(0xFFEF4444) : const Color(0xFFE5E7EB),
             width: 1.5,
           ),
         ),
@@ -357,7 +400,12 @@ class _LoginScreenState extends State<LoginScreen> {
       onTap: () {
         Navigator.pushReplacement(
           context,
-          AppRoutes.slideFromRight(const SignupScreen()),
+          AppRoutes.slideFromRight(
+            SignupScreen(
+              initialPhoneNumber:
+                  _pinController.text.isNotEmpty ? _pinController.text : null,
+            ),
+          ),
         );
       },
       borderRadius: BorderRadius.circular(20),
@@ -380,7 +428,6 @@ class _LoginScreenState extends State<LoginScreen> {
             Text(
               'signup_create_account'.tr(),
               style: const TextStyle(
-                
                 fontSize: 16,
                 color: AppTheme.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -392,4 +439,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-

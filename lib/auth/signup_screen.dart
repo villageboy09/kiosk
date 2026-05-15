@@ -283,6 +283,25 @@ class _SignupScreenState extends State<SignupScreen>
     }
   }
 
+  Widget _buildBackgroundPattern() {
+    return Positioned.fill(
+      child: Opacity(
+        opacity: 0.03,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(top: 40, left: -20, child: Transform.rotate(angle: -0.2, child: const Icon(Icons.eco_rounded, size: 140, color: Color(0xFF059669)))),
+            Positioned(top: 180, right: -30, child: Transform.rotate(angle: 0.3, child: const Icon(Icons.agriculture_rounded, size: 180, color: Color(0xFF059669)))),
+            Positioned(top: 380, left: 30, child: Transform.rotate(angle: 0.1, child: const Icon(Icons.water_drop_rounded, size: 100, color: Color(0xFF059669)))),
+            Positioned(bottom: 150, right: 20, child: Transform.rotate(angle: -0.4, child: const Icon(Icons.park_rounded, size: 150, color: Color(0xFF059669)))),
+            Positioned(bottom: -40, left: 50, child: Transform.rotate(angle: 0.2, child: const Icon(Icons.grass_rounded, size: 160, color: Color(0xFF059669)))),
+            Positioned(bottom: 30, right: -40, child: Transform.rotate(angle: -0.1, child: const Icon(Icons.wb_sunny_rounded, size: 130, color: Color(0xFF059669)))),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -291,35 +310,49 @@ class _SignupScreenState extends State<SignupScreen>
       body: SafeArea(
         child: Stack(
           children: [
+            _buildBackgroundPattern(),
             SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 430),
-                      child: FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: SlideTransition(
-                          position: _slideAnimation,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              AuthLogoHeader(
-                                title: _isOperator
-                                    ? 'operator_login_title'.tr()
-                                    : 'signup_title'.tr(),
-                                subtitle: _isOperator
-                                    ? 'operator_login_subtitle'.tr()
-                                    : 'signup_subtitle'.tr(),
-                              ),
-                              const SizedBox(height: 24),
-                              _buildRoleToggle(),
-                              const SizedBox(height: 26),
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 500),
+              physics: const BouncingScrollPhysics(),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 430),
+                    child: FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: SlideTransition(
+                        position: _slideAnimation,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            AuthLogoHeader(
+                              title: _isOperator
+                                  ? 'operator_login_title'.tr()
+                                  : 'signup_title'.tr(),
+                              subtitle: _isOperator
+                                  ? 'operator_login_subtitle'.tr()
+                                  : 'signup_subtitle'.tr(),
+                            ),
+                            const SizedBox(height: 24),
+                            _buildRoleToggle(),
+                            const SizedBox(height: 26),
+                            AnimatedSize(
+                              duration: const Duration(milliseconds: 400),
+                              curve: Curves.easeOutCubic,
+                              alignment: Alignment.topCenter,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 400),
+                                layoutBuilder: (currentChild, previousChildren) {
+                                  return Stack(
+                                    alignment: Alignment.topCenter,
+                                    children: <Widget>[
+                                      ...previousChildren,
+                                      if (currentChild != null) currentChild,
+                                    ],
+                                  );
+                                },
                                 transitionBuilder: (child, animation) {
                                   return FadeTransition(
                                     opacity: animation,
@@ -338,19 +371,19 @@ class _SignupScreenState extends State<SignupScreen>
                                     : _buildMainCard(
                                         key: const ValueKey('farmer')),
                               ),
-                              const SizedBox(height: 18),
-                              if (!_isOperator) _buildLoginLink(),
-                              const SizedBox(height: 10),
-                              SizedBox(
-                                  height:
-                                      MediaQuery.of(context).viewInsets.bottom >
-                                              0
-                                          ? 20
-                                          : 40),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 18),
+                            if (!_isOperator) _buildLoginLink(),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                                height:
+                                    MediaQuery.of(context).viewInsets.bottom > 0
+                                        ? 20
+                                        : 40),
+                          ],
                         ),
                       ),
+                    ),
                   ),
                 ),
               ),
@@ -410,7 +443,6 @@ class _SignupScreenState extends State<SignupScreen>
                     child: Text(
                       'farmer'.tr(),
                       style: TextStyle(
-                        
                         fontSize: 15,
                         fontWeight:
                             _isOperator ? FontWeight.w500 : FontWeight.w700,
@@ -435,7 +467,6 @@ class _SignupScreenState extends State<SignupScreen>
                     child: Text(
                       'operator'.tr(),
                       style: TextStyle(
-                        
                         fontSize: 15,
                         fontWeight:
                             _isOperator ? FontWeight.w700 : FontWeight.w500,
@@ -455,109 +486,139 @@ class _SignupScreenState extends State<SignupScreen>
   }
 
   Widget _buildMainCard({required Key key}) {
-    return Column(
+    return Container(
       key: key,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _nameController,
-          focusNode: _nameFocusNode,
-          enabled: !_otpSent,
-          keyboardType: TextInputType.name,
-          decoration: InputDecoration(
-            hintText: 'signup_name_hint'.tr(),
-            prefixIcon: const Icon(Icons.person_rounded),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _phoneController,
-          focusNode: _phoneFocusNode,
-          enabled: !_otpSent,
-          keyboardType: TextInputType.phone,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(10),
-          ],
-          decoration: InputDecoration(
-            hintText: 'signup_phone_hint'.tr(),
-            prefixIcon: const Icon(Icons.phone_rounded),
-          ),
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 16),
-        _buildClientCodePicker(),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 400),
-          transitionBuilder: (child, animation) => SizeTransition(
-            sizeFactor: animation,
-            axis: Axis.vertical,
-            axisAlignment: -1.0,
-            child: FadeTransition(
-              opacity: animation,
-              child: child,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _nameController,
+            focusNode: _nameFocusNode,
+            enabled: !_otpSent,
+            keyboardType: TextInputType.name,
+            decoration: InputDecoration(
+              hintText: 'signup_name_hint'.tr(),
+              prefixIcon: const Icon(Icons.person_rounded),
             ),
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
-          child: _otpSent
-              ? Column(
-                  key: const ValueKey('otp_section'),
-                  children: [
-                    const SizedBox(height: 24),
-                    _buildOtpInputField(),
-                    const SizedBox(height: 20),
-                    Center(child: _buildHintChip()),
-                  ],
-                )
-              : const SizedBox.shrink(key: ValueKey('no_otp')),
-        ),
-        const SizedBox(height: 32),
-        _buildSubmitButton(),
-      ],
+          const SizedBox(height: 16),
+          TextField(
+            controller: _phoneController,
+            focusNode: _phoneFocusNode,
+            enabled: !_otpSent,
+            keyboardType: TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ],
+            decoration: InputDecoration(
+              hintText: 'signup_phone_hint'.tr(),
+              prefixIcon: const Icon(Icons.phone_rounded),
+            ),
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
+          _buildClientCodePicker(),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            transitionBuilder: (child, animation) => SizeTransition(
+              sizeFactor: animation,
+              axis: Axis.vertical,
+              axisAlignment: -1.0,
+              child: FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+            ),
+            child: _otpSent
+                ? Column(
+                    key: const ValueKey('otp_section'),
+                    children: [
+                      const SizedBox(height: 24),
+                      _buildOtpInputField(),
+                      const SizedBox(height: 20),
+                      Center(child: _buildHintChip()),
+                    ],
+                  )
+                : const SizedBox.shrink(key: ValueKey('no_otp')),
+          ),
+          const SizedBox(height: 32),
+          _buildSubmitButton(),
+        ],
+      ),
     );
   }
 
   Widget _buildOperatorCard({required Key key}) {
-    return Column(
+    return Container(
       key: key,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _operatorPhoneController,
-          keyboardType: TextInputType.phone,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(10),
-          ],
-          decoration: InputDecoration(
-            hintText: 'operator_phone_hint'.tr(),
-            prefixIcon: const Icon(Icons.phone_rounded),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _operatorPasswordController,
-          obscureText: _obscurePassword,
-          decoration: InputDecoration(
-            hintText: 'operator_password_hint'.tr(),
-            prefixIcon: const Icon(Icons.lock_rounded),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscurePassword
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                color: AppTheme.textHint,
-              ),
-              onPressed: () =>
-                  setState(() => _obscurePassword = !_obscurePassword),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _operatorPhoneController,
+            keyboardType: TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ],
+            decoration: InputDecoration(
+              hintText: 'operator_phone_hint'.tr(),
+              prefixIcon: const Icon(Icons.phone_rounded),
             ),
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 32),
-        _buildSubmitButton(), // Reuse common submit button style
-      ],
+          const SizedBox(height: 16),
+          TextField(
+            controller: _operatorPasswordController,
+            obscureText: _obscurePassword,
+            decoration: InputDecoration(
+              hintText: 'operator_password_hint'.tr(),
+              prefixIcon: const Icon(Icons.lock_rounded),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                  color: AppTheme.textHint,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 32),
+          _buildSubmitButton(), // Reuse common submit button style
+        ],
+      ),
     );
   }
 
@@ -617,7 +678,6 @@ class _SignupScreenState extends State<SignupScreen>
                         child: Text(
                           char,
                           style: const TextStyle(
-                            
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
                             color: AppTheme.textPrimary,
@@ -902,7 +962,7 @@ class _SignupScreenState extends State<SignupScreen>
         HapticFeedback.lightImpact();
         Navigator.pushReplacement(
           context,
-          AppRoutes.noAnimation(const LoginScreen()),
+          AppRoutes.slideFromLeft(const LoginScreen()),
         );
       },
       borderRadius: BorderRadius.circular(16),
@@ -933,4 +993,3 @@ class _SignupScreenState extends State<SignupScreen>
     );
   }
 }
-

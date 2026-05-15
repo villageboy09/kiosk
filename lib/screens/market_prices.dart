@@ -161,7 +161,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = json.decode(utf8.decode(response.bodyBytes));
         final records = data['records'] as List?;
 
         if (records == null || records.isEmpty) {

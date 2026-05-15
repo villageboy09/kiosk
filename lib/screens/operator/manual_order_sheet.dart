@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
+import 'dart:convert';
 
 import 'package:cropsync/models/chc_operator.dart';
 import 'package:cropsync/services/api_service.dart';
@@ -17,9 +19,15 @@ class ManualOrderSheet extends StatefulWidget {
 
 class _ManualOrderSheetState extends State<ManualOrderSheet> {
   final _pageController = PageController();
+  final ScrollController _step2ScrollController = ScrollController();
   int _currentStep = 1; // 1: Farmer, 2: Usage, 3: Receipt
 
   final _phoneController = TextEditingController();
+  final List<TextEditingController> _qtyControllers = [TextEditingController()];
+  final List<TextEditingController> _rateControllers = [TextEditingController()];
+  final List<Map<String, dynamic>> _services = [
+    {'type': '2x2', 'hours': 0, 'minutes': 0, 'qty': 0.0, 'rate': 0.0, 'unit': 'hour'}
+  ];
   final _nameController = TextEditingController();
   final _villageController = TextEditingController();
   final _qtyController = TextEditingController();
@@ -38,6 +46,10 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   DateTime? _serviceDate;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
+  // Manual total time input (hours + minutes) for time-based equipments
+  int _totalHoursInputHours = 0;
+  int _totalHoursInputMinutes = 0;
+  String? _lastResolvedPhone;
   double _ratePerUnit = 0.0;
   bool _isLoading = false;
   String? _errorMsg;
@@ -45,7 +57,6 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   Timer? _phoneDebounce;
 
   static const Color _accent = Color(0xFF111827);
-  static const Color _bg = Color(0xFFFAFAFA);
   static const Color _slate = Color(0xFF475569);
   static const Color _border = Color(0xFFE2E8F0);
 
@@ -106,10 +117,37 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     }
   }
 
+  @override
+  void dispose() {
+    _phoneDebounce?.cancel();
+    _phoneController.dispose();
+    _nameController.dispose();
+    _villageController.dispose();
+    _qtyController.dispose();
+    _distanceController.dispose();
+    _cropController.dispose();
+    _landSizeController.dispose();
+    _rateController.dispose();
+    for (var c in _qtyControllers) {
+      c.dispose();
+    }
+    for (var c in _rateControllers) {
+      c.dispose();
+    }
+    _pageController.dispose();
+    _step2ScrollController.dispose();
+    super.dispose();
+  }
+
   void _onPhoneChanged() {
     if (!mounted) return;
     _phoneDebounce?.cancel();
     final phone = _phoneController.text.trim();
+
+    if (phone != _lastResolvedPhone) {
+      _clearAutofillFields();
+    }
+
     if (phone.length != 10) {
       if (_isFetchingUser || _isFoundMember || !_isNewUser) {
         setState(() {
@@ -143,10 +181,14 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         _isCrossClientMember = user != null && !matchesClient;
         _isNewUser = user == null;
         _isFetchingUser = false;
+        _lastResolvedPhone = phone;
         if (user != null) {
           _nameController.text = (user['name'] ?? '').toString().trim();
           _villageController.text =
               (user['village'] ?? user['region'] ?? '').toString();
+        } else {
+          _nameController.clear();
+          _villageController.clear();
         }
       });
       await _loadEquipments();
@@ -230,6 +272,11 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     }
   }
 
+  bool get _isMultiService => (_selectedEquipment?['name_en'] ?? '')
+      .toString()
+      .toLowerCase()
+      .contains('harvester');
+
   bool get _isTimeBased => (_selectedEquipment?['unit'] ?? '')
       .toString()
       .toLowerCase()
@@ -242,6 +289,11 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       double.tryParse(_distanceController.text.trim()) ?? 0.0;
   double get _quantity => double.tryParse(_qtyController.text.trim()) ?? 0.0;
   double get _totalHours {
+    // For time-based equipments we allow manual total entry via dropdowns
+    if (_isTimeBased) {
+      final totalMins = _totalHoursInputHours * 60 + _totalHoursInputMinutes;
+      return totalMins / 60.0;
+    }
     if (_startTime == null || _endTime == null) return 0.0;
     final start = _startTime!.hour * 60 + _startTime!.minute;
     final end = _endTime!.hour * 60 + _endTime!.minute;
@@ -249,12 +301,46 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     return diff / 60.0;
   }
 
-  double get _billedQty => _isTimeBased ? _totalHours : _quantity;
+  double get _billedQty {
+    if (_isMultiService) {
+      return _services.fold(0.0, (sum, s) => sum + ((s['qty'] as num?)?.toDouble() ?? 0.0));
+    }
+    return _isTimeBased ? _totalHours : _quantity;
+  }
+
   double get _finalAmount {
+    if (_isMultiService) {
+      double total = 0.0;
+      for (int i = 0; i < _services.length; i++) {
+        final h = _services[i]['hours'] as int? ?? 0;
+        final m = _services[i]['minutes'] as int? ?? 0;
+        final qty = h + (m / 60.0);
+        final rate = double.tryParse(_rateControllers[i].text) ?? 0.0;
+        total += qty * rate;
+      }
+      return total;
+    }
     final rate = _ratePerUnit > 0
         ? _ratePerUnit
         : (double.tryParse(_rateController.text) ?? 0.0);
     return rate * _billedQty;
+  }
+
+  void _addServiceLine() {
+    setState(() {
+      _services.add({'type': '4x4', 'hours': 0, 'minutes': 0, 'qty': 0.0, 'rate': 0.0, 'unit': 'hour'});
+      _qtyControllers.add(TextEditingController());
+      _rateControllers.add(TextEditingController());
+    });
+  }
+
+  void _removeServiceLine(int index) {
+    if (_services.length <= 1) return;
+    setState(() {
+      _services.removeAt(index);
+      _qtyControllers.removeAt(index).dispose();
+      _rateControllers.removeAt(index).dispose();
+    });
   }
 
   String get _measuredUnit => _isTimeBased
@@ -267,9 +353,43 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       _phoneController.text.length == 10 &&
       _nameController.text.isNotEmpty &&
       _villageController.text.isNotEmpty;
+
+  void _clearAutofillFields() {
+    final shouldUpdate = _isFoundMember ||
+        _isCrossClientMember ||
+        _isFetchingUser ||
+        _nameController.text.isNotEmpty ||
+        _villageController.text.isNotEmpty ||
+        _ratePerUnit > 0 ||
+        _rateController.text.isNotEmpty;
+
+    if (!shouldUpdate) return;
+
+    setState(() {
+      _isFetchingUser = false;
+      _isFoundMember = false;
+      _isCrossClientMember = false;
+      _isNewUser = true;
+      _nameController.clear();
+      _villageController.clear();
+      _ratePerUnit = 0.0;
+      _rateController.clear();
+    });
+  }
+
   bool get _canSubmit {
     if (!_canGoToStep2 || _selectedEquipment == null) {
       return false;
+    }
+    if (_isMultiService) {
+      for (int i = 0; i < _services.length; i++) {
+        final h = _services[i]['hours'] as int? ?? 0;
+        final m = _services[i]['minutes'] as int? ?? 0;
+        final qty = h + (m / 60.0);
+        final rate = double.tryParse(_rateControllers[i].text) ?? 0.0;
+        if (qty <= 0 || rate <= 0) return false;
+      }
+      return true;
     }
     // If rate is still 0, operator MUST enter it manually
     final manualRate = double.tryParse(_rateController.text) ?? 0.0;
@@ -285,6 +405,16 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   Future<void> _submit() async {
     if (!_canSubmit) return;
     setState(() => _isLoading = true);
+    
+    if (_isMultiService) {
+      for (int i = 0; i < _services.length; i++) {
+        final h = _services[i]['hours'] as int? ?? 0;
+        final m = _services[i]['minutes'] as int? ?? 0;
+        _services[i]['qty'] = h + (m / 60.0);
+        _services[i]['rate'] = double.tryParse(_rateControllers[i].text) ?? 0.0;
+      }
+    }
+    
     try {
       final res = await ApiService.completeBookingManual(
         operatorId: widget.operator.operatorId,
@@ -294,11 +424,10 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         village: _villageController.text.trim(),
         equipmentUsed: _selectedEquipment!['name_en'] ?? 'Equipment',
         equipmentId: _selectedEquipment!['id'],
-        startTime: _isTimeBased
-            ? '${_startTime!.hour}:${_startTime!.minute}'
+        startTime: _isTimeBased ? '00:00' : '00:00',
+        endTime: _isTimeBased
+            ? '${_totalHoursInputHours.toString().padLeft(2, '0')}:${_totalHoursInputMinutes.toString().padLeft(2, '0')}'
             : '00:00',
-        endTime:
-            _isTimeBased ? '${_endTime!.hour}:${_endTime!.minute}' : '00:00',
         distance: _isTractorTrolley ? _distance : 0,
         serviceDate:
             '${_serviceDate!.year}-${_serviceDate!.month}-${_serviceDate!.day}',
@@ -306,10 +435,13 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         landSizeAcres: double.tryParse(_landSizeController.text) ?? 0,
         billedQty: _billedQty,
         unitType: _measuredUnit,
-        rate: _ratePerUnit > 0
-            ? _ratePerUnit
-            : (double.tryParse(_rateController.text) ?? 0.0),
+        rate: _isMultiService
+            ? 0.0
+            : (_ratePerUnit > 0
+                ? _ratePerUnit
+                : (double.tryParse(_rateController.text) ?? 0.0)),
         finalAmount: _finalAmount,
+        services: _isMultiService ? jsonEncode(_services) : null,
       );
 
       if (res['success'] == true) {
@@ -338,38 +470,52 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Colors.white,
       appBar: _currentStep == 4
           ? null
           : AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    color: _accent, size: 20),
-                onPressed: () {
-                  if (_currentStep > 1) {
-                    _pageController.previousPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOut);
-                    setState(() => _currentStep--);
-                  } else {
-                    Navigator.pop(context);
-                  }
-                },
+              scrolledUnderElevation: 0,
+              toolbarHeight: 64,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(1),
+                child: Container(color: const Color(0xFFF3F4F6), height: 1),
+              ),
+              leading: Padding(
+                padding: const EdgeInsets.only(left: 8.0),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                      color: _accent, size: 20),
+                  onPressed: () {
+                    if (_currentStep > 1) {
+                      _pageController.previousPage(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOut);
+                      setState(() => _currentStep--);
+                    } else {
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
               ),
               title: Column(
                 children: [
-                  Text(_currentStep == 3
-                      ? 'operator_review_bill'.tr()
-                      : 'operator_job_completion_title'.tr(),
+                  Text(
+                      _currentStep == 3
+                          ? 'operator_review_bill'.tr()
+                          : 'operator_job_completion_title'.tr(),
                       style: const TextStyle(
                           color: _accent,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold)),
+                          fontSize: 17,
+                          letterSpacing: -0.4,
+                          fontWeight: FontWeight.w800)),
                   if (_currentStep < 3)
                     Text('${'step'.tr()} $_currentStep ${'of'.tr()} 2',
-                        style: const TextStyle(color: _slate, fontSize: 11)),
+                        style: const TextStyle(
+                            color: _slate, 
+                            fontSize: 12, 
+                            fontWeight: FontWeight.w600)),
                 ],
               ),
               centerTitle: true,
@@ -447,6 +593,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   Widget _buildStep2() {
     return SingleChildScrollView(
+      controller: _step2ScrollController,
       padding: const EdgeInsets.all(24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _sectionTitle(
@@ -454,37 +601,191 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         const SizedBox(height: 16),
         _buildEquipmentGrid(),
         const SizedBox(height: 24),
-        _sectionTitle(Icons.speed_rounded, 'operator_usage'.tr()),
-        const SizedBox(height: 16),
-        if (_isTimeBased)
-          _buildTimeSelectors()
-        else if (_isTractorTrolley) ...[
-          _buildTextField(
-              _distanceController,
-              'operator_distance_per_trip_label'.tr(),
-              Icons.add_road_rounded,
-              TextInputType.number,
-              suffix: 'KM'),
+        if (_isMultiService) ...[
+          _sectionTitle(Icons.speed_rounded, 'operator_usage'.tr()),
           const SizedBox(height: 16),
-          _buildTextField(_qtyController, 'operator_total_trips_label'.tr(),
-              Icons.repeat_rounded, TextInputType.number),
+          ...List.generate(_services.length, (index) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _services[index]['type'],
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: const Color(0xFFE9E9EB),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none),
+                            enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none),
+                            focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: _accent, width: 1.5)),
+                          ),
+                          icon: const Icon(Icons.expand_more_rounded, color: Color(0xFF8E8E93), size: 20),
+                          items: ['2x2', '4x4', 'Other']
+                              .map((val) => DropdownMenuItem(
+                                  value: val, child: Text(val, style: const TextStyle(fontWeight: FontWeight.w600))))
+                              .toList(),
+                          onChanged: (val) =>
+                              setState(() => _services[index]['type'] = val),
+                        ),
+                      ),
+                      if (index > 0)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              color: Colors.redAccent, size: 20),
+                          onPressed: () => _removeServiceLine(index),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: _buildDurationDropdown(
+                          label: 'operator_hours'.tr(),
+                          value: _services[index]['hours'] as int? ?? 0,
+                          items: List<int>.generate(24, (i) => i),
+                          suffix: 'operator_select_hours'.tr(),
+                          onChanged: (value) =>
+                              setState(() => _services[index]['hours'] = value),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 2,
+                        child: _buildDurationDropdown(
+                          label: 'operator_minutes'.tr(),
+                          value: _services[index]['minutes'] as int? ?? 0,
+                          items: List<int>.generate(60, (i) => i),
+                          suffix: 'operator_select_minutes'.tr(),
+                          onChanged: (value) =>
+                              setState(() => _services[index]['minutes'] = value),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'operator_rate'.tr(),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: _slate,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 48,
+                              child: TextField(
+                                controller: _rateControllers[index],
+                                keyboardType: const TextInputType.numberWithOptions(
+                                    decimal: true),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(4),
+                                ],
+                                decoration: InputDecoration(
+                                  hintText: 'operator_rate'.tr(),
+                                  prefixText: '₹',
+                                  filled: true,
+                                  fillColor: const Color(0xFFF8FAFC),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 14),
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: const BorderSide(color: _border)),
+                                  enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: const BorderSide(color: _border)),
+                                  focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: const BorderSide(color: _accent, width: 1.5)),
+                                ),
+                                onChanged: (_) => setState(() {}),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (index == _services.length - 1) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: _addServiceLine,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: Text('operator_add_service_line'.tr()),
+                        style: TextButton.styleFrom(
+                            foregroundColor: _accent,
+                            padding: EdgeInsets.zero),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
         ] else ...[
+          _sectionTitle(Icons.speed_rounded, 'operator_usage'.tr()),
+          const SizedBox(height: 16),
+          if (_isTimeBased)
+            _buildTimeSelectors()
+          else if (_isTractorTrolley) ...[
+            _buildTextField(
+                _distanceController,
+                'operator_distance_per_trip_label'.tr(),
+                Icons.add_road_rounded,
+                TextInputType.number,
+                suffix: 'KM'),
+            const SizedBox(height: 16),
+            _buildTextField(_qtyController, 'operator_total_trips_label'.tr(),
+                Icons.repeat_rounded, TextInputType.number),
+          ] else ...[
+            _buildTextField(
+                _qtyController,
+                'operator_quantity_label'
+                    .tr(namedArgs: {'unit': _measuredUnit}),
+                Icons.calculate_rounded,
+                TextInputType.number),
+          ],
+          const SizedBox(height: 24),
+          _sectionTitle(Icons.payments_rounded, 'chc_rate_label'.tr()),
+          const SizedBox(height: 16),
           _buildTextField(
-              _qtyController,
-              'operator_quantity_label'.tr(namedArgs: {'unit': _measuredUnit}),
-              Icons.calculate_rounded,
-              TextInputType.number),
+            _rateController,
+            'chc_rate_label'.tr(),
+            Icons.currency_rupee_rounded,
+            TextInputType.number,
+            suffix: '/ ${_measuredUnit.tr()}',
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(4),
+            ],
+          ),
         ],
-        const SizedBox(height: 24),
-        _sectionTitle(Icons.payments_rounded, 'chc_rate_label'.tr()),
-        const SizedBox(height: 16),
-        _buildTextField(
-          _rateController,
-          'chc_rate_label'.tr(),
-          Icons.currency_rupee_rounded,
-          TextInputType.number,
-          suffix: '/ ${_measuredUnit.tr()}',
-        ),
         if (_errorMsg != null)
           Padding(
             padding: const EdgeInsets.only(top: 16),
@@ -538,17 +839,33 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                 const Divider(height: 32, color: Color(0xFFF1F5F9)),
                 _receiptRow('operator_equipment_used_label'.tr(),
                     _selectedEquipment?['name_en'] ?? ''),
-                if (_isTimeBased)
-                  _receiptRow('operator_duration'.tr(),
-                      '${_startTime?.format(context) ?? '--:--'} → ${_endTime?.format(context) ?? '--:--'} (${_totalHours.toStringAsFixed(1)} hrs)')
-                else if (_isTractorTrolley) ...[
-                  _receiptRow('operator_distance'.tr(), '$_distance KM'),
-                  _receiptRow('operator_trips'.tr(), _qtyController.text),
-                ] else
-                  _receiptRow('operator_quantity'.tr(),
-                      '${_qtyController.text} $_measuredUnit'),
-                _receiptRow('chc_rate_label'.tr(),
-                    '₹${rate.toStringAsFixed(0)} / ${_measuredUnit.tr()}'),
+                if (_isMultiService) ...[
+                  ..._services.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final svc = entry.value;
+                    final h = svc['hours'] as int? ?? 0;
+                    final m = svc['minutes'] as int? ?? 0;
+                    final qty = h + (m / 60.0);
+                    final lineRate = double.tryParse(_rateControllers[i].text) ?? 0.0;
+                    final lineCost = qty * lineRate;
+                    return _receiptRow(
+                      '${svc['type'] ?? 'Service'} ${i + 1}',
+                      '${qty % 1 == 0 ? qty.toInt() : qty.toStringAsFixed(2)} × ₹$lineRate = ₹${lineCost.toStringAsFixed(0)}',
+                    );
+                  }),
+                ] else ...[
+                  if (_isTimeBased)
+                    _receiptRow('operator_duration'.tr(),
+                        '${_totalHoursInputHours}h ${_totalHoursInputMinutes}m (${_totalHours.toStringAsFixed(1)} hrs)')
+                  else if (_isTractorTrolley) ...[
+                    _receiptRow('operator_distance'.tr(), '$_distance KM'),
+                    _receiptRow('operator_trips'.tr(), _qtyController.text),
+                  ] else
+                    _receiptRow('operator_quantity'.tr(),
+                        '${_qtyController.text} $_measuredUnit'),
+                  _receiptRow('chc_rate_label'.tr(),
+                      '₹${rate.toStringAsFixed(0)} / ${_measuredUnit.tr()}'),
+                ],
                 const Divider(height: 32, color: _border),
                 _receiptRow('operator_total_bill'.tr(),
                     '₹${_finalAmount.toStringAsFixed(0)}',
@@ -717,7 +1034,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   Widget _buildTextField(TextEditingController controller, String label,
       IconData icon, TextInputType type,
-      {String? suffix, Widget? suffixIcon}) {
+      {String? suffix, Widget? suffixIcon, List<TextInputFormatter>? inputFormatters}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -728,6 +1045,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         TextField(
           controller: controller,
           keyboardType: type,
+          inputFormatters: inputFormatters,
           style: const TextStyle(fontWeight: FontWeight.w600),
           onChanged: (_) {
             if (controller == _distanceController) {
@@ -820,6 +1138,15 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                 onTap: () {
                   setState(() => _selectedEquipment = eq);
                   _updateRate();
+                  Future.delayed(const Duration(milliseconds: 200), () {
+                    if (_step2ScrollController.hasClients) {
+                      _step2ScrollController.animateTo(
+                        _step2ScrollController.position.maxScrollExtent,
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeOutCubic,
+                      );
+                    }
+                  });
                 },
                 borderRadius: BorderRadius.circular(16),
                 child: AnimatedContainer(
@@ -828,8 +1155,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border:
-                        Border.all(color: isSel ? _accent : _border, width: isSel ? 2 : 1),
+                    border: Border.all(
+                        color: isSel ? _accent : _border, width: isSel ? 2 : 1),
                     boxShadow: isSel
                         ? [
                             BoxShadow(
@@ -851,8 +1178,11 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                         flex: 3,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: isSel ? _accent.withValues(alpha: 0.05) : const Color(0xFFF8FAFC),
-                            border: const Border(bottom: BorderSide(color: _border, width: 1)),
+                            color: isSel
+                                ? _accent.withValues(alpha: 0.05)
+                                : const Color(0xFFF8FAFC),
+                            border: const Border(
+                                bottom: BorderSide(color: _border, width: 1)),
                           ),
                           child: Image.asset(
                             _getImagePath(eq['name_en']),
@@ -873,7 +1203,9 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                                   color: _accent,
                                   fontSize: 13,
                                   height: 1.1,
-                                  fontWeight: isSel ? FontWeight.w800 : FontWeight.w600)),
+                                  fontWeight: isSel
+                                      ? FontWeight.w800
+                                      : FontWeight.w600)),
                         ),
                       ),
                     ],
@@ -886,87 +1218,185 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   String _getImagePath(String? name) {
     name = name?.toLowerCase() ?? '';
-    if (name.contains('trolley')) return 'assets/chc_equipments/tractor_trolley.webp';
+    if (name.contains('trolley')) {
+      return 'assets/chc_equipments/tractor_trolley.webp';
+    }
     if (name.contains('tractor')) return 'assets/chc_equipments/tractor.webp';
     if (name.contains('drone')) return 'assets/chc_equipments/agri_drone.webp';
-    if (name.contains('harvester')) return 'assets/chc_equipments/combined_harvester.webp';
+    if (name.contains('harvester')) {
+      return 'assets/chc_equipments/combined_harvester.webp';
+    }
     if (name.contains('baler')) return 'assets/chc_equipments/balers.webp';
-    if (name.contains('sprayer')) return 'assets/chc_equipments/boom_sprayer.webp';
-    if (name.contains('seeder')) return 'assets/chc_equipments/manual_seeder.png';
-    if (name.contains('dryer')) return 'assets/chc_equipments/mobile_grain_dryer.webp';
-    if (name.contains('drill')) return 'assets/chc_equipments/seed_cum_fertilizer_drill.webp';
+    if (name.contains('sprayer')) {
+      return 'assets/chc_equipments/boom_sprayer.webp';
+    }
+    if (name.contains('seeder')) {
+      return 'assets/chc_equipments/manual_seeder.png';
+    }
+    if (name.contains('dryer')) {
+      return 'assets/chc_equipments/mobile_grain_dryer.webp';
+    }
+    if (name.contains('drill')) {
+      return 'assets/chc_equipments/seed_cum_fertilizer_drill.webp';
+    }
     if (name.contains('shredder')) return 'assets/chc_equipments/shredder.webp';
     return 'assets/chc_equipments/tractor.webp';
   }
 
   Widget _buildTimeSelectors() {
-    return Row(
-      children: [
-        Expanded(child: _timeBtn(true)),
-        const SizedBox(width: 12),
-        Expanded(child: _timeBtn(false)),
-      ],
-    );
-  }
+    final totalMinutes = _totalHoursInputHours * 60 + _totalHoursInputMinutes;
 
-  Widget _timeBtn(bool isStart) {
-    final time = isStart ? _startTime : _endTime;
-    return InkWell(
-      onTap: () async {
-        final picked = await showTimePicker(
-          context: context,
-          initialTime: time ?? TimeOfDay.now(),
-          builder: (context, child) {
-            return Localizations.override(
-              context: context,
-              locale: const Locale('en', 'US'),
-              child: MediaQuery(
-                data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
-                child: child!,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Total duration',
+            style: TextStyle(
+              fontSize: 13,
+              color: _accent,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Enter the full machine usage time for the day',
+            style:
+                TextStyle(fontSize: 11, color: _slate.withValues(alpha: 0.8)),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDurationDropdown(
+                  label: 'Hours',
+                  value: _totalHoursInputHours,
+                  items: List<int>.generate(24, (i) => i),
+                  suffix: 'h',
+                  onChanged: (value) =>
+                      setState(() => _totalHoursInputHours = value),
+                ),
               ),
-            );
-          },
-        );
-        if (picked != null) {
-          setState(() {
-            if (isStart) {
-              _startTime = picked;
-            } else {
-              _endTime = picked;
-            }
-          });
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _border)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(isStart ? 'START' : 'END',
-                style: const TextStyle(
-                    fontSize: 10, color: _slate, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.access_time_rounded, size: 16, color: _accent),
-                const SizedBox(width: 8),
-                Text(
-                    time == null
-                        ? '--:--'
-                        : '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildDurationDropdown(
+                  label: 'Minutes',
+                  value: _totalHoursInputMinutes,
+                  items: List<int>.generate(60, (i) => i),
+                  suffix: 'm',
+                  onChanged: (value) =>
+                      setState(() => _totalHoursInputMinutes = value),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Text(
+              'Selected: ${_totalHoursInputHours}h ${_totalHoursInputMinutes.toString().padLeft(2, '0')}m  •  ${(_isTimeBased ? _totalHours : 0).toStringAsFixed(1)} hrs',
+              style: const TextStyle(
+                fontSize: 12,
+                color: _slate,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (totalMinutes == 0) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Set at least 1 minute to continue.',
+              style: TextStyle(fontSize: 11, color: Colors.red),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
 
+  Widget _buildDurationDropdown({
+    required String label,
+    required int value,
+    required List<int> items,
+    required String suffix,
+    required ValueChanged<int> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: _slate,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<int>(
+          initialValue: value,
+          isExpanded: true,
+          menuMaxHeight: 320,
+          borderRadius: BorderRadius.circular(14),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFE9E9EB),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: _accent, width: 1.5),
+            ),
+          ),
+          icon: const Icon(Icons.expand_more_rounded, color: Color(0xFF8E8E93), size: 20),
+          items: items
+              .map(
+                (item) => DropdownMenuItem<int>(
+                  value: item,
+                  child: Text(
+                    item == 0 ? '0 $suffix' : '$item $suffix',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (selected) {
+            if (selected != null) {
+              onChanged(selected);
+            }
+          },
+        ),
+      ],
+    );
+  }
 
   Widget _receiptRow(String label, String value, {bool isTotal = false}) {
     return Padding(

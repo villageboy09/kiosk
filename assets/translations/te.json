@@ -475,5 +475,12 @@
   "operator_verify_info": "Verify Information",
   "operator_job_summary": "Job Summary",
   "settings": "Settings",
-  "enter": "Enter"
+  "enter": "Enter",
+  "operator_add_service_line": "సర్వీస్ లైన్ జోడించండి",
+  "operator_service_type": "సర్వీస్ రకం",
+  "operator_hours": "గంటలు",
+  "operator_minutes": "నిమిషాలు",
+  "operator_select_hours": "గంటలు",
+  "operator_select_minutes": "నిమి",
+  "operator_rate": "ధర"
 }

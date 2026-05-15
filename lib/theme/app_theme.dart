@@ -119,6 +119,11 @@ class AppTheme {
         ),
       ];
 
+  static List<String> get _fallbacks => [
+        GoogleFonts.notoSansTelugu().fontFamily ?? 'Noto Sans Telugu',
+        GoogleFonts.notoSansDevanagari().fontFamily ?? 'Noto Sans Devanagari',
+      ];
+
   /// Headline 1 - Large titles
   static TextStyle get h1 => GoogleFonts.googleSans(
         fontSize: 32,
@@ -126,7 +131,7 @@ class AppTheme {
         color: textPrimary,
         height: 1.1,
         letterSpacing: -0.5,
-      );
+      ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Headline 2 - Section titles
   static TextStyle get h2 => GoogleFonts.googleSans(
@@ -135,7 +140,7 @@ class AppTheme {
         color: textPrimary,
         height: 1.2,
         letterSpacing: -0.3,
-      );
+      ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Headline 3 - Card titles
   static TextStyle get h3 => GoogleFonts.googleSans(
@@ -144,7 +149,7 @@ class AppTheme {
         color: textPrimary,
         height: 1.3,
         letterSpacing: -0.2,
-      );
+      ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Body text
   static TextStyle get body => GoogleFonts.googleSans(
@@ -153,7 +158,7 @@ class AppTheme {
         color: textSecondary,
         height: 1.6,
         letterSpacing: 0,
-      );
+      ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Body medium
   static TextStyle get bodyMedium => GoogleFonts.googleSans(
@@ -162,7 +167,7 @@ class AppTheme {
         color: textPrimary,
         height: 1.5,
         letterSpacing: 0,
-      );
+      ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Caption text
   static TextStyle get caption => GoogleFonts.googleSans(
@@ -171,7 +176,7 @@ class AppTheme {
         color: textSecondary,
         height: 1.4,
         letterSpacing: 0.1,
-      );
+      ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Small text
   static TextStyle get small => GoogleFonts.googleSans(
@@ -180,7 +185,7 @@ class AppTheme {
         color: textHint,
         height: 1.4,
         letterSpacing: 0.3,
-      );
+      ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Button text
   static TextStyle get button => GoogleFonts.googleSans(
@@ -189,7 +194,7 @@ class AppTheme {
         color: textOnPrimary,
         height: 1.2,
         letterSpacing: 0.1,
-      );
+      ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// AppBar title
   static TextStyle get appBarTitle => GoogleFonts.googleSans(
@@ -197,7 +202,7 @@ class AppTheme {
         fontWeight: FontWeight.w700,
         color: textPrimary,
         letterSpacing: -0.2,
-      );
+      ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Telugu text style helper — uses GoogleFonts.notoSansTelugu directly
   static TextStyle teluguText({
@@ -222,25 +227,35 @@ class AppTheme {
     double? letterSpacing,
   }) {
     final languageCode = EasyLocalization.of(context)?.locale.languageCode;
-    final isTelugu = languageCode == 'te';
-
-    if (isTelugu) {
-      return GoogleFonts.notoSansTelugu(
+    
+    TextStyle baseStyle;
+    if (languageCode == 'te') {
+      baseStyle = GoogleFonts.notoSansTelugu(
         fontSize: fontSize,
         fontWeight: fontWeight,
         color: color ?? textPrimary,
         height: height,
         letterSpacing: letterSpacing ?? 0.3,
       );
+    } else if (languageCode == 'hi') {
+      baseStyle = GoogleFonts.notoSansDevanagari(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color ?? textPrimary,
+        height: height,
+        letterSpacing: letterSpacing ?? 0.2,
+      );
+    } else {
+      baseStyle = GoogleFonts.googleSans(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color ?? textPrimary,
+        height: height,
+        letterSpacing: letterSpacing,
+      );
     }
-
-    return GoogleFonts.googleSans(
-      fontSize: fontSize,
-      fontWeight: fontWeight,
-      color: color ?? textPrimary,
-      height: height,
-      letterSpacing: letterSpacing,
-    );
+    
+    return baseStyle.copyWith(fontFamilyFallback: _fallbacks);
   }
 
   // ============ DECORATIONS ============
@@ -298,11 +313,12 @@ class AppTheme {
     final languageCode =
         EasyLocalization.of(context)?.locale.languageCode ?? 'en';
     final isTelugu = languageCode == 'te';
+    final isHindi = languageCode == 'hi';
 
     // Base text theme driven by Google Fonts
     final baseTextTheme = isTelugu
         ? GoogleFonts.notoSansTeluguTextTheme()
-        : GoogleFonts.googleSansTextTheme();
+        : (isHindi ? GoogleFonts.notoSansDevanagariTextTheme() : GoogleFonts.googleSansTextTheme());
 
     return ThemeData(
       useMaterial3: true,
@@ -312,6 +328,7 @@ class AppTheme {
       textTheme: baseTextTheme.apply(
         bodyColor: textPrimary,
         displayColor: textPrimary,
+        fontFamilyFallback: _fallbacks,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -319,19 +336,13 @@ class AppTheme {
         elevation: 0,
         centerTitle: true,
         scrolledUnderElevation: 0,
-        titleTextStyle: isTelugu
-            ? GoogleFonts.notoSansTelugu(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: textPrimary,
-                letterSpacing: -0.2,
-              )
-            : GoogleFonts.googleSans(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: textPrimary,
-                letterSpacing: -0.2,
-              ),
+        titleTextStyle: getTextStyle(
+          context,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: textPrimary,
+          letterSpacing: -0.2,
+        ),
         iconTheme: const IconThemeData(color: textPrimary, size: 22),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -342,32 +353,23 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(radiusFull)),
-          textStyle: isTelugu
-              ? GoogleFonts.notoSansTelugu(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.1,
-                )
-              : GoogleFonts.googleSans(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.1,
-                ),
+          textStyle: getTextStyle(
+            context,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.1,
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: textPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          textStyle: isTelugu
-              ? GoogleFonts.notoSansTelugu(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                )
-              : GoogleFonts.googleSans(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+          textStyle: getTextStyle(
+            context,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(radiusFull)),
         ),
@@ -377,17 +379,12 @@ class AppTheme {
         fillColor: surface,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        hintStyle: isTelugu
-            ? GoogleFonts.notoSansTelugu(
-                color: textHint,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              )
-            : GoogleFonts.googleSans(
-                color: textHint,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
+        hintStyle: getTextStyle(
+          context,
+          color: textHint,
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
           borderSide: const BorderSide(color: border, width: 1.5),

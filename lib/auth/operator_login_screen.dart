@@ -106,41 +106,77 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         child: Stack(
           children: [
+            const Positioned(
+              top: -70,
+              right: -90,
+              child: _DecorBlob(color: Color(0xFFDCEBFA), size: 210),
+            ),
+            const Positioned(
+              bottom: -90,
+              left: -110,
+              child: _DecorBlob(color: Color(0xFFEFF6FF), size: 240),
+            ),
             Center(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 28.0, vertical: 20.0),
+                    horizontal: 20.0, vertical: 20.0),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
+                  constraints: const BoxConstraints(maxWidth: 460),
                   child: FadeTransition(
                     opacity: _fadeAnim,
                     child: SlideTransition(
                       position: _slideAnim,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          AuthLogoHeader(
-                            title: 'operator_login_title'.tr(),
-                            subtitle: 'operator_login_subtitle'.tr(),
-                            logoHeight: 72,
-                          ),
-                          const SizedBox(height: 36),
-                          _buildOperatorBadge(),
-                          const SizedBox(height: 28),
-                          _buildPhoneField(),
-                          const SizedBox(height: 16),
-                          _buildPasswordField(),
-                          const SizedBox(height: 32),
-                          _buildLoginButton(),
-                          const SizedBox(height: 28),
-                          _buildBackLink(),
-                        ],
+                      child: Container(
+                        padding: const EdgeInsets.all(22),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.92),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.07),
+                              blurRadius: 28,
+                              offset: const Offset(0, 16),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            AuthLogoHeader(
+                              title: 'operator_login_title'.tr(),
+                              subtitle: 'operator_login_subtitle'.tr(),
+                              logoHeight: 72,
+                            ),
+                            const SizedBox(height: 24),
+                            _buildOperatorBadge(),
+                            const SizedBox(height: 24),
+                            _buildPhoneField(),
+                            const SizedBox(height: 16),
+                            _buildPasswordField(),
+                            const SizedBox(height: 28),
+                            _buildLoginButton(),
+                            const SizedBox(height: 20),
+                            _buildBackLink(),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Secure operator access for managed equipment jobs.',
+                              textAlign: TextAlign.center,
+                              style: AppTheme.getTextStyle(
+                                context,
+                                fontSize: 12,
+                                color: const Color(0xFF6B7280),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -156,27 +192,30 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
 
   Widget _buildOperatorBadge() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF0FDF4), Color(0xFFEFF6FF)],
+        ),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: const Color(0xFFA7F3D0), width: 1),
+        border: Border.all(color: const Color(0xFFBAE6FD), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(Icons.verified_rounded,
-              size: 16, color: Color(0xFF111827)),
+              size: 16, color: Color(0xFF0F172A)),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               'operator_login_badge'.tr(),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: AppTheme.getTextStyle(context, 
+              style: AppTheme.getTextStyle(
+                context,
                 fontSize: 13,
-                color: const Color(0xFF111827),
+                color: const Color(0xFF0F172A),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -190,8 +229,15 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
     return Container(
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _border, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
       child: TextField(
         controller: _phoneController,
@@ -200,11 +246,11 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
           FilteringTextInputFormatter.digitsOnly,
           LengthLimitingTextInputFormatter(10),
         ],
-        style: AppTheme.getTextStyle(context, 
+        style: AppTheme.getTextStyle(context,
             fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: 'operator_phone_hint'.tr(),
-          hintStyle: AppTheme.getTextStyle(context, 
+          hintStyle: AppTheme.getTextStyle(context,
               color: const Color(0xFF9CA3AF),
               fontSize: 16,
               fontWeight: FontWeight.w500),
@@ -224,17 +270,24 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
     return Container(
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _border, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
       child: TextField(
         controller: _passwordController,
         obscureText: _obscurePassword,
-        style: AppTheme.getTextStyle(context, 
+        style: AppTheme.getTextStyle(context,
             fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: 'operator_password_hint'.tr(),
-          hintStyle: AppTheme.getTextStyle(context, 
+          hintStyle: AppTheme.getTextStyle(context,
               color: const Color(0xFF9CA3AF),
               fontSize: 16,
               fontWeight: FontWeight.w500),
@@ -266,10 +319,10 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
 
   Widget _buildLoginButton() {
     return Container(
-      height: 60,
+      height: 58,
       decoration: BoxDecoration(
         color: _isLoading ? const Color(0xFF94A3B8) : _accent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: _isLoading
             ? []
             : [
@@ -283,7 +336,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           onTap: _isLoading ? null : _login,
           child: Center(
             child: _isLoading
@@ -295,7 +348,8 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
                   )
                 : Text(
                     'operator_login_button'.tr(),
-                    style: AppTheme.getTextStyle(context, 
+                    style: AppTheme.getTextStyle(
+                      context,
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
@@ -312,7 +366,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
     return TextButton(
       onPressed: () => Navigator.pushReplacement(
         context,
-        AppRoutes.noAnimation(const SignupScreen()),
+        AppRoutes.slideFromLeft(const SignupScreen()),
       ),
       style: TextButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -327,13 +381,35 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
           const SizedBox(width: 8),
           Text(
             'operator_back_to_farmer_login'.tr(),
-            style: AppTheme.getTextStyle(context, 
+            style: AppTheme.getTextStyle(
+              context,
               fontSize: 15,
               color: _textSub,
               fontWeight: FontWeight.w600,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DecorBlob extends StatelessWidget {
+  final Color color;
+  final double size;
+
+  const _DecorBlob({required this.color, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
       ),
     );
   }

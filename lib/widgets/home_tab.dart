@@ -116,7 +116,7 @@ class _WelcomeCardState extends State<_WelcomeCard> {
 
       final response = await http.get(url).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = json.decode(utf8.decode(response.bodyBytes));
         final days = data['days'];
         if (days is List && days.isNotEmpty) {
           final temp = days.first['temp'];

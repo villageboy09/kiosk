@@ -17,6 +17,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once '../config.php';
 
+// Keep app/API string parameters consistent with utf8mb4.
+// This helps avoid MySQL collation conflicts when the database contains mixed legacy collations.
+try {
+    if (isset($pdo) && $pdo instanceof PDO) {
+        $pdo->exec("SET NAMES utf8mb4");
+    }
+} catch (Throwable $e) {
+    // Do not block API execution if the server does not allow changing connection charset.
+}
+
 $action = $_GET['action'] ?? '';
 
 switch ($action) {
@@ -1468,50 +1478,90 @@ function getOperatorDetails($pdo) {
 
 function operatorLogin($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
+
     $phone = $input['phone_number'] ?? '';
     $password = $input['password'] ?? '';
 
     if (empty($phone) || empty($password)) {
-        echo json_encode(['success' => false, 'message' => 'Phone and password are required']);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Phone and password are required'
+        ]);
         return;
     }
 
     try {
+
+        // Fetch all operators with same phone number
         $stmt = $pdo->prepare("
-            SELECT o.*, 
-                   (SELECT COUNT(*) FROM chc_bookings b 
-                    WHERE b.assigned_operator_id = o.operator_id 
-                      AND (b.booking_status = 'Completed' OR b.assignment_status = 'Completed')
+            SELECT o.*,
+                   (SELECT COUNT(*) FROM chc_bookings b
+                    WHERE b.assigned_operator_id = o.operator_id
+                    AND (
+                        b.booking_status = 'Completed'
+                        OR b.assignment_status = 'Completed'
+                    )
                    ) AS jobs_completed
-            FROM chc_operators o 
+            FROM chc_operators o
             WHERE o.phone_number = ?
         ");
-        $stmt->execute([$phone]);
-        $operator = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$operator) {
-            echo json_encode(['success' => false, 'message' => 'Operator not found. Check your phone number.']);
+        $stmt->execute([$phone]);
+
+        $operators = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!$operators || count($operators) === 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Operator not found'
+            ]);
             return;
         }
 
-        $passwordMatch = false;
-        if (isset($operator['password'])) {
-            if (password_verify($password, $operator['password'])) {
-                $passwordMatch = true;
-            } elseif ($operator['password'] === $password) {
-                $passwordMatch = true;
+        $matchedOperator = null;
+
+        foreach ($operators as $operator) {
+
+            $passwordMatch = false;
+
+            if (!empty($operator['password'])) {
+
+                if (password_verify($password, $operator['password'])) {
+                    $passwordMatch = true;
+                }
+
+                elseif ($operator['password'] === $password) {
+                    $passwordMatch = true;
+                }
+            }
+
+            if ($passwordMatch) {
+                $matchedOperator = $operator;
+                break;
             }
         }
 
-        if (!$passwordMatch) {
-            echo json_encode(['success' => false, 'message' => 'Incorrect password.']);
+        if (!$matchedOperator) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Incorrect password'
+            ]);
             return;
         }
 
-        unset($operator['password']);
-        echo json_encode(['success' => true, 'operator' => $operator]);
+        unset($matchedOperator['password']);
+
+        echo json_encode([
+            'success' => true,
+            'operator' => $matchedOperator
+        ]);
+
     } catch (PDOException $e) {
-        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'Database error: ' . $e->getMessage()
+        ]);
     }
 }
 
@@ -1567,88 +1617,223 @@ function getOperatorBookings($pdo) {
     }
 }
 
+/**
+ * Update Operator Booking Status + Handle current_booking_id
+ */
 function updateOperatorBookingStatus($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
 
-    $bookingId = trim($input['booking_id'] ?? '');
-    $bookingStatus = isset($input['booking_status']) ? trim($input['booking_status']) : null;
-    $assignmentStatus = isset($input['assignment_status']) ? trim($input['assignment_status']) : null;
-    $rescheduledDate = array_key_exists('rescheduled_date', $input) ? trim((string)$input['rescheduled_date']) : null;
+    $bookingId         = trim($input['booking_id'] ?? '');
+    $bookingStatus     = trim($input['booking_status'] ?? '');
+    $assignmentStatus  = trim($input['assignment_status'] ?? '');
+    $rescheduledDate   = $input['rescheduled_date'] ?? null;
+    $operatorIdInput   = trim((string)($input['operator_id'] ?? ''));
+    $operatorNotes     = trim($input['operator_notes'] ?? '');
+    $cancelReason      = trim($input['cancel_reason'] ?? ($input['reason'] ?? ($operatorNotes ?: 'Cancelled by operator from app')));
 
     if (empty($bookingId)) {
-        echo json_encode(['success' => false, 'error' => 'Booking ID required']);
-        return;
-    }
-
-    if ($bookingStatus === 'Completed' && empty($assignmentStatus)) {
-        $assignmentStatus = 'Completed';
-    }
-
-    $updates = [];
-    $params = [];
-
-    if (!empty($bookingStatus)) {
-        $updates[] = 'booking_status = ?';
-        $params[] = $bookingStatus;
-    }
-
-    if (!empty($assignmentStatus)) {
-        $updates[] = 'assignment_status = ?';
-        $params[] = $assignmentStatus;
-    }
-
-    if ($rescheduledDate !== null) {
-        $updates[] = 'rescheduled_date = ?';
-        $params[] = ($rescheduledDate === '') ? null : $rescheduledDate;
-    }
-
-    if (empty($updates)) {
-        echo json_encode(['success' => false, 'error' => 'No fields to update']);
+        echo json_encode(['success' => false, 'error' => 'Booking ID is required']);
         return;
     }
 
     try {
-        $sql = "UPDATE chc_bookings SET " . implode(', ', $updates) . ", updated_at = NOW() WHERE booking_id = ?";
+        $pdo->beginTransaction();
+
+        // 1. Lock and read current booking details before changing anything.
+        $stmt = $pdo->prepare(" 
+            SELECT assigned_operator_id, booking_status, assignment_status, service_date, operator_notes
+            FROM chc_bookings 
+            WHERE BINARY booking_id = BINARY ?
+            FOR UPDATE
+        ");
+        $stmt->execute([$bookingId]);
+        $booking = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$booking) {
+            throw new Exception("Booking not found");
+        }
+
+        $operatorId = !empty($booking['assigned_operator_id']) ? $booking['assigned_operator_id'] : $operatorIdInput;
+        $bookingStatusLower = strtolower(trim($bookingStatus));
+        $assignmentStatusLower = strtolower(trim($assignmentStatus));
+
+        // IMPORTANT:
+        // This endpoint is used by the operator app. Therefore, when the app sends
+        // Cancelled, it should mean "operator cancelled this assignment", not
+        // "farmer/admin cancelled the whole booking". The booking must remain
+        // active and reassignable on the dashboard.
+        $isOperatorCancellation = in_array($bookingStatusLower, ['cancelled', 'canceled'], true)
+            || in_array($assignmentStatusLower, ['cancelled', 'canceled', 'operator cancelled', 'operator canceled'], true);
+
+        if ($isOperatorCancellation) {
+            if (empty($operatorId)) {
+                throw new Exception('Cannot cancel operator assignment because no operator is attached to this booking.');
+            }
+
+            if (strtolower(trim($booking['booking_status'] ?? '')) === 'completed' || strtolower(trim($booking['assignment_status'] ?? '')) === 'completed') {
+                throw new Exception('Cannot cancel an already completed booking.');
+            }
+
+            // Avoid duplicate open cancellation logs if the app retries the request.
+            $existingLogStmt = $pdo->prepare(" 
+                SELECT id
+                FROM chc_operator_cancelled_orders
+                WHERE BINARY booking_id = BINARY ?
+                  AND operator_id = ?
+                  AND reassigned_to_operator_id IS NULL
+                ORDER BY cancelled_at DESC
+                LIMIT 1
+            ");
+            $existingLogStmt->execute([$bookingId, $operatorId]);
+            $existingLog = $existingLogStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$existingLog) {
+                $logStmt = $pdo->prepare(" 
+                    INSERT INTO chc_operator_cancelled_orders
+                        (booking_id, operator_id, reason, cancelled_at, created_by)
+                    VALUES
+                        (?, ?, ?, NOW(), 'operator_app')
+                ");
+                $logStmt->execute([$bookingId, $operatorId, $cancelReason]);
+            }
+
+            // Keep the farmer booking alive, detach only the operator assignment,
+            // and save the last operator-cancellation details for dashboard filtering.
+            // IMPORTANT: decide status values in PHP, not with SQL LOWER/CASE comparisons.
+            // This avoids MySQL "Illegal mix of collations" errors on databases with mixed collations.
+            $currentBookingStatusLower = strtolower(trim((string)($booking['booking_status'] ?? '')));
+            $safeBookingStatus = in_array($currentBookingStatusLower, ['', 'cancelled', 'canceled'], true)
+                ? 'Slot Booked'
+                : (string)$booking['booking_status'];
+            $safeOperatorNotes = $operatorNotes !== '' ? $operatorNotes : ($booking['operator_notes'] ?? null);
+
+            $updateStmt = $pdo->prepare(" 
+                UPDATE chc_bookings
+                SET booking_status = ?,
+                    assignment_status = ?,
+                    assigned_operator_id = NULL,
+                    last_cancelled_operator_id = ?,
+                    last_operator_cancel_reason = ?,
+                    last_operator_cancelled_at = NOW(),
+                    operator_notes = ?,
+                    updated_at = NOW()
+                WHERE BINARY booking_id = BINARY ?
+            ");
+            $updateStmt->execute([$safeBookingStatus, 'Operator Cancelled', $operatorId, $cancelReason, $safeOperatorNotes, $bookingId]);
+
+            // Free the operator for new work.
+            $stmtOp = $pdo->prepare(" 
+                UPDATE chc_operators
+                SET current_booking_id = NULL,
+                    availability = 'Available'
+                WHERE operator_id = ?
+            ");
+            $stmtOp->execute([$operatorId]);
+
+            $pdo->commit();
+
+            $stmtFetch = $pdo->prepare(" 
+                SELECT booking_id, booking_status, assignment_status, service_date,
+                       rescheduled_date, assigned_operator_id, last_cancelled_operator_id,
+                       last_operator_cancel_reason, last_operator_cancelled_at, updated_at
+                FROM chc_bookings
+                WHERE BINARY booking_id = BINARY ?
+            ");
+            $stmtFetch->execute([$bookingId]);
+            $updatedBooking = $stmtFetch->fetch(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Operator assignment cancelled. Booking is kept active for reassignment.',
+                'operator_cancelled' => true,
+                'booking' => $updatedBooking
+            ]);
+            return;
+        }
+
+        // 2. Normal non-cancellation status updates.
+        $updates = [];
+        $params = [];
+
+        if (!empty($bookingStatus)) {
+            $updates[] = "booking_status = ?";
+            $params[] = $bookingStatus;
+        }
+
+        if (!empty($assignmentStatus)) {
+            $updates[] = "assignment_status = ?";
+            $params[] = $assignmentStatus;
+        }
+
+        if ($rescheduledDate !== null) {
+            $updates[] = "rescheduled_date = ?";
+            $params[] = ($rescheduledDate === '') ? null : $rescheduledDate;
+        }
+
+        if ($operatorNotes !== '') {
+            $updates[] = "operator_notes = ?";
+            $params[] = $operatorNotes;
+        }
+
+        $updates[] = "updated_at = NOW()";
         $params[] = $bookingId;
 
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
+        if (!empty($updates)) {
+            $sql = "UPDATE chc_bookings SET " . implode(", ", $updates) . " WHERE BINARY booking_id = BINARY ?";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+        }
 
-        $stmtFetch = $pdo->prepare("SELECT booking_id, booking_status, assignment_status, service_date, rescheduled_date, updated_at FROM chc_bookings WHERE booking_id = ? LIMIT 1");
+        // 3. Handle operator current_booking_id for non-cancellation updates.
+        if ($operatorId) {
+            if (strtolower($assignmentStatus) === 'in progress' || strtolower($bookingStatus) === 'in progress') {
+                $stmtOp = $pdo->prepare(" 
+                    UPDATE chc_operators 
+                    SET current_booking_id = ?, 
+                        availability = 'Busy'
+                    WHERE operator_id = ?
+                ");
+                $stmtOp->execute([$bookingId, $operatorId]);
+            } elseif (in_array(strtolower($assignmentStatus), ['completed'], true) || in_array(strtolower($bookingStatus), ['completed'], true)) {
+                $stmtOp = $pdo->prepare(" 
+                    UPDATE chc_operators 
+                    SET current_booking_id = NULL, 
+                        availability = 'Available'
+                    WHERE operator_id = ?
+                ");
+                $stmtOp->execute([$operatorId]);
+
+                $stmtJobs = $pdo->prepare(" 
+                    UPDATE chc_operators 
+                    SET jobs_completed = jobs_completed + 1 
+                    WHERE operator_id = ?
+                ");
+                $stmtJobs->execute([$operatorId]);
+            }
+        }
+
+        $pdo->commit();
+
+        $stmtFetch = $pdo->prepare(" 
+            SELECT booking_id, booking_status, assignment_status, service_date, 
+                   rescheduled_date, assigned_operator_id, updated_at 
+            FROM chc_bookings 
+            WHERE BINARY booking_id = BINARY ?
+        ");
         $stmtFetch->execute([$bookingId]);
-        $booking = $stmtFetch->fetch(PDO::FETCH_ASSOC);
-
-        // Relieve operator from this booking if they were bound to it
-        if ($bookingStatus === 'Completed' || $bookingStatus === 'Cancelled' || $assignmentStatus === 'Completed' || $assignmentStatus === 'Cancelled') {
-            $stmtOpUpdate = $pdo->prepare("UPDATE chc_operators SET availability = 'Available', current_booking_id = NULL WHERE current_booking_id = ?");
-            $stmtOpUpdate->execute([$bookingId]);
-        }
-
-        // Fetch assigned operator ID first to avoid MySQL 1093 error pattern
-        $stmtOpId = $pdo->prepare("SELECT assigned_operator_id FROM chc_bookings WHERE booking_id = ?");
-        $stmtOpId->execute([$bookingId]);
-        $opId = $stmtOpId->fetchColumn();
-
-        if ($opId) {
-            // Recalculate jobs_completed
-            $stmtJobs = $pdo->prepare("
-                UPDATE chc_operators o
-                SET o.jobs_completed = (
-                    SELECT COUNT(*) FROM chc_bookings 
-                    WHERE assigned_operator_id = ? 
-                    AND (booking_status = 'Completed' OR assignment_status = 'Completed')
-                )
-                WHERE o.operator_id = ?
-            ");
-            $stmtJobs->execute([$opId, $opId]);
-        }
+        $updatedBooking = $stmtFetch->fetch(PDO::FETCH_ASSOC);
 
         echo json_encode([
             'success' => true,
             'message' => 'Booking status updated successfully',
-            'booking' => $booking,
+            'operator_cancelled' => false,
+            'booking' => $updatedBooking
         ]);
-    } catch (PDOException $e) {
+
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
 }
@@ -1673,7 +1858,26 @@ function completeBookingManual($pdo) {
     $rate           = (float)($input['rate'] ?? 0);
     $notes          = $input['notes'] ?? null;
     $operatorNotes  = $input['operator_notes'] ?? 'Walk-in job logged by operator';
-    $finalAmount    = (float)($input['final_amount'] ?? 0);
+    
+    $servicesJson = $input['services'] ?? null;
+    $services = $servicesJson ? json_decode($servicesJson, true) : null;
+    $totalAmount = 0.0;
+    $summaryUnit = $input['unit_type'] ?? 'hour';
+    $summaryQty = 0.0;
+    
+    if ($services && is_array($services) && count($services) > 0) {
+        foreach ($services as $svc) {
+            $qty = floatval($svc['qty'] ?? 0);
+            $svcRate = floatval($svc['rate'] ?? 0);
+            $cost = $qty * $svcRate;
+            $totalAmount += $cost;
+            $summaryQty += $qty;
+        }
+        $finalAmount = $totalAmount;
+    } else {
+        $finalAmount = (float)($input['final_amount'] ?? 0);
+        $summaryQty = (float)($input['billed_qty'] ?? 0);
+    }
 
     if (empty($operatorId) || empty($farmerPhone) || empty($farmerName) || empty($village) || empty($equipment) || empty($serviceDate)) {
         echo json_encode(['success' => false, 'error' => 'Missing required fields']);
@@ -1726,7 +1930,7 @@ function completeBookingManual($pdo) {
                 UPDATE chc_bookings SET 
                     equipment_type = ?, billing_type = ?, crop_type = ?,
                     land_size_acres = ?, billed_qty = ?, unit_type = ?, service_date = ?, rate = ?,
-                    total_cost = ?, notes = ?, booking_status = 'Completed', assignment_status = 'Completed', assigned_operator_id = ?,
+                    total_cost = ?, service_breakdown = ?, notes = ?, booking_status = 'Completed', assignment_status = 'Completed', assigned_operator_id = ?,
                     operator_notes = ?, updated_at = NOW()
                 WHERE booking_id = ?
             ");
@@ -1735,11 +1939,12 @@ function completeBookingManual($pdo) {
                 $billingType,
                 $cropType,
                 $landSizeAcres,
-                $billedQty,
-                $unitType,
+                $summaryQty,
+                $summaryUnit,
                 $serviceDate,
-                $rate,
+                ($totalAmount > 0 && $summaryQty > 0) ? ($totalAmount / $summaryQty) : $rate,
                 $finalAmount,
+                $services ? json_encode($services) : null,
                 $notes,
                 $operatorId,
                 $operatorNotes,
@@ -1753,9 +1958,9 @@ function completeBookingManual($pdo) {
                 INSERT INTO chc_bookings (
                     booking_id, user_id, equipment_type, billing_type, crop_type,
                     land_size_acres, billed_qty, unit_type, service_date, rate,
-                    total_cost, notes, booking_status, assignment_status, assigned_operator_id,
+                    total_cost, service_breakdown, notes, booking_status, assignment_status, assigned_operator_id,
                     operator_notes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Completed', 'Completed', ?, ?, NOW())
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Completed', 'Completed', ?, ?, NOW())
             ");
             $stmtBook->execute([
                 $bookingId,
@@ -1764,11 +1969,12 @@ function completeBookingManual($pdo) {
                 $billingType,
                 $cropType,
                 $landSizeAcres,
-                $billedQty,
-                $unitType,
+                $summaryQty,
+                $summaryUnit,
                 $serviceDate,
-                $rate,
+                ($totalAmount > 0 && $summaryQty > 0) ? ($totalAmount / $summaryQty) : $rate,
                 $finalAmount,
+                $services ? json_encode($services) : null,
                 $notes,
                 $operatorId,
                 $operatorNotes,
@@ -1776,14 +1982,15 @@ function completeBookingManual($pdo) {
         }
 
         // Update operator status and increment jobs_completed atomically
-        $stmtOpUpdate = $pdo->prepare("
-            UPDATE chc_operators 
-            SET availability = 'Available', 
-                current_booking_id = NULL,
-                jobs_completed = jobs_completed + 1 
-            WHERE operator_id = ?
-        ");
-        $stmtOpUpdate->execute([$operatorId]);
+       // Replace the old operator update with:
+$stmtOpUpdate = $pdo->prepare("
+    UPDATE chc_operators 
+    SET availability = 'Available', 
+        current_booking_id = NULL,
+        jobs_completed = jobs_completed + 1 
+    WHERE operator_id = ?
+");
+$stmtOpUpdate->execute([$operatorId]);
 
         $pdo->commit();
 
