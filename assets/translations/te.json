@@ -482,5 +482,13 @@
   "operator_minutes": "నిమిషాలు",
   "operator_select_hours": "గంటలు",
   "operator_select_minutes": "నిమి",
-  "operator_rate": "ధర"
+  "operator_rate": "ధర",
+  "fetching_state_prices": "రాష్ట్రవ్యాప్త ధరలను పొందుతోంది...",
+  "no_prices_for_state": "{state} కోసం ధరలు కనుగొనబడలేదు.",
+  "error_fetching_prices": "ధరలను పొందడంలో లోపం సంభవించింది.",
+  "commodities_in_state": "రాష్ట్రంలోని వస్తువులు",
+  "avg_across_state": "రాష్ట్రవ్యాప్త సగటు",
+  "no_historical_data_for_district": "{district} కోసం చారిత్రక డేటా అందుబాటులో లేదు.",
+  "price_trends": "ధర పోకడలు (30 రోజులు)",
+  "all_state_markets": "అన్ని రాష్ట్ర మార్కెట్లు"
 }

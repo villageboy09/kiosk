@@ -16,6 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once '../config.php';
+require_once 'market_prices_api.php';
 
 // Keep app/API string parameters consistent with utf8mb4.
 // This helps avoid MySQL collation conflicts when the database contains mixed legacy collations.
@@ -147,6 +148,16 @@ switch ($action) {
     // NEW ENDPOINT FOR TROLLEY PRICING
     case 'calculate_trolley_price':
         calculateTrolleyPrice($pdo);
+        break;
+    // MARKET PRICES V2 ENDPOINTS
+    case 'sync_market_prices':
+        syncMarketPrices($pdo);
+        break;
+    case 'get_state_market_prices':
+        getStateMarketPrices($pdo);
+        break;
+    case 'get_commodity_trends':
+        getCommodityTrends($pdo);
         break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);

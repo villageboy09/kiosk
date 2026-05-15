@@ -181,103 +181,34 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9), // Light blue-grey background
-      body: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: _isLoading
-                ? _buildLoadingState()
-                : _errorMessage != null
-                    ? _buildErrorState()
-                    : _crops.isEmpty
-                        ? _buildEmptyState()
-                        : _buildCropGrid(),
+      appBar: AppBar(
+        title: Text(
+          context.tr('home_feature_advisory_title'),
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            letterSpacing: -1,
+          ),
+        ),
+        backgroundColor: AppTheme.textPrimary, // Match home screen app bar
+        elevation: 0,
+        centerTitle: false,
+        actions: [
+          IconButton(
+            onPressed: _loadCrops,
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            tooltip: context.tr('refresh'),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        24,
-        MediaQuery.of(context).padding.top + 24,
-        24,
-        32,
-      ),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF111827), Color(0xFF1F2937)],
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(40),
-          bottomRight: Radius.circular(40),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 20,
-            offset: Offset(0, 10),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr('home_feature_advisory_title'),
-                    style: AppTheme.getTextStyle(
-                      context,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: -1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text(
-                      context.tr('crop_advisories_label'),
-                      style: AppTheme.getTextStyle(
-                        context,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  onPressed: _loadCrops,
-                  icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                  tooltip: context.tr('refresh'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      body: _isLoading
+          ? _buildLoadingState()
+          : _errorMessage != null
+              ? _buildErrorState()
+              : _crops.isEmpty
+                  ? _buildEmptyState()
+                  : _buildCropGrid(),
     );
   }
 

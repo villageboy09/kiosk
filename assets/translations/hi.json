@@ -481,5 +481,13 @@
   "operator_minutes": "मिनट",
   "operator_select_hours": "घंटे",
   "operator_select_minutes": "मिनट",
-  "operator_rate": "दर"
+  "operator_rate": "दर",
+  "fetching_state_prices": "राज्यव्यापी कीमतें प्राप्त की जा रही हैं...",
+  "no_prices_for_state": "{state} के लिए कोई मूल्य नहीं मिला。",
+  "error_fetching_prices": "कीमतें प्राप्त करने में त्रुटि हुई।",
+  "commodities_in_state": "राज्य में वस्तुएं",
+  "avg_across_state": "राज्यव्यापी औसत",
+  "no_historical_data_for_district": "{district} के लिए कोई ऐतिहासिक डेटा उपलब्ध नहीं है。",
+  "price_trends": "मूल्य रुझान (30 दिन)",
+  "all_state_markets": "सभी राज्य बाजार"
 }

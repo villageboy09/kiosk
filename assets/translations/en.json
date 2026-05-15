@@ -482,5 +482,13 @@
   "operator_minutes": "Minutes",
   "operator_select_hours": "Hrs",
   "operator_select_minutes": "Mins",
-  "operator_rate": "Rate"
+  "operator_rate": "Rate",
+  "fetching_state_prices": "Fetching state-wide prices...",
+  "no_prices_for_state": "No prices found for {state}.",
+  "error_fetching_prices": "An error occurred while fetching prices.",
+  "commodities_in_state": "Commodities in State",
+  "avg_across_state": "Avg across state",
+  "no_historical_data_for_district": "No historical data available for {district}.",
+  "price_trends": "Price Trends (30 Days)",
+  "all_state_markets": "All State Markets"
 }

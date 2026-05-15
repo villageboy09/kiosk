@@ -221,23 +221,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   label: 'home_bottom_nav_home'.tr(),
                   isActive: _selectedIndex == 0,
                   onTap: () => _onNavTap(0),
-                  activeColor: AppTheme.textPrimary,
+                  activeColor: AppTheme.primary,
                 ),
                 _NavItem(
-                  icon: Icons.auto_awesome_mosaic_outlined,
-                  activeIcon: Icons.auto_awesome_mosaic_rounded,
+                  icon: Icons.eco_outlined,
+                  activeIcon: Icons.eco,
                   label: 'home_bottom_nav_advisories'.tr(),
                   isActive: _selectedIndex == 1,
                   onTap: () => _onNavTap(1),
-                  activeColor: AppTheme.textPrimary,
+                  activeColor: AppTheme.primary,
                 ),
                 _NavItem(
-                  icon: Icons.person_outline_rounded,
-                  activeIcon: Icons.person_rounded,
+                  icon: Icons.settings_outlined,
+                  activeIcon: Icons.settings,
                   label: 'home_bottom_nav_settings'.tr(),
                   isActive: _selectedIndex == 2,
                   onTap: () => _onNavTap(2),
-                  activeColor: AppTheme.textPrimary,
+                  activeColor: AppTheme.primary,
                 ),
               ],
             ),
@@ -276,7 +276,7 @@ class _NavItem extends StatelessWidget {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: isActive ? activeColor : Colors.transparent,
+          color: isActive ? activeColor.withValues(alpha: 0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(100),
         ),
         child: Row(
@@ -285,16 +285,16 @@ class _NavItem extends StatelessWidget {
             Icon(
               isActive ? activeIcon : icon,
               size: 24,
-              color: isActive ? Colors.white : const Color(0xFF9CA3AF),
+              color: isActive ? activeColor : const Color(0xFF9CA3AF),
             ),
             if (isActive) ...[
               const SizedBox(width: 8),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  color: activeColor,
                   letterSpacing: 0.2,
                 ),
               ),

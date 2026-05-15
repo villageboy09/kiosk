@@ -1132,4 +1132,34 @@ class ApiService {
       return [];
     }
   }
+
+  // ===================== MARKET PRICES V2 ENDPOINTS =====================
+
+  /// Get state market prices
+  static Future<Map<String, dynamic>> getStateMarketPrices(String state) async {
+    final url = Uri.parse('$baseUrl/api.php?action=get_state_market_prices&state=${Uri.encodeComponent(state)}');
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes));
+      }
+      return {'success': false, 'error': 'Server error'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error'};
+    }
+  }
+
+  /// Get commodity trends
+  static Future<Map<String, dynamic>> getCommodityTrends(String district, String commodity) async {
+    final url = Uri.parse('$baseUrl/api.php?action=get_commodity_trends&district=${Uri.encodeComponent(district)}&commodity=${Uri.encodeComponent(commodity)}');
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes));
+      }
+      return {'success': false, 'error': 'Server error'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error'};
+    }
+  }
 }

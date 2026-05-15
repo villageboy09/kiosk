@@ -130,7 +130,7 @@ class AppTheme {
         fontWeight: FontWeight.w700,
         color: textPrimary,
         height: 1.1,
-        letterSpacing: -0.5,
+        letterSpacing: 0.1,
       ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Headline 2 - Section titles
@@ -139,7 +139,7 @@ class AppTheme {
         fontWeight: FontWeight.w700,
         color: textPrimary,
         height: 1.2,
-        letterSpacing: -0.3,
+        letterSpacing: 0.1,
       ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Headline 3 - Card titles
@@ -148,7 +148,7 @@ class AppTheme {
         fontWeight: FontWeight.w700,
         color: textPrimary,
         height: 1.3,
-        letterSpacing: -0.2,
+        letterSpacing: 0.1,
       ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Body text
@@ -201,7 +201,7 @@ class AppTheme {
         fontSize: 20,
         fontWeight: FontWeight.w700,
         color: textPrimary,
-        letterSpacing: -0.2,
+        letterSpacing: 0.1,
       ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Telugu text style helper — uses GoogleFonts.notoSansTelugu directly
