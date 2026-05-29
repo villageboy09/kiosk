@@ -156,6 +156,9 @@ switch ($action) {
     case 'get_state_market_prices':
         getStateMarketPrices($pdo);
         break;
+    case 'get_live_state_market_prices':
+        getLiveStateMarketPrices($pdo);
+        break;
     case 'get_commodity_trends':
         getCommodityTrends($pdo);
         break;

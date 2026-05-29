@@ -97,7 +97,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     });
 
     try {
-      final response = await ApiService.getStateMarketPrices(_currentState);
+      final response = await ApiService.getLiveStateMarketPrices(_currentState);
 
       if (!mounted) return;
 
@@ -121,12 +121,30 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
 
         setState(() {
           _allPrices = allFetchedPrices;
+          _latestDate = response['date']?.toString() ?? _latestDate;
         });
       } else {
-        setState(() {
-          _statusMessage = response['error'] ?? context.tr('failed_fetch');
-          _allPrices = [];
-        });
+        final fallback = await ApiService.getStateMarketPrices(_currentState);
+        if (!mounted) return;
+        if (fallback['success'] == true) {
+          final records = fallback['records'] as List?;
+          _latestDate = fallback['date']?.toString() ?? '';
+          final allFetchedPrices = records
+                  ?.whereType<Map<String, dynamic>>()
+                  .map((record) => MarketPrice.fromJson(record))
+                  .toList() ??
+              [];
+          setState(() {
+            _allPrices = allFetchedPrices;
+          });
+        } else {
+          setState(() {
+            _statusMessage = response['error'] ??
+                fallback['error'] ??
+                context.tr('failed_fetch');
+            _allPrices = [];
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -590,8 +608,8 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
     });
 
     try {
-      final response =
-          await ApiService.getCommodityTrends(district, widget.commodity);
+      final response = await ApiService.getCommodityTrends(
+          widget.currentDistrict, district, widget.commodity);
       if (mounted) {
         if (response['success'] == true) {
           final trends = response['trends'] as List;

@@ -23,7 +23,8 @@ class ApiService {
         body: jsonEncode({'user_id': userId}),
       );
 
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && data['success'] == true) {
         final userData = data['user'] as Map<String, dynamic>;
@@ -51,7 +52,8 @@ class ApiService {
         body: jsonEncode({'user_id': userId}),
       );
 
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && data['success'] == true) {
         final userData = data['user'] as Map<String, dynamic>;
@@ -954,7 +956,8 @@ class ApiService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone_number': phoneNumber, 'password': password}),
       );
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (response.statusCode == 200 && data['success'] == true) {
         return ChcOperator.fromJson(data['operator'] as Map<String, dynamic>);
       } else {
@@ -973,7 +976,8 @@ class ApiService {
         '$baseUrl/api.php?action=get_operator_details&operator_id=${Uri.encodeComponent(operatorId.trim())}');
     try {
       final response = await http.get(url);
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (response.statusCode == 200 && data['success'] == true) {
         return ChcOperator.fromJson(data['operator'] as Map<String, dynamic>);
       } else {
@@ -1137,7 +1141,8 @@ class ApiService {
 
   /// Get state market prices
   static Future<Map<String, dynamic>> getStateMarketPrices(String state) async {
-    final url = Uri.parse('$baseUrl/api.php?action=get_state_market_prices&state=${Uri.encodeComponent(state)}');
+    final url = Uri.parse(
+        '$baseUrl/api.php?action=get_state_market_prices&state=${Uri.encodeComponent(state)}');
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
@@ -1149,9 +1154,27 @@ class ApiService {
     }
   }
 
+  /// Get live market prices directly from the upstream market API.
+  static Future<Map<String, dynamic>> getLiveStateMarketPrices(
+      String state) async {
+    final url = Uri.parse(
+        '$baseUrl/api.php?action=get_live_state_market_prices&state=${Uri.encodeComponent(state)}');
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 20));
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes));
+      }
+      return {'success': false, 'error': 'Server error'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error'};
+    }
+  }
+
   /// Get commodity trends
-  static Future<Map<String, dynamic>> getCommodityTrends(String district, String commodity) async {
-    final url = Uri.parse('$baseUrl/api.php?action=get_commodity_trends&district=${Uri.encodeComponent(district)}&commodity=${Uri.encodeComponent(commodity)}');
+  static Future<Map<String, dynamic>> getCommodityTrends(
+      String state, String district, String commodity) async {
+    final url = Uri.parse(
+        '$baseUrl/api.php?action=get_commodity_trends&state=${Uri.encodeComponent(state)}&district=${Uri.encodeComponent(district)}&commodity=${Uri.encodeComponent(commodity)}');
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {

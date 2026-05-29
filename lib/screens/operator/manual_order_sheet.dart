@@ -24,9 +24,18 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   final _phoneController = TextEditingController();
   final List<TextEditingController> _qtyControllers = [TextEditingController()];
-  final List<TextEditingController> _rateControllers = [TextEditingController()];
+  final List<TextEditingController> _rateControllers = [
+    TextEditingController()
+  ];
   final List<Map<String, dynamic>> _services = [
-    {'type': '2x2', 'hours': 0, 'minutes': 0, 'qty': 0.0, 'rate': 0.0, 'unit': 'hour'}
+    {
+      'type': '2x2',
+      'hours': 0,
+      'minutes': 0,
+      'qty': 0.0,
+      'rate': 0.0,
+      'unit': 'hour'
+    }
   ];
   final _nameController = TextEditingController();
   final _villageController = TextEditingController();
@@ -303,7 +312,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   double get _billedQty {
     if (_isMultiService) {
-      return _services.fold(0.0, (sum, s) => sum + ((s['qty'] as num?)?.toDouble() ?? 0.0));
+      return _services.fold(
+          0.0, (sum, s) => sum + ((s['qty'] as num?)?.toDouble() ?? 0.0));
     }
     return _isTimeBased ? _totalHours : _quantity;
   }
@@ -328,7 +338,14 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   void _addServiceLine() {
     setState(() {
-      _services.add({'type': '4x4', 'hours': 0, 'minutes': 0, 'qty': 0.0, 'rate': 0.0, 'unit': 'hour'});
+      _services.add({
+        'type': '4x4',
+        'hours': 0,
+        'minutes': 0,
+        'qty': 0.0,
+        'rate': 0.0,
+        'unit': 'hour'
+      });
       _qtyControllers.add(TextEditingController());
       _rateControllers.add(TextEditingController());
     });
@@ -405,7 +422,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   Future<void> _submit() async {
     if (!_canSubmit) return;
     setState(() => _isLoading = true);
-    
+
     if (_isMultiService) {
       for (int i = 0; i < _services.length; i++) {
         final h = _services[i]['hours'] as int? ?? 0;
@@ -414,7 +431,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
         _services[i]['rate'] = double.tryParse(_rateControllers[i].text) ?? 0.0;
       }
     }
-    
+
     try {
       final res = await ApiService.completeBookingManual(
         operatorId: widget.operator.operatorId,
@@ -430,7 +447,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
             : '00:00',
         distance: _isTractorTrolley ? _distance : 0,
         serviceDate:
-            '${_serviceDate!.year}-${_serviceDate!.month}-${_serviceDate!.day}',
+            '${_serviceDate!.year}-${_serviceDate!.month.toString().padLeft(2, '0')}-${_serviceDate!.day.toString().padLeft(2, '0')}',
         cropType: _cropController.text.isNotEmpty ? _cropController.text : null,
         landSizeAcres: double.tryParse(_landSizeController.text) ?? 0,
         billedQty: _billedQty,
@@ -513,8 +530,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                   if (_currentStep < 3)
                     Text('${'step'.tr()} $_currentStep ${'of'.tr()} 2',
                         style: const TextStyle(
-                            color: _slate, 
-                            fontSize: 12, 
+                            color: _slate,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600)),
                 ],
               ),
@@ -625,7 +642,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: const Color(0xFFE9E9EB),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 12),
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide.none),
@@ -634,12 +652,17 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                                 borderSide: BorderSide.none),
                             focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                borderSide: const BorderSide(color: _accent, width: 1.5)),
+                                borderSide: const BorderSide(
+                                    color: _accent, width: 1.5)),
                           ),
-                          icon: const Icon(Icons.expand_more_rounded, color: Color(0xFF8E8E93), size: 20),
+                          icon: const Icon(Icons.expand_more_rounded,
+                              color: Color(0xFF8E8E93), size: 20),
                           items: ['2x2', '4x4', 'Other']
                               .map((val) => DropdownMenuItem(
-                                  value: val, child: Text(val, style: const TextStyle(fontWeight: FontWeight.w600))))
+                                  value: val,
+                                  child: Text(val,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600))))
                               .toList(),
                           onChanged: (val) =>
                               setState(() => _services[index]['type'] = val),
@@ -676,8 +699,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                           value: _services[index]['minutes'] as int? ?? 0,
                           items: List<int>.generate(60, (i) => i),
                           suffix: 'operator_select_minutes'.tr(),
-                          onChanged: (value) =>
-                              setState(() => _services[index]['minutes'] = value),
+                          onChanged: (value) => setState(
+                              () => _services[index]['minutes'] = value),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -699,8 +722,9 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                               height: 48,
                               child: TextField(
                                 controller: _rateControllers[index],
-                                keyboardType: const TextInputType.numberWithOptions(
-                                    decimal: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
                                 inputFormatters: [
                                   FilteringTextInputFormatter.digitsOnly,
                                   LengthLimitingTextInputFormatter(4),
@@ -714,13 +738,16 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                                       horizontal: 14, vertical: 14),
                                   border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(14),
-                                      borderSide: const BorderSide(color: _border)),
+                                      borderSide:
+                                          const BorderSide(color: _border)),
                                   enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(14),
-                                      borderSide: const BorderSide(color: _border)),
+                                      borderSide:
+                                          const BorderSide(color: _border)),
                                   focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(14),
-                                      borderSide: const BorderSide(color: _accent, width: 1.5)),
+                                      borderSide: const BorderSide(
+                                          color: _accent, width: 1.5)),
                                 ),
                                 onChanged: (_) => setState(() {}),
                               ),
@@ -739,8 +766,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                         icon: const Icon(Icons.add, size: 18),
                         label: Text('operator_add_service_line'.tr()),
                         style: TextButton.styleFrom(
-                            foregroundColor: _accent,
-                            padding: EdgeInsets.zero),
+                            foregroundColor: _accent, padding: EdgeInsets.zero),
                       ),
                     ),
                   ],
@@ -846,7 +872,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                     final h = svc['hours'] as int? ?? 0;
                     final m = svc['minutes'] as int? ?? 0;
                     final qty = h + (m / 60.0);
-                    final lineRate = double.tryParse(_rateControllers[i].text) ?? 0.0;
+                    final lineRate =
+                        double.tryParse(_rateControllers[i].text) ?? 0.0;
                     final lineCost = qty * lineRate;
                     return _receiptRow(
                       '${svc['type'] ?? 'Service'} ${i + 1}',
@@ -1034,7 +1061,9 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   Widget _buildTextField(TextEditingController controller, String label,
       IconData icon, TextInputType type,
-      {String? suffix, Widget? suffixIcon, List<TextInputFormatter>? inputFormatters}) {
+      {String? suffix,
+      Widget? suffixIcon,
+      List<TextInputFormatter>? inputFormatters}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1091,11 +1120,15 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   Widget _buildDateButton() {
     return InkWell(
       onTap: () async {
+        final now = DateTime.now();
+        final firstDate = DateTime(now.year - 1, now.month, 1);
+        final initialDate = _serviceDate ?? now;
         final picked = await showDatePicker(
             context: context,
-            initialDate: _serviceDate ?? DateTime.now(),
-            firstDate: DateTime.now().subtract(const Duration(days: 30)),
-            lastDate: DateTime.now().add(const Duration(days: 30)));
+            initialDate:
+                initialDate.isBefore(firstDate) ? firstDate : initialDate,
+            firstDate: firstDate,
+            lastDate: now.add(const Duration(days: 30)));
         if (picked != null) setState(() => _serviceDate = picked);
       },
       child: Container(
@@ -1376,7 +1409,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
               borderSide: const BorderSide(color: _accent, width: 1.5),
             ),
           ),
-          icon: const Icon(Icons.expand_more_rounded, color: Color(0xFF8E8E93), size: 20),
+          icon: const Icon(Icons.expand_more_rounded,
+              color: Color(0xFF8E8E93), size: 20),
           items: items
               .map(
                 (item) => DropdownMenuItem<int>(
