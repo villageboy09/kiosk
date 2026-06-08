@@ -27,11 +27,11 @@ class _SignupScreenState extends State<SignupScreen>
     with TickerProviderStateMixin {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _otpController = TextEditingController();
-  final _otpFocusNode = FocusNode();
   final _nameFocusNode = FocusNode();
   final _phoneFocusNode = FocusNode();
   final _fpoDropdownFocusNode = FocusNode();
+  final _operatorPhoneFocusNode = FocusNode();
+  final _operatorPasswordFocusNode = FocusNode();
 
   late AnimationController _entranceController;
   late Animation<double> _fadeAnimation;
@@ -42,7 +42,6 @@ class _SignupScreenState extends State<SignupScreen>
   String? _successMessage;
 
   bool _isOperator = false;
-  bool _otpSent = false;
   bool _obscurePassword = true;
 
   final _operatorPhoneController = TextEditingController();
@@ -73,6 +72,12 @@ class _SignupScreenState extends State<SignupScreen>
     _selectedFpoKey = _fpoOptions.last.key;
     _selectedClientCode = _fpoOptions.last.value;
 
+    _nameFocusNode.addListener(_onFocusChange);
+    _phoneFocusNode.addListener(_onFocusChange);
+    _fpoDropdownFocusNode.addListener(_onFocusChange);
+    _operatorPhoneFocusNode.addListener(_onFocusChange);
+    _operatorPasswordFocusNode.addListener(_onFocusChange);
+
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -94,21 +99,34 @@ class _SignupScreenState extends State<SignupScreen>
     _entranceController.forward();
   }
 
+  void _onFocusChange() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _errorTimer?.cancel();
     _successTimer?.cancel();
     _nameController.dispose();
     _phoneController.dispose();
-    _otpController.dispose();
-    _otpFocusNode.dispose();
+    _nameFocusNode.removeListener(_onFocusChange);
+    _phoneFocusNode.removeListener(_onFocusChange);
+    _fpoDropdownFocusNode.removeListener(_onFocusChange);
+    _operatorPhoneFocusNode.removeListener(_onFocusChange);
+    _operatorPasswordFocusNode.removeListener(_onFocusChange);
     _nameFocusNode.dispose();
     _phoneFocusNode.dispose();
     _fpoDropdownFocusNode.dispose();
+    _operatorPhoneFocusNode.dispose();
+    _operatorPasswordFocusNode.dispose();
     _operatorPhoneController.dispose();
     _operatorPasswordController.dispose();
     _entranceController.dispose();
-    smartAuth.removeUserConsentApiListener();
+    try {
+      smartAuth.removeUserConsentApiListener();
+    } catch (e) {
+      debugPrint('Error removing SMS listener: $e');
+    }
     super.dispose();
   }
 
@@ -124,40 +142,122 @@ class _SignupScreenState extends State<SignupScreen>
     });
   }
 
-  void _listenForSms() async {
-    try {
-      final res = await smartAuth.getSmsWithUserConsentApi();
-      if (res.data?.code != null) {
-        if (mounted) {
-          setState(() {
-            _otpController.text = res.data!.code!;
-          });
-          // Auto-submit if the code length is exactly 6
-          if (_otpController.text.length == 6) {
-            FocusScope.of(context).unfocus();
-            HapticFeedback.mediumImpact();
-            _verifyAndRegister();
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('SMS Autofill error: $e');
-    }
-  }
-
-  void _showSuccess(String msg) {
+  Future<void> _selectPhoneNumber() async {
+    HapticFeedback.selectionClick();
     if (!mounted) return;
-    _successTimer?.cancel();
-    setState(() {
-      _successMessage = msg;
-      _errorMessage = null;
-    });
-    _successTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted) setState(() => _successMessage = null);
-    });
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(Icons.sim_card_rounded,
+                          color: AppTheme.textPrimary, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    const Text(
+                      'Select Mobile Number',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                  leading: const Icon(Icons.sim_card_outlined, color: AppTheme.textSecondary, size: 24),
+                  title: const Text(
+                    '+91 98765 43210',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppTheme.textPrimary),
+                  ),
+                  subtitle: const Text('SIM Slot 1'),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _phoneController.text = '9876543210';
+                    });
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                  leading: const Icon(Icons.sim_card_outlined, color: AppTheme.textSecondary, size: 24),
+                  title: const Text(
+                    '+91 81234 56789',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppTheme.textPrimary),
+                  ),
+                  subtitle: const Text('SIM Slot 2'),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _phoneController.text = '8123456789';
+                    });
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
+        );
+      },
+    );
   }
 
-  Future<void> _sendOtp() async {
+
+
+  Future<void> _registerFarmer() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
 
@@ -166,7 +266,7 @@ class _SignupScreenState extends State<SignupScreen>
       return;
     }
 
-    if (phone.length < 10) {
+    if (phone.isEmpty) {
       _showError('signup_error_phone'.tr());
       return;
     }
@@ -182,50 +282,6 @@ class _SignupScreenState extends State<SignupScreen>
           context,
           AppRoutes.slideFromLeft(const LoginScreen()),
         );
-        return;
-      }
-
-      final res = await ApiService.sendOtp(phone);
-      if (res['success'] == true) {
-        if (mounted) {
-          HapticFeedback.mediumImpact();
-          setState(() {
-            _otpSent = true;
-            _isLoading = false;
-          });
-          _showSuccess('signup_otp_sent'.tr(namedArgs: {'phone': phone}));
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) FocusScope.of(context).requestFocus(_otpFocusNode);
-          });
-          _listenForSms();
-        }
-      } else {
-        _showError(res['error'] ?? 'signup_unknown_error'.tr());
-        if (mounted) setState(() => _isLoading = false);
-      }
-    } catch (e) {
-      _showError(e.toString());
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _verifyAndRegister() async {
-    final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim();
-    final otp = _otpController.text.trim();
-
-    if (otp.length < 6) {
-      _showError('login_pin_length_error'.tr());
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final verifyRes = await ApiService.verifyOtp(phone, otp);
-      if (verifyRes['success'] != true) {
-        _showError(verifyRes['error'] ?? 'signup_invalid_otp'.tr());
-        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
@@ -486,242 +542,294 @@ class _SignupScreenState extends State<SignupScreen>
   }
 
   Widget _buildMainCard({required Key key}) {
-    return Container(
+    return Column(
       key: key,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: _nameController,
-            focusNode: _nameFocusNode,
-            enabled: !_otpSent,
-            keyboardType: TextInputType.name,
-            decoration: InputDecoration(
-              hintText: 'signup_name_hint'.tr(),
-              prefixIcon: const Icon(Icons.person_rounded),
-            ),
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _phoneController,
-            focusNode: _phoneFocusNode,
-            enabled: !_otpSent,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            decoration: InputDecoration(
-              hintText: 'signup_phone_hint'.tr(),
-              prefixIcon: const Icon(Icons.phone_rounded),
-            ),
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 16),
-          _buildClientCodePicker(),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            transitionBuilder: (child, animation) => SizeTransition(
-              sizeFactor: animation,
-              axis: Axis.vertical,
-              axisAlignment: -1.0,
-              child: FadeTransition(
-                opacity: animation,
-                child: child,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _nameFocusNode.requestFocus(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(
+                color: _nameFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.border.withValues(alpha: 0.5),
+                width: _nameFocusNode.hasFocus ? 2.0 : 1.5,
               ),
             ),
-            child: _otpSent
-                ? Column(
-                    key: const ValueKey('otp_section'),
-                    children: [
-                      const SizedBox(height: 24),
-                      _buildOtpInputField(),
-                      const SizedBox(height: 20),
-                      Center(child: _buildHintChip()),
-                    ],
-                  )
-                : const SizedBox.shrink(key: ValueKey('no_otp')),
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 24, right: 14),
+                  child: AnimatedScale(
+                    scale: _nameFocusNode.hasFocus ? 1.15 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.person_outline_rounded,
+                      size: 22,
+                      color: _nameFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _nameController,
+                    focusNode: _nameFocusNode,
+                    keyboardType: TextInputType.name,
+                    decoration: InputDecoration(
+                      hintText: 'signup_name_hint'.tr(),
+                      hintStyle: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textHint,
+                      ),
+                      border: InputBorder.none,
+                      filled: false,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+              ],
+            ),
           ),
-          const SizedBox(height: 32),
-          _buildSubmitButton(),
-        ],
-      ),
+        ),
+        const SizedBox(height: 16),
+        Focus(
+          focusNode: _phoneFocusNode,
+          child: InkWell(
+            onTap: () {
+              _phoneFocusNode.requestFocus();
+              if (_phoneController.text.isEmpty) {
+                _selectPhoneNumber();
+              }
+            },
+            borderRadius: BorderRadius.circular(100),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              height: 64,
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(
+                  color: _phoneFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.border.withValues(alpha: 0.5),
+                  width: _phoneFocusNode.hasFocus ? 2.0 : 1.5,
+                ),
+              ),
+              child: Row(
+                children: [
+                  AnimatedScale(
+                    scale: _phoneFocusNode.hasFocus ? 1.15 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.smartphone_rounded,
+                      size: 22,
+                      color: _phoneFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      _phoneController.text.isEmpty
+                          ? 'signup_phone_hint'.tr()
+                          : _phoneController.text,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: _phoneController.text.isEmpty
+                            ? AppTheme.textHint
+                            : AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (_phoneController.text.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(
+                        Icons.cancel_outlined,
+                        color: Colors.redAccent,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        setState(() {
+                          _phoneController.clear();
+                        });
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildClientCodePicker(),
+        const SizedBox(height: 32),
+        _buildSubmitButton(),
+      ],
     );
   }
 
   Widget _buildOperatorCard({required Key key}) {
-    return Container(
+    return Column(
       key: key,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: _operatorPhoneController,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            decoration: InputDecoration(
-              hintText: 'operator_phone_hint'.tr(),
-              prefixIcon: const Icon(Icons.phone_rounded),
-            ),
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _operatorPasswordController,
-            obscureText: _obscurePassword,
-            decoration: InputDecoration(
-              hintText: 'operator_password_hint'.tr(),
-              prefixIcon: const Icon(Icons.lock_rounded),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscurePassword
-                      ? Icons.visibility_off_rounded
-                      : Icons.visibility_rounded,
-                  color: AppTheme.textHint,
-                ),
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _operatorPhoneFocusNode.requestFocus(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(
+                color: _operatorPhoneFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.border.withValues(alpha: 0.5),
+                width: _operatorPhoneFocusNode.hasFocus ? 2.0 : 1.5,
               ),
             ),
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 32),
-          _buildSubmitButton(), // Reuse common submit button style
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOtpInputField() {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_otpController, _otpFocusNode]),
-      builder: (context, child) {
-        final text = _otpController.text;
-        final isFocused = _otpFocusNode.hasFocus;
-
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                const double boxGap = 8;
-                final double maxWidth = constraints.maxWidth;
-                final double calculated = (maxWidth - (5 * boxGap)) / 6;
-                final double boxSize = calculated.clamp(44.0, 58.0);
-
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(6, (index) {
-                    final hasChar = index < text.length;
-                    final char = hasChar ? text[index] : '';
-                    final isCurrentFocused = isFocused && index == text.length;
-
-                    return Padding(
-                      padding: EdgeInsets.only(right: index == 5 ? 0 : boxGap),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOutCubic,
-                        width: boxSize,
-                        height: boxSize,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isCurrentFocused
-                                ? AppTheme.textPrimary
-                                : (hasChar
-                                    ? AppTheme.textSecondary
-                                    : const Color(0xFFE5E7EB)),
-                            width: isCurrentFocused ? 2.0 : 1.5,
-                          ),
-                          boxShadow: isCurrentFocused
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.05),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Text(
-                          char,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 24, right: 14),
+                  child: Icon(
+                    Icons.smartphone_rounded,
+                    size: 22,
+                    color: _operatorPhoneFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.textSecondary,
+                  ),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _operatorPhoneController,
+                    focusNode: _operatorPhoneFocusNode,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
+                    decoration: InputDecoration(
+                      hintText: 'operator_phone_hint'.tr(),
+                      hintStyle: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textHint,
                       ),
-                    );
-                  }),
-                );
-              },
-            ),
-            Positioned.fill(
-              child: TextField(
-                controller: _otpController,
-                focusNode: _otpFocusNode,
-                keyboardType: TextInputType.number,
-                cursorColor: Colors.transparent,
-                style: const TextStyle(color: Colors.transparent),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  filled: false,
-                  counterText: '',
+                      border: InputBorder.none,
+                      filled: false,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
                 ),
-                maxLength: 6,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                onChanged: (val) {
-                  if (val.length == 6) {
-                    FocusScope.of(context).unfocus();
-                    HapticFeedback.mediumImpact();
-                  }
-                  setState(() {}); // Refresh boxes
-                },
+                const SizedBox(width: 24),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _operatorPasswordFocusNode.requestFocus(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(
+                color: _operatorPasswordFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.border.withValues(alpha: 0.5),
+                width: _operatorPasswordFocusNode.hasFocus ? 2.0 : 1.5,
               ),
             ),
-          ],
-        );
-      },
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 24, right: 14),
+                  child: Icon(
+                    Icons.lock_outline_rounded,
+                    size: 22,
+                    color: _operatorPasswordFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.textSecondary,
+                  ),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _operatorPasswordController,
+                    focusNode: _operatorPasswordFocusNode,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      hintText: 'operator_password_hint'.tr(),
+                      hintStyle: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textHint,
+                      ),
+                      border: InputBorder.none,
+                      filled: false,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded,
+                      color: AppTheme.textHint,
+                      size: 22,
+                    ),
+                    splashRadius: 24,
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 32),
+        _buildSubmitButton(),
+      ],
     );
   }
+
+
 
   void _showFpoPicker() {
-    if (_otpSent) return;
     HapticFeedback.selectionClick();
     showModalBottomSheet(
       context: context,
@@ -790,17 +898,15 @@ class _SignupScreenState extends State<SignupScreen>
                         Navigator.pop(context);
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 20),
+                        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                         decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFFF9FAFB)
-                              : Colors.transparent,
-                          border: isSelected
-                              ? const Border(
-                                  left: BorderSide(
-                                      color: AppTheme.textPrimary, width: 4))
-                              : null,
+                          color: isSelected ? AppTheme.textPrimary : const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(
+                            color: isSelected ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
+                            width: 1.5,
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -813,14 +919,16 @@ class _SignupScreenState extends State<SignupScreen>
                                       ? FontWeight.w700
                                       : FontWeight.w500,
                                   color: isSelected
-                                      ? AppTheme.textPrimary
+                                      ? Colors.white
                                       : AppTheme.textSecondary,
                                 ),
                               ),
                             ),
-                            if (isSelected)
-                              const Icon(Icons.check_circle_rounded,
-                                  color: AppTheme.textPrimary, size: 22),
+                            Icon(
+                              isSelected ? Icons.check_circle_rounded : Icons.radio_button_off_rounded,
+                              color: isSelected ? Colors.white : AppTheme.textHint,
+                              size: 20,
+                            ),
                           ],
                         ),
                       ),
@@ -836,87 +944,69 @@ class _SignupScreenState extends State<SignupScreen>
   }
 
   Widget _buildClientCodePicker() {
-    return InkWell(
-      onTap: _showFpoPicker,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        height: 64,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: BoxDecoration(
-          color: _otpSent ? const Color(0xFFF3F4F6) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFFD9DCE1),
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.apartment_rounded,
-              size: 22,
-              color: AppTheme.textSecondary,
+    return Focus(
+      focusNode: _fpoDropdownFocusNode,
+      child: InkWell(
+        onTap: () {
+          _fpoDropdownFocusNode.requestFocus();
+          _showFpoPicker();
+        },
+        borderRadius: BorderRadius.circular(100),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          height: 64,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: _fpoDropdownFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.border.withValues(alpha: 0.5),
+              width: _fpoDropdownFocusNode.hasFocus ? 2.0 : 1.5,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                _selectedFpoKey.tr(),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
+          ),
+          child: Row(
+            children: [
+              AnimatedScale(
+                scale: _fpoDropdownFocusNode.hasFocus ? 1.15 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                child: Icon(
+                  Icons.business_outlined,
+                  size: 22,
+                  color: _fpoDropdownFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.textSecondary,
                 ),
               ),
-            ),
-            const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: AppTheme.textHint,
-            ),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  _selectedFpoKey.tr(),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: AppTheme.textHint,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHintChip() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.info_outline_rounded,
-            size: 16,
-            color: AppTheme.textSecondary,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'signup_otp_hint'.tr(),
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildSubmitButton() {
     bool canProceed = true;
-    if (_otpSent && !_isOperator) {
-      canProceed = _otpController.text.length == 6;
-    } else if (_isOperator) {
+    if (_isOperator) {
       canProceed = _operatorPhoneController.text.length == 10 &&
           _operatorPasswordController.text.isNotEmpty;
     } else {
       canProceed =
-          _phoneController.text.length == 10 && _nameController.text.isNotEmpty;
+          _phoneController.text.isNotEmpty && _nameController.text.isNotEmpty;
     }
 
     final bool isButtonDisabled = _isLoading || !canProceed;
@@ -928,10 +1018,8 @@ class _SignupScreenState extends State<SignupScreen>
               HapticFeedback.mediumImpact();
               if (_isOperator) {
                 _loginOperator();
-              } else if (_otpSent) {
-                _verifyAndRegister();
               } else {
-                _sendOtp();
+                _registerFarmer();
               }
             },
       style: ElevatedButton.styleFrom(
@@ -949,46 +1037,42 @@ class _SignupScreenState extends State<SignupScreen>
           : Text(
               _isOperator
                   ? 'operator_login_button'.tr()
-                  : (_otpSent
-                      ? 'signup_confirm_create'.tr()
-                      : 'signup_send_otp'.tr()),
+                  : 'signup_confirm_create'.tr(),
             ),
     );
   }
 
   Widget _buildLoginLink() {
-    return InkWell(
-      onTap: () {
+    return OutlinedButton(
+      onPressed: () {
         HapticFeedback.lightImpact();
         Navigator.pushReplacement(
           context,
           AppRoutes.slideFromLeft(const LoginScreen()),
         );
       },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppTheme.textSecondary,
+        side: BorderSide(color: AppTheme.border.withValues(alpha: 0.5), width: 1.5),
+        minimumSize: const Size(double.infinity, 64),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(100),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.login_rounded,
-                size: 20, color: AppTheme.textSecondary),
-            const SizedBox(width: 8),
-            Text(
-              'signup_already_have_account'.tr(),
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
-              ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.login_rounded, size: 20, color: AppTheme.textSecondary),
+          const SizedBox(width: 8),
+          Text(
+            'signup_already_have_account'.tr(),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

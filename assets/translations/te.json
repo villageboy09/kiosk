@@ -27,6 +27,7 @@
   "login_failed_generic": "లాగిన్ విఫలమైంది. దయచేసి తర్వాత మళ్లీ ప్రయత్నించండి.",
   "login_invalid_pin": "మీరు నమోదు చేసిన పిన్ తప్పు. దయచేసి మళ్లీ ప్రయత్నించండి.",
   "login_pin_hint": "సూచన: లాగిన్ పిన్ 123456",
+  "login_submit": "సైన్ ఇన్",
   "continue": "కొనసాగించు",
   "home_greeting_morning": "శుభోదయం",
   "home_greeting_afternoon": "శుభ మధ్యాహ్నం",

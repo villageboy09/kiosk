@@ -1,9 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:in_app_update/in_app_update.dart';
 
 class UpdateService {
   /// Checks for an update and starts a flexible update flow if available.
   static Future<void> checkForUpdates() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
     try {
       final updateInfo = await InAppUpdate.checkForUpdate();
 

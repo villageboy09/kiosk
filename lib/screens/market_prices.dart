@@ -83,8 +83,13 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   }
 
   String _getCommodityImagePath(String commodity) {
-    final formattedName = commodity.toLowerCase().replaceAll(' ', '');
-    return 'http://kiosk.cropsync.in/api/commodity/$formattedName.png';
+    if (commodity.isEmpty) return '';
+    final words = commodity.trim().split(' ');
+    final capitalized = words.map((w) {
+      if (w.isEmpty) return '';
+      return '${w[0].toUpperCase()}${w.substring(1)}';
+    }).join('');
+    return 'https://kiosk.cropsync.in/api/commodity/$capitalized.png';
   }
 
   Future<void> _fetchPrices() async {
@@ -482,7 +487,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
             return Image.asset(
-              'assets/images/logo_t.png',
+              'assets/images/logo.png',
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
                 return const Icon(Icons.grass_rounded,

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:cropsync/auth/signup_screen.dart';
 import 'package:cropsync/navigation/app_routes.dart';
@@ -111,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen>
         Navigator.pushReplacement(
           context,
           AppRoutes.slideFromRight(
-            SignupScreen(initialPhoneNumber: pin),
+            const SignupScreen(),
           ),
         );
         return;
@@ -165,13 +166,15 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                     textAlign: TextAlign.center,
                                   ),
-                                  const SizedBox(height: 32),
+                                  const SizedBox(height: 20),
                                   _buildSingleInputDisplay(),
                                   const SizedBox(height: 16),
                                   _buildHintChip(),
-                                  const SizedBox(height: 32),
+                                  const SizedBox(height: 20),
                                   _buildKeypad(),
-                                  const SizedBox(height: 32),
+                                  const SizedBox(height: 16),
+                                  _buildSubmitButton(),
+                                  const SizedBox(height: 20),
                                   _buildSignupLink(),
                                   const SizedBox(height: 16),
                                 ],
@@ -193,15 +196,16 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildSingleInputDisplay() {
-    final hasInput = _pinController.text.isNotEmpty;
-    final displayText = hasInput ? _pinController.text : '------';
+    final text = _pinController.text;
+    final remainingLength = 10 - text.length;
+    final hasInput = text.isNotEmpty;
     return Container(
       constraints: const BoxConstraints(maxWidth: 320),
       width: double.infinity,
-      height: 72,
+      height: 64,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(100),
         border: Border.all(
           color: hasInput ? AppTheme.textPrimary : const Color(0xFFD1D5DB),
           width: 2,
@@ -219,14 +223,24 @@ class _LoginScreenState extends State<LoginScreen>
       alignment: Alignment.center,
       child: FittedBox(
         fit: BoxFit.scaleDown,
-        child: Text(
-          displayText,
+        child: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: text),
+              TextSpan(
+                text: '•' * remainingLength,
+                style: TextStyle(
+                  color: AppTheme.textPrimary.withValues(alpha: 0.15),
+                ),
+              ),
+            ],
+          ),
           maxLines: 1,
-          style: TextStyle(
-            fontSize: hasInput ? 26 : 32,
+          style: AppTheme.getTextStyle(context,
+            fontSize: 28,
             fontWeight: FontWeight.w800,
-            letterSpacing: hasInput ? 4 : 8,
-            color: hasInput ? AppTheme.textPrimary : AppTheme.textHint,
+            letterSpacing: 6,
+            color: AppTheme.textPrimary,
           ),
         ),
       ),
@@ -269,11 +283,11 @@ class _LoginScreenState extends State<LoginScreen>
         crossAxisCount: 3,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: 1.2,
+        childAspectRatio: 1.15,
         children: [
           ...List.generate(9, (index) => index + 1)
               .map((number) => _buildKeyButton(number.toString())),
-          _buildSubmitButton(),
+          const SizedBox.shrink(),
           _buildKeyButton('0'),
           _buildDeleteButton(),
         ],
@@ -282,43 +296,54 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildSubmitButton() {
-    final isPressed = _pressedButton == 'submit';
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressedButton = 'submit'),
-      onTapUp: (_) {
-        setState(() => _pressedButton = null);
-        if (!_isLoading) _login();
-      },
-      onTapCancel: () => setState(() => _pressedButton = null),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        decoration: BoxDecoration(
-          color: AppTheme.textPrimary,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isPressed
-              ? null
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+    final canProceed = _pinController.text.length == 10;
+    final bool isButtonDisabled = _isLoading || !canProceed;
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 300),
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: isButtonDisabled
+            ? null
+            : () {
+                HapticFeedback.mediumImpact();
+                _login();
+              },
+        style: ElevatedButton.styleFrom(
+          backgroundColor:
+              isButtonDisabled ? const Color(0xFFD1D5DB) : AppTheme.textPrimary,
+          minimumSize: const Size(double.infinity, 64),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(100),
+          ),
+          elevation: isButtonDisabled ? 0 : 4,
+          shadowColor: AppTheme.textPrimary.withValues(alpha: 0.3),
         ),
-        alignment: Alignment.center,
         child: _isLoading
             ? const SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 3,
-                ),
+                    color: Colors.white, strokeWidth: 3),
               )
-            : const Icon(
-                Icons.arrow_forward_rounded,
-                size: 32,
-                color: Colors.white,
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'login_submit'.tr() == 'login_submit' ? 'Sign In' : 'login_submit'.tr(),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ],
               ),
       ),
     );
@@ -337,7 +362,7 @@ class _LoginScreenState extends State<LoginScreen>
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
           color: isPressed ? const Color(0xFFF3F4F6) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: isPressed ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
             width: 1.5,
@@ -378,7 +403,7 @@ class _LoginScreenState extends State<LoginScreen>
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
           color: isPressed ? const Color(0xFFFEF2F2) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color:
                 isPressed ? const Color(0xFFEF4444) : const Color(0xFFE5E7EB),
@@ -396,28 +421,28 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildSignupLink() {
-    return InkWell(
-      onTap: () {
-        Navigator.pushReplacement(
-          context,
-          AppRoutes.slideFromRight(
-            SignupScreen(
-              initialPhoneNumber:
-                  _pinController.text.isNotEmpty ? _pinController.text : null,
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 300),
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: () {
+          Navigator.pushReplacement(
+            context,
+            AppRoutes.slideFromRight(
+              const SignupScreen(),
             ),
+          );
+        },
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppTheme.textSecondary,
+          side: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5),
+          minimumSize: const Size(double.infinity, 64),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(100),
           ),
-        );
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(
               Icons.person_add_rounded,
@@ -428,7 +453,7 @@ class _LoginScreenState extends State<LoginScreen>
             Text(
               'signup_create_account'.tr(),
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 color: AppTheme.textPrimary,
                 fontWeight: FontWeight.w700,
               ),

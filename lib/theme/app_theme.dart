@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Centralized design system for CropSync
@@ -226,34 +225,13 @@ class AppTheme {
     double? height,
     double? letterSpacing,
   }) {
-    final languageCode = EasyLocalization.of(context)?.locale.languageCode;
-    
-    TextStyle baseStyle;
-    if (languageCode == 'te') {
-      baseStyle = GoogleFonts.notoSansTelugu(
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        color: color ?? textPrimary,
-        height: height,
-        letterSpacing: letterSpacing ?? 0.3,
-      );
-    } else if (languageCode == 'hi') {
-      baseStyle = GoogleFonts.notoSansDevanagari(
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        color: color ?? textPrimary,
-        height: height,
-        letterSpacing: letterSpacing ?? 0.2,
-      );
-    } else {
-      baseStyle = GoogleFonts.googleSans(
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        color: color ?? textPrimary,
-        height: height,
-        letterSpacing: letterSpacing,
-      );
-    }
+    TextStyle baseStyle = GoogleFonts.googleSans(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color ?? textPrimary,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
     
     return baseStyle.copyWith(fontFamilyFallback: _fallbacks);
   }
@@ -310,15 +288,8 @@ class AppTheme {
 
   /// Modern ThemeData for the entire app
   static ThemeData lightTheme(BuildContext context) {
-    final languageCode =
-        EasyLocalization.of(context)?.locale.languageCode ?? 'en';
-    final isTelugu = languageCode == 'te';
-    final isHindi = languageCode == 'hi';
-
     // Base text theme driven by Google Fonts
-    final baseTextTheme = isTelugu
-        ? GoogleFonts.notoSansTeluguTextTheme()
-        : (isHindi ? GoogleFonts.notoSansDevanagariTextTheme() : GoogleFonts.googleSansTextTheme());
+    final baseTextTheme = GoogleFonts.googleSansTextTheme();
 
     return ThemeData(
       useMaterial3: true,

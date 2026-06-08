@@ -23,6 +23,8 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
     with SingleTickerProviderStateMixin {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _phoneFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -61,6 +63,8 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
 
   @override
   void dispose() {
+    _phoneFocusNode.dispose();
+    _passwordFocusNode.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
     _animController.dispose();
@@ -226,92 +230,128 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
   }
 
   Widget _buildPhoneField() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: TextField(
-        controller: _phoneController,
-        keyboardType: TextInputType.phone,
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(10),
-        ],
-        style: AppTheme.getTextStyle(context,
-            fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w600),
-        decoration: InputDecoration(
-          hintText: 'operator_phone_hint'.tr(),
-          hintStyle: AppTheme.getTextStyle(context,
-              color: const Color(0xFF9CA3AF),
-              fontSize: 16,
-              fontWeight: FontWeight.w500),
-          prefixIcon: const Padding(
-            padding: EdgeInsets.only(left: 16, right: 12),
-            child: Icon(Icons.phone_rounded, color: _accent, size: 22),
-          ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 50),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 20),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _phoneFocusNode.requestFocus(),
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(color: _border, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(left: 24, right: 14),
+              child: Icon(Icons.phone_rounded, color: _accent, size: 22),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _phoneController,
+                focusNode: _phoneFocusNode,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                style: AppTheme.getTextStyle(context,
+                    fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w600),
+                decoration: InputDecoration(
+                  hintText: 'operator_phone_hint'.tr(),
+                  hintStyle: AppTheme.getTextStyle(context,
+                      color: const Color(0xFF9CA3AF),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500),
+                  border: InputBorder.none,
+                  filled: false,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+            const SizedBox(width: 24),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildPasswordField() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: TextField(
-        controller: _passwordController,
-        obscureText: _obscurePassword,
-        style: AppTheme.getTextStyle(context,
-            fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w600),
-        decoration: InputDecoration(
-          hintText: 'operator_password_hint'.tr(),
-          hintStyle: AppTheme.getTextStyle(context,
-              color: const Color(0xFF9CA3AF),
-              fontSize: 16,
-              fontWeight: FontWeight.w500),
-          prefixIcon: const Padding(
-            padding: EdgeInsets.only(left: 16, right: 12),
-            child: Icon(Icons.lock_rounded, color: _accent, size: 22),
-          ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 50),
-          suffixIcon: Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: IconButton(
-              icon: Icon(
-                _obscurePassword
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                color: const Color(0xFF9CA3AF),
-                size: 22,
-              ),
-              onPressed: () =>
-                  setState(() => _obscurePassword = !_obscurePassword),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _passwordFocusNode.requestFocus(),
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(color: _border, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(left: 24, right: 14),
+              child: Icon(Icons.lock_rounded, color: _accent, size: 22),
             ),
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 20),
+            Expanded(
+              child: TextField(
+                controller: _passwordController,
+                focusNode: _passwordFocusNode,
+                obscureText: _obscurePassword,
+                style: AppTheme.getTextStyle(context,
+                    fontSize: 16, color: _textPrimary, fontWeight: FontWeight.w600),
+                decoration: InputDecoration(
+                  hintText: 'operator_password_hint'.tr(),
+                  hintStyle: AppTheme.getTextStyle(context,
+                      color: const Color(0xFF9CA3AF),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500),
+                  border: InputBorder.none,
+                  filled: false,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                  color: const Color(0xFF9CA3AF),
+                  size: 22,
+                ),
+                splashRadius: 24,
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -319,10 +359,10 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
 
   Widget _buildLoginButton() {
     return Container(
-      height: 58,
+      height: 64,
       decoration: BoxDecoration(
         color: _isLoading ? const Color(0xFF94A3B8) : _accent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(100),
         boxShadow: _isLoading
             ? []
             : [
@@ -336,7 +376,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(100),
           onTap: _isLoading ? null : _login,
           child: Center(
             child: _isLoading

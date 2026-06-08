@@ -25,6 +25,7 @@
   "login_failed_generic": "लॉगिन विफल। कृपया बाद में पुनः प्रयास करें।",
   "login_invalid_pin": "आपके द्वारा दर्ज किया गया पिन गलत है। कृपया पुनः प्रयास करें।",
   "login_pin_hint": "संकेत: लॉगिन पिन 123456 है",
+  "login_submit": "साइन इन",
   "continue": "जारी रखें",
   "home_greeting_morning": "सुप्रभात",
   "home_greeting_afternoon": " नमस्कार",

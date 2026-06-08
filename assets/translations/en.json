@@ -25,6 +25,7 @@
   "login_failed_generic": "Login failed. Please try again later.",
   "login_invalid_pin": "The PIN you entered is incorrect. Please try again.",
   "login_pin_hint": "Hint: Login PIN is 123456",
+  "login_submit": "Sign In",
   "continue": "Continue",
   "home_greeting_morning": "Good Morning",
   "home_greeting_afternoon": "Good Afternoon",

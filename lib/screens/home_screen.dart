@@ -104,6 +104,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         greeting: currentGreeting,
         farmerName: _farmerName,
         profileImageUrl: _profileImageUrl,
+        onTabSelected: _onNavTap,
       ),
       CropAdvisoryGridScreen(key: const ValueKey('advisory_tab')),
       SettingsScreen(key: const ValueKey('settings_tab')),
