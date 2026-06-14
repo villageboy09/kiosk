@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1096184018472",
+    "project_id": "cropsync-d3457",
+    "storage_bucket": "cropsync-d3457.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1096184018472:android:561e43ef3dc6161622a71d",
+        "android_client_info": {
+          "package_name": "com.cropsync.cropsync"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwi6k9NipgLxaLKhUolOjH-F9NaYV3gPg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

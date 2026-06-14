@@ -148,26 +148,23 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
     return SliverAppBar(
       expandedHeight: 280,
       pinned: true,
-      backgroundColor: const Color(0xFF111827),
-      leadingWidth: 72,
-      leading: Center(child: AppTheme.backButton(context, color: Colors.white)),
+      backgroundColor: AppTheme.appBarBg,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
+      leading: Center(child: AppTheme.backButton(context, color: AppTheme.appBarText)),
       flexibleSpace: LayoutBuilder(
         builder: (context, constraints) {
           final isCollapsed = constraints.biggest.height <=
               MediaQuery.of(context).padding.top + kToolbarHeight + 1;
           return FlexibleSpaceBar(
-            centerTitle: true,
+            centerTitle: false,
             title: AnimatedOpacity(
               duration: const Duration(milliseconds: 200),
               opacity: isCollapsed ? 1.0 : 0.0,
               child: Text(
                 widget.crop.cropName,
-                style: AppTheme.getTextStyle(
-                  context,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
+                style: AppTheme.appBarTitle,
               ),
             ),
             background: Stack(

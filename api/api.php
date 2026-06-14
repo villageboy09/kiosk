@@ -486,8 +486,10 @@ function getUser($pdo) {
 
 function getCrops($pdo) {
     $lang = $_GET['lang'] ?? 'te';
+    $nameField = ($lang === 'en') ? 'name_en' : (($lang === 'hi') ? 'name_hi' : 'name');
     
-    $stmt = $pdo->query("SELECT id, name, image_url FROM crops ORDER BY id");
+    $stmt = $pdo->prepare("SELECT id, $nameField as name, image_url FROM crops ORDER BY id");
+    $stmt->execute();
     $crops = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     echo json_encode(['success' => true, 'crops' => $crops]);
@@ -509,13 +511,15 @@ function getUserSelections($pdo) {
     $userId = $_GET['user_id'] ?? '';
     $lang = $_GET['lang'] ?? 'te';
     
+    $cropNameField = ($lang === 'en') ? 'c.name_en' : (($lang === 'hi') ? 'c.name_hi' : 'c.name');
+    
     $stmt = $pdo->prepare("
         SELECT 
             ucs.id as selection_id,
             ucs.field_number as field_name,
             ucs.crop_id,
             ucs.variety_id,
-            c.name as crop_name,
+            $cropNameField as crop_name,
             c.image_url as crop_image_url,
             cv.variety_name,
             sd.sowing_date
@@ -642,7 +646,8 @@ function getCropStages($pdo) {
     $cropId = $_GET['crop_id'] ?? 0;
     $lang = $_GET['lang'] ?? 'te';
     
-    $nameField = ($lang === 'en') ? 'StageName_en' : 'StageName';
+    $nameField = ($lang === 'en') ? 'StageName_en' : (($lang === 'hi') ? 'StageName_hi' : 'StageName');
+    $descField = ($lang === 'en') ? 'Description_en' : (($lang === 'hi') ? 'Description_hi' : 'Description');
     
     $stmt = $pdo->prepare("
         SELECT 
@@ -650,7 +655,8 @@ function getCropStages($pdo) {
             $nameField as name, 
             StageName as name_te,
             StageName_en as name_en,
-            Description as description, 
+            StageName_hi as name_hi,
+            $descField as description, 
             StageImageURL as image_url
         FROM CropStages 
         WHERE crop_id = ?
@@ -710,7 +716,7 @@ function getProblems($pdo) {
     $stageId = $_GET['stage_id'] ?? null;
     $lang = $_GET['lang'] ?? 'te';
     
-    $nameField = ($lang === 'en') ? 'problem_name_en' : 'problem_name_te';
+    $nameField = ($lang === 'en') ? 'problem_name_en' : (($lang === 'hi') ? 'problem_name_hi' : 'problem_name_te');
     
     if ($stageId) {
         $sql = "
@@ -792,8 +798,8 @@ function getAdvisories($pdo) {
     $stageId = $_GET['stage_id'] ?? null;
     $lang = $_GET['lang'] ?? 'te';
     
-    $titleField = ($lang === 'en') ? 'advisory_title_en' : 'advisory_title_te';
-    $symptomsField = ($lang === 'en') ? 'symptoms_en' : 'symptoms_te';
+    $titleField = ($lang === 'en') ? 'advisory_title_en' : (($lang === 'hi') ? 'advisory_title_hi' : 'advisory_title_te');
+    $symptomsField = ($lang === 'en') ? 'symptoms_en' : (($lang === 'hi') ? 'symptoms_hi' : 'symptoms_te');
     
     $stmt = $pdo->prepare("
         SELECT 
@@ -802,9 +808,11 @@ function getAdvisories($pdo) {
             $titleField as title,
             advisory_title_te as title_te,
             advisory_title_en as title_en,
+            advisory_title_hi as title_hi,
             $symptomsField as symptoms,
             symptoms_te,
-            symptoms_en
+            symptoms_en,
+            symptoms_hi
         FROM crop_advisories 
         WHERE problem_id = ?
     ");
@@ -847,10 +855,10 @@ function getAdvisoryComponents($pdo) {
     $stageScope = $_GET['stage_scope'] ?? null;
     $lang = $_GET['lang'] ?? 'te';
     
-    $nameField = ($lang === 'en') ? 'component_name_en' : 'component_name_te';
-    $altNameField = ($lang === 'en') ? 'alt_component_name_en' : 'alt_component_name_te';
-    $doseField = ($lang === 'en') ? 'dose_en' : 'dose_te';
-    $methodField = ($lang === 'en') ? 'application_method_en' : 'application_method_te';
+    $nameField = ($lang === 'en') ? 'component_name_en' : (($lang === 'hi') ? 'component_name_hi' : 'component_name_te');
+    $altNameField = ($lang === 'en') ? 'alt_component_name_en' : (($lang === 'hi') ? 'alt_component_name_hi' : 'alt_component_name_te');
+    $doseField = ($lang === 'en') ? 'dose_en' : (($lang === 'hi') ? 'dose_hi' : 'dose_te');
+    $methodField = ($lang === 'en') ? 'application_method_en' : (($lang === 'hi') ? 'application_method_hi' : 'application_method_te');
     
     $sql = "
         SELECT 
@@ -952,9 +960,12 @@ function getProducts($pdo) {
         $userId = $_GET['user_id'] ?? null;
         $lang = $_GET['lang'] ?? 'te';
         
+        $nameField = ($lang === 'en') ? 'product_name_en' : (($lang === 'hi') ? 'product_name_hi' : 'product_name');
+        $descField = ($lang === 'en') ? 'product_description_en' : (($lang === 'hi') ? 'product_description_hi' : 'product_description');
+        
         $sql = "
-            SELECT p.product_id, p.product_code, p.category, p.product_name, 
-                   p.price, p.product_description, p.product_video_url,
+            SELECT p.product_id, p.product_code, p.category, p.$nameField as product_name, 
+                   p.price, p.$descField as product_description, p.product_video_url,
                    p.image_url_1, p.image_url_2, p.image_url_3,
                    a.advertiser_id, a.advertiser_name
             FROM products p
@@ -1051,8 +1062,8 @@ function getSeedVarieties($pdo) {
     $userId = $_GET['user_id'] ?? '';
     $lang = $_GET['lang'] ?? 'te';
     
-    $varietyField = ($lang === 'en') ? 'variety_name_en' : 'variety_name_te';
-    $detailsField = 'details_te';
+    $varietyField = ($lang === 'en') ? 'variety_name_en' : (($lang === 'hi') ? 'variety_name_hi' : 'variety_name_te');
+    $detailsField = ($lang === 'en') ? 'details_en' : (($lang === 'hi') ? 'details_hi' : 'details_te');
     
     $sql = "
         SELECT DISTINCT 
@@ -1109,10 +1120,13 @@ function getSeedVarieties($pdo) {
 }
 
 function getCropNames($pdo) {
+    $lang = $_GET['lang'] ?? 'te';
+    $nameField = ($lang === 'en') ? 'name_en' : (($lang === 'hi') ? 'name_hi' : 'name');
+    
     $stmt = $pdo->query("SELECT DISTINCT crop_name FROM seed_varieties ORDER BY crop_name");
     $crops = $stmt->fetchAll(PDO::FETCH_COLUMN);
     
-    $stmt = $pdo->query("SELECT id, name FROM crops ORDER BY id");
+    $stmt = $pdo->query("SELECT id, $nameField as name FROM crops ORDER BY id");
     $cropNames = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     echo json_encode(['success' => true, 'crop_names' => $crops, 'crops' => $cropNames]);

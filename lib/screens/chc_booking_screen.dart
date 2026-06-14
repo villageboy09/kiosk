@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 // google_fonts import removed — AppTheme.getTextStyle() handles font selection
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
@@ -176,9 +177,14 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
   late CHCBookingState _state;
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _bookingSuccess = false;
+  String _successBookingId = '';
+  String _successBillingType = 'Fixed';
+  double _successTotalCost = 0.0;
   List<Equipment> _equipments = [];
   List<Crop> _crops = [];
   DateTime _calendarMonth = DateTime.now();
+  int _currentStep = 0;
 
   static const List<String> _monthNamesTe = [
     'జనవరి',
@@ -195,6 +201,8 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
     'డిసెంబర్'
   ];
 
+  Locale? _lastLocale;
+
   @override
   void initState() {
     super.initState();
@@ -203,7 +211,16 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
     final isMember =
         currentUser?.cardUid != null && currentUser!.cardUid!.isNotEmpty;
     _state = CHCBookingState(isMember: isMember);
-    _loadData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final currentLocale = context.locale;
+    if (_lastLocale != currentLocale) {
+      _lastLocale = currentLocale;
+      _loadData();
+    }
   }
 
   @override
@@ -212,13 +229,17 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final user = AuthService.currentUser;
+      final locale = context.locale.languageCode;
+      
       final equipmentsData = await ApiService.getCHCEquipments(
           isMember: _state.isMember, clientCode: user?.clientCode);
       _equipments = equipmentsData.map((e) => Equipment.fromJson(e)).toList();
-      final cropsData = await ApiService.getCrops();
+      
+      final cropsData = await ApiService.getCrops(lang: locale);
       _crops = cropsData.map((c) => Crop.fromJson(c)).toList();
     } catch (e) {
       // Silent error handling
@@ -350,11 +371,12 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        await _showSuccessDialog(
-            bookingId: bookingId,
-            billingType: billingType,
-            totalCost: totalCost);
-        setState(() => _state = CHCBookingState(isMember: _state.isMember));
+        setState(() {
+          _bookingSuccess = true;
+          _successBookingId = bookingId;
+          _successBillingType = billingType;
+          _successTotalCost = totalCost;
+        });
       } else {
         _showErrorSnackBar(result['error'] ?? 'Booking failed');
       }
@@ -377,23 +399,7 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
     );
   }
 
-  Future<void> _showSuccessDialog({
-    required String bookingId,
-    required String billingType,
-    required double totalCost,
-  }) async {
-    return showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => _SuccessDialog(
-        bookingId: bookingId,
-        billingType: billingType,
-        totalCost: totalCost,
-        state: _state,
-        onClose: () => Navigator.pop(ctx),
-      ),
-    );
-  }
+
 
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -407,168 +413,429 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
     );
   }
 
+  Widget _buildStepIndicator() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
+      ),
+      child: Row(
+        children: [
+          _stepNode(0, 'chc_select_equipment'.tr()),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              height: 2,
+              color: _currentStep >= 1 ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _stepNode(1, 'chc_select_date'.tr()),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepNode(int index, String label) {
+    final isActive = _currentStep == index;
+    final isDone = _currentStep > index;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: isDone || isActive ? AppTheme.textPrimary : Colors.white,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isDone || isActive ? AppTheme.textPrimary : const Color(0xFFD1D5DB),
+              width: 2,
+            ),
+          ),
+          child: Center(
+            child: isDone
+                ? const Icon(Icons.check, size: 12, color: Colors.white)
+                : Text(
+                    '${index + 1}',
+                    style: TextStyle(
+                      color: isDone || isActive ? Colors.white : const Color(0xFF6B7280),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isActive || isDone ? FontWeight.w800 : FontWeight.w500,
+            color: isActive || isDone ? AppTheme.textPrimary : const Color(0xFF6B7280),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep1Content(String locale) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Icon(Icons.grid_view_rounded, color: AppTheme.textPrimary, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              context.tr('chc_select_equipment'),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _CHCEquipmentGrid(
+          equipments: _equipments,
+          selected: _state.equipment,
+          isMember: _state.isMember,
+          locale: locale,
+          onSelect: _selectEquipment,
+        ),
+        const SizedBox(height: 32),
+        Row(
+          children: [
+            const Icon(Icons.grass_rounded, color: AppTheme.textPrimary, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              context.tr('chc_select_crop'),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _CHCCropSelector(
+          crops: _crops,
+          selected: _state.crop,
+          onSelect: _selectCrop,
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildStep2Content() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Icon(Icons.straighten_rounded, color: AppTheme.textPrimary, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              context.tr('chc_land_size'),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _CHCAcresCounter(
+          acres: _state.acres,
+          equipment: _state.equipment,
+          onChanged: _changeAcres,
+        ),
+        const SizedBox(height: 32),
+        Row(
+          children: [
+            const Icon(Icons.calendar_today_rounded, color: AppTheme.textPrimary, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              context.tr('chc_select_date'),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _CHCCalendar(
+          calendarMonth: _calendarMonth,
+          serviceDate: _state.serviceDate,
+          fullyBookedDates: _state.fullyBookedDates,
+          monthNamesTe: _monthNamesTe,
+          onSelectDate: _selectDate,
+          onChangeMonth: _changeMonth,
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildBottomNavBar(bool isStep1) {
+    final isVariableBilling = _state.equipment?.billingType == 'Variable';
+    final totalDisplay = isVariableBilling
+        ? context.tr('chc_bill_pending')
+        : '₹${_state.totalCost.toStringAsFixed(0)}';
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        24,
+        16,
+        24,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          if (!isStep1)
+            OutlinedButton(
+              onPressed: () => setState(() => _currentStep = 0),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppTheme.textPrimary, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              ),
+              child: const Icon(Icons.arrow_back_rounded, color: AppTheme.textPrimary, size: 20),
+            )
+          else
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.tr('chc_equipment'),
+                    style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    _state.equipment?.getDisplayName(context.locale.languageCode) ?? 'None selected',
+                    style: const TextStyle(fontSize: 15, color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: SizedBox(
+              height: 56,
+              child: FilledButton(
+                onPressed: isStep1
+                    ? (_state.equipment != null ? () => setState(() => _currentStep = 1) : null)
+                    : (_state.isValid && !_isSubmitting ? _submitBooking : null),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.textPrimary,
+                  disabledBackgroundColor: const Color(0xFFE5E7EB),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                ),
+                child: _isSubmitting
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+                      )
+                    : Text(
+                        isStep1
+                            ? 'Next'
+                            : (_state.equipment!.billingType == 'Fixed'
+                                ? '${context.tr('chc_confirm_booking')} ($totalDisplay)'
+                                : context.tr('chc_book_slot')),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuccessContent() {
+    final locale = context.locale.languageCode;
+    final equipmentName = _state.equipment?.getDisplayName(locale) ?? 'Equipment';
+    final dateStr = _state.serviceDate != null
+        ? DateFormat('dd MMM yyyy').format(_state.serviceDate!)
+        : '';
+
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 450),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(),
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFD1FAE5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check_circle_rounded, size: 48, color: Color(0xFF10B981)),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  context.tr('chc_success_title'),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  context.tr('detail_booking_id'),
+                  style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  _successBookingId,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppTheme.textPrimary, letterSpacing: -0.5),
+                ),
+                const SizedBox(height: 32),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: Column(
+                    children: [
+                      _ReceiptRow(context.tr('chc_equipment'), equipmentName),
+                      if (_state.crop != null)
+                        _ReceiptRow(context.tr('crop_label'), _state.crop!.name),
+                      _ReceiptRow(context.tr('chc_land_size'), '${_state.acres} ${context.tr("acres")}'),
+                      _ReceiptRow(context.tr('chc_service_date'), dateStr),
+                      const Divider(height: 32, color: Color(0xFFE5E7EB)),
+                      _ReceiptRow(
+                        context.tr('total'),
+                        _successBillingType == 'Fixed'
+                            ? '₹${_successTotalCost.toStringAsFixed(0)}'
+                            : context.tr('chc_bill_pending'),
+                        isTotal: true,
+                        isPending: _successBillingType != 'Fixed',
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                SizedBox(
+                  width: double.infinity,
+                  height: 58,
+                  child: FilledButton(
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      Navigator.of(context).pop();
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.textPrimary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                    ),
+                    child: const Text(
+                      'Go back to Home',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const _CHCScreenSkeleton();
     }
 
+    if (_bookingSuccess) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: _buildSuccessContent(),
+      );
+    }
+
+    final locale = context.locale.languageCode;
+    final isStep1 = _currentStep == 0;
+
     return Scaffold(
       backgroundColor: Colors.white,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 600;
-          return isWide ? _buildWideLayout(constraints) : _buildNarrowLayout();
-        },
+      appBar: AppBar(
+        backgroundColor: AppTheme.appBarBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: AppTheme.backButton(context, color: AppTheme.appBarText),
+        title: Text(
+          'chc_title'.tr(),
+          style: AppTheme.appBarTitle,
+        ),
+        centerTitle: false,
+        actions: [
+          _MemberBadge(isMember: _state.isMember),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.receipt_long_rounded, color: AppTheme.appBarText),
+            onPressed: _showBookingsBottomSheet,
+          ),
+          const SizedBox(width: 12),
+        ],
       ),
-    );
-  }
-
-  // ==================== NARROW LAYOUT (Mobile) ====================
-  Widget _buildNarrowLayout() {
-    final locale = context.locale.languageCode;
-    final currentUser = AuthService.currentUser;
-
-    return Column(
-      children: [
-        Expanded(
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                  child: _CHCHeader(
-                      state: _state,
-                      currentUser: currentUser,
-                      onBookingsPressed: _showBookingsBottomSheet)),
-              _buildEquipmentSection(locale),
-              _buildCropSection(),
-              _buildAcresSection(),
-              _buildCalendarSection(),
-              const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
-            ],
+      body: Column(
+        children: [
+          _buildStepIndicator(),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: AnimatedCrossFade(
+                firstChild: _buildStep1Content(locale),
+                secondChild: _buildStep2Content(),
+                crossFadeState: isStep1 ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                duration: const Duration(milliseconds: 300),
+              ),
+            ),
           ),
-        ),
-        _CHCSummaryBar(
-          state: _state,
-          isSubmitting: _isSubmitting,
-          onSubmit: _submitBooking,
-        ),
-      ],
-    );
-  }
-
-  // ==================== WIDE LAYOUT (Tablet/Desktop) ====================
-  Widget _buildWideLayout(BoxConstraints constraints) {
-    final locale = context.locale.languageCode;
-    final currentUser = AuthService.currentUser;
-
-    return Row(
-      children: [
-        // Left panel - Equipment & Date selection
-        Expanded(
-          flex: 3,
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                  child: _CHCHeader(
-                      state: _state,
-                      currentUser: currentUser,
-                      onBookingsPressed: _showBookingsBottomSheet)),
-              _buildEquipmentSection(locale),
-              _buildCropSection(),
-              _buildAcresSection(),
-              _buildCalendarSection(),
-              const SliverPadding(padding: EdgeInsets.only(bottom: 40)),
-            ],
-          ),
-        ),
-        // Right panel - Summary
-        Container(
-          width: 360,
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            border: Border(
-                left: BorderSide(color: AppTheme.border.withOpacity(0.5))),
-          ),
-          child: _CHCSummaryPanel(
-            state: _state,
-            isSubmitting: _isSubmitting,
-            onSubmit: _submitBooking,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ==================== SECTION BUILDERS ====================
-  SliverPadding _buildEquipmentSection(String locale) {
-    return SliverPadding(
-      padding: const EdgeInsets.all(24),
-      sliver: SliverToBoxAdapter(
-        child: _CHCCard(
-          title: context.tr('chc_select_equipment'),
-          icon: Icons.grid_view_rounded,
-          child: _CHCEquipmentGrid(
-            equipments: _equipments,
-            selected: _state.equipment,
-            isMember: _state.isMember,
-            locale: locale,
-            onSelect: _selectEquipment,
-          ),
-        ),
-      ),
-    );
-  }
-
-  SliverPadding _buildCropSection() {
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      sliver: SliverToBoxAdapter(
-        child: _CHCCard(
-          title: context.tr('chc_select_crop'),
-          icon: Icons.grass_rounded,
-          child: _CHCCropSelector(
-            crops: _crops,
-            selected: _state.crop,
-            onSelect: _selectCrop,
-          ),
-        ),
-      ),
-    );
-  }
-
-  SliverPadding _buildAcresSection() {
-    return SliverPadding(
-      padding: const EdgeInsets.all(24),
-      sliver: SliverToBoxAdapter(
-        child: _CHCCard(
-          title: context.tr('chc_land_size'),
-          icon: Icons.straighten_rounded,
-          child: _CHCAcresCounter(
-            acres: _state.acres,
-            equipment: _state.equipment,
-            onChanged: _changeAcres,
-          ),
-        ),
-      ),
-    );
-  }
-
-  SliverPadding _buildCalendarSection() {
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      sliver: SliverToBoxAdapter(
-        child: _CHCCard(
-          title: context.tr('chc_select_date'),
-          icon: Icons.calendar_today_rounded,
-          child: _CHCCalendar(
-            calendarMonth: _calendarMonth,
-            serviceDate: _state.serviceDate,
-            fullyBookedDates: _state.fullyBookedDates,
-            monthNamesTe: _monthNamesTe,
-            onSelectDate: _selectDate,
-            onChangeMonth: _changeMonth,
-          ),
-        ),
+          _buildBottomNavBar(isStep1),
+        ],
       ),
     );
   }
@@ -585,135 +852,130 @@ class _CHCScreenSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: SingleChildScrollView(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: AppTheme.appBarBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: const Icon(Icons.arrow_back_rounded, color: Color(0xFFD1D5DB)),
+        title: Container(
+          width: 150,
+          height: 18,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE5E7EB),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        actions: [
+          Container(
+            width: 72,
+            height: 28,
+            margin: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE5E7EB),
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.receipt_long_rounded, color: Color(0xFFD1D5DB)),
+          const SizedBox(width: 16),
+        ],
+      ),
+      body: Shimmer.fromColors(
+        baseColor: const Color(0xFFE0E0E0),
+        highlightColor: const Color(0xFFF5F5F5),
         child: Column(
           children: [
-            // 1. Header Skeleton — compact single row
-            Container(
-              padding: EdgeInsets.fromLTRB(
-                12,
-                MediaQuery.of(context).padding.top + 8,
-                12,
-                12,
-              ),
-              decoration: const BoxDecoration(
-                color: Color(0xFF111827),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(24),
-                  bottomRight: Radius.circular(24),
-                ),
-              ),
-              child: const Row(
+            // Step Indicator Skeleton
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+              child: Row(
                 children: [
-                  // Back button placeholder
-                  _ShimmerBox(
-                      width: 36, height: 36, borderRadius: 18, isDark: true),
-                  SizedBox(width: 10),
-                  // Avatar
-                  _ShimmerBox(
-                      width: 34, height: 34, borderRadius: 17, isDark: true),
-                  SizedBox(width: 10),
-                  // Name + village
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _ShimmerBox(
-                            width: 130,
-                            height: 14,
-                            borderRadius: 4,
-                            isDark: true),
-                        SizedBox(height: 6),
-                        _ShimmerBox(
-                            width: 80,
-                            height: 11,
-                            borderRadius: 4,
-                            isDark: true),
-                      ],
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
                     ),
                   ),
-                  // Member badge + bookings button
-                  _ShimmerBox(
-                      width: 72, height: 28, borderRadius: 14, isDark: true),
-                  SizedBox(width: 8),
-                  _ShimmerBox(
-                      width: 90, height: 32, borderRadius: 12, isDark: true),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 80,
+                    height: 12,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Container(
+                      height: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                 ],
               ),
             ),
-
-            // 2. Equipment Grid Skeleton
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Container(
+            const Divider(height: 1),
+            // Body Grid Skeleton
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(32),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
-                      children: [
-                        _ShimmerBox(width: 24, height: 24, borderRadius: 6),
-                        SizedBox(width: 12),
-                        _ShimmerBox(width: 140, height: 18, borderRadius: 4),
-                      ],
+                    Container(
+                      width: 140,
+                      height: 16,
+                      color: Colors.white,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 16,
-                        crossAxisSpacing: 16,
-                        childAspectRatio: 0.82,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 0.76,
                       ),
-                      itemCount: 4,
-                      // Dark card skeleton matching new full-bleed design
-                      itemBuilder: (_, __) => ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            // Dark background
-                            Container(color: const Color(0xFF1F2937)),
-                            // Shimmer overlay covering the whole card
-                            const _ShimmerBox(
-                                width: double.infinity,
-                                height: double.infinity,
-                                borderRadius: 0,
-                                isDark: true),
-                            // Bottom label strip placeholder
-                            const Positioned(
-                              left: 10,
-                              right: 10,
-                              bottom: 10,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _ShimmerBox(
-                                      width: 80,
-                                      height: 12,
-                                      borderRadius: 4,
-                                      isDark: true),
-                                  SizedBox(height: 6),
-                                  _ShimmerBox(
-                                      width: 52,
-                                      height: 22,
-                                      borderRadius: 11,
-                                      isDark: true),
-                                ],
-                              ),
-                            ),
-                          ],
+                      itemCount: 6,
+                      itemBuilder: (_, __) => Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    Container(
+                      width: 120,
+                      height: 16,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 100,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: 4,
+                        itemBuilder: (_, __) => Container(
+                          width: 88,
+                          margin: const EdgeInsets.only(right: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
                         ),
                       ),
                     ),
@@ -721,116 +983,9 @@ class _CHCScreenSkeleton extends StatelessWidget {
                 ),
               ),
             ),
-
-            // 3. Section Skeletons
-            _buildSectionSkeleton(),
-            _buildSectionSkeleton(),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSectionSkeleton() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-        ),
-        child: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                _ShimmerBox(width: 24, height: 24, borderRadius: 6),
-                SizedBox(width: 12),
-                _ShimmerBox(width: 120, height: 18, borderRadius: 4),
-              ],
-            ),
-            SizedBox(height: 24),
-            _ShimmerBox(width: double.infinity, height: 100, borderRadius: 16),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ShimmerBox extends StatefulWidget {
-  final double width;
-  final double height;
-  final double borderRadius;
-  final bool isDark;
-
-  const _ShimmerBox({
-    required this.width,
-    required this.height,
-    this.borderRadius = 8,
-    this.isDark = false,
-  });
-
-  @override
-  State<_ShimmerBox> createState() => _ShimmerBoxState();
-}
-
-class _ShimmerBoxState extends State<_ShimmerBox>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    )..repeat();
-    _animation = Tween<double>(begin: -2, end: 2).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOutSine),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = widget.isDark
-        ? [
-            const Color(0xFF1F2937),
-            const Color(0xFF374151),
-            const Color(0xFF1F2937),
-          ]
-        : [
-            const Color(0xFFE8E8E8),
-            const Color(0xFFF5F5F5),
-            const Color(0xFFE8E8E8),
-          ];
-
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return Container(
-          width: widget.width,
-          height: widget.height,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(widget.borderRadius),
-            gradient: LinearGradient(
-              begin: Alignment(_animation.value - 1, 0),
-              end: Alignment(_animation.value + 1, 0),
-              colors: colors,
-              stops: const [0.0, 0.5, 1.0],
-            ),
-          ),
-        );
-      },
     );
   }
 }
@@ -840,135 +995,7 @@ class _ShimmerBoxState extends State<_ShimmerBox>
 // ============================================================================
 
 // ---------------------------- Header ----------------------------
-class _CHCHeader extends StatelessWidget {
-  final CHCBookingState state;
-  final dynamic currentUser;
-  final VoidCallback? onBookingsPressed;
 
-  const _CHCHeader({
-    required this.state,
-    required this.currentUser,
-    this.onBookingsPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final name = currentUser?.name ?? 'Guest';
-    final initials = name.isNotEmpty ? name[0].toUpperCase() : 'G';
-    final village = currentUser?.village as String?;
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        12,
-        MediaQuery.of(context).padding.top + 8,
-        12,
-        16,
-      ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
-      ),
-      child: Row(
-        children: [
-          // Back button
-          AppTheme.backButton(context, color: AppTheme.textPrimary),
-          // Avatar
-          Container(
-            width: 36,
-            height: 36,
-            margin: const EdgeInsets.only(right: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: const Color(0xFFE5E7EB), width: 1.5),
-            ),
-            child: Center(
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-            ),
-          ),
-          // Name + village
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  name,
-                  style: AppTheme.getTextStyle(
-                    context,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (village != null && village.isNotEmpty)
-                  Text(
-                    village,
-                    style: AppTheme.getTextStyle(
-                      context,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
-          ),
-          // Member badge
-          _MemberBadge(isMember: state.isMember),
-          const SizedBox(width: 8),
-          // My Bookings button — icon only on tight screens
-          if (onBookingsPressed != null)
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onBookingsPressed,
-                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.receipt_long_rounded,
-                          color: AppTheme.textPrimary, size: 16),
-                      const SizedBox(width: 6),
-                      Text(
-                        context.tr('chc_my_bookings'),
-                        style: AppTheme.getTextStyle(
-                          context,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
 
 class _MemberBadge extends StatelessWidget {
   final bool isMember;
@@ -977,77 +1004,29 @@ class _MemberBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
+        color: isMember ? const Color(0xFFFEF3C7) : const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: isMember ? const Color(0xFFFDE68A) : const Color(0xFFE5E7EB),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (isMember)
-            const Icon(Icons.stars_rounded, color: Color(0xFFFFD700), size: 16),
-          if (isMember) const SizedBox(width: 6),
+            const Icon(Icons.stars_rounded, color: Color(0xFFD97706), size: 14),
+          if (isMember) const SizedBox(width: 4),
           Text(
             isMember ? context.tr('member') : context.tr('non_member'),
             style: AppTheme.getTextStyle(
               context,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: isMember ? const Color(0xFFB45309) : const Color(0xFF4B5563),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------- Card ----------------------------
-class _CHCCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Widget child;
-
-  const _CHCCard(
-      {required this.title, required this.icon, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 16,
-              offset: const Offset(0, 6))
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: AppTheme.textPrimary, size: 22),
-              const SizedBox(width: 12),
-              Text(title,
-                  style: AppTheme.getTextStyle(
-                    context,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.textPrimary,
-                    letterSpacing: -0.4,
-                  )),
-            ],
-          ),
-          const SizedBox(height: 24),
-          child,
         ],
       ),
     );
@@ -1074,16 +1053,16 @@ class _CHCEquipmentGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Responsive: max 180px per item, adapts 2-5 columns
-        final crossAxisCount = (constraints.maxWidth / 160).floor().clamp(2, 5);
+        // Responsive: 3 columns on mobile (constraint width ~300px), up to 5 on tablet/desktop
+        final crossAxisCount = (constraints.maxWidth / 90).floor().clamp(3, 5);
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 16,
-            childAspectRatio: 0.82,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 0.76,
           ),
           itemCount: equipments.length,
           itemBuilder: (ctx, i) {
@@ -1130,170 +1109,120 @@ class _EquipmentCard extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
-          color: const Color(0xFF1F2937),
-          borderRadius: BorderRadius.circular(20),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
-                ? Colors.white.withValues(alpha: 0.9)
-                : Colors.transparent,
-            width: 2.5,
+                ? AppTheme.textPrimary
+                : const Color(0xFFE5E7EB),
+            width: isSelected ? 2.0 : 1.0,
           ),
           boxShadow: [
             BoxShadow(
               color: isSelected
-                  ? Colors.black.withValues(alpha: 0.25)
-                  : Colors.black.withValues(alpha: 0.1),
-              blurRadius: isSelected ? 16 : 8,
+                  ? Colors.black.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.02),
+              blurRadius: isSelected ? 12 : 6,
               offset: const Offset(0, 4),
             )
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(19),
-          child: Stack(
-            fit: StackFit.expand,
+          borderRadius: BorderRadius.circular(15),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Full-bleed equipment image ──
-              CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.cover,
-                memCacheHeight: 400,
-                placeholder: (_, __) => Container(
-                  color: const Color(0xFF1F2937),
-                  child: const Center(
-                    child: SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white30),
-                    ),
-                  ),
-                ),
-                errorWidget: (_, __, ___) => Container(
-                  color: const Color(0xFF1F2937),
-                  child: const Center(
-                    child: Icon(Icons.agriculture_rounded,
-                        size: 48, color: Colors.white24),
-                  ),
-                ),
-              ),
-
-              // ── Gradient overlay — top (subtle dark for badges) ──
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: const [0.0, 0.45, 1.0],
-                      colors: [
-                        Colors.black.withValues(alpha: 0.15),
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.75),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── Selected checkmark ──
-              if (isSelected)
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.check_rounded,
-                        size: 16, color: Color(0xFF111827)),
-                  ),
-                ),
-
-              // ── Member badge ──
-              if (isMember)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFD700),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.stars_rounded,
-                            size: 10, color: Colors.black87),
-                        const SizedBox(width: 3),
-                        Text(
-                          context.tr('member').toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black87,
-                            letterSpacing: 0.5,
+              // Image Section
+              Expanded(
+                flex: 5,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      color: const Color(0xFFF9FAFB),
+                      padding: const EdgeInsets.all(6),
+                      child: CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.contain,
+                        memCacheHeight: 200,
+                        placeholder: (_, __) => const Center(
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 1.5, color: AppTheme.textHint),
                           ),
                         ),
-                      ],
+                        errorWidget: (_, __, ___) => const Center(
+                          child: Icon(Icons.agriculture_rounded,
+                              size: 28, color: AppTheme.textHint),
+                        ),
+                      ),
                     ),
-                  ),
+                    // Selected checkmark badge
+                    if (isSelected)
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: const BoxDecoration(
+                            color: AppTheme.textPrimary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.check_rounded,
+                              size: 12, color: Colors.white),
+                        ),
+                      ),
+                    // Member gold star badge
+                    if (isMember)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFFD700),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.stars_rounded,
+                              size: 10, color: Colors.black87),
+                        ),
+                      ),
+                  ],
                 ),
-
-              // ── Bottom label strip ──
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        equipment.getDisplayName(locale),
+              ),
+              // Details Section
+              Padding(
+                padding: const EdgeInsets.all(6.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      equipment.getDisplayName(locale),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '₹${equipment.displayPrice.toStringAsFixed(0)}/${equipment.unit}',
                         style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          letterSpacing: -0.2,
-                          shadows: [
-                            Shadow(
-                                color: Colors.black54,
-                                blurRadius: 4,
-                                offset: Offset(0, 1))
-                          ],
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 5),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          '₹${equipment.displayPrice.toStringAsFixed(0)}/${equipment.unit}',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.textSecondary,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1823,266 +1752,6 @@ class _CHCCalendar extends StatelessWidget {
   }
 }
 
-// ---------------------------- Summary Bar (Mobile) ----------------------------
-class _CHCSummaryBar extends StatelessWidget {
-  final CHCBookingState state;
-  final bool isSubmitting;
-  final VoidCallback onSubmit;
-
-  const _CHCSummaryBar(
-      {required this.state,
-      required this.isSubmitting,
-      required this.onSubmit});
-
-  @override
-  Widget build(BuildContext context) {
-    final isVariableBilling = state.equipment?.billingType == 'Variable';
-    final totalDisplay = isVariableBilling
-        ? context.tr('chc_bill_pending')
-        : '₹${state.totalCost.toStringAsFixed(0)}';
-    final buttonText = state.equipment == null
-        ? context.tr('chc_select_equipment')
-        : (state.equipment!.billingType == 'Fixed'
-            ? context.tr('chc_confirm_booking')
-            : context.tr('chc_book_slot'));
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-          24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, -4))
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(context.tr('total'),
-                    style: AppTheme.getTextStyle(
-                      context,
-                      fontSize: 13,
-                      color: AppTheme.textSecondary,
-                      fontWeight: FontWeight.w700,
-                    )),
-                Text(totalDisplay,
-                    style: AppTheme.getTextStyle(
-                      context,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: isVariableBilling
-                          ? const Color(0xFFB45309)
-                          : AppTheme.textPrimary,
-                      letterSpacing: -0.5,
-                    )),
-              ],
-            ),
-          ),
-          SizedBox(
-            height: 56,
-            child: FilledButton(
-              onPressed: state.isValid && !isSubmitting ? onSubmit : null,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.textPrimary,
-                disabledBackgroundColor: const Color(0xFFE5E7EB),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(100)),
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-              ),
-              child: isSubmitting
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 3, color: Colors.white))
-                  : Text(buttonText,
-                      style: AppTheme.getTextStyle(
-                        context,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
-                        color: Colors.white,
-                      )),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------- Summary Panel (Desktop) ----------------------------
-class _CHCSummaryPanel extends StatelessWidget {
-  final CHCBookingState state;
-  final bool isSubmitting;
-  final VoidCallback onSubmit;
-
-  const _CHCSummaryPanel(
-      {required this.state,
-      required this.isSubmitting,
-      required this.onSubmit});
-
-  @override
-  Widget build(BuildContext context) {
-    final locale = context.locale.languageCode;
-    final equipmentName = state.equipment?.getDisplayName(locale) ??
-        context.tr('select_equipment');
-    final rate = state.equipment != null
-        ? '₹${state.equipment!.displayPrice.toStringAsFixed(0)}/${state.equipment!.unit}'
-        : '-';
-    final dateStr = state.serviceDate != null
-        ? DateFormat('dd MMM yyyy').format(state.serviceDate!)
-        : '-';
-    final isVariableBilling = state.equipment?.billingType == 'Variable';
-    final totalDisplay = isVariableBilling
-        ? context.tr('chc_bill_pending')
-        : '₹${state.totalCost.toStringAsFixed(0)}';
-    final buttonText = state.equipment == null
-        ? context.tr('chc_select_equipment')
-        : (state.equipment!.billingType == 'Fixed'
-            ? context.tr('chc_confirm_booking')
-            : context.tr('chc_book_slot'));
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(context.tr('chc_summary_title'),
-                style: AppTheme.getTextStyle(
-                  context,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
-                  letterSpacing: -0.5,
-                )),
-            const SizedBox(height: AppTheme.spacingLg),
-            _SummaryRow(
-                label: context.tr('chc_equipment'),
-                value: equipmentName,
-                highlight: true),
-            if (state.equipment?.requiresCropSelection == true)
-              _SummaryRow(
-                  label: context.tr('crop_label'),
-                  value: state.crop?.name ?? '-'),
-            _SummaryRow(label: context.tr('chc_rate_label'), value: rate),
-            _SummaryRow(
-                label: context.tr('chc_land_size'),
-                value: '${state.acres} ${context.tr("acres")}'),
-            _SummaryRow(label: context.tr('chc_service_date'), value: dateStr),
-            const Divider(height: 40),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(context.tr('total'),
-                    style: AppTheme.getTextStyle(
-                      context,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                    )),
-                Text(totalDisplay,
-                    style: AppTheme.getTextStyle(
-                      context,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: isVariableBilling
-                          ? const Color(0xFFB45309)
-                          : AppTheme.textPrimary,
-                      letterSpacing: -0.5,
-                    )),
-              ],
-            ),
-            if (isVariableBilling)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(context.tr('chc_bill_after_service'),
-                    style: AppTheme.getTextStyle(
-                      context,
-                      fontSize: 12,
-                      color: const Color(0xFFB45309),
-                      fontWeight: FontWeight.w600,
-                    )),
-              ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: state.isValid && !isSubmitting ? onSubmit : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.textPrimary,
-                  disabledBackgroundColor: const Color(0xFFE5E7EB),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(100)),
-                ),
-                child: isSubmitting
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : Text(buttonText,
-                        style: AppTheme.getTextStyle(
-                          context,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        )),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SummaryRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool highlight;
-
-  const _SummaryRow(
-      {required this.label, required this.value, this.highlight = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingXs),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: AppTheme.getTextStyle(
-                context,
-                fontSize: 13,
-                color: AppTheme.textSecondary,
-              )),
-          Flexible(
-              child: Text(value,
-                  style: AppTheme.getTextStyle(
-                    context,
-                    fontSize: 13,
-                    fontWeight: highlight ? FontWeight.w700 : FontWeight.w500,
-                    color:
-                        highlight ? AppTheme.textPrimary : AppTheme.textPrimary,
-                  ),
-                  textAlign: TextAlign.end)),
-        ],
-      ),
-    );
-  }
-}
-
 // ---------------------------- Dialogs ----------------------------
 class _ErrorDialog extends StatelessWidget {
   final Equipment? equipment;
@@ -2157,108 +1826,7 @@ class _ErrorDialog extends StatelessWidget {
   }
 }
 
-class _SuccessDialog extends StatelessWidget {
-  final String bookingId;
-  final String billingType;
-  final double totalCost;
-  final CHCBookingState state;
-  final VoidCallback onClose;
 
-  const _SuccessDialog({
-    required this.bookingId,
-    required this.billingType,
-    required this.totalCost,
-    required this.state,
-    required this.onClose,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final locale = context.locale.languageCode;
-    final equipmentName = state.equipment!.getDisplayName(locale);
-    final dateStr = DateFormat('dd MMM yyyy').format(state.serviceDate!);
-
-    return Dialog(
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusXl)),
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacingLg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.1),
-                  shape: BoxShape.circle),
-              child: const Icon(Icons.check, size: 40, color: AppTheme.primary),
-            ),
-            const SizedBox(height: AppTheme.spacingMd),
-            Text(context.tr('chc_success_title'),
-                style: AppTheme.getTextStyle(
-                  context,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
-                )),
-            const SizedBox(height: AppTheme.spacingSm),
-            Text(context.tr('detail_booking_id'),
-                style: AppTheme.getTextStyle(context,
-                    fontSize: 12, color: AppTheme.textSecondary)),
-            Text(bookingId,
-                style: AppTheme.getTextStyle(context,
-                    fontSize: 22, fontWeight: FontWeight.w700)),
-            const SizedBox(height: AppTheme.spacingMd),
-            Container(
-              padding: const EdgeInsets.all(AppTheme.spacingMd),
-              decoration: BoxDecoration(
-                  color: AppTheme.bg,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
-              child: Column(
-                children: [
-                  _ReceiptRow(context.tr('chc_equipment'), equipmentName),
-                  if (state.crop != null)
-                    _ReceiptRow(context.tr('crop_label'), state.crop!.name),
-                  _ReceiptRow(context.tr('chc_land_size'),
-                      '${state.acres} ${context.tr("acres")}'),
-                  _ReceiptRow(context.tr('chc_service_date'), dateStr),
-                  const Divider(height: AppTheme.spacingMd),
-                  _ReceiptRow(
-                      context.tr('total'),
-                      billingType == 'Fixed'
-                          ? '₹${totalCost.toStringAsFixed(0)}'
-                          : context.tr('chc_bill_pending'),
-                      isTotal: true,
-                      isPending: billingType != 'Fixed'),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppTheme.spacingLg),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: onClose,
-                style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.text,
-                    shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppTheme.radiusMd))),
-                child: Text(context.tr('ok'),
-                    style: AppTheme.getTextStyle(
-                      context,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    )),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ============================================================================
 // BOOKINGS BOTTOM SHEET
@@ -2350,6 +1918,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
       ),
       decoration: const BoxDecoration(
         color: AppTheme.bg,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3269,6 +2838,30 @@ class _ReceiptRow extends StatelessWidget {
                     : (isTotal ? AppTheme.textPrimary : AppTheme.textPrimary),
               )),
         ],
+      ),
+    );
+  }
+}
+
+class _ShimmerBox extends StatelessWidget {
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  const _ShimmerBox({
+    required this.width,
+    required this.height,
+    this.borderRadius = 8,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(borderRadius),
       ),
     );
   }

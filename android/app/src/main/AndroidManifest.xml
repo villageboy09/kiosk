@@ -3,7 +3,9 @@
 <!-- Permission to access the internet -->
 <uses-permission android:name="android.permission.INTERNET" />
 
-
+<!-- Permissions for phone/SIM details -->
+<uses-permission android:name="android.permission.READ_PHONE_STATE" />
+<uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 
 <!-- Permissions for location access -->
 <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -44,6 +46,9 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

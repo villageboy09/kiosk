@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/services/notification_service.dart';
 
 /// Authentication Service for managing user sessions locally
 class AuthService {
@@ -24,6 +25,15 @@ class AuthService {
     final user = await ApiService.loginWithUserId(userId);
     await _saveUserSession(user);
     _currentUser = user;
+    
+    // Subscribe to Firebase notifications
+    try {
+      await NotificationService.subscribeToDistrictTopic(user);
+      await NotificationService.synchronizeCropSubscriptions(user);
+    } catch (e) {
+      // Don't fail login if FCM subscription fails
+    }
+    
     return user;
   }
 

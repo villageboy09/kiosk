@@ -6,6 +6,8 @@ import 'dart:convert';
 
 import 'package:cropsync/models/chc_operator.dart';
 import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/theme/app_theme.dart';
+
 
 class ManualOrderSheet extends StatefulWidget {
   final ChcOperator operator;
@@ -491,19 +493,16 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       appBar: _currentStep == 4
           ? null
           : AppBar(
-              backgroundColor: Colors.white,
+              backgroundColor: AppTheme.appBarBg,
               elevation: 0,
               scrolledUnderElevation: 0,
+              surfaceTintColor: Colors.transparent,
               toolbarHeight: 64,
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(1),
-                child: Container(color: const Color(0xFFF3F4F6), height: 1),
-              ),
               leading: Padding(
                 padding: const EdgeInsets.only(left: 8.0),
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                      color: _accent, size: 20),
+                      color: AppTheme.appBarText, size: 20),
                   onPressed: () {
                     if (_currentStep > 1) {
                       _pageController.previousPage(
@@ -517,25 +516,22 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                 ),
               ),
               title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                       _currentStep == 3
                           ? 'operator_review_bill'.tr()
                           : 'operator_job_completion_title'.tr(),
-                      style: const TextStyle(
-                          color: _accent,
-                          fontSize: 17,
-                          letterSpacing: -0.4,
-                          fontWeight: FontWeight.w800)),
+                      style: AppTheme.appBarTitle),
                   if (_currentStep < 3)
                     Text('${'step'.tr()} $_currentStep ${'of'.tr()} 2',
-                        style: const TextStyle(
-                            color: _slate,
+                        style: TextStyle(
+                            color: AppTheme.appBarText.withValues(alpha: 0.6),
                             fontSize: 12,
                             fontWeight: FontWeight.w600)),
                 ],
               ),
-              centerTitle: true,
+              centerTitle: false,
             ),
       body: PageView(
         controller: _pageController,

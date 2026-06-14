@@ -3,7 +3,6 @@ import 'package:cropsync/screens/operator/operator_dashboard.dart';
 import 'package:cropsync/welcome_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/operator_auth_service.dart';
-import 'package:cropsync/services/location_service.dart';
 import 'package:cropsync/services/update_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/widgets/responsive/app_viewport.dart';
@@ -11,9 +10,16 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'package:cropsync/services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  await NotificationService.initialize();
   await EasyLocalization.ensureInitialized();
 
   // Load environment variables (optional, for any other config)
@@ -29,8 +35,10 @@ Future<void> main() async {
     OperatorAuthService.loadSession(),
   ]);
 
-  // Request location permission early (non-blocking)
-  LocationService.requestPermission();
+  if (AuthService.currentUser != null) {
+    NotificationService.subscribeToDistrictTopic(AuthService.currentUser!);
+    NotificationService.synchronizeCropSubscriptions(AuthService.currentUser!);
+  }
 
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.edgeToEdge,
@@ -93,6 +101,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: NotificationService.navigatorKey,
       locale: context.locale,
       supportedLocales: context.supportedLocales,
       localizationsDelegates: context.localizationDelegates,

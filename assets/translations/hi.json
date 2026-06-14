@@ -490,5 +490,10 @@
   "avg_across_state": "राज्यव्यापी औसत",
   "no_historical_data_for_district": "{district} के लिए कोई ऐतिहासिक डेटा उपलब्ध नहीं है。",
   "price_trends": "मूल्य रुझान (30 दिन)",
-  "all_state_markets": "सभी राज्य बाजार"
+  "all_state_markets": "सभी राज्य बाजार",
+  "పనిముట్లు": "उपकरण",
+  "విత్తనాలు/ఎరువులు": "बीज / उर्वरक",
+  "మషిన్": "मशीनरी",
+  "share_app": "ऐप साझा करें",
+  "share_message": "क्रॉपसिंक: स्मार्ट फार्मिंग, सरलीकृत। ऐप अभी डाउनलोड करें: https://play.google.com/store/apps/details?id=com.cropsync.cropsync"
 }

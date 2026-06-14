@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Centralized design system for CropSync
@@ -48,6 +49,10 @@ class AppTheme {
   static const Color accentBlue = Color(0xFF1565C0);
   static const Color accentPurple = Color(0xFF6A1B9A);
   static const Color accentTeal = Color(0xFF00695C);
+
+  // App Bar Colors
+  static const Color appBarBg = Color(0xFFE8F4EC); // Premium sage/mint light green
+  static const Color appBarText = Color(0xFF1E3A2F); // Contrast dark green/charcoal
 
   // ============ GRADIENTS ============
 
@@ -197,10 +202,10 @@ class AppTheme {
 
   /// AppBar title
   static TextStyle get appBarTitle => GoogleFonts.googleSans(
-        fontSize: 20,
+        fontSize: 24,
         fontWeight: FontWeight.w700,
-        color: textPrimary,
-        letterSpacing: 0.1,
+        color: appBarText,
+        letterSpacing: -1,
       ).copyWith(fontFamilyFallback: _fallbacks);
 
   /// Telugu text style helper — uses GoogleFonts.notoSansTelugu directly
@@ -302,19 +307,21 @@ class AppTheme {
         fontFamilyFallback: _fallbacks,
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: Colors.transparent,
-        foregroundColor: textPrimary,
+        backgroundColor: appBarBg,
+        foregroundColor: appBarText,
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
         scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
         titleTextStyle: getTextStyle(
           context,
-          fontSize: 20,
+          fontSize: 24,
           fontWeight: FontWeight.w700,
-          color: textPrimary,
-          letterSpacing: -0.2,
+          color: appBarText,
+          letterSpacing: -1,
         ),
-        iconTheme: const IconThemeData(color: textPrimary, size: 22),
+        iconTheme: const IconThemeData(color: appBarText, size: 22),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

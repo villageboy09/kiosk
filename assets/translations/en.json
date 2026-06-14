@@ -491,5 +491,10 @@
   "avg_across_state": "Avg across state",
   "no_historical_data_for_district": "No historical data available for {district}.",
   "price_trends": "Price Trends (30 Days)",
-  "all_state_markets": "All State Markets"
+  "all_state_markets": "All State Markets",
+  "పనిముట్లు": "Tools / Implements",
+  "విత్తనాలు/ఎరువులు": "Seeds / Fertilizers",
+  "మషిన్": "Machinery",
+  "share_app": "Share App",
+  "share_message": "CropSync: Smart Farming, Simplified. Download the app now: https://play.google.com/store/apps/details?id=com.cropsync.cropsync"
 }

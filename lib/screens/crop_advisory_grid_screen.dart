@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/widgets/skeletons/shimmer_grid_skeleton.dart';
-import 'package:cropsync/widgets/states/app_empty_state.dart';
 import 'package:cropsync/widgets/states/app_error_state.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -11,6 +10,14 @@ import '../models/farmer_crop.dart';
 import 'crop_stages_screen.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/services/global_notifiers.dart';
+
+String _getDisplayFieldName(String name) {
+  if (name == 'Field 1' || name == 'పొలం 1') return 'field_1'.tr();
+  if (name == 'Field 2' || name == 'పొలం 2') return 'field_2'.tr();
+  if (name == 'Field 3' || name == 'పొలం 3') return 'field_3'.tr();
+  if (name == 'Field 4' || name == 'పొలం 4') return 'field_4'.tr();
+  return name;
+}
 
 class CropAdvisoryGridScreen extends StatefulWidget {
   const CropAdvisoryGridScreen({super.key});
@@ -24,6 +31,7 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
   List<FarmerCrop> _crops = [];
   String? _errorMessage;
   bool _hasLoadedOnce = false;
+  Locale? _lastLocale;
 
   @override
   void initState() {
@@ -50,7 +58,11 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_hasLoadedOnce) {
+    final currentLocale = context.locale;
+    if (_lastLocale != currentLocale) {
+      _lastLocale = currentLocale;
+      _loadCrops();
+    } else if (!_hasLoadedOnce) {
       _hasLoadedOnce = true;
       _loadCrops();
     }
@@ -184,20 +196,17 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
       appBar: AppBar(
         title: Text(
           context.tr('home_feature_advisory_title'),
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            letterSpacing: -1,
-          ),
+          style: AppTheme.appBarTitle,
         ),
-        backgroundColor: AppTheme.textPrimary, // Match home screen app bar
+        backgroundColor: AppTheme.appBarBg,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         centerTitle: false,
         actions: [
           IconButton(
             onPressed: _loadCrops,
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            icon: const Icon(Icons.refresh_rounded, color: AppTheme.appBarText),
             tooltip: context.tr('refresh'),
           ),
         ],
@@ -226,10 +235,83 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
   }
 
   Widget _buildEmptyState() {
-    return AppEmptyState(
-      icon: Icons.grass_rounded,
-      title: context.tr('no_fields_yet'),
-      subtitle: context.tr('add_first_crop'),
+    final user = AuthService.currentUser;
+    final imageUrl = user?.profileImageUrl;
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty && imageUrl.startsWith('http');
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 144,
+              height: 144,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.textPrimary.withValues(alpha: 0.1), width: 4),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: hasImage
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        width: 144,
+                        height: 144,
+                        placeholder: (_, __) => Container(
+                          color: const Color(0xFFF3F4F6),
+                          child: const Icon(Icons.person, size: 80, color: AppTheme.textHint),
+                        ),
+                        errorWidget: (_, __, ___) => Container(
+                          color: const Color(0xFFF3F4F6),
+                          child: const Icon(Icons.person, size: 80, color: AppTheme.textHint),
+                        ),
+                      )
+                    : Image.asset(
+                        'assets/images/logo.png',
+                        fit: BoxFit.cover,
+                        width: 144,
+                        height: 144,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: const Color(0xFFF3F4F6),
+                          child: const Icon(Icons.person, size: 80, color: AppTheme.textHint),
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              context.tr('no_fields_yet'),
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
+                letterSpacing: -0.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.tr('add_first_crop'),
+              style: const TextStyle(
+                fontSize: 16,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w600,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -385,7 +467,7 @@ class _CropCard extends StatelessWidget {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            crop.fieldName,
+                            _getDisplayFieldName(crop.fieldName),
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,

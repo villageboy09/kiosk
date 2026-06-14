@@ -12,6 +12,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/theme/app_theme.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'dart:io';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -344,6 +348,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _shareApp() async {
+    final box = context.findRenderObject() as RenderBox?;
+    const shareText = 'CropSync: Smart Farming, Simplified. Download the app now: https://play.google.com/store/apps/details?id=com.cropsync.cropsync';
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final tempPath = '${tempDir.path}/logo_h.png';
+      
+      final byteData = await rootBundle.load('assets/images/logo_h.png');
+      final file = File(tempPath);
+      await file.writeAsBytes(byteData.buffer.asUint8List(
+        byteData.offsetInBytes,
+        byteData.lengthInBytes,
+      ));
+      
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(tempPath)],
+          text: shareText,
+          sharePositionOrigin: box != null ? (box.localToGlobal(Offset.zero) & box.size) : null,
+        ),
+      );
+    } catch (e) {
+      SharePlus.instance.share(
+        ShareParams(
+          text: shareText,
+          sharePositionOrigin: box != null ? (box.localToGlobal(Offset.zero) & box.size) : null,
+        ),
+      );
+    }
+  }
+
+
   Widget _buildResponsiveBottomSheet({required Widget child}) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
@@ -468,19 +505,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SliverAppBar(
                 expandedHeight: 280,
                 pinned: true,
-                backgroundColor: AppTheme.textPrimary,
+                backgroundColor: AppTheme.appBarBg,
                 elevation: 0,
+                scrolledUnderElevation: 0,
+                surfaceTintColor: Colors.transparent,
                 automaticallyImplyLeading: false,
                 title: AnimatedOpacity(
                   duration: const Duration(milliseconds: 300),
                   opacity: _showTitle ? 1.0 : 0.0,
                   child: Text(user.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      )),
+                      style: AppTheme.appBarTitle),
                 ),
-                centerTitle: true,
+                centerTitle: false,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.share_rounded),
+                    color: _showTitle ? AppTheme.appBarText : Colors.white,
+                    onPressed: _shareApp,
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 flexibleSpace: FlexibleSpaceBar(
                   background: _buildProfileHeader(user),
                   collapseMode: CollapseMode.pin,
@@ -667,41 +711,85 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildUserDetailsList(User user) {
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         children: [
           _buildInfoTile(
-              context.tr('user_id'), user.userId, Icons.badge_rounded),
-          const Divider(indent: 64, endIndent: 20),
-          _buildInfoTile(context.tr('name'), user.name, Icons.person_rounded),
-          const Divider(indent: 64, endIndent: 20),
-          _buildInfoTile(context.tr('phone'), user.phoneNumber ?? 'N/A',
-              Icons.phone_rounded),
-          const Divider(indent: 64, endIndent: 20),
-          _buildInfoTile(context.tr('region'), user.region ?? 'N/A',
-              Icons.location_on_rounded),
+            title: context.tr('user_id'),
+            value: user.userId,
+            icon: Icons.badge_rounded,
+            bgColor: const Color(0xFFEFF6FF), // Soft Blue
+            iconColor: const Color(0xFF2563EB),
+          ),
+          const Divider(indent: 72, endIndent: 20, height: 1, color: Color(0xFFF3F4F6)),
+          _buildInfoTile(
+            title: context.tr('name'),
+            value: user.name,
+            icon: Icons.person_rounded,
+            bgColor: const Color(0xFFF0FDF4), // Soft Green
+            iconColor: const Color(0xFF16A34A),
+          ),
+          const Divider(indent: 72, endIndent: 20, height: 1, color: Color(0xFFF3F4F6)),
+          _buildInfoTile(
+            title: context.tr('phone'),
+            value: user.phoneNumber ?? 'N/A',
+            icon: Icons.phone_rounded,
+            bgColor: const Color(0xFFFFF7ED), // Soft Orange
+            iconColor: const Color(0xFFEA580C),
+          ),
+          const Divider(indent: 72, endIndent: 20, height: 1, color: Color(0xFFF3F4F6)),
+          _buildInfoTile(
+            title: context.tr('region'),
+            value: user.region ?? 'N/A',
+            icon: Icons.location_on_rounded,
+            bgColor: const Color(0xFFFFF1F2), // Soft Rose
+            iconColor: const Color(0xFFE11D48),
+          ),
           if (user.mandal != null && user.mandal!.isNotEmpty) ...[
-            const Divider(indent: 64, endIndent: 20),
+            const Divider(indent: 72, endIndent: 20, height: 1, color: Color(0xFFF3F4F6)),
             _buildInfoTile(
-                context.tr('mandal'), user.mandal!, Icons.apartment_rounded),
+              title: context.tr('mandal'),
+              value: user.mandal!,
+              icon: Icons.apartment_rounded,
+              bgColor: const Color(0xFFF5F3FF), // Soft Purple
+              iconColor: const Color(0xFF7C3AED),
+            ),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildInfoTile(String title, String value, IconData icon) {
+  Widget _buildInfoTile({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color bgColor,
+    required Color iconColor,
+  }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(12),
+              color: bgColor,
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(icon, color: AppTheme.textPrimary, size: 22),
+            child: Icon(icon, color: iconColor, size: 22),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -717,7 +805,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     letterSpacing: 0.2,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   value,
                   style: const TextStyle(
@@ -740,54 +828,103 @@ class _ProfileScreenState extends State<ProfileScreen> {
   */
 
   Widget _buildMenuCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildMenuPill(
+                icon: Icons.privacy_tip_rounded,
+                iconColor: const Color(0xFF16A34A),
+                bgColor: const Color(0xFFF0FDF4),
+                title: context.tr('privacy_policy'),
+                onTap: _showPrivacyPolicy,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMenuPill(
+                icon: Icons.contact_support_rounded,
+                iconColor: const Color(0xFF2563EB),
+                bgColor: const Color(0xFFEFF6FF),
+                title: context.tr('contact_us'),
+                onTap: _showContactUs,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: _buildMenuPill(
+            icon: Icons.share_rounded,
+            iconColor: const Color(0xFFEA580C),
+            bgColor: const Color(0xFFFFF7ED),
+            title: context.tr('share_app'),
+            onTap: _shareApp,
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _buildMenuTile(
-            icon: Icons.privacy_tip_rounded,
-            title: context.tr('privacy_policy'),
-            onTap: _showPrivacyPolicy,
-          ),
-          const Divider(height: 1, indent: 56),
-          _buildMenuTile(
-            icon: Icons.contact_support_rounded,
-            title: context.tr('contact_us'),
-            onTap: _showContactUs,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildMenuTile({
+  Widget _buildMenuPill({
     required IconData icon,
+    required Color iconColor,
+    required Color bgColor,
     required String title,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      leading: Icon(icon, color: AppTheme.textPrimary),
-      title: Text(
-        title,
-        style: const TextStyle(
-          
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-          color: Color(0xFF282C3F),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(100),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(100),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: iconColor, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-      trailing: const Icon(Icons.chevron_right, color: Color(0xFF93959F)),
-      onTap: onTap,
     );
   }
 

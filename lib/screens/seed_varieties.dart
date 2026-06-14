@@ -13,6 +13,12 @@ import 'package:shimmer/shimmer.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:video_player/video_player.dart';
 
+String _getTranslatedCropName(BuildContext context, String cropName) {
+  final key = cropName.toLowerCase();
+  final translated = context.tr(key);
+  return translated == key ? cropName : translated;
+}
+
 /// Seed variety data model
 class SeedVariety {
   final int id;
@@ -239,7 +245,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
           itemBuilder: (context, index) {
             final isAll = index == 0;
             final crop = isAll ? null : cropTypes[index - 1];
-            final label = isAll ? context.tr('all_filter') : crop!;
+            final label = isAll ? context.tr('all_filter') : _getTranslatedCropName(context, crop!);
             final isSelected = _selectedCrop == crop;
 
             return Padding(
@@ -377,7 +383,7 @@ class _SeedCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
-                            variety.cropName,
+                            _getTranslatedCropName(context, variety.cropName),
                             style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 9,
@@ -735,7 +741,7 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          variety.cropName,
+                          _getTranslatedCropName(context, variety.cropName),
                           style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w900,

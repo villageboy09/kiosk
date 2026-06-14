@@ -56,7 +56,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   late Future<List<Product>> _productsFuture;
   late Future<List<String>> _categoriesFuture;
   String _searchQuery = '';
-  String _selectedCategory = '';
+  String _selectedCategory = 'all_category';
   String _sortOrder = 'default'; // 'price_asc', 'price_desc'
   final TextEditingController _searchController = TextEditingController();
 
@@ -73,7 +73,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     final currentLocale = context.locale;
     if (_lastLocale != currentLocale) {
       _lastLocale = currentLocale;
-      _selectedCategory = context.tr('all_category');
+      _selectedCategory = 'all_category';
       _categoriesFuture = _fetchCategories();
       _loadProducts();
     }
@@ -106,12 +106,11 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
       final locale = _getLocaleField(context.locale.languageCode);
       final categories = await ApiService.getProductCategories(lang: locale);
       return [
-        context.tr('all_category'),
-        ...categories.map((c) => c.replaceAllMapped(
-            RegExp(r'\b\w'), (m) => m.group(0)!.toUpperCase()))
+        'all_category',
+        ...categories
       ];
     } catch (e) {
-      return [context.tr('all_category')];
+      return ['all_category'];
     }
   }
 
@@ -122,7 +121,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
 
       // Determine category filter
       String? categoryFilter;
-      if (category != null && category != context.tr('all_category')) {
+      if (category != null && category != 'all_category') {
         categoryFilter = category;
       }
 
@@ -302,7 +301,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ChoiceChip(
-                  label: Text(category),
+                  label: Text(context.tr(category)),
                   labelStyle: TextStyle(
                     color: isSelected ? Colors.white : AppTheme.textPrimary,
                     fontWeight:

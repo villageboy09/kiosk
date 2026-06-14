@@ -7,20 +7,16 @@ class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final bool showBackButton;
   final List<Widget>? actions;
-  final bool useGradient;
   final bool centerTitle;
   final Widget? leading;
-  final double elevation;
 
   const CommonAppBar({
     super.key,
     required this.title,
     this.showBackButton = true,
     this.actions,
-    this.useGradient = true,
-    this.centerTitle = true,
+    this.centerTitle = false,
     this.leading,
-    this.elevation = 0,
   });
 
   @override
@@ -31,20 +27,13 @@ class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
         style: AppTheme.appBarTitle,
       ),
       centerTitle: centerTitle,
-      backgroundColor: AppTheme.surface,
+      backgroundColor: AppTheme.appBarBg,
       elevation: 0,
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
       systemOverlayStyle: SystemUiOverlayStyle.dark,
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(
-          color: AppTheme.divider.withValues(alpha: 0.5),
-          height: 1,
-        ),
-      ),
       leading: leading ?? (showBackButton ? IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppTheme.textPrimary),
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppTheme.appBarText),
         onPressed: () => Navigator.maybePop(context),
       ) : null),
       automaticallyImplyLeading: false,
@@ -86,26 +75,22 @@ class CommonSliverAppBar extends StatelessWidget {
       snap: snap,
       pinned: pinned,
       expandedHeight: expandedHeight,
-      backgroundColor: AppTheme.primary,
+      backgroundColor: AppTheme.appBarBg,
       elevation: 0,
-      systemOverlayStyle: SystemUiOverlayStyle.light,
-      flexibleSpace: flexibleSpace ??
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppTheme.textPrimary, Color(0xFF1F2937)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-          ),
-      leading: null,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
+      systemOverlayStyle: SystemUiOverlayStyle.dark,
+      flexibleSpace: flexibleSpace,
+      leading: showBackButton ? IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppTheme.appBarText),
+        onPressed: () => Navigator.maybePop(context),
+      ) : null,
       automaticallyImplyLeading: false,
       title: Text(
         title,
         style: AppTheme.appBarTitle,
       ),
-      centerTitle: true,
+      centerTitle: false,
       actions: actions,
     );
   }

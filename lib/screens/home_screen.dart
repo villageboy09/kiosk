@@ -1,11 +1,12 @@
-// ignore_for_file: prefer_const_constructors
-
 import 'package:cropsync/screens/crop_advisory_grid_screen.dart';
 import 'package:cropsync/screens/profile_screen.dart';
 import 'package:cropsync/screens/settings_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/location_service.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/theme/app_theme.dart';
+import 'package:cropsync/services/notification_service.dart';
+
 import 'package:cropsync/widgets/home_tab.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -33,6 +34,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _fetchFarmerDetails();
+    // Request permissions after the home screen is fully rendered.
+    // Using a post-frame + 1.5s delay gives the user context before
+    // the OS dialogs appear — production pattern (no cold-start lag).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (!mounted) return;
+        _requestPermissions();
+      });
+    });
+  }
+
+  Future<void> _requestPermissions() async {
+    // Notification permission first
+    await NotificationService.requestPermissions();
+    // Then location (sequential so dialogs don't stack)
+    if (!mounted) return;
+    await LocationService.requestPermission();
   }
 
   String _getGreeting() {
@@ -55,6 +73,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       if (user != null) {
         final currentUser = user;
+        NotificationService.subscribeToDistrictTopic(currentUser);
         setState(() {
           _farmerName = currentUser.name;
           _profileImageUrl = currentUser.profileImageUrl;
@@ -106,46 +125,54 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         profileImageUrl: _profileImageUrl,
         onTabSelected: _onNavTap,
       ),
-      CropAdvisoryGridScreen(key: const ValueKey('advisory_tab')),
-      SettingsScreen(key: const ValueKey('settings_tab')),
+      const CropAdvisoryGridScreen(key: ValueKey('advisory_tab')),
+      const SettingsScreen(key: ValueKey('settings_tab')),
     ];
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: _selectedIndex == 1 ? null : _buildCurvedAppBar(),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        child: _isLoading
-            ? const _HomeShimmer(key: ValueKey('shimmer'))
-            : IndexedStack(
-                key: const ValueKey('content'),
-                index: _selectedIndex,
-                children: screens,
-              ),
+    return PopScope(
+      canPop: _selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_selectedIndex != 0) {
+          setState(() {
+            _selectedIndex = 0;
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: _selectedIndex == 1 ? null : _buildCurvedAppBar(),
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: _isLoading
+              ? const _HomeShimmer(key: ValueKey('shimmer'))
+              : IndexedStack(
+                  key: const ValueKey('content'),
+                  index: _selectedIndex,
+                  children: screens,
+                ),
+        ),
+        bottomNavigationBar: _buildBottomNav(),
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
   PreferredSizeWidget _buildCurvedAppBar() {
     return AppBar(
-      title: const Text(
+      title: Text(
         'CropSync',
-        style: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
-          letterSpacing: -1,
-        ),
+        style: AppTheme.appBarTitle,
       ),
       centerTitle: false,
-      backgroundColor: AppTheme.textPrimary,
+      backgroundColor: AppTheme.appBarBg,
       elevation: 0,
-      systemOverlayStyle: SystemUiOverlayStyle.light,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
+      systemOverlayStyle: SystemUiOverlayStyle.dark,
       actions: [
         IconButton(
           icon: const Icon(Icons.translate_rounded,
-              color: Colors.white, size: 24),
+              color: AppTheme.appBarText, size: 24),
           onPressed: _showLanguageSheet,
           splashRadius: 24,
         ),
@@ -313,45 +340,26 @@ class _HomeShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: const Color(0xFFE0E0E0),
-      highlightColor: const Color(0xFFF5F5F5),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Daily Brief Card
-            Container(
-              height: 160,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-            ),
-            const SizedBox(height: 32),
-            // Section Title
-            Container(
-              height: 24,
-              width: 150,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Grid
-            Expanded(
+    return Center(
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Shimmer.fromColors(
+              baseColor: const Color(0xFFE0E0E0),
+              highlightColor: const Color(0xFFF5F5F5),
               child: GridView.builder(
+                shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                   maxCrossAxisExtent: 240,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 1.1,
+                  crossAxisSpacing: 20,
+                  mainAxisSpacing: 20,
+                  childAspectRatio: 0.85,
                 ),
-                itemCount: 4,
+                itemCount: 6,
                 itemBuilder: (_, __) => Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -360,9 +368,10 @@ class _HomeShimmer extends StatelessWidget {
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
+

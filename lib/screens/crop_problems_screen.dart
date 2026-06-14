@@ -100,26 +100,13 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        leadingWidth: 72,
-        leading:
-            Center(child: AppTheme.backButton(context, color: Colors.white)),
-        toolbarHeight: 100,
+        leading: AppTheme.backButton(context, color: AppTheme.appBarText),
         centerTitle: false,
         elevation: 0,
-        backgroundColor: Colors.transparent,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF111827), Color(0xFF1F2937)],
-            ),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(32),
-              bottomRight: Radius.circular(32),
-            ),
-          ),
-        ),
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: AppTheme.appBarBg,
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -128,15 +115,9 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
               widget.stage.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTheme.getTextStyle(
-                context,
-                fontWeight: FontWeight.w700,
-                fontSize: 22,
-                color: Colors.white,
-                letterSpacing: -0.5,
-              ),
+              style: AppTheme.appBarTitle,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               widget.crop.cropName,
               maxLines: 1,
@@ -144,8 +125,8 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
               style: AppTheme.getTextStyle(
                 context,
                 fontWeight: FontWeight.w500,
-                fontSize: 14,
-                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 13,
+                color: AppTheme.appBarText.withValues(alpha: 0.6),
               ),
             ),
           ],

@@ -701,10 +701,10 @@ class ApiService {
   }
 
   /// Get crop names for seed varieties filter
-  static Future<Map<String, dynamic>> getCropNamesForSeeds() async {
+  static Future<Map<String, dynamic>> getCropNamesForSeeds({String lang = 'te'}) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api.php?action=get_crop_names'),
+        Uri.parse('$baseUrl/api.php?action=get_crop_names&lang=$lang'),
       );
 
       if (response.statusCode == 200) {

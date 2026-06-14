@@ -267,36 +267,33 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(context.tr('market_prices_title'),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: AppTheme.textPrimary,
-                  letterSpacing: -0.5,
-                )),
+                style: AppTheme.appBarTitle),
             Text(
               '$_currentDistrict, $_currentState',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textSecondary,
-                letterSpacing: 0.1,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.appBarText.withValues(alpha: 0.6),
               ),
             ),
           ],
         ),
-        leading: AppTheme.backButton(context),
+        leading: AppTheme.backButton(context, color: AppTheme.appBarText),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(Icons.refresh_rounded, color: AppTheme.appBarText),
             onPressed: _getCurrentLocation,
           ),
         ],
         elevation: 0,
-        backgroundColor: Colors.white,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: AppTheme.appBarBg,
+        centerTitle: false,
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -664,9 +661,13 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
-        title: Text(widget.commodity),
+        title: Text(widget.commodity, style: AppTheme.appBarTitle),
+        leading: AppTheme.backButton(context, color: AppTheme.appBarText),
         elevation: 0,
-        backgroundColor: Colors.white,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: AppTheme.appBarBg,
+        centerTitle: false,
       ),
       body: CustomScrollView(
         slivers: [

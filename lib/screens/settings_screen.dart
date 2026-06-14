@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/global_notifiers.dart';
+import 'package:cropsync/services/notification_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cropsync/theme/app_theme.dart';
 
@@ -284,10 +285,17 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
     }
   }
 
+  Locale? _lastLocale;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_didFetchInitialData) {
+    final currentLocale = context.locale;
+    if (_lastLocale != currentLocale) {
+      _lastLocale = currentLocale;
+      _fetchInitialData(forceRefresh: true);
+      _didFetchInitialData = true;
+    } else if (!_didFetchInitialData) {
       _fetchInitialData();
       _didFetchInitialData = true;
     }
@@ -304,6 +312,7 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
   Future<void> _fetchInitialData({bool forceRefresh = false}) async {
     // Invalidate cache if forced
     if (forceRefresh) {
+      _cachedCrops = null;
       _cachedUsedFields = null;
     }
 
@@ -422,6 +431,9 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       );
 
       if (result['success'] == true) {
+        if (AuthService.currentUser != null) {
+          NotificationService.synchronizeCropSubscriptions(AuthService.currentUser!);
+        }
         if (mounted) {
           _showFeedbackSnackbar('save_success'.tr(), true);
 
@@ -931,10 +943,18 @@ class _MyFieldsViewState extends State<MyFieldsView>
     }
   }
 
+  Locale? _lastLocale;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_didFetchSelections || _shouldForceRefresh) {
+    final currentLocale = context.locale;
+    if (_lastLocale != currentLocale) {
+      _lastLocale = currentLocale;
+      _fetchSelections();
+      _didFetchSelections = true;
+      _shouldForceRefresh = false;
+    } else if (!_didFetchSelections || _shouldForceRefresh) {
       _fetchSelections();
       _didFetchSelections = true;
       _shouldForceRefresh = false;
@@ -1350,6 +1370,9 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
       if (!mounted) return;
 
       if (result['success'] == true) {
+        if (AuthService.currentUser != null) {
+          NotificationService.synchronizeCropSubscriptions(AuthService.currentUser!);
+        }
         _MyFieldsViewState._shouldForceRefresh = true;
 
         GlobalNotifiers.selectionUpdated.value = {
@@ -1407,6 +1430,9 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
         if (!mounted) return;
 
         if (result['success'] == true) {
+          if (AuthService.currentUser != null) {
+            NotificationService.synchronizeCropSubscriptions(AuthService.currentUser!);
+          }
           if (_AddNewCropSelectionViewState._cachedUsedFields != null) {
             _AddNewCropSelectionViewState._cachedUsedFields!
                 .remove(widget.initialSelection.fieldName);
@@ -1441,15 +1467,19 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
           backgroundColor: AppTheme.background,
           appBar: AppBar(
             title:
-                Text('edit_field_selection'.tr(), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                Text('edit_field_selection'.tr(), style: AppTheme.appBarTitle),
             automaticallyImplyLeading: false,
-            centerTitle: true,
+            centerTitle: false,
+            backgroundColor: AppTheme.appBarBg,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            surfaceTintColor: Colors.transparent,
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded, size: 28)),
+                    icon: const Icon(Icons.close_rounded, size: 28, color: AppTheme.appBarText)),
               )
             ],
           ),

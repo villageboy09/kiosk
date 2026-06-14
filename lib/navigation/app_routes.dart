@@ -11,33 +11,55 @@ class AppRoutes {
     );
   }
 
-  static Route<T> slideFromRight<T>(Widget page, {int ms = 400}) {
+  static Route<T> slideFromRight<T>(Widget page, {int ms = 300}) {
     return PageRouteBuilder<T>(
       pageBuilder: (_, __, ___) => page,
       transitionDuration: Duration(milliseconds: ms),
+      reverseTransitionDuration: Duration(milliseconds: ms),
       transitionsBuilder: (_, animation, __, child) {
+        final slideIn = Tween<Offset>(
+          begin: const Offset(0.12, 0.0),
+          end: Offset.zero,
+        ).chain(CurveTween(curve: Curves.fastOutSlowIn)).animate(animation);
+
+        final fadeIn = Tween<double>(
+          begin: 0.0,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.fastOutSlowIn)).animate(animation);
+
         return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(1.0, 0.0),
-            end: Offset.zero,
-          ).chain(CurveTween(curve: Curves.easeInOutCubic)).animate(animation),
-          child: child,
+          position: slideIn,
+          child: FadeTransition(
+            opacity: fadeIn,
+            child: child,
+          ),
         );
       },
     );
   }
 
-  static Route<T> slideFromLeft<T>(Widget page, {int ms = 400}) {
+  static Route<T> slideFromLeft<T>(Widget page, {int ms = 300}) {
     return PageRouteBuilder<T>(
       pageBuilder: (_, __, ___) => page,
       transitionDuration: Duration(milliseconds: ms),
+      reverseTransitionDuration: Duration(milliseconds: ms),
       transitionsBuilder: (_, animation, __, child) {
+        final slideIn = Tween<Offset>(
+          begin: const Offset(-0.12, 0.0),
+          end: Offset.zero,
+        ).chain(CurveTween(curve: Curves.fastOutSlowIn)).animate(animation);
+
+        final fadeIn = Tween<double>(
+          begin: 0.0,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.fastOutSlowIn)).animate(animation);
+
         return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(-1.0, 0.0),
-            end: Offset.zero,
-          ).chain(CurveTween(curve: Curves.easeInOutCubic)).animate(animation),
-          child: child,
+          position: slideIn,
+          child: FadeTransition(
+            opacity: fadeIn,
+            child: child,
+          ),
         );
       },
     );

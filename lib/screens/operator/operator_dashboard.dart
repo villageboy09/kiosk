@@ -288,8 +288,10 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
   PreferredSizeWidget _buildAppBar() {
     final op = _operator;
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.appBarBg,
       elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
       titleSpacing: 0,
       automaticallyImplyLeading: false,
       title: Padding(
@@ -322,7 +324,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                         context,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0F172A),
+                        color: AppTheme.appBarText,
                       ),
                     )
                   : null,
@@ -339,7 +341,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                         context,
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF111827),
+                        color: AppTheme.appBarText,
                       ),
                     ),
                     Text(
@@ -347,7 +349,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                       style: AppTheme.getTextStyle(
                         context,
                         fontSize: 12,
-                        color: const Color(0xFF6B7280),
+                        color: AppTheme.appBarText.withValues(alpha: 0.6),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -358,7 +360,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
               Expanded(
                 child: Text('operator_dashboard_title'.tr(),
                     style: AppTheme.getTextStyle(context,
-                        fontSize: 15, fontWeight: FontWeight.w700)),
+                        fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.appBarText)),
               ),
           ],
         ),
@@ -366,7 +368,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
       actions: [
         IconButton(
           icon: const Icon(Icons.translate_rounded,
-              color: AppTheme.textPrimary, size: 24),
+              color: AppTheme.appBarText, size: 24),
           onPressed: () => LanguageSelector.show(context),
           splashRadius: 24,
         ),

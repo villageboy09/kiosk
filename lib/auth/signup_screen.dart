@@ -146,6 +146,19 @@ class _SignupScreenState extends State<SignupScreen>
     HapticFeedback.selectionClick();
     if (!mounted) return;
 
+    List<Map<String, dynamic>> simList = [];
+    try {
+      final List<dynamic>? rawSims = await const MethodChannel('cropsync/sim_info')
+          .invokeMethod<List<dynamic>>('getSimInfo');
+      if (rawSims != null) {
+        simList = rawSims.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching SIM details from channel: $e');
+    }
+
+    if (!mounted) return;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -195,58 +208,72 @@ class _SignupScreenState extends State<SignupScreen>
                 ),
               ),
               const SizedBox(height: 16),
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9FAFB),
-                  borderRadius: BorderRadius.circular(100),
-                  border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-                  leading: const Icon(Icons.sim_card_outlined, color: AppTheme.textSecondary, size: 24),
-                  title: const Text(
-                    '+91 98765 43210',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppTheme.textPrimary),
+              if (simList.isEmpty) ...[
+                const SizedBox(height: 16),
+                const Icon(Icons.sim_card_alert_rounded, size: 48, color: AppTheme.textSecondary),
+                const SizedBox(height: 12),
+                const Text(
+                  'No SIM Card Detected',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
                   ),
-                  subtitle: const Text('SIM Slot 1'),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    setState(() {
-                      _phoneController.text = '9876543210';
-                    });
-                    Navigator.pop(context);
-                  },
                 ),
-              ),
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9FAFB),
-                  borderRadius: BorderRadius.circular(100),
-                  border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-                  leading: const Icon(Icons.sim_card_outlined, color: AppTheme.textSecondary, size: 24),
-                  title: const Text(
-                    '+91 81234 56789',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppTheme.textPrimary),
+                const SizedBox(height: 4),
+                const Text(
+                  'We couldn\'t automatically read your SIM details.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
                   ),
-                  subtitle: const Text('SIM Slot 2'),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    setState(() {
-                      _phoneController.text = '8123456789';
-                    });
-                    Navigator.pop(context);
-                  },
                 ),
-              ),
+                const SizedBox(height: 16),
+              ] else ...[
+                ...simList.map((sim) {
+                  final int slot = sim['slot'] as int? ?? 1;
+                  final String carrier = sim['carrier'] as String? ?? 'Carrier';
+                  final String rawNumber = sim['number'] as String? ?? '';
+                  final String displayNum = rawNumber.isNotEmpty ? rawNumber : 'Select Number (Not Available)';
+
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                      leading: const Icon(Icons.sim_card_outlined, color: AppTheme.textSecondary, size: 24),
+                      title: Text(
+                        displayNum,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 16, color: AppTheme.textPrimary),
+                      ),
+                      subtitle: Text('SIM Slot $slot - $carrier'),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        if (rawNumber.isNotEmpty) {
+                          String cleanNum = rawNumber.replaceAll(RegExp(r'[^\d+]'), '');
+                          if (cleanNum.startsWith('+91')) {
+                            cleanNum = cleanNum.substring(3);
+                          } else if (cleanNum.startsWith('91') && cleanNum.length == 12) {
+                            cleanNum = cleanNum.substring(2);
+                          }
+                          cleanNum = cleanNum.replaceAll(RegExp(r'\D'), '');
+                          setState(() {
+                            _phoneController.text = cleanNum;
+                          });
+                        }
+                        Navigator.pop(context);
+                      },
+                    ),
+                  );
+                }),
+              ],
               const SizedBox(height: 32),
             ],
           ),
@@ -339,25 +366,6 @@ class _SignupScreenState extends State<SignupScreen>
     }
   }
 
-  Widget _buildBackgroundPattern() {
-    return Positioned.fill(
-      child: Opacity(
-        opacity: 0.03,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(top: 40, left: -20, child: Transform.rotate(angle: -0.2, child: const Icon(Icons.eco_rounded, size: 140, color: Color(0xFF059669)))),
-            Positioned(top: 180, right: -30, child: Transform.rotate(angle: 0.3, child: const Icon(Icons.agriculture_rounded, size: 180, color: Color(0xFF059669)))),
-            Positioned(top: 380, left: 30, child: Transform.rotate(angle: 0.1, child: const Icon(Icons.water_drop_rounded, size: 100, color: Color(0xFF059669)))),
-            Positioned(bottom: 150, right: 20, child: Transform.rotate(angle: -0.4, child: const Icon(Icons.park_rounded, size: 150, color: Color(0xFF059669)))),
-            Positioned(bottom: -40, left: 50, child: Transform.rotate(angle: 0.2, child: const Icon(Icons.grass_rounded, size: 160, color: Color(0xFF059669)))),
-            Positioned(bottom: 30, right: -40, child: Transform.rotate(angle: -0.1, child: const Icon(Icons.wb_sunny_rounded, size: 130, color: Color(0xFF059669)))),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -366,7 +374,6 @@ class _SignupScreenState extends State<SignupScreen>
       body: SafeArea(
         child: Stack(
           children: [
-            _buildBackgroundPattern(),
             SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: Padding(
@@ -394,39 +401,20 @@ class _SignupScreenState extends State<SignupScreen>
                             const SizedBox(height: 24),
                             _buildRoleToggle(),
                             const SizedBox(height: 26),
-                            AnimatedSize(
-                              duration: const Duration(milliseconds: 400),
-                              curve: Curves.easeOutCubic,
-                              alignment: Alignment.topCenter,
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 400),
-                                layoutBuilder: (currentChild, previousChildren) {
-                                  return Stack(
-                                    alignment: Alignment.topCenter,
-                                    children: <Widget>[
-                                      ...previousChildren,
-                                      if (currentChild != null) currentChild,
-                                    ],
-                                  );
-                                },
-                                transitionBuilder: (child, animation) {
-                                  return FadeTransition(
-                                    opacity: animation,
-                                    child: SlideTransition(
-                                      position: Tween<Offset>(
-                                        begin: const Offset(0.05, 0),
-                                        end: Offset.zero,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
-                                  );
-                                },
-                                child: _isOperator
-                                    ? _buildOperatorCard(
-                                        key: const ValueKey('operator'))
-                                    : _buildMainCard(
-                                        key: const ValueKey('farmer')),
+                            AnimatedCrossFade(
+                              firstChild: _buildMainCard(
+                                key: const ValueKey('farmer'),
                               ),
+                              secondChild: _buildOperatorCard(
+                                key: const ValueKey('operator'),
+                              ),
+                              crossFadeState: _isOperator
+                                  ? CrossFadeState.showSecond
+                                  : CrossFadeState.showFirst,
+                              duration: const Duration(milliseconds: 350),
+                              firstCurve: Curves.easeInOutCubic,
+                              secondCurve: Curves.easeInOutCubic,
+                              sizeCurve: Curves.easeInOutCubic,
                             ),
                             const SizedBox(height: 18),
                             if (!_isOperator) _buildLoginLink(),
@@ -613,9 +601,7 @@ class _SignupScreenState extends State<SignupScreen>
           child: InkWell(
             onTap: () {
               _phoneFocusNode.requestFocus();
-              if (_phoneController.text.isEmpty) {
-                _selectPhoneNumber();
-              }
+              _selectPhoneNumber();
             },
             borderRadius: BorderRadius.circular(100),
             child: AnimatedContainer(
