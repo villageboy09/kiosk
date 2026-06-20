@@ -7,6 +7,8 @@ import 'package:cropsync/screens/operator/operator_dashboard.dart';
 import 'package:cropsync/screens/onboarding/language_selection_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cropsync/auth/signup_screen.dart';
+import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
+import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 
@@ -84,9 +86,20 @@ class _SplashScreenState extends State<SplashScreen>
     } else if (isFarmer) {
       await AuthService.loadUserSession();
       if (!currentContext.mounted) return;
-      Navigator.of(currentContext).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      final user = AuthService.currentUser;
+      if (user?.membershipType == 'Retailer') {
+        Navigator.of(currentContext).pushReplacement(
+          MaterialPageRoute(builder: (context) => const RetailerDashboard()),
+        );
+      } else if (user?.membershipType == 'Officer') {
+        Navigator.of(currentContext).pushReplacement(
+          MaterialPageRoute(builder: (context) => const ExtensionOfficerDashboard()),
+        );
+      } else {
+        Navigator.of(currentContext).pushReplacement(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
     } else {
       final prefs = await SharedPreferences.getInstance();
       final hasSelectedLanguage = prefs.getBool('language_selected') ?? false;

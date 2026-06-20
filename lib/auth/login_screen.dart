@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:cropsync/auth/signup_screen.dart';
 import 'package:cropsync/navigation/app_routes.dart';
 import 'package:cropsync/screens/home_screen.dart';
+import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
+import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
@@ -34,6 +36,9 @@ class _LoginScreenState extends State<LoginScreen>
   String? _errorMessage;
   String? _pressedButton;
   Timer? _errorTimer;
+
+  // Selected role: 'farmer', 'retailer', 'officer', or null for role selection landing
+  String? _selectedRole;
 
   @override
   void initState() {
@@ -104,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     setState(() => _isLoading = true);
     try {
-      final user = await ApiService.checkUser(pin);
+      final user = await ApiService.checkUser(pin, role: _selectedRole);
       if (user == null) {
         _showError('login_user_not_registered_redirect'.tr());
         await Future.delayed(const Duration(milliseconds: 1200));
@@ -118,16 +123,53 @@ class _LoginScreenState extends State<LoginScreen>
         return;
       }
 
-      await AuthService.login(pin);
+      await AuthService.login(pin, role: _selectedRole);
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        AppRoutes.fade(const HomeScreen()),
-      );
+      final loggedInUser = AuthService.currentUser;
+      if (loggedInUser?.membershipType == 'Retailer') {
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const RetailerDashboard()),
+        );
+      } else if (loggedInUser?.membershipType == 'Officer') {
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const ExtensionOfficerDashboard()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const HomeScreen()),
+        );
+      }
     } catch (error) {
       _showError(error.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Color _getRoleThemeColor() {
+    switch (_selectedRole) {
+      case 'retailer':
+        return const Color(0xFF1565C0);
+      case 'officer':
+        return const Color(0xFF00695C);
+      case 'farmer':
+      default:
+        return const Color(0xFF2E7D32);
+    }
+  }
+
+  String _getRoleTitle() {
+    switch (_selectedRole) {
+      case 'retailer':
+        return 'role_retailer_title'.tr();
+      case 'officer':
+        return 'role_officer_title'.tr();
+      case 'farmer':
+      default:
+        return 'role_farmer_title'.tr();
     }
   }
 
@@ -156,29 +198,9 @@ class _LoginScreenState extends State<LoginScreen>
                             opacity: _fadeAnimation,
                             child: SlideTransition(
                               position: _slideAnimation,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  AuthLogoHeader(
-                                    title: 'login_welcome_back'.tr(),
-                                    subtitle: 'enter_field'.tr(
-                                      namedArgs: {'field': 'user_id'.tr()},
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 20),
-                                  _buildSingleInputDisplay(),
-                                  const SizedBox(height: 16),
-                                  _buildHintChip(),
-                                  const SizedBox(height: 20),
-                                  _buildKeypad(),
-                                  const SizedBox(height: 16),
-                                  _buildSubmitButton(),
-                                  const SizedBox(height: 20),
-                                  _buildSignupLink(),
-                                  const SizedBox(height: 16),
-                                ],
-                              ),
+                              child: _selectedRole == null
+                                  ? _buildRoleSelectionView()
+                                  : _buildLoginInputView(),
                             ),
                           ),
                         ),
@@ -195,10 +217,214 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  Widget _buildRoleSelectionView() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const SizedBox(height: 10),
+        AuthLogoHeader(
+          title: 'login_welcome_back'.tr(),
+          subtitle: 'login_select_role_subtitle'.tr(),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 32),
+        
+        // 1. Farmer Card (Prominent green card)
+        _buildRoleCard(
+          role: 'farmer',
+          title: 'role_farmer_title'.tr(),
+          description: 'role_farmer_desc'.tr(),
+          icon: Icons.agriculture_rounded,
+          startColor: const Color(0xFFE8F5E9),
+          endColor: const Color(0xFFC8E6C9),
+          themeColor: const Color(0xFF2E7D32),
+          isPrimary: true,
+        ),
+        const SizedBox(height: 16),
+
+        // 2. Retailer Card (Blue card)
+        _buildRoleCard(
+          role: 'retailer',
+          title: 'role_retailer_title'.tr(),
+          description: 'role_retailer_desc'.tr(),
+          icon: Icons.storefront_rounded,
+          startColor: const Color(0xFFE3F2FD),
+          endColor: const Color(0xFFBBDEFB),
+          themeColor: const Color(0xFF1565C0),
+          isPrimary: false,
+        ),
+        const SizedBox(height: 16),
+
+        // 3. Extension Officer Card (Teal card)
+        _buildRoleCard(
+          role: 'officer',
+          title: 'role_officer_title'.tr(),
+          description: 'role_officer_desc'.tr(),
+          icon: Icons.verified_user_rounded,
+          startColor: const Color(0xFFE0F2F1),
+          endColor: const Color(0xFFB2DFDB),
+          themeColor: const Color(0xFF00695C),
+          isPrimary: false,
+        ),
+        const SizedBox(height: 30),
+      ],
+    );
+  }
+
+  Widget _buildRoleCard({
+    required String role,
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color startColor,
+    required Color endColor,
+    required Color themeColor,
+    required bool isPrimary,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() {
+          _selectedRole = role;
+          _pinController.clear();
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [startColor, endColor],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: isPrimary ? themeColor : Colors.white.withValues(alpha: 0.8),
+            width: isPrimary ? 2.5 : 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: themeColor.withValues(alpha: isPrimary ? 0.15 : 0.08),
+              blurRadius: isPrimary ? 16 : 8,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: themeColor.withValues(alpha: 0.1),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(
+                icon,
+                size: isPrimary ? 32 : 28,
+                color: themeColor,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: isPrimary ? 18 : 16,
+                      fontWeight: FontWeight.w800,
+                      color: themeColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: themeColor.withValues(alpha: 0.75),
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: themeColor.withValues(alpha: 0.6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoginInputView() {
+    final themeColor = _getRoleThemeColor();
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () {
+              setState(() {
+                _selectedRole = null;
+                _pinController.clear();
+              });
+            },
+            icon: Icon(Icons.arrow_back_rounded, color: themeColor),
+            label: Text(
+              'login_change_role'.tr(),
+              style: TextStyle(
+                color: themeColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        AuthLogoHeader(
+          title: _getRoleTitle(),
+          subtitle: 'enter_field'.tr(
+            namedArgs: {'field': 'phone_number'.tr()},
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
+        _buildSingleInputDisplay(),
+        const SizedBox(height: 16),
+        _buildHintChip(),
+        const SizedBox(height: 20),
+        _buildKeypad(),
+        const SizedBox(height: 16),
+        _buildSubmitButton(),
+        const SizedBox(height: 20),
+        if (_selectedRole == 'farmer') ...[
+          _buildSignupLink(),
+          const SizedBox(height: 16),
+        ],
+      ],
+    );
+  }
+
   Widget _buildSingleInputDisplay() {
     final text = _pinController.text;
     final remainingLength = 10 - text.length;
     final hasInput = text.isNotEmpty;
+    final themeColor = _getRoleThemeColor();
     return Container(
       constraints: const BoxConstraints(maxWidth: 320),
       width: double.infinity,
@@ -207,7 +433,7 @@ class _LoginScreenState extends State<LoginScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(100),
         border: Border.all(
-          color: hasInput ? AppTheme.textPrimary : const Color(0xFFD1D5DB),
+          color: hasInput ? themeColor : const Color(0xFFD1D5DB),
           width: 2,
         ),
         boxShadow: hasInput
@@ -230,7 +456,7 @@ class _LoginScreenState extends State<LoginScreen>
               TextSpan(
                 text: '•' * remainingLength,
                 style: TextStyle(
-                  color: AppTheme.textPrimary.withValues(alpha: 0.15),
+                  color: themeColor.withValues(alpha: 0.15),
                 ),
               ),
             ],
@@ -240,7 +466,7 @@ class _LoginScreenState extends State<LoginScreen>
             fontSize: 28,
             fontWeight: FontWeight.w800,
             letterSpacing: 6,
-            color: AppTheme.textPrimary,
+            color: themeColor,
           ),
         ),
       ),
@@ -248,22 +474,28 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildHintChip() {
+    String hintText = 'login_hint_farmer'.tr();
+    if (_selectedRole == 'retailer') {
+      hintText = 'login_hint_retailer'.tr();
+    } else if (_selectedRole == 'officer') {
+      hintText = 'login_hint_officer'.tr();
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(100),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.info_outline_rounded,
+          const Icon(Icons.info_outline_rounded,
               size: 16, color: AppTheme.textSecondary),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Text(
-            'Your phone number is your login pin',
+            hintText,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 14,
               color: AppTheme.textSecondary,
               fontWeight: FontWeight.w600,
@@ -298,6 +530,7 @@ class _LoginScreenState extends State<LoginScreen>
   Widget _buildSubmitButton() {
     final canProceed = _pinController.text.length == 10;
     final bool isButtonDisabled = _isLoading || !canProceed;
+    final themeColor = _getRoleThemeColor();
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 300),
@@ -311,13 +544,13 @@ class _LoginScreenState extends State<LoginScreen>
               },
         style: ElevatedButton.styleFrom(
           backgroundColor:
-              isButtonDisabled ? const Color(0xFFD1D5DB) : AppTheme.textPrimary,
+              isButtonDisabled ? const Color(0xFFD1D5DB) : themeColor,
           minimumSize: const Size(double.infinity, 64),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(100),
           ),
           elevation: isButtonDisabled ? 0 : 4,
-          shadowColor: AppTheme.textPrimary.withValues(alpha: 0.3),
+          shadowColor: themeColor.withValues(alpha: 0.3),
         ),
         child: _isLoading
             ? const SizedBox(
@@ -330,7 +563,7 @@ class _LoginScreenState extends State<LoginScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    'login_submit'.tr() == 'login_submit' ? 'Sign In' : 'login_submit'.tr(),
+                    'login_submit'.tr(),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -351,6 +584,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   Widget _buildKeyButton(String label) {
     final isPressed = _pressedButton == label;
+    final themeColor = _getRoleThemeColor();
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressedButton = label),
       onTapUp: (_) {
@@ -364,7 +598,7 @@ class _LoginScreenState extends State<LoginScreen>
           color: isPressed ? const Color(0xFFF3F4F6) : Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isPressed ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
+            color: isPressed ? themeColor : const Color(0xFFE5E7EB),
             width: 1.5,
           ),
           boxShadow: isPressed
@@ -380,10 +614,10 @@ class _LoginScreenState extends State<LoginScreen>
         alignment: Alignment.center,
         child: Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w700,
-            color: AppTheme.textPrimary,
+            color: themeColor,
           ),
         ),
       ),

@@ -7,6 +7,8 @@ import 'package:cropsync/widgets/auth/auth_alert_banner.dart';
 import 'package:cropsync/widgets/auth/auth_logo_header.dart';
 
 import 'package:cropsync/screens/home_screen.dart';
+import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
+import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/auth/login_screen.dart';
@@ -327,10 +329,23 @@ class _SignupScreenState extends State<SignupScreen>
 
       if (!mounted) return;
       HapticFeedback.heavyImpact();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      final user = AuthService.currentUser;
+      if (user?.membershipType == 'Retailer') {
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const RetailerDashboard()),
+        );
+      } else if (user?.membershipType == 'Officer') {
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const ExtensionOfficerDashboard()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const HomeScreen()),
+        );
+      }
     } catch (e) {
       _showError(e.toString());
       if (mounted) setState(() => _isLoading = false);

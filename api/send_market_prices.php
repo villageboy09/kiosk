@@ -290,7 +290,7 @@ function getOAuth2Token() {
         return null;
     }
     
-    $privateKey = $json['private_key'];
+    $privateKey = str_replace(["\\n", '\n'], "\n", $json['private_key']);
     $clientEmail = $json['client_email'];
     
     $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);

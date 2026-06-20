@@ -13,14 +13,17 @@ class ApiService {
 
   /// Login with user ID (6-digit PIN)
   /// Returns a User object on success, throws an exception on failure
-  static Future<User> loginWithUserId(String userId) async {
+  static Future<User> loginWithUserId(String userId, {String? role}) async {
     final url = Uri.parse('$baseUrl/api.php?action=login');
 
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'user_id': userId}),
+        body: jsonEncode({
+          'user_id': userId,
+          if (role != null) 'role': role,
+        }),
       );
 
       final data =
@@ -42,14 +45,17 @@ class ApiService {
   }
 
   /// Get user profile by user ID
-  static Future<User> getUserProfile(String userId) async {
+  static Future<User> getUserProfile(String userId, {String? role}) async {
     final url = Uri.parse('$baseUrl/api.php?action=get_user_profile');
 
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'user_id': userId}),
+        body: jsonEncode({
+          'user_id': userId,
+          if (role != null) 'role': role,
+        }),
       );
 
       final data =
@@ -153,12 +159,13 @@ class ApiService {
 
   /// Check if a user exists by phone number.
   /// Returns user data if found, null otherwise.
-  static Future<Map<String, dynamic>?> checkUser(String phoneNumber) async {
+  static Future<Map<String, dynamic>?> checkUser(String phoneNumber, {String? role}) async {
     try {
-      final response = await http.get(
-        Uri.parse(
-            '$baseUrl/api.php?action=check_user&phone_number=$phoneNumber'),
-      );
+      String url = '$baseUrl/api.php?action=check_user&phone_number=$phoneNumber';
+      if (role != null) {
+        url += '&role=$role';
+      }
+      final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -1185,4 +1192,139 @@ class ApiService {
       return {'success': false, 'error': 'Network error'};
     }
   }
+
+  // ===================== RETAILER AND EXTENSION OFFICER MODULES =====================
+
+  static Future<Map<String, dynamic>?> getRetailerInfo(String phoneNumber) async {
+    // Queries info about a retailer by phone/contact number
+    final url = Uri.parse('$baseUrl/api.php?action=login');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': phoneNumber}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data['success'] == true && data['role'] == 'retailer') {
+          return data;
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getOfficerInfo(String phoneNumber) async {
+    // Queries info about an extension officer by phone/contact number
+    final url = Uri.parse('$baseUrl/api.php?action=login');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': phoneNumber}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data['success'] == true && data['role'] == 'officer') {
+          return data;
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> getRetailerDashboard(int retailerId, {String lang = 'te'}) async {
+    final url = Uri.parse('$baseUrl/api.php?action=get_retailer_dashboard&retailer_id=$retailerId&lang=$lang');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes));
+      }
+      return {'success': false, 'error': 'Server error'};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getRetailerLeads(int retailerId, {String lang = 'te'}) async {
+    final url = Uri.parse('$baseUrl/api.php?action=get_retailer_leads&retailer_id=$retailerId&lang=$lang');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['leads']);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateLeadStatus({
+    required dynamic leadId,
+    required String status,
+    String? notes,
+  }) async {
+    final url = Uri.parse('$baseUrl/api.php?action=update_lead_status');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'lead_id': leadId,
+          'status': status,
+          'notes': notes,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes));
+      }
+      return {'success': false, 'error': 'Server error'};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getExtensionDashboard(int officerId) async {
+    final url = Uri.parse('$baseUrl/api.php?action=get_extension_dashboard&officer_id=$officerId');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes));
+      }
+      return {'success': false, 'error': 'Server error'};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getActiveOutbreaks({
+    String? district,
+    String? mandal,
+  }) async {
+    String urlStr = '$baseUrl/api.php?action=get_active_outbreaks';
+    if (district != null) urlStr += '&district=${Uri.encodeComponent(district)}';
+    if (mandal != null) urlStr += '&mandal=${Uri.encodeComponent(mandal)}';
+    
+    final url = Uri.parse(urlStr);
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['outbreaks']);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
 }
+

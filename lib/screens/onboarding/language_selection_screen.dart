@@ -56,13 +56,27 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
             children: [
               const SizedBox(height: 40),
               Center(
-                child: Image.asset(
-                  'assets/images/logo_t.png',
-                  height: 80,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.agriculture_rounded,
-                    size: 64,
-                    color: Color(0xFF1B5E20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Image.asset(
+                    'assets/images/logo_t.png',
+                    height: 80,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.agriculture_rounded,
+                      size: 64,
+                      color: Color(0xFF1B5E20),
+                    ),
                   ),
                 ),
               ),

@@ -6,6 +6,8 @@ import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/services/update_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/widgets/responsive/app_viewport.dart';
+import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
+import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,10 +18,15 @@ import 'package:cropsync/services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  await NotificationService.initialize();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await NotificationService.initialize();
+  } catch (e) {
+    // Gracefully handle if Firebase/Notifications are not configured or supported (e.g. on Web)
+    debugPrint("Firebase/Notification initialization failed/skipped: $e");
+  }
   await EasyLocalization.ensureInitialized();
 
   // Load environment variables (optional, for any other config)
@@ -36,8 +43,12 @@ Future<void> main() async {
   ]);
 
   if (AuthService.currentUser != null) {
-    NotificationService.subscribeToDistrictTopic(AuthService.currentUser!);
-    NotificationService.synchronizeCropSubscriptions(AuthService.currentUser!);
+    try {
+      NotificationService.subscribeToDistrictTopic(AuthService.currentUser!);
+      NotificationService.synchronizeCropSubscriptions(AuthService.currentUser!);
+    } catch (e) {
+      debugPrint("Notification subscription skipped: $e");
+    }
   }
 
   SystemChrome.setEnabledSystemUIMode(
@@ -134,6 +145,12 @@ class _MyAppState extends State<MyApp> {
 
           // Regular farmer session
           if (data['farmer'] == true) {
+            final user = AuthService.currentUser;
+            if (user?.membershipType == 'Retailer') {
+              return const RetailerDashboard();
+            } else if (user?.membershipType == 'Officer') {
+              return const ExtensionOfficerDashboard();
+            }
             return const HomeScreen();
           }
 

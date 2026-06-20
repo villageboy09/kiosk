@@ -5,6 +5,7 @@ import 'package:cropsync/screens/weather_screen.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class NotificationService {
@@ -13,6 +14,7 @@ class NotificationService {
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   static Future<void> subscribeToDistrictTopic(User user) async {
+    if (kIsWeb) return; // FCM topics are not supported on web
     final district = user.district;
     if (district == null || district.trim().isEmpty) return;
     
@@ -27,6 +29,7 @@ class NotificationService {
   }
 
   static Future<void> synchronizeCropSubscriptions(User user) async {
+    if (kIsWeb) return; // FCM topics are not supported on web
     final district = user.district;
     if (district == null || district.trim().isEmpty) return;
 
@@ -83,6 +86,7 @@ class NotificationService {
   /// Call this at app startup — sets up message handlers only.
   /// Does NOT request any permissions (no dialogs, no lag).
   static Future<void> initialize() async {
+    if (kIsWeb) return; // Firebase messaging listeners and topics are not supported on web
     // Subscribe to general topic for all farmers (no permission needed) in background
     FirebaseMessaging.instance.subscribeToTopic('all_farmers').catchError((e) {
       debugPrint('Error subscribing to all_farmers topic: $e');
@@ -113,6 +117,7 @@ class NotificationService {
   /// with a post-frame callback). Shows the OS permission dialog naturally,
   /// without blocking or lagging the startup animation.
   static Future<void> requestPermissions() async {
+    if (kIsWeb) return; // Permissions not applicable on web
     await FirebaseMessaging.instance.requestPermission(
       alert: true,
       badge: true,

@@ -23,7 +23,21 @@ if (php_sapi_name() !== 'cli') {
 }
 
 // 1. Configure Keys
-$apiKey = "YOUR_VISUAL_CROSSING_WEATHER_API_KEY"; // Replace with your Visual Crossing key
+$envPath = __DIR__ . '/../.env';
+$apiKey = "7E7P7EAAR6GGWYM3Q44J66HR2"; // Default fallback
+if (file_exists($envPath)) {
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue;
+        if (strpos($line, '=') !== false) {
+            list($name, $value) = explode('=', $line, 2);
+            if (trim($name) === 'WEATHER_API_KEY') {
+                $apiKey = trim($value);
+                break;
+            }
+        }
+    }
+}
 $projectId = "cropsync-d3457";
 
 // 2. Fetch Unique Districts from Database
@@ -162,7 +176,7 @@ function getOAuth2Token() {
     }
     
     $json = json_decode($keyContent, true);
-    $privateKey = $json['private_key'];
+    $privateKey = str_replace(["\\n", '\n'], "\n", $json['private_key']);
     $clientEmail = $json['client_email'];
     
     // Header

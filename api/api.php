@@ -31,6 +31,9 @@ try {
 $action = $_GET['action'] ?? '';
 
 switch ($action) {
+    case 'apply_migration':
+        applyMigration($pdo);
+        break;
     case 'login':
         handleLogin($pdo);
         break;
@@ -162,8 +165,42 @@ switch ($action) {
     case 'get_commodity_trends':
         getCommodityTrends($pdo);
         break;
+    // RETAILER AND EXTENSION OFFICER ENDPOINTS
+    case 'get_retailer_dashboard':
+        getRetailerDashboard($pdo);
+        break;
+    case 'get_retailer_leads':
+        getRetailerLeads($pdo);
+        break;
+    case 'update_lead_status':
+        updateLeadStatus($pdo);
+        break;
+    case 'get_extension_dashboard':
+        getExtensionDashboard($pdo);
+        break;
+    case 'get_active_outbreaks':
+        getActiveOutbreaks($pdo);
+        break;
+    case 'bind_retailer_referral':
+        bindRetailerReferral($pdo);
+        break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
+}
+
+function applyMigration($pdo) {
+    try {
+        $stmt = $pdo->query("SHOW INDEX FROM users WHERE Key_name = 'idx_users_phone_number'");
+        $indexExists = $stmt->fetch();
+        if ($indexExists) {
+            echo json_encode(['success' => true, 'message' => 'Index already exists']);
+        } else {
+            $pdo->exec("ALTER TABLE `users` ADD INDEX `idx_users_phone_number` (`phone_number`)");
+            echo json_encode(['success' => true, 'message' => 'Index applied successfully']);
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
 }
 
 // ===================== TRACTOR TROLLEY PRICING CALCULATION =====================
@@ -375,18 +412,16 @@ function registerUser($pdo) {
 
 function checkUser($pdo) {
     $userId = $_GET['phone_number'] ?? '';
+    $role = $_GET['role'] ?? null;
     if (empty($userId)) {
         echo json_encode(['success' => false, 'error' => 'Phone number is required']);
         return;
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT user_id, name, phone_number, village, mandal, district, region, card_uid, client_code FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
-        $stmt->execute([$userId, $userId]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($user) {
-            echo json_encode(['success' => true, 'exists' => true, 'user' => $user]);
+        $res = loginWithRoleChecking($pdo, $userId, $role);
+        if ($res['success']) {
+            echo json_encode(['success' => true, 'exists' => true, 'user' => $res['user']]);
         } else {
             echo json_encode(['success' => true, 'exists' => false]);
         }
@@ -395,9 +430,152 @@ function checkUser($pdo) {
     }
 }
 
+
+function loginWithRoleChecking($pdo, $userId, $role = null) {
+    // Ensure PDO throws exceptions for robustness and clear error reporting
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // If role is explicitly provided, target only the single matching table for maximum performance
+    if ($role === 'retailer') {
+        $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? LIMIT 1");
+        $stmtRet->execute([$userId]);
+        $retailer = $stmtRet->fetch(PDO::FETCH_ASSOC);
+        if ($retailer) {
+            return [
+                'success' => true,
+                'role' => 'retailer',
+                'retailer_id' => (int)$retailer['id'],
+                'user' => [
+                    'user_id' => $userId,
+                    'name' => $retailer['owner_name'],
+                    'phone_number' => $retailer['contact_number'],
+                    'village' => $retailer['village'],
+                    'mandal' => $retailer['mandal'],
+                    'district' => $retailer['district'],
+                    'region' => $retailer['region'],
+                    'client_code' => $retailer['client_code'],
+                    'membership_type' => 'Retailer'
+                ]
+            ];
+        }
+    } elseif ($role === 'officer') {
+        $stmtOff = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? LIMIT 1");
+        $stmtOff->execute([$userId]);
+        $officer = $stmtOff->fetch(PDO::FETCH_ASSOC);
+        if ($officer) {
+            return [
+                'success' => true,
+                'role' => 'officer',
+                'officer_id' => (int)$officer['id'],
+                'user' => [
+                    'user_id' => $userId,
+                    'name' => $officer['name'],
+                    'phone_number' => $officer['contact_number'],
+                    'village' => $officer['coverage_mandal'],
+                    'mandal' => $officer['coverage_mandal'],
+                    'district' => $officer['coverage_district'],
+                    'region' => $officer['coverage_district'],
+                    'membership_type' => 'Officer'
+                ]
+            ];
+        }
+    } elseif ($role === 'farmer') {
+        $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
+        $stmtFarmer->execute([$userId, $userId]);
+        $user = $stmtFarmer->fetch(PDO::FETCH_ASSOC);
+        if ($user) {
+            return [
+                'success' => true,
+                'role' => 'farmer',
+                'user' => $user
+            ];
+        }
+    } else {
+        // Fallback to UNION lookup if role is not supplied (for backward compatibility)
+        $stmt = $pdo->prepare("
+            (SELECT 'retailer' AS role, id FROM retailer_partners WHERE contact_number = ? LIMIT 1)
+            UNION ALL
+            (SELECT 'officer' AS role, id FROM extension_officers WHERE contact_number = ? LIMIT 1)
+            UNION ALL
+            (SELECT 'farmer' AS role, user_id AS id FROM users WHERE user_id = ? LIMIT 1)
+            UNION ALL
+            (SELECT 'farmer' AS role, user_id AS id FROM users WHERE phone_number = ? LIMIT 1)
+        ");
+        $stmt->execute([$userId, $userId, $userId, $userId]);
+        $match = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($match) {
+            $matchedRole = $match['role'];
+            $matchedId = $match['id'];
+
+            if ($matchedRole === 'retailer') {
+                $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE id = ? LIMIT 1");
+                $stmtRet->execute([$matchedId]);
+                $retailer = $stmtRet->fetch(PDO::FETCH_ASSOC);
+                if ($retailer) {
+                    return [
+                        'success' => true,
+                        'role' => 'retailer',
+                        'retailer_id' => (int)$retailer['id'],
+                        'user' => [
+                            'user_id' => $userId,
+                            'name' => $retailer['owner_name'],
+                            'phone_number' => $retailer['contact_number'],
+                            'village' => $retailer['village'],
+                            'mandal' => $retailer['mandal'],
+                            'district' => $retailer['district'],
+                            'region' => $retailer['region'],
+                            'client_code' => $retailer['client_code'],
+                            'membership_type' => 'Retailer'
+                        ]
+                    ];
+                }
+            } elseif ($matchedRole === 'officer') {
+                $stmtOff = $pdo->prepare("SELECT * FROM extension_officers WHERE id = ? LIMIT 1");
+                $stmtOff->execute([$matchedId]);
+                $officer = $stmtOff->fetch(PDO::FETCH_ASSOC);
+                if ($officer) {
+                    return [
+                        'success' => true,
+                        'role' => 'officer',
+                        'officer_id' => (int)$officer['id'],
+                        'user' => [
+                            'user_id' => $userId,
+                            'name' => $officer['name'],
+                            'phone_number' => $officer['contact_number'],
+                            'village' => $officer['coverage_mandal'],
+                            'mandal' => $officer['coverage_mandal'],
+                            'district' => $officer['coverage_district'],
+                            'region' => $officer['coverage_district'],
+                            'membership_type' => 'Officer'
+                        ]
+                    ];
+                }
+            } elseif ($matchedRole === 'farmer') {
+                $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? LIMIT 1");
+                $stmtFarmer->execute([$matchedId]);
+                $user = $stmtFarmer->fetch(PDO::FETCH_ASSOC);
+                if ($user) {
+                    return [
+                        'success' => true,
+                        'role' => 'farmer',
+                        'user' => $user
+                    ];
+                }
+            }
+        }
+    }
+
+    return [
+        'success' => false,
+        'message' => 'User not found. Please register first.'
+    ];
+}
+
 function loginUser($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     $userId = $input['user_id'] ?? '';
+    $role = $input['role'] ?? null;
 
     if (empty($userId)) {
         echo json_encode(['success' => false, 'message' => 'User ID is required']);
@@ -405,15 +583,8 @@ function loginUser($pdo) {
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
-        $stmt->execute([$userId]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($user) {
-            echo json_encode(['success' => true, 'user' => $user]);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'User not found. Please register first.']);
-        }
+        $res = loginWithRoleChecking($pdo, $userId, $role);
+        echo json_encode($res);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
     }
@@ -422,6 +593,7 @@ function loginUser($pdo) {
 function getUserProfile($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     $userId = $input['user_id'] ?? '';
+    $role = $input['role'] ?? null;
 
     if (empty($userId)) {
         echo json_encode(['success' => false, 'message' => 'User ID is required']);
@@ -429,12 +601,9 @@ function getUserProfile($pdo) {
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
-        $stmt->execute([$userId]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($user) {
-            echo json_encode(['success' => true, 'user' => $user]);
+        $res = loginWithRoleChecking($pdo, $userId, $role);
+        if ($res['success']) {
+            echo json_encode(['success' => true, 'user' => $res['user']]);
         } else {
             echo json_encode(['success' => false, 'message' => 'User not found']);
         }
@@ -446,20 +615,18 @@ function getUserProfile($pdo) {
 function handleLogin($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     $userId = $input['user_id'] ?? '';
+    $role = $input['role'] ?? null;
     
     if (empty($userId)) {
         echo json_encode(['success' => false, 'message' => 'User ID is required']);
         return;
     }
     
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
-    $stmt->execute([$userId]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if ($user) {
-        echo json_encode(['success' => true, 'user' => $user]);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'User not found']);
+    try {
+        $res = loginWithRoleChecking($pdo, $userId, $role);
+        echo json_encode($res);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
     }
 }
 
@@ -940,10 +1107,48 @@ function saveIdentifiedProblem($pdo) {
             VALUES (?, ?, NOW())
         ");
         $stmt->execute([$problemId, $userId]);
+        $problemRecordId = $pdo->lastInsertId();
+        
+        // Lead Assignment Engine logic:
+        try {
+            $userStmt = $pdo->prepare("SELECT referred_by_retailer_id, mandal, district FROM users WHERE user_id = ? LIMIT 1");
+            $userStmt->execute([$userId]);
+            $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+            
+            $retailerId = null;
+            if ($user) {
+                if (!empty($user['referred_by_retailer_id'])) {
+                    $retailerId = $user['referred_by_retailer_id'];
+                } else {
+                    // Find an active retailer in the same mandal and district, prioritized by subscription tier
+                    $retStmt = $pdo->prepare("
+                        SELECT id FROM retailer_partners 
+                        WHERE mandal = ? AND district = ? AND subscription_status = 'ACTIVE'
+                        ORDER BY FIELD(tier, 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE') ASC, RAND()
+                        LIMIT 1
+                    ");
+                    $retStmt->execute([$user['mandal'], $user['district']]);
+                    $matchedRetailer = $retStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($matchedRetailer) {
+                        $retailerId = $matchedRetailer['id'];
+                    }
+                }
+            }
+            
+            if ($retailerId) {
+                $leadStmt = $pdo->prepare("
+                    INSERT INTO retailer_leads (farmer_identified_problem_id, retailer_partner_id, lead_status, assigned_at)
+                    VALUES (?, ?, 'NEW', NOW())
+                ");
+                $leadStmt->execute([$problemRecordId, $retailerId]);
+            }
+        } catch (Throwable $leadEx) {
+            // Log/ignore errors with lead engine assignment so the main save flow is not blocked
+        }
         
         echo json_encode([
             'success' => true, 
-            'id' => $pdo->lastInsertId(),
+            'id' => $problemRecordId,
             'message' => 'Problem marked as identified'
         ]);
     } catch (PDOException $e) {
@@ -2036,3 +2241,526 @@ $stmtOpUpdate->execute([$operatorId]);
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
 }
+
+// ===================== RETAILER AND EXTENSION OFFICER MODULES =====================
+
+function bindRetailerReferral($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $userId = $input['user_id'] ?? $input['phone_number'] ?? '';
+    $referralCode = $input['referral_code'] ?? '';
+    
+    if (empty($userId) || empty($referralCode)) {
+        echo json_encode(['success' => false, 'error' => 'User ID and Referral Code are required']);
+        return;
+    }
+    
+    try {
+        $stmt = $pdo->prepare("SELECT id FROM retailer_partners WHERE referral_code = ? LIMIT 1");
+        $stmt->execute([$referralCode]);
+        $retailer = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$retailer) {
+            echo json_encode(['success' => false, 'error' => 'Invalid referral code']);
+            return;
+        }
+        
+        $updateStmt = $pdo->prepare("UPDATE users SET referred_by_retailer_id = ? WHERE user_id = ? OR phone_number = ?");
+        $updateStmt->execute([$retailer['id'], $userId, $userId]);
+        
+        echo json_encode(['success' => true, 'message' => 'Linked to retailer partner successfully']);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function getRetailerDashboard($pdo) {
+    $retailerId = $_GET['retailer_id'] ?? 0;
+    $lang = $_GET['lang'] ?? 'te';
+    if (empty($retailerId)) {
+        echo json_encode(['success' => false, 'error' => 'Retailer ID is required']);
+        return;
+    }
+
+    try {
+        // Fetch retailer details first
+        $stmt = $pdo->prepare("SELECT * FROM retailer_partners WHERE id = ? LIMIT 1");
+        $stmt->execute([$retailerId]);
+        $retailer = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$retailer) {
+            echo json_encode(['success' => false, 'error' => 'Retailer not found']);
+            return;
+        }
+
+        // 1. Total referred farmers
+        $stmtCount = $pdo->prepare("SELECT COUNT(*) as referred_count FROM users WHERE referred_by_retailer_id = ?");
+        $stmtCount->execute([$retailerId]);
+        $referredCount = $stmtCount->fetch(PDO::FETCH_ASSOC)['referred_count'] ?? 0;
+
+        // 2. Total farmers in coverage area (same mandal/district)
+        $stmtArea = $pdo->prepare("
+            SELECT COUNT(*) as area_count 
+            FROM users 
+            WHERE mandal = ? AND district = ?
+        ");
+        $stmtArea->execute([$retailer['mandal'], $retailer['district']]);
+        $areaCount = $stmtArea->fetch(PDO::FETCH_ASSOC)['area_count'] ?? 0;
+
+        $cropNameField = ($lang === 'en') ? 'c.name_en' : (($lang === 'hi') ? 'c.name_hi' : 'c.name');
+
+        // 3. Crops grown this season & acreage (coverage area)
+        $stmtCrops = $pdo->prepare("
+            SELECT 
+                c.id as crop_id, 
+                $cropNameField as crop_name, 
+                COUNT(ucs.id) as fields_count,
+                SUM(COALESCE(ucs.acreage, 1.00)) as total_acreage
+            FROM user_crop_selections ucs
+            JOIN crops c ON ucs.crop_id = c.id
+            JOIN users u ON ucs.user_id = u.user_id
+            WHERE u.mandal = ? AND u.district = ?
+            GROUP BY c.id, $cropNameField
+            ORDER BY total_acreage DESC
+        ");
+        $stmtCrops->execute([$retailer['mandal'], $retailer['district']]);
+        $cropsReferred = $stmtCrops->fetchAll(PDO::FETCH_ASSOC);
+
+        // Fallback 1: Check the entire district (with and without trailing spaces)
+        if (empty($cropsReferred)) {
+            $stmtCropsDist = $pdo->prepare("
+                SELECT 
+                    c.id as crop_id, 
+                    $cropNameField as crop_name, 
+                    COUNT(ucs.id) as fields_count,
+                    SUM(COALESCE(ucs.acreage, 1.00)) as total_acreage
+                FROM user_crop_selections ucs
+                JOIN crops c ON ucs.crop_id = c.id
+                JOIN users u ON ucs.user_id = u.user_id
+                WHERE TRIM(u.district) = ? OR TRIM(u.district) = ?
+                GROUP BY c.id, $cropNameField
+                ORDER BY total_acreage DESC
+            ");
+            $distTrimmed = trim($retailer['district']);
+            $stmtCropsDist->execute([$distTrimmed, $distTrimmed . ' ']);
+            $cropsReferred = $stmtCropsDist->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        // Fallback 2: Get all crop selections globally
+        if (empty($cropsReferred)) {
+            $stmtCropsAll = $pdo->prepare("
+                SELECT 
+                    c.id as crop_id, 
+                    $cropNameField as crop_name, 
+                    COUNT(ucs.id) as fields_count,
+                    SUM(COALESCE(ucs.acreage, 1.00)) as total_acreage
+                FROM user_crop_selections ucs
+                JOIN crops c ON ucs.crop_id = c.id
+                GROUP BY c.id, $cropNameField
+                ORDER BY total_acreage DESC
+            ");
+            $stmtCropsAll->execute();
+            $cropsReferred = $stmtCropsAll->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        // 4. Sowing peak timeline (coverage area)
+        $stmtSowing = $pdo->prepare("
+            SELECT 
+                sd.sowing_date, 
+                COUNT(ucs.id) as sowing_count
+            FROM user_crop_selections ucs
+            JOIN sowing_dates sd ON ucs.sowing_date_id = sd.id
+            JOIN users u ON ucs.user_id = u.user_id
+            WHERE u.mandal = ? AND u.district = ?
+            GROUP BY sd.sowing_date
+            ORDER BY sd.sowing_date ASC
+        ");
+        $stmtSowing->execute([$retailer['mandal'], $retailer['district']]);
+        $sowingTimeline = $stmtSowing->fetchAll(PDO::FETCH_ASSOC);
+
+        // Fallback 1: Check sowing timeline for the entire district
+        if (empty($sowingTimeline)) {
+            $stmtSowingDist = $pdo->prepare("
+                SELECT 
+                    sd.sowing_date, 
+                    COUNT(ucs.id) as sowing_count
+                FROM user_crop_selections ucs
+                JOIN sowing_dates sd ON ucs.sowing_date_id = sd.id
+                JOIN users u ON ucs.user_id = u.user_id
+                WHERE TRIM(u.district) = ? OR TRIM(u.district) = ?
+                GROUP BY sd.sowing_date
+                ORDER BY sd.sowing_date ASC
+            ");
+            $distTrimmed = trim($retailer['district']);
+            $stmtSowingDist->execute([$distTrimmed, $distTrimmed . ' ']);
+            $sowingTimeline = $stmtSowingDist->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        // Fallback 2: Get all sowing dates globally
+        if (empty($sowingTimeline)) {
+            $stmtSowingAll = $pdo->prepare("
+                SELECT 
+                    sd.sowing_date, 
+                    COUNT(ucs.id) as sowing_count
+                FROM user_crop_selections ucs
+                JOIN sowing_dates sd ON ucs.sowing_date_id = sd.id
+                GROUP BY sd.sowing_date
+                ORDER BY sd.sowing_date ASC
+            ");
+            $stmtSowingAll->execute();
+            $sowingTimeline = $stmtSowingAll->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        echo json_encode([
+            'success' => true,
+            'retailer' => $retailer,
+            'referred_farmers_count' => (int)$referredCount,
+            'area_farmers_count' => (int)$areaCount,
+            'cultivation_intelligence' => $cropsReferred,
+            'sowing_timeline' => $sowingTimeline
+        ]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function getRetailerLeads($pdo) {
+    $retailerId = $_GET['retailer_id'] ?? 0;
+    $lang = $_GET['lang'] ?? 'te';
+    if (empty($retailerId)) {
+        echo json_encode(['success' => false, 'error' => 'Retailer ID is required']);
+        return;
+    }
+
+    try {
+        // Fetch retailer details
+        $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE id = ? LIMIT 1");
+        $stmtRet->execute([$retailerId]);
+        $retailer = $stmtRet->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$retailer) {
+            echo json_encode(['success' => false, 'error' => 'Retailer not found']);
+            return;
+        }
+
+        $mandal = $retailer['mandal'];
+        $district = $retailer['district'];
+
+        $cropNameField = ($lang === 'en') ? 'c.name_en' : (($lang === 'hi') ? 'c.name_hi' : 'c.name');
+        $probNameField = ($lang === 'en') ? 'rp.problem_name_en' : (($lang === 'hi') ? 'rp.problem_name_hi' : 'rp.problem_name_te');
+
+        $sql = "
+            SELECT 
+                rl.id as lead_id,
+                rl.lead_status,
+                rl.retailer_notes,
+                rl.assigned_at,
+                fip.id as problem_report_id,
+                u.name as farmer_name,
+                u.phone_number as farmer_phone,
+                u.village,
+                u.mandal,
+                $cropNameField as crop_name,
+                $probNameField as problem_name,
+                fip.created_at as reported_at,
+                'LEAD' as source_type,
+                rp.id as problem_id,
+                rp.image_url1,
+                rp.image_url2,
+                rp.image_url3
+            FROM retailer_leads rl
+            JOIN farmer_identified_problems fip ON rl.farmer_identified_problem_id = fip.id
+            JOIN users u ON fip.user_id = u.user_id
+            JOIN rice_problems rp ON fip.problem_id = rp.id
+            JOIN crops c ON rp.crop_id = c.id
+            WHERE rl.retailer_partner_id = ?
+
+            UNION ALL
+
+            SELECT 
+                CONCAT('receipt_', ar.id) as lead_id,
+                UPPER(ar.status) as lead_status,
+                CONCAT('Receipt: ', ar.receipt_id) as retailer_notes,
+                ar.created_at as assigned_at,
+                ar.id as problem_report_id,
+                u.name as farmer_name,
+                u.phone_number as farmer_phone,
+                u.village,
+                u.mandal,
+                $cropNameField as crop_name,
+                $probNameField as problem_name,
+                ar.created_at as reported_at,
+                'RECEIPT' as source_type,
+                rp.id as problem_id,
+                rp.image_url1,
+                rp.image_url2,
+                rp.image_url3
+            FROM advisory_receipts ar
+            JOIN users u ON ar.user_id = u.user_id
+            JOIN rice_problems rp ON ar.problem_id = rp.id
+            JOIN crops c ON rp.crop_id = c.id
+            WHERE u.referred_by_retailer_id = ? 
+               OR (u.referred_by_retailer_id IS NULL AND u.mandal = ? AND u.district = ?)
+            
+            ORDER BY assigned_at DESC
+        ";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$retailerId, $retailerId, $mandal, $district]);
+        $leads = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'leads' => $leads]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function updateLeadStatus($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $leadId = $input['lead_id'] ?? 0;
+    $status = $input['status'] ?? '';
+    $notes = $input['notes'] ?? null;
+
+    if (empty($leadId) || empty($status)) {
+        echo json_encode(['success' => false, 'error' => 'Lead ID and status are required']);
+        return;
+    }
+
+    try {
+        if (strpos($leadId, 'receipt_') === 0) {
+            $realId = (int)str_replace('receipt_', '', $leadId);
+            // advisory_receipts status enum: 'New', 'Contacted', 'Resolved'
+            $dbStatus = 'New';
+            if (strcasecmp($status, 'CONTACTED') === 0 || strcasecmp($status, 'VISITED') === 0) {
+                $dbStatus = 'Contacted';
+            } else if (strcasecmp($status, 'RESOLVED') === 0 || strcasecmp($status, 'CLOSED') === 0) {
+                $dbStatus = 'Resolved';
+            }
+
+            $stmt = $pdo->prepare("UPDATE advisory_receipts SET status = ? WHERE id = ?");
+            $stmt->execute([$dbStatus, $realId]);
+            echo json_encode(['success' => true, 'message' => 'Receipt status updated successfully']);
+        } else {
+            $validStatuses = ['NEW', 'CONTACTED', 'VISITED', 'RESOLVED', 'CLOSED'];
+            if (!in_array($status, $validStatuses)) {
+                echo json_encode(['success' => false, 'error' => 'Invalid status value']);
+                return;
+            }
+
+            $stmt = $pdo->prepare("
+                UPDATE retailer_leads 
+                SET lead_status = ?, retailer_notes = COALESCE(?, retailer_notes), updated_at = NOW() 
+                WHERE id = ?
+            ");
+            $stmt->execute([$status, $notes, $leadId]);
+            echo json_encode(['success' => true, 'message' => 'Lead status updated successfully']);
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function getExtensionDashboard($pdo) {
+    $officerId = $_GET['officer_id'] ?? 0;
+    if (empty($officerId)) {
+        echo json_encode(['success' => false, 'error' => 'Extension Officer ID is required']);
+        return;
+    }
+
+    try {
+        // Fetch officer details
+        $stmt = $pdo->prepare("SELECT * FROM extension_officers WHERE id = ? LIMIT 1");
+        $stmt->execute([$officerId]);
+        $officer = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$officer) {
+            echo json_encode(['success' => false, 'error' => 'Extension Officer not found']);
+            return;
+        }
+
+        $mandal = $officer['coverage_mandal'];
+        $district = $officer['coverage_district'];
+
+        // 1. Total farmers in coverage area
+        $stmtCount = $pdo->prepare("SELECT COUNT(*) as total_farmers FROM users WHERE mandal = ? AND district = ?");
+        $stmtCount->execute([$mandal, $district]);
+        $totalFarmers = $stmtCount->fetch(PDO::FETCH_ASSOC)['total_farmers'] ?? 0;
+
+        // 2. Total cultivation acreage by crop in mandal
+        $stmtCrops = $pdo->prepare("
+            SELECT 
+                c.id as crop_id, 
+                c.name_en as crop_name, 
+                COUNT(ucs.id) as fields_count,
+                SUM(COALESCE(ucs.acreage, 1.00)) as total_acreage
+            FROM user_crop_selections ucs
+            JOIN crops c ON ucs.crop_id = c.id
+            JOIN users u ON ucs.user_id = u.user_id
+            WHERE u.mandal = ? AND u.district = ?
+            GROUP BY c.id, c.name_en
+            ORDER BY total_acreage DESC
+        ");
+        $stmtCrops->execute([$mandal, $district]);
+        $cropStats = $stmtCrops->fetchAll(PDO::FETCH_ASSOC);
+
+        // 3. Sowing progress details
+        $stmtSowing = $pdo->prepare("
+            SELECT 
+                sd.sowing_date, 
+                COUNT(ucs.id) as count
+            FROM user_crop_selections ucs
+            JOIN sowing_dates sd ON ucs.sowing_date_id = sd.id
+            JOIN users u ON ucs.user_id = u.user_id
+            WHERE u.mandal = ? AND u.district = ?
+            GROUP BY sd.sowing_date
+            ORDER BY sd.sowing_date ASC
+        ");
+        $stmtSowing->execute([$mandal, $district]);
+        $sowingProgress = $stmtSowing->fetchAll(PDO::FETCH_ASSOC);
+
+        // 4. Disease reports count (active/recent problems in coverage mandal from BOTH tables)
+        $stmtProblems = $pdo->prepare("
+            SELECT 
+                problem_name,
+                crop_name,
+                COUNT(*) as cases_count
+            FROM (
+                SELECT rp.problem_name_en as problem_name, c.name_en as crop_name
+                FROM farmer_identified_problems fip
+                JOIN users u ON fip.user_id = u.user_id
+                JOIN rice_problems rp ON fip.problem_id = rp.id
+                JOIN crops c ON rp.crop_id = c.id
+                WHERE u.mandal = ? AND u.district = ?
+                
+                UNION ALL
+                
+                SELECT rp.problem_name_en as problem_name, c.name_en as crop_name
+                FROM advisory_receipts ar
+                JOIN users u ON ar.user_id = u.user_id
+                JOIN rice_problems rp ON ar.problem_id = rp.id
+                JOIN crops c ON rp.crop_id = c.id
+                WHERE u.mandal = ? AND u.district = ?
+            ) combined
+            GROUP BY problem_name, crop_name
+            ORDER BY cases_count DESC
+        ");
+        $stmtProblems->execute([$mandal, $district, $mandal, $district]);
+        $diseaseReports = $stmtProblems->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'officer' => $officer,
+            'total_farmers' => (int)$totalFarmers,
+            'crop_cultivation' => $cropStats,
+            'sowing_progress' => $sowingProgress,
+            'disease_reports' => $diseaseReports
+        ]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+function getActiveOutbreaks($pdo) {
+    $district = $_GET['district'] ?? null;
+    $mandal = $_GET['mandal'] ?? null;
+
+    try {
+        // Run Early Warning analysis on-the-fly to detect new outbreaks
+        // We look for problems where >= 3 farmers reported it in the same mandal/district within the last 15 days
+        $analysisQuery = "
+            SELECT 
+                crop_id,
+                problem_id,
+                district,
+                mandal,
+                COUNT(*) as reports_count
+            FROM (
+                SELECT rp.crop_id, fip.problem_id, u.district, u.mandal
+                FROM farmer_identified_problems fip
+                JOIN users u ON fip.user_id = u.user_id
+                JOIN rice_problems rp ON fip.problem_id = rp.id
+                WHERE fip.created_at >= DATE_SUB(NOW(), INTERVAL 15 DAY)
+                
+                UNION ALL
+                
+                SELECT rp.crop_id, ar.problem_id, u.district, u.mandal
+                FROM advisory_receipts ar
+                JOIN users u ON ar.user_id = u.user_id
+                JOIN rice_problems rp ON ar.problem_id = rp.id
+                WHERE ar.created_at >= DATE_SUB(NOW(), INTERVAL 15 DAY)
+            ) combined
+            GROUP BY crop_id, problem_id, district, mandal
+            HAVING reports_count >= 3
+        ";
+        $analysisStmt = $pdo->prepare($analysisQuery);
+        $analysisStmt->execute();
+        $potentialOutbreaks = $analysisStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // For each potential outbreak, upsert it into outbreak_alerts table
+        foreach ($potentialOutbreaks as $outbreak) {
+            // Check if active alert already exists
+            $checkStmt = $pdo->prepare("
+                SELECT id FROM outbreak_alerts 
+                WHERE crop_id = ? AND problem_id = ? AND district = ? AND mandal = ? AND outbreak_status != 'RESOLVED'
+                LIMIT 1
+            ");
+            $checkStmt->execute([$outbreak['crop_id'], $outbreak['problem_id'], $outbreak['district'], $outbreak['mandal']]);
+            $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($existing) {
+                // Update count
+                $updateStmt = $pdo->prepare("UPDATE outbreak_alerts SET reports_count = ? WHERE id = ?");
+                $updateStmt->execute([$outbreak['reports_count'], $existing['id']]);
+            } else {
+                // Insert new alert
+                $insertStmt = $pdo->prepare("
+                    INSERT INTO outbreak_alerts (crop_id, problem_id, district, mandal, reports_count, outbreak_status, triggered_at)
+                    VALUES (?, ?, ?, ?, ?, 'DETECTED', NOW())
+                ");
+                $insertStmt->execute([
+                    $outbreak['crop_id'],
+                    $outbreak['problem_id'],
+                    $outbreak['district'],
+                    $outbreak['mandal'],
+                    $outbreak['reports_count']
+                ]);
+            }
+        }
+
+        // Fetch active outbreaks
+        $sql = "
+            SELECT 
+                oa.id as alert_id,
+                c.name_en as crop_name,
+                rp.problem_name_en as problem_name,
+                oa.district,
+                oa.mandal,
+                oa.outbreak_status,
+                oa.reports_count,
+                oa.triggered_at
+            FROM outbreak_alerts oa
+            JOIN crops c ON oa.crop_id = c.id
+            JOIN rice_problems rp ON oa.problem_id = rp.id
+            WHERE oa.outbreak_status != 'RESOLVED'
+        ";
+        
+        $params = [];
+        if ($district) {
+            $sql .= " AND oa.district = ?";
+            $params[] = $district;
+        }
+        if ($mandal) {
+            $sql .= " AND oa.mandal = ?";
+            $params[] = $mandal;
+        }
+        $sql .= " ORDER BY oa.reports_count DESC, oa.triggered_at DESC";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'outbreaks' => $alerts]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+

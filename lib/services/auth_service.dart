@@ -21,8 +21,8 @@ class AuthService {
   }
 
   /// Login with user ID and save session
-  static Future<User> login(String userId) async {
-    final user = await ApiService.loginWithUserId(userId);
+  static Future<User> login(String userId, {String? role}) async {
+    final user = await ApiService.loginWithUserId(userId, role: role);
     await _saveUserSession(user);
     _currentUser = user;
     
@@ -65,7 +65,15 @@ class AuthService {
 
     if (_currentUser != null) {
       try {
-        final user = await ApiService.getUserProfile(_currentUser!.userId);
+        String? role;
+        if (_currentUser!.membershipType == 'Retailer') {
+          role = 'retailer';
+        } else if (_currentUser!.membershipType == 'Officer') {
+          role = 'officer';
+        } else {
+          role = 'farmer';
+        }
+        final user = await ApiService.getUserProfile(_currentUser!.userId, role: role);
         await _saveUserSession(user);
         _currentUser = user;
         return user;
