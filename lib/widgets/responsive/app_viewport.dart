@@ -21,7 +21,10 @@ class AppViewport extends StatelessWidget {
 
         return MediaQuery(
           data: mediaQuery.copyWith(
-            textScaler: const TextScaler.linear(1.0),
+            textScaler: mediaQuery.textScaler.clamp(
+              minScaleFactor: 0.85,
+              maxScaleFactor: 1.15,
+            ),
           ),
           child: Align(
             alignment: Alignment.topCenter,

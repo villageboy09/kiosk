@@ -221,6 +221,19 @@ class AppTheme {
         letterSpacing: 0.3,
       );
 
+  /// Compute a responsive font size based on the layout context.
+  /// Uses a baseline width of 375 (logical pixels) with a dampening factor
+  /// to ensure safe scaling ranges (0.85 to 1.25 multiplier) across phone/tablet viewports.
+  static double getResponsiveFontSize(BuildContext context, double baseSize) {
+    final double width = MediaQuery.of(context).size.width;
+    double scaleFactor = width / 375.0;
+    // Apply dampening (0.35 weight) to slow down scaling on tablets/desktops
+    double scale = 1.0 + (scaleFactor - 1.0) * 0.35;
+    // Clamp to ensure it doesn't shrink or grow too excessively
+    scale = scale.clamp(0.85, 1.25);
+    return baseSize * scale;
+  }
+
   /// Dynamic locale-aware text style
   static TextStyle getTextStyle(
     BuildContext context, {
@@ -230,8 +243,9 @@ class AppTheme {
     double? height,
     double? letterSpacing,
   }) {
+    final double? responsiveSize = fontSize != null ? getResponsiveFontSize(context, fontSize) : null;
     TextStyle baseStyle = GoogleFonts.googleSans(
-      fontSize: fontSize,
+      fontSize: responsiveSize,
       fontWeight: fontWeight,
       color: color ?? textPrimary,
       height: height,
