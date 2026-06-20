@@ -158,52 +158,56 @@ class NotificationService {
     final context = navigatorKey.currentContext;
     if (context == null) return;
 
-    showDialog(
-      context: context,
-      builder: (BuildContext ctx) {
-        final title = message.notification?.title ?? 'Notification';
-        final body = message.notification?.body ?? '';
-        final imageUrl = message.notification?.android?.imageUrl ?? 
-                         message.notification?.apple?.imageUrl ?? 
-                         message.data['image'];
+    final title = message.notification?.title ?? 'Notification';
+    final body = message.notification?.body ?? '';
 
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (imageUrl != null && imageUrl.isNotEmpty) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (c, e, s) => const SizedBox.shrink(),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.notifications_active, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-              ],
-              Text(body),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
-            ),
-            if (message.data['screen'] != null)
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _handleNotificationClick(message);
-                },
-                child: const Text('View'),
+                  const SizedBox(height: 2),
+                  Text(
+                    body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ),
+            ),
           ],
-        );
-      },
+        ),
+        action: message.data['screen'] != null
+            ? SnackBarAction(
+                label: 'View',
+                textColor: const Color(0xFF4ADE80), // Premium bright green text for action
+                onPressed: () => _handleNotificationClick(message),
+              )
+            : null,
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: const Color(0xFF1E293B), // Premium dark slate background
+      ),
     );
   }
 }

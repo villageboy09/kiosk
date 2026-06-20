@@ -23,28 +23,14 @@ class AuthLogoHeader extends StatelessWidget {
       padding: padding,
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Image.asset(
-              'assets/images/logo_t.png',
-              height: logoHeight,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.agriculture_rounded,
-                size: 64,
-                color: Color(0xFF1B5E20),
-              ),
+          Image.asset(
+            'assets/images/logo_t.png',
+            height: logoHeight,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Icon(
+              Icons.agriculture_rounded,
+              size: 64,
+              color: Color(0xFF1B5E20),
             ),
           ),
           const SizedBox(height: 24),

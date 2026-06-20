@@ -389,63 +389,70 @@ class _SignupScreenState extends State<SignupScreen>
       body: SafeArea(
         child: Stack(
           children: [
-            SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                child: Center(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 430),
-                    child: FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: SlideTransition(
-                        position: _slideAnimation,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            AuthLogoHeader(
-                              title: _isOperator
-                                  ? 'operator_login_title'.tr()
-                                  : 'signup_title'.tr(),
-                              subtitle: _isOperator
-                                  ? 'operator_login_subtitle'.tr()
-                                  : 'signup_subtitle'.tr(),
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - 48,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 430),
+                        child: FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: SlideTransition(
+                            position: _slideAnimation,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                AuthLogoHeader(
+                                  title: _isOperator
+                                      ? 'operator_login_title'.tr()
+                                      : 'signup_title'.tr(),
+                                  subtitle: _isOperator
+                                      ? 'operator_login_subtitle'.tr()
+                                      : 'signup_subtitle'.tr(),
+                                ),
+                                const SizedBox(height: 24),
+                                _buildRoleToggle(),
+                                const SizedBox(height: 26),
+                                AnimatedCrossFade(
+                                  firstChild: _buildMainCard(
+                                    key: const ValueKey('farmer'),
+                                  ),
+                                  secondChild: _buildOperatorCard(
+                                    key: const ValueKey('operator'),
+                                  ),
+                                  crossFadeState: _isOperator
+                                      ? CrossFadeState.showSecond
+                                      : CrossFadeState.showFirst,
+                                  duration: const Duration(milliseconds: 350),
+                                  firstCurve: Curves.easeInOutCubic,
+                                  secondCurve: Curves.easeInOutCubic,
+                                  sizeCurve: Curves.easeInOutCubic,
+                                ),
+                                const SizedBox(height: 18),
+                                if (!_isOperator) _buildLoginLink(),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                    height:
+                                        MediaQuery.of(context).viewInsets.bottom > 0
+                                            ? 20
+                                            : 40),
+                              ],
                             ),
-                            const SizedBox(height: 24),
-                            _buildRoleToggle(),
-                            const SizedBox(height: 26),
-                            AnimatedCrossFade(
-                              firstChild: _buildMainCard(
-                                key: const ValueKey('farmer'),
-                              ),
-                              secondChild: _buildOperatorCard(
-                                key: const ValueKey('operator'),
-                              ),
-                              crossFadeState: _isOperator
-                                  ? CrossFadeState.showSecond
-                                  : CrossFadeState.showFirst,
-                              duration: const Duration(milliseconds: 350),
-                              firstCurve: Curves.easeInOutCubic,
-                              secondCurve: Curves.easeInOutCubic,
-                              sizeCurve: Curves.easeInOutCubic,
-                            ),
-                            const SizedBox(height: 18),
-                            if (!_isOperator) _buildLoginLink(),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                                height:
-                                    MediaQuery.of(context).viewInsets.bottom > 0
-                                        ? 20
-                                        : 40),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
             AuthAlertBanner(message: _errorMessage),
             AuthAlertBanner(message: _successMessage, isError: false),

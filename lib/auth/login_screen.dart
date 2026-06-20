@@ -9,7 +9,6 @@ import 'package:cropsync/navigation/app_routes.dart';
 import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
 import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
-import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/widgets/auth/auth_alert_banner.dart';
@@ -109,22 +108,10 @@ class _LoginScreenState extends State<LoginScreen>
 
     setState(() => _isLoading = true);
     try {
-      final user = await ApiService.checkUser(pin, role: _selectedRole);
-      if (user == null) {
-        _showError('login_user_not_registered_redirect'.tr());
-        await Future.delayed(const Duration(milliseconds: 1200));
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          AppRoutes.slideFromRight(
-            const SignupScreen(),
-          ),
-        );
-        return;
-      }
-
+      // Direct login to optimize performance (saves a redundant checkUser network call)
       await AuthService.login(pin, role: _selectedRole);
       if (!mounted) return;
+      
       final loggedInUser = AuthService.currentUser;
       if (loggedInUser?.membershipType == 'Retailer') {
         Navigator.pushReplacement(
@@ -143,7 +130,21 @@ class _LoginScreenState extends State<LoginScreen>
         );
       }
     } catch (error) {
-      _showError(error.toString());
+      final errorStr = error.toString().toLowerCase();
+      // If user is not registered, redirect to signup
+      if (errorStr.contains('not found') || errorStr.contains('register')) {
+        _showError('login_user_not_registered_redirect'.tr());
+        await Future.delayed(const Duration(milliseconds: 1200));
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.slideFromRight(
+            SignupScreen(initialPhoneNumber: pin),
+          ),
+        );
+      } else {
+        _showError(error.toString().replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -198,9 +199,32 @@ class _LoginScreenState extends State<LoginScreen>
                             opacity: _fadeAnimation,
                             child: SlideTransition(
                               position: _slideAnimation,
-                              child: _selectedRole == null
-                                  ? _buildRoleSelectionView()
-                                  : _buildLoginInputView(),
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 350),
+                                switchInCurve: Curves.easeInOutCubic,
+                                switchOutCurve: Curves.easeInOutCubic,
+                                transitionBuilder: (Widget child, Animation<double> animation) {
+                                  return FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: Tween<Offset>(
+                                        begin: const Offset(0.08, 0),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: _selectedRole == null
+                                    ? KeyedSubtree(
+                                        key: const ValueKey('RoleSelectionView'),
+                                        child: _buildRoleSelectionView(),
+                                      )
+                                    : KeyedSubtree(
+                                        key: const ValueKey('LoginInputView'),
+                                        child: _buildLoginInputView(),
+                                      ),
+                              ),
                             ),
                           ),
                         ),
@@ -220,6 +244,7 @@ class _LoginScreenState extends State<LoginScreen>
   Widget _buildRoleSelectionView() {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
         const SizedBox(height: 10),
         AuthLogoHeader(
@@ -229,40 +254,40 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         const SizedBox(height: 32),
         
-        // 1. Farmer Card (Prominent green card)
+        // 1. Farmer Card (Prominent green card outline)
         _buildRoleCard(
           role: 'farmer',
           title: 'role_farmer_title'.tr(),
           description: 'role_farmer_desc'.tr(),
           icon: Icons.agriculture_rounded,
-          startColor: const Color(0xFFE8F5E9),
-          endColor: const Color(0xFFC8E6C9),
+          startColor: Colors.transparent,
+          endColor: Colors.transparent,
           themeColor: const Color(0xFF2E7D32),
           isPrimary: true,
         ),
         const SizedBox(height: 16),
 
-        // 2. Retailer Card (Blue card)
+        // 2. Retailer Card (Blue card outline)
         _buildRoleCard(
           role: 'retailer',
           title: 'role_retailer_title'.tr(),
           description: 'role_retailer_desc'.tr(),
           icon: Icons.storefront_rounded,
-          startColor: const Color(0xFFE3F2FD),
-          endColor: const Color(0xFFBBDEFB),
+          startColor: Colors.transparent,
+          endColor: Colors.transparent,
           themeColor: const Color(0xFF1565C0),
           isPrimary: false,
         ),
         const SizedBox(height: 16),
 
-        // 3. Extension Officer Card (Teal card)
+        // 3. Extension Officer Card (Teal card outline)
         _buildRoleCard(
           role: 'officer',
           title: 'role_officer_title'.tr(),
           description: 'role_officer_desc'.tr(),
           icon: Icons.verified_user_rounded,
-          startColor: const Color(0xFFE0F2F1),
-          endColor: const Color(0xFFB2DFDB),
+          startColor: Colors.transparent,
+          endColor: Colors.transparent,
           themeColor: const Color(0xFF00695C),
           isPrimary: false,
         ),
@@ -294,23 +319,12 @@ class _LoginScreenState extends State<LoginScreen>
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [startColor, endColor],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: Colors.transparent, // Completely removed solid card backdrop
           borderRadius: BorderRadius.circular(28),
           border: Border.all(
-            color: isPrimary ? themeColor : Colors.white.withValues(alpha: 0.8),
-            width: isPrimary ? 2.5 : 1.5,
+            color: themeColor.withValues(alpha: isPrimary ? 0.45 : 0.25),
+            width: isPrimary ? 2.0 : 1.2,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: themeColor.withValues(alpha: isPrimary ? 0.15 : 0.08),
-              blurRadius: isPrimary ? 16 : 8,
-              offset: const Offset(0, 6),
-            ),
-          ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,15 +332,8 @@ class _LoginScreenState extends State<LoginScreen>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: themeColor.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: themeColor.withValues(alpha: 0.1),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
               ),
               child: Icon(
                 icon,
@@ -372,29 +379,11 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildLoginInputView() {
-    final themeColor = _getRoleThemeColor();
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () {
-              setState(() {
-                _selectedRole = null;
-                _pinController.clear();
-              });
-            },
-            icon: Icon(Icons.arrow_back_rounded, color: themeColor),
-            label: Text(
-              'login_change_role'.tr(),
-              style: TextStyle(
-                color: themeColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
+        // Removed back text button from the form layout (now placed as top-left IconButton in SafeArea Stack)
         const SizedBox(height: 10),
         AuthLogoHeader(
           title: _getRoleTitle(),

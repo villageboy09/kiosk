@@ -10,7 +10,6 @@ import 'package:cropsync/widgets/auth/auth_logo_header.dart';
 
 import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/screens/operator/operator_dashboard.dart';
-import 'package:cropsync/auth/signup_screen.dart';
 
 class OperatorLoginScreen extends StatefulWidget {
   const OperatorLoginScreen({super.key});
@@ -38,7 +37,6 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
   static const Color _surface = Color(0xFFF9FAFB);
   static const Color _border = Color(0xFFD1D5DB);
   static const Color _textPrimary = Color(0xFF111827);
-  static const Color _textSub = Color(0xFF4B5563);
 
   @override
   void initState() {
@@ -124,68 +122,67 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
               left: -110,
               child: _DecorBlob(color: Color(0xFFEFF6FF), size: 240),
             ),
-            Center(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20.0, vertical: 20.0),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
-                  child: FadeTransition(
-                    opacity: _fadeAnim,
-                    child: SlideTransition(
-                      position: _slideAnim,
-                      child: Container(
-                        padding: const EdgeInsets.all(22),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.07),
-                              blurRadius: 28,
-                              offset: const Offset(0, 16),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            AuthLogoHeader(
-                              title: 'operator_login_title'.tr(),
-                              subtitle: 'operator_login_subtitle'.tr(),
-                              logoHeight: 72,
-                            ),
-                            const SizedBox(height: 24),
-                            _buildOperatorBadge(),
-                            const SizedBox(height: 24),
-                            _buildPhoneField(),
-                            const SizedBox(height: 16),
-                            _buildPasswordField(),
-                            const SizedBox(height: 28),
-                            _buildLoginButton(),
-                            const SizedBox(height: 20),
-                            _buildBackLink(),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Secure operator access for managed equipment jobs.',
-                              textAlign: TextAlign.center,
-                              style: AppTheme.getTextStyle(
-                                context,
-                                fontSize: 12,
-                                color: const Color(0xFF6B7280),
-                                fontWeight: FontWeight.w500,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20.0, vertical: 20.0),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - 40,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 460),
+                        child: FadeTransition(
+                          opacity: _fadeAnim,
+                          child: SlideTransition(
+                            position: _slideAnim,
+                            child: Container(
+                              padding: const EdgeInsets.all(22),
+                              decoration: const BoxDecoration(
+                                color: Colors.transparent, // Completely removed card backdrop
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  AuthLogoHeader(
+                                    title: 'operator_login_title'.tr(),
+                                    subtitle: 'operator_login_subtitle'.tr(),
+                                    logoHeight: 72,
+                                  ),
+                                  const SizedBox(height: 24),
+                                  _buildOperatorBadge(),
+                                  const SizedBox(height: 24),
+                                  _buildPhoneField(),
+                                  const SizedBox(height: 16),
+                                  _buildPasswordField(),
+                                  const SizedBox(height: 28),
+                                  _buildLoginButton(),
+                                  const SizedBox(height: 20),
+                                  // Removed back text button from form column layout
+                                  Text(
+                                    'Secure operator access for managed equipment jobs.',
+                                    textAlign: TextAlign.center,
+                                    style: AppTheme.getTextStyle(
+                                      context,
+                                      fontSize: 12,
+                                      color: const Color(0xFF6B7280),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
             AuthAlertBanner(message: _errorMessage),
           ],
@@ -398,37 +395,6 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
                   ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildBackLink() {
-    return TextButton(
-      onPressed: () => Navigator.pushReplacement(
-        context,
-        AppRoutes.slideFromLeft(const SignupScreen()),
-      ),
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: const Color(0xFFF8FAFC),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.arrow_back_rounded,
-              size: 18, color: Color(0xFF4B5563)),
-          const SizedBox(width: 8),
-          Text(
-            'operator_back_to_farmer_login'.tr(),
-            style: AppTheme.getTextStyle(
-              context,
-              fontSize: 15,
-              color: _textSub,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }

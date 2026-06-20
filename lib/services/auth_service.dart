@@ -26,13 +26,14 @@ class AuthService {
     await _saveUserSession(user);
     _currentUser = user;
     
-    // Subscribe to Firebase notifications
-    try {
-      await NotificationService.subscribeToDistrictTopic(user);
-      await NotificationService.synchronizeCropSubscriptions(user);
-    } catch (e) {
-      // Don't fail login if FCM subscription fails
-    }
+    // Subscribe to Firebase notifications asynchronously in background to avoid blocking login!
+    // Since this can be slow (esp. on Android), we do not await it.
+    NotificationService.subscribeToDistrictTopic(user).catchError((e) {
+      // Fail silently in background
+    });
+    NotificationService.synchronizeCropSubscriptions(user).catchError((e) {
+      // Fail silently in background
+    });
     
     return user;
   }
