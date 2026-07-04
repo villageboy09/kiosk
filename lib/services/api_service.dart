@@ -1032,6 +1032,26 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>?> getOperatorAnalytics(String operatorId, {String timeframe = 'month'}) async {
+    try {
+      final trimmedOperatorId = operatorId.trim();
+      if (trimmedOperatorId.isEmpty) return null;
+
+      final url = '$baseUrl/api.php?action=get_operator_analytics&operator_id=${Uri.encodeComponent(trimmedOperatorId)}&timeframe=${Uri.encodeComponent(timeframe)}';
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data['success'] == true) {
+          return data['analytics'];
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Update booking and/or assignment status from operator dashboard.
   static Future<Map<String, dynamic>> updateOperatorBookingStatus({
     required String bookingId,

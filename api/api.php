@@ -124,6 +124,9 @@ switch ($action) {
     case 'get_operator_bookings':
         getOperatorBookings($pdo);
         break;
+    case 'get_operator_analytics':
+        getOperatorAnalytics($pdo);
+        break;
     case 'update_operator_booking_status':
         updateOperatorBookingStatus($pdo);
         break;
@@ -371,6 +374,59 @@ function verifyOtp($pdo) {
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
     }
+}
+
+function sendBookingCompletionSMS($phone, $serviceSummary, $amount) {
+    if (empty($phone)) return false;
+    
+    $authkey = defined('MSG91_AUTHKEY') && !empty(MSG91_AUTHKEY) ? MSG91_AUTHKEY : '491154AraRrF6el3UI69a6deb0P1';
+    $template_id = 'YOUR_DLT_TEMPLATE_ID'; // TODO: Replace with the actual approved DLT template ID
+    
+    // Default to Indian country code if not present
+    $mobile = preg_match('/^\d{10}$/', $phone) ? '91' . $phone : $phone;
+
+    $postData = json_encode([
+        "template_id" => $template_id,
+        "short_url" => "0",
+        "recipients" => [
+            [
+                "mobiles" => $mobile,
+                "var1" => $serviceSummary,
+                "var2" => $amount
+            ]
+        ]
+    ]);
+
+    $curl = curl_init();
+    curl_setopt_array($curl, [
+        CURLOPT_URL => "https://api.msg91.com/api/v5/flow/",
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => "",
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => "POST",
+        CURLOPT_POSTFIELDS => $postData,
+        CURLOPT_HTTPHEADER => [
+            "Content-Type: application/json",
+            "authkey: $authkey"
+        ],
+    ]);
+
+    $response = curl_exec($curl);
+    $err = curl_error($curl);
+    curl_close($curl);
+
+    if ($err) {
+        return false;
+    }
+    
+    $result = json_decode($response, true);
+    if (isset($result['type']) && $result['type'] === 'success') {
+        return true;
+    }
+    
+    return false;
 }
 
 function registerUser($pdo) {
@@ -1851,6 +1907,111 @@ function getOperatorBookings($pdo) {
 }
 
 /**
+ * Get Operator Analytics
+ */
+function getOperatorAnalytics($pdo) {
+    $operatorId = trim($_GET['operator_id'] ?? '');
+    $timeframe = trim($_GET['timeframe'] ?? 'month'); // week, month, all
+
+    if (empty($operatorId)) {
+        echo json_encode(['success' => false, 'error' => 'Operator ID required']);
+        return;
+    }
+
+    try {
+        // Timeframe filter logic
+        $dateFilter = "";
+        $params = [$operatorId];
+        
+        if ($timeframe === 'week') {
+            $dateFilter = "AND service_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+        } else if ($timeframe === 'month') {
+            $dateFilter = "AND service_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+        }
+
+        // Today's Stats (Always calculated)
+        $todaySql = "
+            SELECT 
+                COUNT(*) as today_jobs,
+                SUM(total_cost) as today_earnings
+            FROM chc_bookings 
+            WHERE assigned_operator_id = ? 
+              AND assignment_status = 'Completed'
+              AND DATE(service_date) = CURDATE()
+        ";
+        $stmtToday = $pdo->prepare($todaySql);
+        $stmtToday->execute([$operatorId]);
+        $todayStats = $stmtToday->fetch(PDO::FETCH_ASSOC);
+
+        // Basic Stats (Filtered)
+        $statsSql = "
+            SELECT 
+                COUNT(*) as total_completed_jobs,
+                SUM(total_cost) as total_earnings
+            FROM chc_bookings 
+            WHERE assigned_operator_id = ? 
+              AND assignment_status = 'Completed'
+              $dateFilter
+        ";
+        $stmt = $pdo->prepare($statsSql);
+        $stmt->execute($params);
+        $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Earnings by Date (Filtered)
+        // If 'all', we might want to group by month, but to keep the chart simple, we can still group by date and maybe limit to 90 days or something.
+        // The user asked to show weekly wise or 15 days, which we handled in UI. We'll return dates and UI will handle interval.
+        $limitStr = $timeframe === 'all' ? "LIMIT 90" : "LIMIT 30";
+        $earningsSql = "
+            SELECT 
+                DATE(service_date) as date,
+                SUM(total_cost) as daily_earnings,
+                COUNT(*) as daily_jobs
+            FROM chc_bookings
+            WHERE assigned_operator_id = ? 
+              AND assignment_status = 'Completed'
+              AND service_date IS NOT NULL
+              $dateFilter
+            GROUP BY DATE(service_date)
+            ORDER BY DATE(service_date) ASC
+            $limitStr
+        ";
+        $stmt2 = $pdo->prepare($earningsSql);
+        $stmt2->execute($params);
+        $earnings = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+
+        // Equipment usage (Filtered)
+        $equipmentSql = "
+            SELECT 
+                equipment_type,
+                COUNT(*) as usage_count
+            FROM chc_bookings
+            WHERE assigned_operator_id = ? 
+              AND assignment_status = 'Completed'
+              $dateFilter
+            GROUP BY equipment_type
+            ORDER BY usage_count DESC
+        ";
+        $stmt3 = $pdo->prepare($equipmentSql);
+        $stmt3->execute($params);
+        $equipment = $stmt3->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true, 
+            'analytics' => [
+                'today_jobs' => (int)($todayStats['today_jobs'] ?? 0),
+                'today_earnings' => (float)($todayStats['today_earnings'] ?? 0),
+                'total_completed_jobs' => (int)($stats['total_completed_jobs'] ?? 0),
+                'total_earnings' => (float)($stats['total_earnings'] ?? 0),
+                'daily_earnings' => $earnings,
+                'equipment_usage' => $equipment
+            ]
+        ]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
  * Update Operator Booking Status + Handle current_booking_id
  */
 function updateOperatorBookingStatus($pdo) {
@@ -2226,6 +2387,22 @@ $stmtOpUpdate = $pdo->prepare("
 $stmtOpUpdate->execute([$operatorId]);
 
         $pdo->commit();
+
+        // Build the service summary for the SMS
+        $serviceSummary = $equipment;
+        if (!empty($summaryQty) && !empty($summaryUnit)) {
+            $serviceSummary .= ' (' . $summaryQty . ' ' . ucfirst(strtolower($summaryUnit));
+            // In tractor cases, distance is sometimes provided but billed_qty is trips
+            // Or if multi-service, just print the unit
+            if (strtolower(trim($summaryUnit)) === 'trip' && !empty($distance) && $distance > 0) {
+                // If it's a trip, maybe distance is relevant. If the user expects trips explicitly, we show it.
+                // It will output like "Tractor Trolley (2 Trip)"
+            }
+            $serviceSummary .= ')';
+        }
+
+        // Send SMS synchronously (will delay response by ~500ms but guarantees attempt)
+        sendBookingCompletionSMS($farmerPhone, $serviceSummary, $finalAmount);
 
         echo json_encode([
             'success' => true,

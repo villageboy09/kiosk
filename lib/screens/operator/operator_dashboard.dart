@@ -10,6 +10,7 @@ import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/screens/operator/manual_order_sheet.dart';
 import 'package:cropsync/screens/operator/operator_history_screen.dart';
 import 'package:cropsync/screens/operator/operator_profile_screen.dart';
+import 'package:cropsync/screens/operator/operator_analytics_tab.dart';
 import 'package:cropsync/auth/signup_screen.dart';
 import 'package:cropsync/widgets/language_selector.dart';
 
@@ -272,6 +273,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
   Widget build(BuildContext context) {
     final tabs = [
       _buildHomeTab(),
+      OperatorAnalyticsTab(operator: _operator),
       OperatorHistoryScreen(operator: _operator),
       OperatorProfileScreen(operator: _operator, onLogout: _logout),
     ];
@@ -1013,11 +1015,17 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
             selectedItemColor: _accent,
             unselectedItemColor: const Color(0xFF9CA3AF),
             itemPadding:
-                const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             items: [
               SalomonBottomBarItem(
                 icon: const Icon(Icons.home_rounded),
                 title: Text('operator_nav_home'.tr(),
+                    style: AppTheme.getTextStyle(context,
+                        fontWeight: FontWeight.w700)),
+              ),
+              SalomonBottomBarItem(
+                icon: const Icon(Icons.bar_chart_rounded),
+                title: Text('operator_nav_analytics'.tr(),
                     style: AppTheme.getTextStyle(context,
                         fontWeight: FontWeight.w700)),
               ),
