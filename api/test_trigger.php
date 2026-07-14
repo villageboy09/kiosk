@@ -30,7 +30,7 @@ $payload = [
         "android" => [
             "notification" => [
                 "image" => "https://images.unsplash.com/photo-1589923188900-85dae523342b?w=600",
-                "icon" => "ic_notification"
+                "icon" => "launcher_icon"
             ]
         ],
         "apns" => [

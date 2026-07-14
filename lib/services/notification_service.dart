@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/screens/market_prices.dart';
 import 'package:cropsync/screens/seed_varieties.dart';
@@ -13,7 +14,7 @@ class NotificationService {
 
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  static Future<void> subscribeToDistrictTopic(User user) async {
+  static Future<void> subscribeToDistrictTopic(User user, {String? lang}) async {
     if (kIsWeb) return; // FCM topics are not supported on web
     final district = user.district;
     if (district == null || district.trim().isEmpty) return;
@@ -24,6 +25,36 @@ class NotificationService {
         .replaceAll(RegExp(r'[^a-z0-9-_.~%]'), '_');
 
     if (safeDistrict.isNotEmpty) {
+      String targetLang = lang ?? 'en';
+      if (lang == null) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final savedLocale = prefs.getString('locale');
+          if (savedLocale != null && savedLocale.isNotEmpty) {
+            targetLang = savedLocale.split('_')[0].toLowerCase();
+          }
+        } catch (e) {
+          // fallback
+        }
+      }
+
+      // Ensure language is valid
+      if (!['en', 'hi', 'te'].contains(targetLang)) {
+        targetLang = 'en';
+      }
+
+      // Unsubscribe from other languages first
+      final languages = ['en', 'hi', 'te'];
+      for (final l in languages) {
+        if (l != targetLang) {
+          await FirebaseMessaging.instance.unsubscribeFromTopic('district_${safeDistrict}_$l');
+        }
+      }
+
+      // Subscribe to targeted language topic
+      await FirebaseMessaging.instance.subscribeToTopic('district_${safeDistrict}_$targetLang');
+      
+      // Also keep the general legacy topic subscribed
       await FirebaseMessaging.instance.subscribeToTopic('district_$safeDistrict');
     }
   }

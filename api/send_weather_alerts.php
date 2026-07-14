@@ -81,28 +81,109 @@ foreach ($districts as $district) {
     $tempMax = $today['tempmax'];
     $precipProb = $today['precipprob'];
 
-    // Evaluate dynamic conditions
-    $alertTitle = "";
-    $alertBody = "";
-    $alertImage = "";
-
-    if ($precipProb > 70) {
-        $alertTitle = "🌧️ Weather Alert for $district";
-        $alertBody = "High chance of rain ({$precipProb}%). Consider postponing irrigation or harvesting mature crops.";
-        $alertImage = "https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?w=600";
-    } else if ($tempMax > 40) {
-        $alertTitle = "☀️ Heat Alert for $district";
-        $alertBody = "Extreme heat expected. Temperature today will reach {$tempMax}°C. Keep crops well-irrigated.";
-        $alertImage = "https://images.unsplash.com/photo-1504370805625-d32c54b16100?w=600";
-    } else {
-        $alertTitle = "🌤️ Morning Weather in $district";
-        $alertBody = "Expect {$conditions} today with a high of {$tempMax}°C. Have a great farming day!";
-        $alertImage = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=600"; // Beautiful generic farm field
+    // Get time of day context based on IST timezone
+    date_default_timezone_set('Asia/Kolkata');
+    $hour = (int)date('H');
+    
+    $timeKey = "time_morning";
+    if ($hour >= 12 && $hour < 17) {
+        $timeKey = "time_afternoon";
+    } else if ($hour >= 17 || $hour < 5) {
+        $timeKey = "time_evening";
     }
 
-    // Broadcast specifically to this district's topic!
-    sendFcmNotification($projectId, $safeTopic, $alertTitle, $alertBody, $alertImage);
-    echo "Notification sent to topic: $safeTopic ($district)\n";
+    $weatherTranslations = [
+        'en' => [
+            'time_morning' => 'Morning',
+            'time_afternoon' => 'Afternoon',
+            'time_evening' => 'Evening',
+            'weather_in' => '🌤️ {time} Weather in {district}',
+            'heat_alert' => '☀️ Heat Alert for {district}',
+            'rain_alert' => '🌧️ Weather Alert for {district}',
+            'rain_body' => 'High chance of rain ({precip}%). Consider postponing irrigation or harvesting mature crops.',
+            'heat_body' => 'Extreme heat expected. Temperature today will reach {temp}°C. Keep crops well-irrigated.',
+            'normal_body' => 'Expect {conditions} today with a high of {temp}°C. Have a great farming day!'
+        ],
+        'hi' => [
+            'time_morning' => 'सुबह का',
+            'time_afternoon' => 'दोपहर का',
+            'time_evening' => 'शाम का',
+            'weather_in' => '🌤️ {district} में {time} मौसम',
+            'heat_alert' => '☀️ {district} के लिए गर्मी की चेतावनी',
+            'rain_alert' => '🌧️ {district} के लिए बारिश की चेतावनी',
+            'rain_body' => 'बारिश की उच्च संभावना ({precip}%)। सिंचाई स्थगित करने या पकी फसलों की कटाई पर विचार करें।',
+            'heat_body' => 'अत्यधिक गर्मी की संभावना। तापमान आज {temp}°C तक पहुंच जाएगा। फसलों की अच्छी सिंचाई रखें।',
+            'normal_body' => 'आज {conditions} की उम्मीद है, अधिकतम तापमान {temp}°C रहेगा। आपका दिन शुभ हो!'
+        ],
+        'te' => [
+            'time_morning' => 'ఉదయం',
+            'time_afternoon' => 'మధ్యాహ్నం',
+            'time_evening' => 'సాయంత్రం',
+            'weather_in' => '🌤️ {district} లో {time} వాతావరణం',
+            'heat_alert' => '☀️ {district} తీవ్ర ఎండల హెచ్చరిక',
+            'rain_alert' => '🌧️ {district} వర్ష సూచన హెచ్చరిక',
+            'rain_body' => 'వర్షం పడే అవకాశం ఎక్కువగా ఉంది ({precip}%). నీటి పారుదల వాయిదా వేయడం లేదా పంట కోయడం మంచిది.',
+            'heat_body' => 'ఈరోజు తీవ్రమైన ఎండలు కాసే అవకాశం ఉంది. ఉష్ణోగ్రత {temp}°C కి చేరుకుంటుంది. పంటలకు తగిన నీరు అందించండి.',
+            'normal_body' => 'ఈరోజు గరిష్ట ఉష్ణోగ్రత {temp}°C తో {conditions} గా ఉండే అవకాశం ఉంది. మీకు మంచి వ్యవసాయ దినం లభించాలని కోరుకుంటున్నాం!'
+        ]
+    ];
+
+    // Helper function to translate weather conditions string
+    $translateConditions = function($cond, $lang) use ($weatherTranslations) {
+        $condLower = strtolower(trim($cond));
+        if (isset($weatherTranslations[$lang][$condLower])) {
+            return $weatherTranslations[$lang][$condLower];
+        }
+        $dict = [
+            'overcast' => ['hi' => 'बादल छाए रहेंगे', 'te' => 'మేఘావృతం'],
+            'partly cloudy' => ['hi' => 'आंशिक बादल छाए रहेंगे', 'te' => 'పాక్షిక మేఘావృతం'],
+            'clear' => ['hi' => 'साफ आसमान', 'te' => 'ప్రశాంతమైన వాతావరణం'],
+            'sunny' => ['hi' => 'धूप', 'te' => 'ఎండగా'],
+            'rain' => ['hi' => 'बारिश', 'te' => 'वर्షం']
+        ];
+        foreach ($dict as $key => $trans) {
+            if (strpos($condLower, $key) !== false && isset($trans[$lang])) {
+                return $trans[$lang];
+            }
+        }
+        return $cond;
+    };
+
+    // Send notifications to each language
+    $languages = ['en', 'hi', 'te'];
+    foreach ($languages as $lang) {
+        $alertTitle = "";
+        $alertBody = "";
+        $alertImage = "";
+
+        $translatedTime = $weatherTranslations[$lang][$timeKey];
+        $translatedConditions = $translateConditions($conditions, $lang);
+
+        if ($precipProb > 70) {
+            $alertTitle = str_replace('{district}', $district, $weatherTranslations[$lang]['rain_alert']);
+            $alertBody = str_replace('{precip}', $precipProb, $weatherTranslations[$lang]['rain_body']);
+            $alertImage = "https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?w=600";
+        } else if ($tempMax > 40) {
+            $alertTitle = str_replace('{district}', $district, $weatherTranslations[$lang]['heat_alert']);
+            $alertBody = str_replace('{temp}', $tempMax, $weatherTranslations[$lang]['heat_body']);
+            $alertImage = "https://images.unsplash.com/photo-1504370805625-d32c54b16100?w=600";
+        } else {
+            $alertTitle = str_replace(['{district}', '{time}'], [$district, $translatedTime], $weatherTranslations[$lang]['weather_in']);
+            $alertBody = str_replace(['{conditions}', '{temp}'], [$translatedConditions, $tempMax], $weatherTranslations[$lang]['normal_body']);
+            $alertImage = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=600";
+        }
+
+        // Send to language-specific topic
+        $langTopic = $safeTopic . '_' . $lang;
+        sendFcmNotification($projectId, $langTopic, $alertTitle, $alertBody, $alertImage);
+        echo "Notification sent to topic: $langTopic ($district - $lang)\n";
+        
+        // Also send to the legacy district general topic (defaults to English content)
+        if ($lang === 'en') {
+            sendFcmNotification($projectId, $safeTopic, $alertTitle, $alertBody, $alertImage);
+            echo "Notification sent to legacy topic: $safeTopic ($district)\n";
+        }
+    }
 }
 
 /**
@@ -126,7 +207,7 @@ function sendFcmNotification($projectId, $topic, $title, $body, $imageUrl) {
             "android" => [
                 "notification" => [
                     "image" => $imageUrl,
-                    "icon" => "ic_notification"
+                    "icon" => "launcher_icon"
                 ]
             ],
             "apns" => [

@@ -233,7 +233,7 @@ function sendFcmNotification($projectId, $topic, $title, $body, $imageUrl) {
             "android" => [
                 "notification" => [
                     "image" => $imageUrl,
-                    "icon" => "ic_notification"
+                    "icon" => "launcher_icon"
                 ]
             ],
             "apns" => [

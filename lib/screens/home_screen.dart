@@ -73,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       if (user != null) {
         final currentUser = user;
-        NotificationService.subscribeToDistrictTopic(currentUser);
+        NotificationService.subscribeToDistrictTopic(currentUser, lang: context.locale.languageCode);
         setState(() {
           _farmerName = currentUser.name;
           _profileImageUrl = currentUser.profileImageUrl;
