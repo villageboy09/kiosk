@@ -23,9 +23,35 @@ require_once 'market_prices_api.php';
 try {
     if (isset($pdo) && $pdo instanceof PDO) {
         $pdo->exec("SET NAMES utf8mb4");
+
+        // Automatically run migrations silently on load to prevent missing column errors
+        try {
+            $stmt = $pdo->query("SHOW INDEX FROM users WHERE Key_name = 'idx_users_phone_number'");
+            if (!$stmt->fetch()) {
+                $pdo->exec("ALTER TABLE `users` ADD INDEX `idx_users_phone_number` (`phone_number`)");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtCol = $pdo->query("SHOW COLUMNS FROM chc_bookings LIKE 'amount_paid'");
+            if (!$stmtCol->fetch()) {
+                $pdo->exec("ALTER TABLE `chc_bookings` ADD COLUMN `amount_paid` DECIMAL(10,2) NOT NULL DEFAULT 0.00");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtCol2 = $pdo->query("SHOW COLUMNS FROM chc_bookings LIKE 'payment_status'");
+            if (!$stmtCol2->fetch()) {
+                $pdo->exec("ALTER TABLE `chc_bookings` ADD COLUMN `payment_status` VARCHAR(20) NOT NULL DEFAULT 'Pending'");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $pdo->exec("UPDATE chc_bookings SET amount_paid = total_cost, payment_status = 'Paid' WHERE booking_status = 'Completed' AND amount_paid = 0.00");
+        } catch (Throwable $e) {}
     }
 } catch (Throwable $e) {
-    // Do not block API execution if the server does not allow changing connection charset.
+    // Do not block API execution if any DB setup fails
 }
 
 $action = $_GET['action'] ?? '';
@@ -193,14 +219,31 @@ switch ($action) {
 
 function applyMigration($pdo) {
     try {
+        // idx_users_phone_number check
         $stmt = $pdo->query("SHOW INDEX FROM users WHERE Key_name = 'idx_users_phone_number'");
         $indexExists = $stmt->fetch();
-        if ($indexExists) {
-            echo json_encode(['success' => true, 'message' => 'Index already exists']);
-        } else {
+        if (!$indexExists) {
             $pdo->exec("ALTER TABLE `users` ADD INDEX `idx_users_phone_number` (`phone_number`)");
-            echo json_encode(['success' => true, 'message' => 'Index applied successfully']);
         }
+
+        // Add amount_paid column
+        $stmtCol = $pdo->query("SHOW COLUMNS FROM chc_bookings LIKE 'amount_paid'");
+        $colExists = $stmtCol->fetch();
+        if (!$colExists) {
+            $pdo->exec("ALTER TABLE `chc_bookings` ADD COLUMN `amount_paid` DECIMAL(10,2) NOT NULL DEFAULT 0.00");
+        }
+
+        // Add payment_status column
+        $stmtCol2 = $pdo->query("SHOW COLUMNS FROM chc_bookings LIKE 'payment_status'");
+        $colExists2 = $stmtCol2->fetch();
+        if (!$colExists2) {
+            $pdo->exec("ALTER TABLE `chc_bookings` ADD COLUMN `payment_status` VARCHAR(20) NOT NULL DEFAULT 'Pending'");
+        }
+
+        // Set all existing Completed bookings without payment_status/amount_paid to completed cost
+        $pdo->exec("UPDATE chc_bookings SET amount_paid = total_cost, payment_status = 'Paid' WHERE booking_status = 'Completed' AND amount_paid = 0.00");
+
+        echo json_encode(['success' => true, 'message' => 'Migration applied successfully']);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
@@ -376,11 +419,11 @@ function verifyOtp($pdo) {
     }
 }
 
-function sendBookingCompletionSMS($phone, $serviceSummary, $amount) {
+function sendBookingCompletionSMS($phone, $serviceSummary, $amount, $operatorId = null) {
     if (empty($phone)) return false;
     
     $authkey = defined('MSG91_AUTHKEY') && !empty(MSG91_AUTHKEY) ? MSG91_AUTHKEY : '491154AraRrF6el3UI69a6deb0P1';
-    $template_id = 'YOUR_DLT_TEMPLATE_ID'; // TODO: Replace with the actual approved DLT template ID
+    $template_id = defined('MSG91_TEMPLATE_ID') && !empty(MSG91_TEMPLATE_ID) ? MSG91_TEMPLATE_ID : '6a48e05940099a0175051674';
     
     // Default to Indian country code if not present
     $mobile = preg_match('/^\d{10}$/', $phone) ? '91' . $phone : $phone;
@@ -391,11 +434,20 @@ function sendBookingCompletionSMS($phone, $serviceSummary, $amount) {
         "recipients" => [
             [
                 "mobiles" => $mobile,
-                "var1" => $serviceSummary,
-                "var2" => $amount
+                "var1" => empty($serviceSummary) ? "Unknown Service" : (string)$serviceSummary,
+                "var2" => empty($amount) ? "0" : (string)$amount,
+                "VAR1" => empty($serviceSummary) ? "Unknown Service" : (string)$serviceSummary,
+                "VAR2" => empty($amount) ? "0" : (string)$amount,
+                "##var1##" => empty($serviceSummary) ? "Unknown Service" : (string)$serviceSummary,
+                "##var2##" => empty($amount) ? "0" : (string)$amount
             ]
         ]
     ]);
+    
+    // Log payload for debugging
+    $logDir = __DIR__ . '/logs';
+    if (!is_dir($logDir)) mkdir($logDir, 0777, true);
+    file_put_contents($logDir . '/msg91.log', date('Y-m-d H:i:s') . " - Payload: " . $postData . "\n", FILE_APPEND);
 
     $curl = curl_init();
     curl_setopt_array($curl, [
@@ -417,16 +469,44 @@ function sendBookingCompletionSMS($phone, $serviceSummary, $amount) {
     $err = curl_error($curl);
     curl_close($curl);
 
+    $status = 'Failed';
+    $logResponse = '';
+
     if ($err) {
-        return false;
+        file_put_contents($logDir . '/msg91.log', date('Y-m-d H:i:s') . " - Error: " . $err . "\n", FILE_APPEND);
+        $logResponse = 'cURL Error: ' . $err;
+    } else {
+        file_put_contents($logDir . '/msg91.log', date('Y-m-d H:i:s') . " - Response: " . $response . "\n", FILE_APPEND);
+        $logResponse = $response;
+        $result = json_decode($response, true);
+        if (isset($result['type']) && $result['type'] === 'success') {
+            $status = 'Success';
+        }
     }
     
-    $result = json_decode($response, true);
-    if (isset($result['type']) && $result['type'] === 'success') {
-        return true;
+    // Log to DB dynamically
+    try {
+        global $pdo;
+        if (isset($pdo) && $pdo instanceof PDO) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS sms_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                phone VARCHAR(20) NOT NULL,
+                service_summary VARCHAR(255) DEFAULT NULL,
+                amount VARCHAR(50) DEFAULT NULL,
+                operator_id INT DEFAULT NULL,
+                status VARCHAR(20) DEFAULT 'Pending',
+                response TEXT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            
+            $stmt = $pdo->prepare("INSERT INTO sms_logs (phone, service_summary, amount, operator_id, status, response) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$phone, $serviceSummary, $amount, $operatorId, $status, $logResponse]);
+        }
+    } catch (Throwable $dbEx) {
+        // Suppress so SMS flow never crashes
     }
     
-    return false;
+    return $status === 'Success';
 }
 
 function registerUser($pdo) {
@@ -1781,7 +1861,10 @@ function operatorLogin($pdo) {
 
     try {
 
-        // Fetch all operators with same phone number
+        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+        $last10 = substr($cleanPhone, -10);
+
+        // Fetch all operators with same phone number, matching variations
         $stmt = $pdo->prepare("
             SELECT o.*,
                    (SELECT COUNT(*) FROM chc_bookings b
@@ -1792,10 +1875,12 @@ function operatorLogin($pdo) {
                     )
                    ) AS jobs_completed
             FROM chc_operators o
-            WHERE o.phone_number = ?
+            WHERE o.phone_number = ? 
+               OR o.phone_number = ? 
+               OR RIGHT(o.phone_number, 10) = ?
         ");
 
-        $stmt->execute([$phone]);
+        $stmt->execute([$cleanPhone, '91' . $last10, $last10]);
 
         $operators = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -1864,13 +1949,33 @@ function getOperatorBookings($pdo) {
     }
 
     try {
+        // Check if columns exist
+        $hasAmountPaid = false;
+        try {
+            $stmtCol = $pdo->query("SHOW COLUMNS FROM chc_bookings LIKE 'amount_paid'");
+            if ($stmtCol && $stmtCol->fetch()) {
+                $hasAmountPaid = true;
+            }
+        } catch (Throwable $e) {}
+
+        $hasPaymentStatus = false;
+        try {
+            $stmtCol2 = $pdo->query("SHOW COLUMNS FROM chc_bookings LIKE 'payment_status'");
+            if ($stmtCol2 && $stmtCol2->fetch()) {
+                $hasPaymentStatus = true;
+            }
+        } catch (Throwable $e) {}
+
+        $amountPaidSelect = $hasAmountPaid ? "b.amount_paid" : "0.00 AS amount_paid";
+        $paymentStatusSelect = $hasPaymentStatus ? "b.payment_status" : "'Pending' AS payment_status";
+
         $sql = "
             SELECT
                 b.id, b.booking_id, b.user_id, b.equipment_type, b.billing_type,
                 b.crop_type, b.land_size_acres, b.billed_qty, b.unit_type,
                 b.service_date, b.rescheduled_date, b.rate, b.total_cost,
                 b.notes, b.booking_status, b.operator_notes,
-                b.assignment_status, b.created_at, b.updated_at,
+                b.assignment_status, $amountPaidSelect, $paymentStatusSelect, b.created_at, b.updated_at,
 
                 MAX(u.name) AS farmer_name,
                 MAX(u.phone_number) AS farmer_phone,
@@ -1919,6 +2024,21 @@ function getOperatorAnalytics($pdo) {
     }
 
     try {
+        // Check if columns exist
+        $hasAmountPaid = false;
+        try {
+            $stmtCol = $pdo->query("SHOW COLUMNS FROM chc_bookings LIKE 'amount_paid'");
+            if ($stmtCol && $stmtCol->fetch()) {
+                $hasAmountPaid = true;
+            }
+        } catch (Throwable $e) {}
+
+        $todayCollectedSelect = $hasAmountPaid ? "COALESCE(SUM(amount_paid), 0)" : "0.00";
+        $todayPendingSelect = $hasAmountPaid ? "COALESCE(SUM(total_cost - amount_paid), 0)" : "0.00";
+        
+        $totalCollectedSelect = $hasAmountPaid ? "COALESCE(SUM(amount_paid), 0)" : "0.00";
+        $totalPendingSelect = $hasAmountPaid ? "COALESCE(SUM(total_cost - amount_paid), 0)" : "0.00";
+
         // Timeframe filter logic
         $dateFilter = "";
         $params = [$operatorId];
@@ -1933,7 +2053,9 @@ function getOperatorAnalytics($pdo) {
         $todaySql = "
             SELECT 
                 COUNT(*) as today_jobs,
-                SUM(total_cost) as today_earnings
+                SUM(total_cost) as today_earnings,
+                $todayCollectedSelect as today_collected,
+                $todayPendingSelect as today_pending
             FROM chc_bookings 
             WHERE assigned_operator_id = ? 
               AND assignment_status = 'Completed'
@@ -1947,7 +2069,9 @@ function getOperatorAnalytics($pdo) {
         $statsSql = "
             SELECT 
                 COUNT(*) as total_completed_jobs,
-                SUM(total_cost) as total_earnings
+                SUM(total_cost) as total_earnings,
+                $totalCollectedSelect as total_collected,
+                $totalPendingSelect as total_pending
             FROM chc_bookings 
             WHERE assigned_operator_id = ? 
               AND assignment_status = 'Completed'
@@ -1995,13 +2119,68 @@ function getOperatorAnalytics($pdo) {
         $stmt3->execute($params);
         $equipment = $stmt3->fetchAll(PDO::FETCH_ASSOC);
 
+        // Daily (Today) working hours
+        $stmtTodayHours = $pdo->prepare("
+            SELECT SUM(billed_qty) as hours 
+            FROM chc_bookings 
+            WHERE assigned_operator_id = ? 
+              AND assignment_status = 'Completed' 
+              AND DATE(service_date) = CURDATE() 
+              AND LOWER(unit_type) = 'hour'
+        ");
+        $stmtTodayHours->execute([$operatorId]);
+        $todayHours = floatval($stmtTodayHours->fetch(PDO::FETCH_ASSOC)['hours'] ?? 0);
+
+        // Weekly working hours
+        $stmtWeekHours = $pdo->prepare("
+            SELECT SUM(billed_qty) as hours 
+            FROM chc_bookings 
+            WHERE assigned_operator_id = ? 
+              AND assignment_status = 'Completed' 
+              AND service_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) 
+              AND LOWER(unit_type) = 'hour'
+        ");
+        $stmtWeekHours->execute([$operatorId]);
+        $weeklyHours = floatval($stmtWeekHours->fetch(PDO::FETCH_ASSOC)['hours'] ?? 0);
+
+        // Monthly working hours
+        $stmtMonthHours = $pdo->prepare("
+            SELECT SUM(billed_qty) as hours 
+            FROM chc_bookings 
+            WHERE assigned_operator_id = ? 
+              AND assignment_status = 'Completed' 
+              AND service_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) 
+              AND LOWER(unit_type) = 'hour'
+        ");
+        $stmtMonthHours->execute([$operatorId]);
+        $monthlyHours = floatval($stmtMonthHours->fetch(PDO::FETCH_ASSOC)['hours'] ?? 0);
+
+        // Season (All-Time) working hours
+        $stmtSeasonHours = $pdo->prepare("
+            SELECT SUM(billed_qty) as hours 
+            FROM chc_bookings 
+            WHERE assigned_operator_id = ? 
+              AND assignment_status = 'Completed' 
+              AND LOWER(unit_type) = 'hour'
+        ");
+        $stmtSeasonHours->execute([$operatorId]);
+        $seasonHours = floatval($stmtSeasonHours->fetch(PDO::FETCH_ASSOC)['hours'] ?? 0);
+
         echo json_encode([
             'success' => true, 
             'analytics' => [
                 'today_jobs' => (int)($todayStats['today_jobs'] ?? 0),
                 'today_earnings' => (float)($todayStats['today_earnings'] ?? 0),
+                'today_collected' => (float)($todayStats['today_collected'] ?? 0),
+                'today_pending' => (float)($todayStats['today_pending'] ?? 0),
+                'today_hours' => $todayHours,
+                'weekly_hours' => $weeklyHours,
+                'monthly_hours' => $monthlyHours,
+                'season_hours' => $seasonHours,
                 'total_completed_jobs' => (int)($stats['total_completed_jobs'] ?? 0),
                 'total_earnings' => (float)($stats['total_earnings'] ?? 0),
+                'total_collected' => (float)($stats['total_collected'] ?? 0),
+                'total_pending' => (float)($stats['total_pending'] ?? 0),
                 'daily_earnings' => $earnings,
                 'equipment_usage' => $equipment
             ]
@@ -2169,6 +2348,27 @@ function updateOperatorBookingStatus($pdo) {
             $params[] = $operatorNotes;
         }
 
+        if (isset($input['amount_paid'])) {
+            $updates[] = "amount_paid = ?";
+            $amountPaidValue = (float)$input['amount_paid'];
+            $params[] = $amountPaidValue;
+            
+            if (!isset($input['payment_status'])) {
+                $stmtCost = $pdo->prepare("SELECT total_cost FROM chc_bookings WHERE BINARY booking_id = BINARY ?");
+                $stmtCost->execute([$bookingId]);
+                $bookingCostRow = $stmtCost->fetch(PDO::FETCH_ASSOC);
+                $totalCost = (float)($bookingCostRow['total_cost'] ?? 0);
+                
+                $updates[] = "payment_status = ?";
+                $params[] = $amountPaidValue >= $totalCost ? 'Paid' : 'Pending';
+            }
+        }
+
+        if (isset($input['payment_status'])) {
+            $updates[] = "payment_status = ?";
+            $params[] = $input['payment_status'];
+        }
+
         $updates[] = "updated_at = NOW()";
         $params[] = $bookingId;
 
@@ -2273,6 +2473,9 @@ function completeBookingManual($pdo) {
         $summaryQty = (float)($input['billed_qty'] ?? 0);
     }
 
+    $amountPaid = isset($input['amount_paid']) ? (float)$input['amount_paid'] : $finalAmount;
+    $paymentStatus = $amountPaid >= $finalAmount ? 'Paid' : 'Pending';
+
     if (empty($operatorId) || empty($farmerPhone) || empty($farmerName) || empty($village) || empty($equipment) || empty($serviceDate)) {
         echo json_encode(['success' => false, 'error' => 'Missing required fields']);
         return;
@@ -2325,7 +2528,7 @@ function completeBookingManual($pdo) {
                     equipment_type = ?, billing_type = ?, crop_type = ?,
                     land_size_acres = ?, billed_qty = ?, unit_type = ?, service_date = ?, rate = ?,
                     total_cost = ?, service_breakdown = ?, notes = ?, booking_status = 'Completed', assignment_status = 'Completed', assigned_operator_id = ?,
-                    operator_notes = ?, updated_at = NOW()
+                    operator_notes = ?, amount_paid = ?, payment_status = ?, updated_at = NOW()
                 WHERE booking_id = ?
             ");
             $stmtBook->execute([
@@ -2342,6 +2545,8 @@ function completeBookingManual($pdo) {
                 $notes,
                 $operatorId,
                 $operatorNotes,
+                $amountPaid,
+                $paymentStatus,
                 $bookingId
             ]);
         } else {
@@ -2353,8 +2558,8 @@ function completeBookingManual($pdo) {
                     booking_id, user_id, equipment_type, billing_type, crop_type,
                     land_size_acres, billed_qty, unit_type, service_date, rate,
                     total_cost, service_breakdown, notes, booking_status, assignment_status, assigned_operator_id,
-                    operator_notes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Completed', 'Completed', ?, ?, NOW())
+                    operator_notes, amount_paid, payment_status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Completed', 'Completed', ?, ?, ?, ?, NOW())
             ");
             $stmtBook->execute([
                 $bookingId,
@@ -2372,6 +2577,8 @@ function completeBookingManual($pdo) {
                 $notes,
                 $operatorId,
                 $operatorNotes,
+                $amountPaid,
+                $paymentStatus
             ]);
         }
 
@@ -2389,20 +2596,22 @@ $stmtOpUpdate->execute([$operatorId]);
         $pdo->commit();
 
         // Build the service summary for the SMS
-        $serviceSummary = $equipment;
-        if (!empty($summaryQty) && !empty($summaryUnit)) {
-            $serviceSummary .= ' (' . $summaryQty . ' ' . ucfirst(strtolower($summaryUnit));
-            // In tractor cases, distance is sometimes provided but billed_qty is trips
-            // Or if multi-service, just print the unit
-            if (strtolower(trim($summaryUnit)) === 'trip' && !empty($distance) && $distance > 0) {
-                // If it's a trip, maybe distance is relevant. If the user expects trips explicitly, we show it.
-                // It will output like "Tractor Trolley (2 Trip)"
+        $serviceSummary = trim($equipment);
+        if ($summaryQty > 0 && !empty($summaryUnit)) {
+            $unit = ucfirst(strtolower(trim($summaryUnit)));
+            if ($summaryQty > 1) {
+                // Pluralize basic units
+                if ($unit === 'Hour') $unit = 'Hours';
+                else if ($unit === 'Trip') $unit = 'Trips';
+                else if ($unit === 'Acre') $unit = 'Acres';
             }
-            $serviceSummary .= ')';
+            // Format to 1 decimal place (e.g. 4.18333 -> 4.2) and drop trailing .0
+            $formattedQty = str_replace('.0', '', number_format($summaryQty, 1, '.', ''));
+            $serviceSummary .= ' (' . $formattedQty . ' ' . $unit . ')';
         }
 
         // Send SMS synchronously (will delay response by ~500ms but guarantees attempt)
-        sendBookingCompletionSMS($farmerPhone, $serviceSummary, $finalAmount);
+        sendBookingCompletionSMS($farmerPhone, $serviceSummary, $finalAmount, $operatorId);
 
         echo json_encode([
             'success' => true,

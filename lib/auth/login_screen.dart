@@ -26,6 +26,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _pinController = TextEditingController();
+  final FocusNode _phoneFocusNode = FocusNode();
 
   late final AnimationController _animController;
   late final Animation<double> _fadeAnimation;
@@ -33,7 +34,6 @@ class _LoginScreenState extends State<LoginScreen>
 
   bool _isLoading = false;
   String? _errorMessage;
-  String? _pressedButton;
   Timer? _errorTimer;
 
   // Selected role: 'farmer', 'retailer', 'officer', or null for role selection landing
@@ -42,6 +42,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
+    _phoneFocusNode.addListener(_onFocusChange);
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 850),
@@ -66,9 +67,15 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  void _onFocusChange() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _errorTimer?.cancel();
+    _phoneFocusNode.removeListener(_onFocusChange);
+    _phoneFocusNode.dispose();
     _animController.dispose();
     _pinController.dispose();
     super.dispose();
@@ -84,20 +91,147 @@ class _LoginScreenState extends State<LoginScreen>
     });
   }
 
-  void _appendDigit(String digit) {
-    if (_pinController.text.length >= 10) return;
-    setState(() {
-      _pinController.text += digit;
-    });
+  Future<void> _selectPhoneNumber() async {
+    HapticFeedback.selectionClick();
+    if (!mounted) return;
+
+    List<Map<String, dynamic>> simList = [];
+    try {
+      final List<dynamic>? rawSims = await const MethodChannel('cropsync/sim_info')
+          .invokeMethod<List<dynamic>>('getSimInfo');
+      if (rawSims != null) {
+        simList = rawSims.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching SIM details from channel: $e');
+    }
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(Icons.sim_card_rounded,
+                          color: AppTheme.textPrimary, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    const Text(
+                      'Select Mobile Number',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (simList.isEmpty) ...[
+                const SizedBox(height: 16),
+                const Icon(Icons.sim_card_alert_rounded, size: 48, color: AppTheme.textSecondary),
+                const SizedBox(height: 12),
+                const Text(
+                  'No SIM Card Detected',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'We couldn\'t automatically read your SIM details.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                ...simList.map((sim) {
+                  final int slot = sim['slot'] as int? ?? 1;
+                  final String carrier = sim['carrier'] as String? ?? 'Carrier';
+                  final String rawNumber = sim['number'] as String? ?? '';
+                  final String displayNum = rawNumber.isNotEmpty ? rawNumber : 'Select Number (Not Available)';
+
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                      leading: const Icon(Icons.sim_card_outlined, color: AppTheme.textSecondary, size: 24),
+                      title: Text(
+                        displayNum,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 16, color: AppTheme.textPrimary),
+                      ),
+                      subtitle: Text('SIM Slot $slot - $carrier'),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        if (rawNumber.isNotEmpty) {
+                          String cleanNum = rawNumber.replaceAll(RegExp(r'[^\d+]'), '');
+                          if (cleanNum.startsWith('+91')) {
+                            cleanNum = cleanNum.substring(3);
+                          } else if (cleanNum.startsWith('91') && cleanNum.length == 12) {
+                            cleanNum = cleanNum.substring(2);
+                          }
+                          cleanNum = cleanNum.replaceAll(RegExp(r'\D'), '');
+                          setState(() {
+                            _pinController.text = cleanNum;
+                          });
+                        }
+                        Navigator.pop(context);
+                      },
+                    ),
+                  );
+                }),
+              ],
+              const SizedBox(height: 32),
+            ],
+          ),
+        );
+      },
+    );
   }
 
-  void _deleteDigit() {
-    if (_pinController.text.isEmpty) return;
-    setState(() {
-      _pinController.text =
-          _pinController.text.substring(0, _pinController.text.length - 1);
-    });
-  }
+
 
   Future<void> _login() async {
     final pin = _pinController.text.trim();
@@ -234,6 +368,22 @@ class _LoginScreenState extends State<LoginScreen>
                 );
               },
             ),
+            if (_selectedRole != null)
+              Positioned(
+                top: 8,
+                left: 8,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                      color: AppTheme.textPrimary, size: 24),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    setState(() {
+                      _selectedRole = null;
+                      _pinController.clear();
+                    });
+                  },
+                ),
+              ),
             AuthAlertBanner(message: _errorMessage),
           ],
         ),
@@ -383,7 +533,6 @@ class _LoginScreenState extends State<LoginScreen>
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Removed back text button from the form layout (now placed as top-left IconButton in SafeArea Stack)
         const SizedBox(height: 10),
         AuthLogoHeader(
           title: _getRoleTitle(),
@@ -392,13 +541,11 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 20),
-        _buildSingleInputDisplay(),
+        const SizedBox(height: 24),
+        _buildPhoneField(),
         const SizedBox(height: 16),
         _buildHintChip(),
-        const SizedBox(height: 20),
-        _buildKeypad(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
         _buildSubmitButton(),
         const SizedBox(height: 20),
         if (_selectedRole == 'farmer') ...[
@@ -409,54 +556,100 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildSingleInputDisplay() {
-    final text = _pinController.text;
-    final remainingLength = 10 - text.length;
-    final hasInput = text.isNotEmpty;
+  Widget _buildPhoneField() {
     final themeColor = _getRoleThemeColor();
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 320),
-      width: double.infinity,
-      height: 64,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(
-          color: hasInput ? themeColor : const Color(0xFFD1D5DB),
-          width: 2,
+    final hasInput = _pinController.text.isNotEmpty;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _selectPhoneNumber,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: 64,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: _phoneFocusNode.hasFocus ? themeColor : const Color(0xFFD1D5DB),
+            width: _phoneFocusNode.hasFocus ? 2.0 : 1.5,
+          ),
+          boxShadow: _phoneFocusNode.hasFocus || hasInput
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : null,
         ),
-        boxShadow: hasInput
-            ? [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+        child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 24, right: 14),
+              child: Icon(
+                Icons.phone_rounded,
+                color: _phoneFocusNode.hasFocus ? themeColor : const Color(0xFF9CA3AF),
+                size: 22,
+              ),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _pinController,
+                focusNode: _phoneFocusNode,
+                readOnly: true,
+                onTap: _selectPhoneNumber,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                onChanged: (val) {
+                  setState(() {});
+                },
+                style: AppTheme.getTextStyle(
+                  context,
+                  fontSize: 16,
+                  color: const Color(0xFF111827),
+                  fontWeight: FontWeight.w600,
                 ),
-              ]
-            : null,
-      ),
-      alignment: Alignment.center,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: text),
-              TextSpan(
-                text: '•' * remainingLength,
-                style: TextStyle(
-                  color: themeColor.withValues(alpha: 0.15),
+                decoration: InputDecoration(
+                  hintText: 'phone_number'.tr(),
+                  hintStyle: AppTheme.getTextStyle(
+                    context,
+                    color: const Color(0xFF9CA3AF),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  border: InputBorder.none,
+                  filled: false,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
-            ],
-          ),
-          maxLines: 1,
-          style: AppTheme.getTextStyle(context,
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 6,
-            color: themeColor,
-          ),
+            ),
+            if (hasInput)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.cancel_outlined,
+                    color: Colors.redAccent,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    setState(() {
+                      _pinController.clear();
+                    });
+                  },
+                ),
+              ),
+            const SizedBox(width: 16),
+          ],
         ),
       ),
     );
@@ -490,27 +683,6 @@ class _LoginScreenState extends State<LoginScreen>
               fontWeight: FontWeight.w600,
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildKeypad() {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 300),
-      child: GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: 3,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.15,
-        children: [
-          ...List.generate(9, (index) => index + 1)
-              .map((number) => _buildKeyButton(number.toString())),
-          const SizedBox.shrink(),
-          _buildKeyButton('0'),
-          _buildDeleteButton(),
         ],
       ),
     );
@@ -567,78 +739,6 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                 ],
               ),
-      ),
-    );
-  }
-
-  Widget _buildKeyButton(String label) {
-    final isPressed = _pressedButton == label;
-    final themeColor = _getRoleThemeColor();
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressedButton = label),
-      onTapUp: (_) {
-        setState(() => _pressedButton = null);
-        _appendDigit(label);
-      },
-      onTapCancel: () => setState(() => _pressedButton = null),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        decoration: BoxDecoration(
-          color: isPressed ? const Color(0xFFF3F4F6) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isPressed ? themeColor : const Color(0xFFE5E7EB),
-            width: 1.5,
-          ),
-          boxShadow: isPressed
-              ? null
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            color: themeColor,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDeleteButton() {
-    final isPressed = _pressedButton == 'delete';
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressedButton = 'delete'),
-      onTapUp: (_) {
-        setState(() => _pressedButton = null);
-        _deleteDigit();
-      },
-      onTapCancel: () => setState(() => _pressedButton = null),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        decoration: BoxDecoration(
-          color: isPressed ? const Color(0xFFFEF2F2) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color:
-                isPressed ? const Color(0xFFEF4444) : const Color(0xFFE5E7EB),
-            width: 1.5,
-          ),
-        ),
-        alignment: Alignment.center,
-        child: const Icon(
-          Icons.backspace_rounded,
-          size: 28,
-          color: Color(0xFFEF4444),
-        ),
       ),
     );
   }

@@ -191,7 +191,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                 slivers: [
                   _buildSliverAppBar(images),
                   SliverPadding(
-                    padding: const EdgeInsets.all(24.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
                         // Category badge if available
@@ -456,14 +456,28 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CachedNetworkImage(
-                    imageUrl: images[index]!,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) =>
-                        Container(color: const Color(0xFFF3F4F6)),
-                    errorWidget: (context, url, error) => const Icon(
-                        Icons.broken_image_rounded,
-                        color: AppTheme.textHint),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => FullScreenImageViewer(
+                            imageUrls: images.whereType<String>().toList(),
+                            initialIndex: index,
+                            tagPrefix: 'problem_image_${widget.problem.id}',
+                          ),
+                        ),
+                      );
+                    },
+                    child: CachedNetworkImage(
+                      imageUrl: images[index]!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) =>
+                          Container(color: const Color(0xFFF3F4F6)),
+                      errorWidget: (context, url, error) => const Icon(
+                          Icons.broken_image_rounded,
+                          color: AppTheme.textHint),
+                    ),
                   ),
                   DecoratedBox(
                     decoration: BoxDecoration(
@@ -514,11 +528,11 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
     required IconData icon,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 20.0),
-      padding: const EdgeInsets.all(24.0),
+      margin: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.all(20.0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
         boxShadow: [
           BoxShadow(
@@ -564,11 +578,11 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
         isChemical ? const Color(0xFF2563EB) : const Color(0xFF059669);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 20.0),
-      padding: const EdgeInsets.all(24.0),
+      margin: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.all(20.0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
         boxShadow: [
           BoxShadow(
@@ -871,6 +885,120 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                   ),
                 ]),
               )),
+        ],
+      ),
+    );
+  }
+}
+
+class FullScreenImageViewer extends StatefulWidget {
+  final List<String> imageUrls;
+  final int initialIndex;
+  final String tagPrefix;
+
+  const FullScreenImageViewer({
+    super.key,
+    required this.imageUrls,
+    required this.initialIndex,
+    required this.tagPrefix,
+  });
+
+  @override
+  State<FullScreenImageViewer> createState() => _FullScreenImageViewerState();
+}
+
+class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.imageUrls.length,
+            onPageChanged: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            itemBuilder: (context, index) {
+              return Hero(
+                tag: '${widget.tagPrefix}_$index',
+                child: InteractiveViewer(
+                  minScale: 1.0,
+                  maxScale: 4.0,
+                  child: Center(
+                    child: CachedNetworkImage(
+                      imageUrl: widget.imageUrls[index],
+                      fit: BoxFit.contain,
+                      placeholder: (_, __) => const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                      errorWidget: (_, __, ___) => const Icon(
+                        Icons.broken_image_rounded,
+                        color: Colors.white54,
+                        size: 64,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
+            left: 16,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ),
+          if (widget.imageUrls.length > 1)
+            Positioned(
+              bottom: MediaQuery.of(context).padding.bottom + 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Text(
+                    '${_currentIndex + 1} / ${widget.imageUrls.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

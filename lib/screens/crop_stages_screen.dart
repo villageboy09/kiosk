@@ -128,13 +128,53 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
       body: CustomScrollView(
         slivers: [
           _buildSliverAppBar(),
-          SliverToBoxAdapter(
-            child: _isLoading
-                ? _buildLoadingState()
-                : _stages.isEmpty
-                    ? _buildEmptyState()
-                    : _buildStagesList(),
-          ),
+          if (_isLoading)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: _buildLoadingState()),
+            )
+          else if (_stages.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _buildEmptyState(),
+            )
+          else ...[
+            const SliverPadding(
+              padding: EdgeInsets.fromLTRB(20, 24, 20, 0),
+              sliver: SliverToBoxAdapter(
+                child: Text(
+                  'Select Stage',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: AppTheme.textPrimary,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 0.85,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final stage = _stages[index];
+                    return _StageGridCard(
+                      stage: stage,
+                      onTap: () => _openProblemsScreen(stage),
+                    );
+                  },
+                  childCount: _stages.length,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -293,47 +333,19 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
     );
   }
 
-  Widget _buildStagesList() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-            child: Text(
-              'Select Stage',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: AppTheme.textPrimary,
-                letterSpacing: -0.5,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          ..._stages.map((stage) => _StageCard(
-                stage: stage,
-                onTap: () => _openProblemsScreen(stage),
-              )),
-          const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
 }
 
-class _StageCard extends StatefulWidget {
+class _StageGridCard extends StatefulWidget {
   final CropStage stage;
   final VoidCallback onTap;
 
-  const _StageCard({required this.stage, required this.onTap});
+  const _StageGridCard({required this.stage, required this.onTap});
 
   @override
-  State<_StageCard> createState() => _StageCardState();
+  State<_StageGridCard> createState() => _StageGridCardState();
 }
 
-class _StageCardState extends State<_StageCard> {
+class _StageGridCardState extends State<_StageGridCard> {
   bool _isPressed = false;
 
   @override
@@ -348,134 +360,125 @@ class _StageCardState extends State<_StageCard> {
       },
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.98 : 1.0,
+        scale: _isPressed ? 0.96 : 1.0,
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeOutCubic,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: BorderRadius.circular(24),
             border: isCurrent
-                ? Border.all(
-                    color: AppTheme.textPrimary.withValues(alpha: 0.1),
-                    width: 2)
+                ? Border.all(color: const Color(0xFF2E7D32), width: 2)
                 : Border.all(color: const Color(0xFFE5E7EB), width: 1),
             boxShadow: [
               BoxShadow(
                 color: isCurrent
-                    ? AppTheme.textPrimary.withValues(alpha: 0.08)
+                    ? const Color(0xFF2E7D32).withValues(alpha: 0.08)
                     : Colors.black.withValues(alpha: 0.04),
-                blurRadius: isCurrent ? 24 : 16,
-                offset: const Offset(0, 8),
+                blurRadius: isCurrent ? 16 : 12,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
-          child: Row(
-            children: [
-              // Image Section
-              Container(
-                width: 100,
-                height: 100,
-                margin: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  color: const Color(0xFFF3F4F6),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: widget.stage.imageUrl != null &&
-                          widget.stage.imageUrl!.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: widget.stage.imageUrl!,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => const Center(
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: AppTheme.textPrimary),
-                          ),
-                          errorWidget: (_, __, ___) => const Center(
-                            child: Icon(Icons.eco_rounded,
-                                color: AppTheme.textHint, size: 32),
-                          ),
-                        )
-                      : const Center(
-                          child: Icon(Icons.eco_rounded,
-                              color: AppTheme.textHint, size: 40),
-                        ),
-                ),
-              ),
-              // Details Section
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 16, 20, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              widget.stage.name,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w900,
-                                color: AppTheme.textPrimary,
-                                height: 1.2,
-                                letterSpacing: -0.4,
-                              ),
-                            ),
-                          ),
-                          if (isCurrent)
-                            Container(
-                              margin: const EdgeInsets.only(left: 8),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.textPrimary,
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                              child: const Text(
-                                'Current',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                  letterSpacing: 0.5,
+                      widget.stage.imageUrl != null && widget.stage.imageUrl!.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: widget.stage.imageUrl!,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Container(
+                                color: const Color(0xFFF3F4F6),
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF2E7D32),
+                                  ),
                                 ),
                               ),
+                              errorWidget: (_, __, ___) => Container(
+                                color: const Color(0xFFF3F4F6),
+                                child: const Icon(
+                                  Icons.eco_rounded,
+                                  color: Color(0xFF9CA3AF),
+                                  size: 40,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: const Color(0xFFF3F4F6),
+                              child: const Icon(
+                                Icons.eco_rounded,
+                                color: Color(0xFF9CA3AF),
+                                size: 40,
+                              ),
                             ),
-                        ],
+                      if (isCurrent)
+                        Positioned(
+                          top: 10,
+                          left: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2E7D32),
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: const Text(
+                              'Current',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  color: Colors.white,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.stage.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1F2937),
+                          letterSpacing: -0.3,
+                        ),
                       ),
-                      if (widget.stage.description != null &&
-                          widget.stage.description!.isNotEmpty) ...[
-                        const SizedBox(height: 8),
+                      if (widget.stage.description != null && widget.stage.description!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
                         Text(
                           widget.stage.description!,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppTheme.textSecondary,
-                            fontWeight: FontWeight.w600,
-                            height: 1.4,
-                          ),
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ],
                   ),
                 ),
-              ),
-              // Forward Arrow Indicator
-              Padding(
-                padding: const EdgeInsets.only(right: 20),
-                child: Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 16,
-                  color: isCurrent ? AppTheme.textPrimary : AppTheme.textHint,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

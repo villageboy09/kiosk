@@ -20,6 +20,13 @@ class _OperatorAnalyticsTabState extends State<OperatorAnalyticsTab> {
   Map<String, dynamic>? _analyticsData;
   String _timeframe = 'month'; // 'week', 'month', 'all'
 
+  double _toDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -60,10 +67,18 @@ class _OperatorAnalyticsTabState extends State<OperatorAnalyticsTab> {
       );
     }
 
-    final todayEarnings = _analyticsData!['today_earnings'] ?? 0;
-    final todayJobs = _analyticsData!['today_jobs'] ?? 0;
-    final totalEarnings = _analyticsData!['total_earnings'] ?? 0;
-    final totalJobs = _analyticsData!['total_completed_jobs'] ?? 0;
+    final double todayEarnings = _toDouble(_analyticsData!['today_earnings']);
+    final double todayJobs = _toDouble(_analyticsData!['today_jobs']);
+    final double todayCollected = _toDouble(_analyticsData!['today_collected']);
+    final double todayPending = _toDouble(_analyticsData!['today_pending']);
+    final double todayHours = _toDouble(_analyticsData!['today_hours']);
+    final double weeklyHours = _toDouble(_analyticsData!['weekly_hours']);
+    final double monthlyHours = _toDouble(_analyticsData!['monthly_hours']);
+    final double seasonHours = _toDouble(_analyticsData!['season_hours']);
+    final double totalEarnings = _toDouble(_analyticsData!['total_earnings']);
+    final double totalJobs = _toDouble(_analyticsData!['total_completed_jobs']);
+    final double totalCollected = _toDouble(_analyticsData!['total_collected']);
+    final double totalPending = _toDouble(_analyticsData!['total_pending']);
     final dailyEarnings = List<Map<String, dynamic>>.from(
         _analyticsData!['daily_earnings'] ?? []);
     final equipmentUsage = List<Map<String, dynamic>>.from(
@@ -124,7 +139,7 @@ class _OperatorAnalyticsTabState extends State<OperatorAnalyticsTab> {
                       Expanded(
                         child: _buildSummaryCard(
                           title: 'operator_today_earnings'.tr(),
-                          value: (todayEarnings as num).toDouble(),
+                          value: todayEarnings,
                           prefix: '₹',
                           icon: Icons.flash_on_rounded,
                           color: const Color(0xFFD97706),
@@ -135,10 +150,36 @@ class _OperatorAnalyticsTabState extends State<OperatorAnalyticsTab> {
                       Expanded(
                         child: _buildSummaryCard(
                           title: 'operator_today_jobs'.tr(),
-                          value: (todayJobs as num).toDouble(),
+                          value: todayJobs,
                           icon: Icons.work_history_rounded,
                           color: const Color(0xFF9333EA),
                           bgColor: const Color(0xFFF3E8FF),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildSummaryCard(
+                          title: 'operator_collected'.tr(),
+                          value: todayCollected,
+                          prefix: '₹',
+                          icon: Icons.check_circle_rounded,
+                          color: const Color(0xFF059669),
+                          bgColor: const Color(0xFFD1FAE5),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildSummaryCard(
+                          title: 'operator_pending'.tr(),
+                          value: todayPending,
+                          prefix: '₹',
+                          icon: Icons.pending_actions_rounded,
+                          color: const Color(0xFFDC2626),
+                          bgColor: const Color(0xFFFEE2E2),
                         ),
                       ),
                     ],
@@ -161,7 +202,7 @@ class _OperatorAnalyticsTabState extends State<OperatorAnalyticsTab> {
                       Expanded(
                         child: _buildSummaryCard(
                           title: 'operator_total_earnings'.tr(),
-                          value: (totalEarnings as num).toDouble(),
+                          value: totalEarnings,
                           prefix: '₹',
                           icon: Icons.currency_rupee_rounded,
                           color: const Color(0xFF047857),
@@ -172,7 +213,7 @@ class _OperatorAnalyticsTabState extends State<OperatorAnalyticsTab> {
                       Expanded(
                         child: _buildSummaryCard(
                           title: 'operator_completed_jobs'.tr(),
-                          value: (totalJobs as num).toDouble(),
+                          value: totalJobs,
                           icon: Icons.check_circle_outline_rounded,
                           color: const Color(0xFF1D4ED8),
                           bgColor: const Color(0xFFDBEAFE),
@@ -180,7 +221,45 @@ class _OperatorAnalyticsTabState extends State<OperatorAnalyticsTab> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildSummaryCard(
+                          title: 'operator_collected'.tr(),
+                          value: totalCollected,
+                          prefix: '₹',
+                          icon: Icons.check_circle_rounded,
+                          color: const Color(0xFF059669),
+                          bgColor: const Color(0xFFD1FAE5),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildSummaryCard(
+                          title: 'operator_pending'.tr(),
+                          value: totalPending,
+                          prefix: '₹',
+                          icon: Icons.pending_actions_rounded,
+                          color: const Color(0xFFDC2626),
+                          bgColor: const Color(0xFFFEE2E2),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _buildWorkingHoursSection(
+                today: todayHours,
+                week: weeklyHours,
+                month: monthlyHours,
+                season: seasonHours,
               ),
             ),
           ),
@@ -653,6 +732,152 @@ class _OperatorAnalyticsTabState extends State<OperatorAnalyticsTab> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkingHoursSection({
+    required double today,
+    required double week,
+    required double month,
+    required double season,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'operator_working_hours_title'.tr(),
+          style: AppTheme.getTextStyle(
+            context,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildHoursItem(
+                      label: 'operator_hours_today'.tr(),
+                      hours: today,
+                      icon: Icons.today_rounded,
+                      color: const Color(0xFF0D9488),
+                    ),
+                  ),
+                  Container(
+                    width: 1.5,
+                    height: 50,
+                    color: const Color(0xFFE5E7EB),
+                  ),
+                  Expanded(
+                    child: _buildHoursItem(
+                      label: 'operator_hours_week'.tr(),
+                      hours: week,
+                      icon: Icons.date_range_rounded,
+                      color: const Color(0xFF2563EB),
+                    ),
+                  ),
+                ],
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildHoursItem(
+                      label: 'operator_hours_month'.tr(),
+                      hours: month,
+                      icon: Icons.calendar_month_rounded,
+                      color: const Color(0xFF7C3AED),
+                    ),
+                  ),
+                  Container(
+                    width: 1.5,
+                    height: 50,
+                    color: const Color(0xFFE5E7EB),
+                  ),
+                  Expanded(
+                    child: _buildHoursItem(
+                      label: 'operator_hours_season'.tr(),
+                      hours: season,
+                      icon: Icons.all_inclusive_rounded,
+                      color: const Color(0xFFEA580C),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHoursItem({
+    required String label,
+    required double hours,
+    required IconData icon,
+    required Color color,
+  }) {
+    final String formattedHours = hours % 1 == 0 ? hours.toInt().toString() : hours.toStringAsFixed(1);
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$formattedHours hrs',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

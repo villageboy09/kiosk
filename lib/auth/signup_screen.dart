@@ -618,29 +618,25 @@ class _SignupScreenState extends State<SignupScreen>
           ),
         ),
         const SizedBox(height: 16),
-        Focus(
-          focusNode: _phoneFocusNode,
-          child: InkWell(
-            onTap: () {
-              _phoneFocusNode.requestFocus();
-              _selectPhoneNumber();
-            },
-            borderRadius: BorderRadius.circular(100),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              height: 64,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(
-                  color: _phoneFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.border.withValues(alpha: 0.5),
-                  width: _phoneFocusNode.hasFocus ? 2.0 : 1.5,
-                ),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _selectPhoneNumber,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(
+                color: _phoneFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.border.withValues(alpha: 0.5),
+                width: _phoneFocusNode.hasFocus ? 2.0 : 1.5,
               ),
-              child: Row(
-                children: [
-                  AnimatedScale(
+            ),
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 24, right: 14),
+                  child: AnimatedScale(
                     scale: _phoneFocusNode.hasFocus ? 1.15 : 1.0,
                     duration: const Duration(milliseconds: 200),
                     child: Icon(
@@ -649,37 +645,72 @@ class _SignupScreenState extends State<SignupScreen>
                       color: _phoneFocusNode.hasFocus ? AppTheme.textPrimary : AppTheme.textSecondary,
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      _phoneController.text.isEmpty
-                          ? 'signup_phone_hint'.tr()
-                          : _phoneController.text,
-                      style: TextStyle(
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _phoneController,
+                    focusNode: _phoneFocusNode,
+                    readOnly: true,
+                    onTap: _selectPhoneNumber,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
+                    onChanged: (val) {
+                      setState(() {});
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'signup_phone_hint'.tr(),
+                      hintStyle: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: _phoneController.text.isEmpty
-                            ? AppTheme.textHint
-                            : AppTheme.textPrimary,
+                        color: AppTheme.textHint,
                       ),
+                      border: InputBorder.none,
+                      filled: false,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
                     ),
                   ),
-                  if (_phoneController.text.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(
-                        Icons.cancel_outlined,
-                        color: Colors.redAccent,
-                        size: 20,
-                      ),
-                      onPressed: () {
-                        HapticFeedback.mediumImpact();
-                        setState(() {
-                          _phoneController.clear();
-                        });
-                      },
+                ),
+                if (_phoneController.text.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(
+                      Icons.cancel_outlined,
+                      color: Colors.redAccent,
+                      size: 20,
                     ),
-                ],
-              ),
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      setState(() {
+                        _phoneController.clear();
+                      });
+                    },
+                  ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.sim_card_outlined,
+                    color: AppTheme.textSecondary,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    _phoneFocusNode.unfocus();
+                    _selectPhoneNumber();
+                  },
+                  tooltip: 'Detect SIM',
+                ),
+                const SizedBox(width: 12),
+              ],
             ),
           ),
         ),

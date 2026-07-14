@@ -46,6 +46,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
   final _cropController = TextEditingController();
   final _landSizeController = TextEditingController();
   final _rateController = TextEditingController();
+  final _amountPaidController = TextEditingController();
 
   Map<String, dynamic>? _selectedEquipment;
   List<Map<String, dynamic>> _equipmentList = [];
@@ -139,6 +140,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     _cropController.dispose();
     _landSizeController.dispose();
     _rateController.dispose();
+    _amountPaidController.dispose();
     for (var c in _qtyControllers) {
       c.dispose();
     }
@@ -460,6 +462,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                 ? _ratePerUnit
                 : (double.tryParse(_rateController.text) ?? 0.0)),
         finalAmount: _finalAmount,
+        amountPaid: double.tryParse(_amountPaidController.text) ?? _finalAmount,
         services: _isMultiService ? jsonEncode(_services) : null,
       );
 
@@ -592,6 +595,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
           const SizedBox(height: 12),
           _buildTextField(_cropController, 'operator_crop_type_optional'.tr(),
               Icons.spa_rounded, TextInputType.text),
+          const SizedBox(height: 8),
+          _buildCropSuggestions(context),
           const SizedBox(height: 16),
           _buildTextField(
               _landSizeController,
@@ -893,6 +898,13 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                 _receiptRow('operator_total_bill'.tr(),
                     '₹${_finalAmount.toStringAsFixed(0)}',
                     isTotal: true),
+                const SizedBox(height: 20),
+                _buildTextField(
+                  _amountPaidController,
+                  'operator_amount_paid_label'.tr(),
+                  Icons.currency_rupee_rounded,
+                  TextInputType.number,
+                ),
               ],
             ),
           ),
@@ -1040,7 +1052,10 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                     _pageController.nextPage(
                         duration: const Duration(milliseconds: 400),
                         curve: Curves.easeInOut);
-                    setState(() => _currentStep = 3);
+                    setState(() {
+                      _currentStep = 3;
+                      _amountPaidController.text = _finalAmount.toStringAsFixed(0);
+                    });
                   }
                 },
           child: Text(
@@ -1250,13 +1265,12 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     if (name.contains('trolley')) {
       return 'assets/chc_equipments/tractor_trolley.webp';
     }
-    if (name.contains('tractor')) return 'assets/chc_equipments/tractor.webp';
     if (name.contains('drone')) return 'assets/chc_equipments/agri_drone.webp';
     if (name.contains('harvester')) {
       return 'assets/chc_equipments/combined_harvester.webp';
     }
     if (name.contains('baler')) return 'assets/chc_equipments/balers.webp';
-    if (name.contains('sprayer')) {
+    if (name.contains('sprayer') || name.contains('spray') || name.contains('boomer')) {
       return 'assets/chc_equipments/boom_sprayer.webp';
     }
     if (name.contains('seeder')) {
@@ -1269,6 +1283,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       return 'assets/chc_equipments/seed_cum_fertilizer_drill.webp';
     }
     if (name.contains('shredder')) return 'assets/chc_equipments/shredder.webp';
+    if (name.contains('tractor')) return 'assets/chc_equipments/tractor.webp';
     return 'assets/chc_equipments/tractor.webp';
   }
 
@@ -1498,6 +1513,54 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCropSuggestions(BuildContext context) {
+    final langCode = context.locale.languageCode;
+    
+    final List<String> suggestions;
+    if (langCode == 'te') {
+      suggestions = ['వరి', 'పత్తి', 'మిర్చి', 'మొక్కజొన్న', 'శనగలు', 'వేరుశనగ', 'చెరకు'];
+    } else if (langCode == 'hi') {
+      suggestions = ['धान', 'कपास', 'मिर्च', 'मक्का', 'चना', 'मूंगफली', 'गन्ना'];
+    } else {
+      suggestions = ['Paddy', 'Cotton', 'Chilli', 'Maize', 'Bengal Gram', 'Groundnut', 'Sugarcane'];
+    }
+
+    return SizedBox(
+      height: 38,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: suggestions.length,
+        itemBuilder: (context, index) {
+          final crop = suggestions[index];
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ActionChip(
+              label: Text(
+                crop,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _accent,
+                ),
+              ),
+              backgroundColor: _accent.withValues(alpha: 0.08),
+              side: const BorderSide(color: _accent, width: 1.0),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(100),
+              ),
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _cropController.text = crop;
+                });
+              },
+            ),
+          );
+        },
       ),
     );
   }

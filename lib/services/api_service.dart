@@ -1058,6 +1058,8 @@ class ApiService {
     String? bookingStatus,
     String? assignmentStatus,
     String? rescheduledDate,
+    double? amountPaid,
+    String? paymentStatus,
   }) async {
     try {
       final response = await http.post(
@@ -1068,6 +1070,8 @@ class ApiService {
           'booking_status': bookingStatus,
           'assignment_status': assignmentStatus,
           'rescheduled_date': rescheduledDate,
+          'amount_paid': amountPaid,
+          'payment_status': paymentStatus,
         }),
       );
 
@@ -1095,6 +1099,7 @@ class ApiService {
     required String startTime,
     required String endTime,
     required double finalAmount,
+    double amountPaid = 0,
     String? serviceDate,
     String? cropType,
     double landSizeAcres = 0,
@@ -1130,6 +1135,7 @@ class ApiService {
           'notes': notes,
           'operator_notes': operatorNotes,
           'final_amount': finalAmount,
+          'amount_paid': amountPaid,
           'services': services,
         }),
       );
