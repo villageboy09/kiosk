@@ -14,6 +14,11 @@ class NotificationService {
 
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+  // In-app notifications in-memory state
+  static final List<RemoteMessage> notifications = [];
+  static final ValueNotifier<int> unreadNotifier = ValueNotifier<int>(0);
+  static VoidCallback? onNotificationReceived;
+
   static Future<void> subscribeToDistrictTopic(User user, {String? lang}) async {
     if (kIsWeb) return; // FCM topics are not supported on web
     final district = user.district;
@@ -129,18 +134,22 @@ class NotificationService {
     if (initialMessage != null) {
       // Delay slightly to ensure navigator is mounted
       Future.delayed(const Duration(milliseconds: 500), () {
-        _handleNotificationClick(initialMessage);
+        handleNotificationClick(initialMessage);
       });
     }
 
     // Handle when app is opened from background state via a notification click
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      _handleNotificationClick(message);
+      handleNotificationClick(message);
     });
 
-    // Handle foreground notifications
+    // Handle foreground notifications (added to in-memory history + triggers bell wiggle)
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      _showForegroundDialog(message);
+      notifications.insert(0, message);
+      unreadNotifier.value++;
+      if (onNotificationReceived != null) {
+        onNotificationReceived!();
+      }
     });
   }
 
@@ -156,7 +165,15 @@ class NotificationService {
     );
   }
 
-  static void _handleNotificationClick(RemoteMessage message) {
+  static void handleNotificationClick(RemoteMessage message) {
+    // Clear unread
+    unreadNotifier.value = 0;
+
+    // Add to in-memory feed if not present
+    if (!notifications.contains(message)) {
+      notifications.insert(0, message);
+    }
+
     final data = message.data;
     final screen = data['screen'];
     
@@ -180,69 +197,10 @@ class NotificationService {
         return;
     }
 
-    navigatorKey.currentState?.push(
+    // Clean navigation stack setup: Pushes target and clears nested stack routes.
+    navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => targetScreen),
-    );
-  }
-
-  static void _showForegroundDialog(RemoteMessage message) {
-    final context = navigatorKey.currentContext;
-    if (context == null) return;
-
-    final title = message.notification?.title ?? 'Notification';
-    final body = message.notification?.body ?? '';
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Image.asset(
-              'assets/images/logo_favicon.png',
-              width: 24,
-              height: 24,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        action: message.data['screen'] != null
-            ? SnackBarAction(
-                label: 'View',
-                textColor: const Color(0xFF4ADE80), // Premium bright green text for action
-                onPressed: () => _handleNotificationClick(message),
-              )
-            : null,
-        duration: const Duration(seconds: 5),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        elevation: 6,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: const Color(0xFF1E293B), // Premium dark slate background
-      ),
+      (route) => route.isFirst,
     );
   }
 }

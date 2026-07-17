@@ -97,10 +97,12 @@ class _LoginScreenState extends State<LoginScreen>
 
     List<Map<String, dynamic>> simList = [];
     try {
-      final List<dynamic>? rawSims = await const MethodChannel('cropsync/sim_info')
-          .invokeMethod<List<dynamic>>('getSimInfo');
+      final List<dynamic>? rawSims =
+          await const MethodChannel('cropsync/sim_info')
+              .invokeMethod<List<dynamic>>('getSimInfo');
       if (rawSims != null) {
-        simList = rawSims.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        simList =
+            rawSims.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       }
     } catch (e) {
       debugPrint('Error fetching SIM details from channel: $e');
@@ -159,7 +161,8 @@ class _LoginScreenState extends State<LoginScreen>
               const SizedBox(height: 16),
               if (simList.isEmpty) ...[
                 const SizedBox(height: 16),
-                const Icon(Icons.sim_card_alert_rounded, size: 48, color: AppTheme.textSecondary),
+                const Icon(Icons.sim_card_alert_rounded,
+                    size: 48, color: AppTheme.textSecondary),
                 const SizedBox(height: 12),
                 const Text(
                   'No SIM Card Detected',
@@ -183,33 +186,45 @@ class _LoginScreenState extends State<LoginScreen>
                   final int slot = sim['slot'] as int? ?? 1;
                   final String carrier = sim['carrier'] as String? ?? 'Carrier';
                   final String rawNumber = sim['number'] as String? ?? '';
-                  final String displayNum = rawNumber.isNotEmpty ? rawNumber : 'Select Number (Not Available)';
+                  final String displayNum = rawNumber.isNotEmpty
+                      ? rawNumber
+                      : 'Select Number (Not Available)';
 
                   return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF9FAFB),
                       borderRadius: BorderRadius.circular(100),
-                      border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
+                      border: Border.all(
+                          color: const Color(0xFFE5E7EB), width: 1.5),
                     ),
                     child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-                      leading: const Icon(Icons.sim_card_outlined, color: AppTheme.textSecondary, size: 24),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 4),
+                      leading: const Icon(Icons.sim_card_outlined,
+                          color: AppTheme.textSecondary, size: 24),
                       title: Text(
                         displayNum,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 16, color: AppTheme.textPrimary),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: AppTheme.textPrimary),
                       ),
                       subtitle: Text('SIM Slot $slot - $carrier'),
-                      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                      trailing:
+                          const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(100)),
                       onTap: () {
                         HapticFeedback.selectionClick();
                         if (rawNumber.isNotEmpty) {
-                          String cleanNum = rawNumber.replaceAll(RegExp(r'[^\d+]'), '');
+                          String cleanNum =
+                              rawNumber.replaceAll(RegExp(r'[^\d+]'), '');
                           if (cleanNum.startsWith('+91')) {
                             cleanNum = cleanNum.substring(3);
-                          } else if (cleanNum.startsWith('91') && cleanNum.length == 12) {
+                          } else if (cleanNum.startsWith('91') &&
+                              cleanNum.length == 12) {
                             cleanNum = cleanNum.substring(2);
                           }
                           cleanNum = cleanNum.replaceAll(RegExp(r'\D'), '');
@@ -231,8 +246,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-
-
   Future<void> _login() async {
     final pin = _pinController.text.trim();
     if (pin.length != 10) {
@@ -245,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen>
       // Direct login to optimize performance (saves a redundant checkUser network call)
       await AuthService.login(pin, role: _selectedRole);
       if (!mounted) return;
-      
+
       final loggedInUser = AuthService.currentUser;
       if (loggedInUser?.membershipType == 'Retailer') {
         Navigator.pushReplacement(
@@ -310,82 +323,104 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: ConstrainedBox(
-                    constraints:
-                        BoxConstraints(minHeight: constraints.maxHeight - 48),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 450),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: FadeTransition(
-                            opacity: _fadeAnimation,
-                            child: SlideTransition(
-                              position: _slideAnimation,
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 350),
-                                switchInCurve: Curves.easeInOutCubic,
-                                switchOutCurve: Curves.easeInOutCubic,
-                                transitionBuilder: (Widget child, Animation<double> animation) {
-                                  return FadeTransition(
-                                    opacity: animation,
-                                    child: SlideTransition(
-                                      position: Tween<Offset>(
-                                        begin: const Offset(0.08, 0),
-                                        end: Offset.zero,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
-                                  );
-                                },
-                                child: _selectedRole == null
-                                    ? KeyedSubtree(
-                                        key: const ValueKey('RoleSelectionView'),
-                                        child: _buildRoleSelectionView(),
-                                      )
-                                    : KeyedSubtree(
-                                        key: const ValueKey('LoginInputView'),
-                                        child: _buildLoginInputView(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_selectedRole != null) {
+          HapticFeedback.lightImpact();
+          setState(() {
+            _selectedRole = null;
+            _pinController.clear();
+          });
+        } else {
+          // Go back to SignupScreen
+          HapticFeedback.lightImpact();
+          Navigator.pushReplacement(
+            context,
+            AppRoutes.slideFromRight(const SignupScreen()),
+          );
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        resizeToAvoidBottomInset: true,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: ConstrainedBox(
+                      constraints:
+                          BoxConstraints(minHeight: constraints.maxHeight - 48),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 450),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: FadeTransition(
+                              opacity: _fadeAnimation,
+                              child: SlideTransition(
+                                position: _slideAnimation,
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 350),
+                                  switchInCurve: Curves.easeInOutCubic,
+                                  switchOutCurve: Curves.easeInOutCubic,
+                                  transitionBuilder: (Widget child,
+                                      Animation<double> animation) {
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: SlideTransition(
+                                        position: Tween<Offset>(
+                                          begin: const Offset(0.08, 0),
+                                          end: Offset.zero,
+                                        ).animate(animation),
+                                        child: child,
                                       ),
+                                    );
+                                  },
+                                  child: _selectedRole == null
+                                      ? KeyedSubtree(
+                                          key: const ValueKey(
+                                              'RoleSelectionView'),
+                                          child: _buildRoleSelectionView(),
+                                        )
+                                      : KeyedSubtree(
+                                          key: const ValueKey('LoginInputView'),
+                                          child: _buildLoginInputView(),
+                                        ),
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-            if (_selectedRole != null)
-              Positioned(
-                top: 8,
-                left: 8,
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                      color: AppTheme.textPrimary, size: 24),
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    setState(() {
-                      _selectedRole = null;
-                      _pinController.clear();
-                    });
-                  },
-                ),
+                  );
+                },
               ),
-            AuthAlertBanner(message: _errorMessage),
-          ],
+              if (_selectedRole != null)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                        color: AppTheme.textPrimary, size: 24),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        _selectedRole = null;
+                        _pinController.clear();
+                      });
+                    },
+                  ),
+                ),
+              AuthAlertBanner(message: _errorMessage),
+            ],
+          ),
         ),
       ),
     );
@@ -403,7 +438,7 @@ class _LoginScreenState extends State<LoginScreen>
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),
-        
+
         // 1. Farmer Card (Prominent green card outline)
         _buildRoleCard(
           role: 'farmer',
@@ -469,12 +504,19 @@ class _LoginScreenState extends State<LoginScreen>
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
         decoration: BoxDecoration(
-          color: Colors.transparent, // Completely removed solid card backdrop
-          borderRadius: BorderRadius.circular(28),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: themeColor.withValues(alpha: isPrimary ? 0.45 : 0.25),
+            color: themeColor.withValues(alpha: isPrimary ? 0.35 : 0.15),
             width: isPrimary ? 2.0 : 1.2,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: themeColor.withValues(alpha: isPrimary ? 0.08 : 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -483,7 +525,7 @@ class _LoginScreenState extends State<LoginScreen>
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: themeColor.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(
                 icon,
@@ -500,27 +542,31 @@ class _LoginScreenState extends State<LoginScreen>
                     title,
                     style: TextStyle(
                       fontSize: isPrimary ? 18 : 16,
-                      fontWeight: FontWeight.w800,
-                      color: themeColor,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
                     description,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
-                      color: themeColor.withValues(alpha: 0.75),
-                      height: 1.35,
+                      color: AppTheme.textSecondary,
+                      height: 1.4,
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 14,
-              color: themeColor.withValues(alpha: 0.6),
+            const SizedBox(width: 8),
+            const Padding(
+              padding: EdgeInsets.only(top: 4.0),
+              child: Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: Color(0xFF94A3B8),
+              ),
             ),
           ],
         ),
@@ -569,7 +615,8 @@ class _LoginScreenState extends State<LoginScreen>
           color: Colors.white,
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
-            color: _phoneFocusNode.hasFocus ? themeColor : const Color(0xFFD1D5DB),
+            color:
+                _phoneFocusNode.hasFocus ? themeColor : const Color(0xFFD1D5DB),
             width: _phoneFocusNode.hasFocus ? 2.0 : 1.5,
           ),
           boxShadow: _phoneFocusNode.hasFocus || hasInput
@@ -588,7 +635,9 @@ class _LoginScreenState extends State<LoginScreen>
               padding: const EdgeInsets.only(left: 24, right: 14),
               child: Icon(
                 Icons.phone_rounded,
-                color: _phoneFocusNode.hasFocus ? themeColor : const Color(0xFF9CA3AF),
+                color: _phoneFocusNode.hasFocus
+                    ? themeColor
+                    : const Color(0xFF9CA3AF),
                 size: 22,
               ),
             ),

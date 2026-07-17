@@ -231,8 +231,11 @@ class ApiService {
 
   /// Get user's crop selections
   static Future<List<Map<String, dynamic>>> getUserSelections(String userId,
-      {String lang = 'te'}) async {
+      {String lang = 'te', bool forceRefresh = false}) async {
     final cacheKey = '${CacheKeys.userSelections}_${userId}_$lang';
+    if (forceRefresh) {
+      CacheService.invalidate(cacheKey);
+    }
     return CacheService.getOrFetch(cacheKey, () async {
       try {
         final response = await http.get(

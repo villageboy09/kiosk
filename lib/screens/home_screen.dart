@@ -14,6 +14,10 @@ import 'package:cropsync/widgets/language_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cropsync/screens/plant_analysis_screen.dart';
+import 'package:cropsync/screens/notifications_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Main home screen - Zepto-inspired clean architecture
 class HomeScreen extends StatefulWidget {
@@ -29,10 +33,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   bool _isLoading = true;
   String? _profileImageUrl;
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
     _fetchFarmerDetails();
     // Request permissions after the home screen is fully rendered.
     // Using a post-frame + 1.5s delay gives the user context before
@@ -43,6 +52,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _requestPermissions();
       });
     });
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   Future<void> _requestPermissions() async {
@@ -85,6 +100,127 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     } catch (error) {
       if (!mounted) return;
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<int> _getAvailableRequests() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final times = prefs.getStringList('nvidia_request_timestamps') ?? [];
+    
+    final validTimes = times.where((t) {
+      final dt = DateTime.tryParse(t);
+      if (dt == null) return false;
+      return now.difference(dt).inSeconds < 60;
+    }).toList();
+    
+    return (40 - validTimes.length).clamp(0, 40).toInt();
+  }
+
+  void _showImageSourceSheet() {
+    HapticFeedback.selectionClick();
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'diag_select_source'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              FutureBuilder<int>(
+                future: _getAvailableRequests(),
+                builder: (context, snapshot) {
+                  final reqs = snapshot.data ?? 40;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 12),
+                    child: Text(
+                      'diag_rate_limit'.tr(args: [reqs.toString()]),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: reqs < 5 ? Colors.red : Colors.grey[600],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded, color: AppTheme.primary),
+                title: Text('diag_camera'.tr()),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded, color: AppTheme.primary),
+                title: Text('diag_gallery'.tr()),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.eco_rounded, color: AppTheme.primary),
+                title: Text('diag_tab_crops'.tr()),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const PlantAnalysisScreen(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    HapticFeedback.mediumImpact();
+    final picker = ImagePicker();
+    try {
+      final XFile? photo = await picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+
+      if (photo != null && mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PlantAnalysisScreen(imagePath: photo.path),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error picking image: $e")),
+        );
+      }
     }
   }
 
@@ -152,6 +288,46 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   children: screens,
                 ),
         ),
+        floatingActionButton: _selectedIndex == 0
+            ? AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, child) {
+                  return Stack(
+                    alignment: Alignment.center,
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned(
+                        width: 56 + (_pulseController.value * 28),
+                        height: 56 + (_pulseController.value * 28),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF16A34A).withValues(alpha: (1.0 - _pulseController.value) * 0.35),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        width: 56 + (_pulseController.value * 14),
+                        height: 56 + (_pulseController.value * 14),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF16A34A).withValues(alpha: (1.0 - _pulseController.value) * 0.65),
+                          ),
+                        ),
+                      ),
+                      FloatingActionButton(
+                        onPressed: _showImageSourceSheet,
+                        backgroundColor: const Color(0xFF16A34A),
+                        shape: const CircleBorder(),
+                        elevation: 6,
+                        child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 28),
+                      ),
+                    ],
+                  );
+                },
+              )
+            : null,
         bottomNavigationBar: _buildBottomNav(),
       ),
     );
@@ -176,6 +352,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           onPressed: _showLanguageSheet,
           splashRadius: 24,
         ),
+        const WiggleBellButton(),
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: IconButton(
@@ -371,6 +548,106 @@ class _HomeShimmer extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class WiggleBellButton extends StatefulWidget {
+  const WiggleBellButton({super.key});
+
+  @override
+  State<WiggleBellButton> createState() => _WiggleBellButtonState();
+}
+
+class _WiggleBellButtonState extends State<WiggleBellButton> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    _animation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -0.04), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -0.04, end: 0.04), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 0.04, end: -0.03), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -0.03, end: 0.03), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 0.03, end: -0.02), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -0.02, end: 0.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    NotificationService.onNotificationReceived = () {
+      if (mounted && !_controller.isAnimating) {
+        _controller.forward(from: 0.0);
+        HapticFeedback.vibrate();
+      }
+    };
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: NotificationService.unreadNotifier,
+      builder: (context, unreadCount, child) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            RotationTransition(
+              turns: _animation,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.notifications_rounded,
+                  color: AppTheme.appBarText,
+                  size: 26,
+                ),
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  NotificationService.unreadNotifier.value = 0;
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                  );
+                },
+                splashRadius: 24,
+              ),
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 14,
+                    minHeight: 14,
+                  ),
+                  child: Text(
+                    unreadCount > 9 ? "9+" : unreadCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
