@@ -196,7 +196,11 @@ class NotificationService {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.notifications_active, color: Colors.white),
+            Image.asset(
+              'assets/images/logo_favicon.png',
+              width: 24,
+              height: 24,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
