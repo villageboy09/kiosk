@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:cropsync/widgets/safe_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PlantAnalysisScreen extends StatefulWidget {
@@ -960,6 +961,7 @@ Format:
         final fieldName = crop['field_name']?.toString() ?? 'Field';
         final varietyName = crop['variety_name']?.toString() ?? 'Default';
         final sowingDateStr = crop['sowing_date']?.toString();
+        final cropImageUrl = crop['crop_image_url']?.toString();
 
         DateTime? sowingDate;
         int daysSinceSowing = 0;
@@ -986,15 +988,22 @@ Format:
           ),
           child: ListTile(
             contentPadding: const EdgeInsets.all(16),
-            leading: Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                width: 52,
+                height: 52,
                 color: const Color(0xFFF0FDF4),
-                borderRadius: BorderRadius.circular(14),
+                child: cropImageUrl != null && cropImageUrl.isNotEmpty
+                    ? SafeNetworkImage(
+                        imageUrl: cropImageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: const Icon(Icons.eco_rounded,
+                            color: Color(0xFF16A34A), size: 28),
+                      )
+                    : const Icon(Icons.eco_rounded,
+                        color: Color(0xFF16A34A), size: 28),
               ),
-              child: const Icon(Icons.eco_rounded,
-                  color: Color(0xFF16A34A), size: 28),
             ),
             title: Text(
               cropName,
@@ -1134,16 +1143,17 @@ Analyze the current growth progress of the farmer's crop:
 - Sowing Date: ${widget.sowingDateStr} ($daysSinceSowing days elapsed)
 - Current Resolved growth stage: $currentStageName
 - Farmer Location: $region
+- Current Date/Season: ${DateTime.now().toIso8601String().substring(0, 10)}
 
 Please generate a professional, stage-specific crop advisory and growth forecast.
-Organize your response into the following sections:
-1. Sowing Status & current stage summary.
-2. Irrigation & fertilization recommendations for this specific stage.
-3. Common pest/disease risks to watch out for at this stage.
-4. Next expected stage and how to prepare.
+You must ONLY provide the following 2 specific things, and absolutely nothing else (no greetings, no introduction, no concluding text, no general summaries):
+1. Crop Yield Optimization: Explain the single best action we can take to increase crop yield at this point in time (specific to stage, time, and weather).
+2. Major Threats & IPM Control: Describe exactly 2 major disease, pest, or nutrient deficiency risks specific to this region, growth stage, time of year, and weather, along with their Integrated Pest Management (IPM) control measures.
 
-You MUST write the entire forecast and recommendations in the $langName language.
-Format in clear, readable Markdown with bullet points. Do not include any JSON wrapping.
+Formatting and Language Rules:
+- You MUST write the entire response in the $langName language.
+- Do NOT use any Markdown formatting characters. This means NO hashtags (#, ##, etc.), NO bold asterisks (**, etc.), NO italic asterisks (*, etc.), and NO hyphens (-) or bullet points.
+- Use only plain text with clean spacing, standard numbers (1., 2.), and regular capital letters for headers if needed.
 """;
 
       final response = await http
@@ -1251,27 +1261,52 @@ Format in clear, readable Markdown with bullet points. Do not include any JSON w
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Header info
+                         // Header info
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              widget.cropName,
-                              style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppTheme.textPrimary),
+                            if (widget.crop['crop_image_url'] != null && widget.crop['crop_image_url'].toString().isNotEmpty) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  width: 52,
+                                  height: 52,
+                                  color: const Color(0xFFF0FDF4),
+                                  child: SafeNetworkImage(
+                                    imageUrl: widget.crop['crop_image_url'].toString(),
+                                    fit: BoxFit.cover,
+                                    placeholder: const Icon(Icons.eco_rounded,
+                                        color: Color(0xFF16A34A), size: 28),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.cropName,
+                                    style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppTheme.textPrimary),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "${'diag_crop_variety'.tr()}: ${widget.varietyName}  |  ${'diag_crop_field'.tr()}: ${widget.fieldName}",
+                                    style: const TextStyle(
+                                        color: AppTheme.textSecondary, fontSize: 13),
+                                  ),
+                                ],
+                              ),
                             ),
                             IconButton(
                               icon: const Icon(Icons.close_rounded),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
-                        ),
-                        Text(
-                          "${'diag_crop_variety'.tr()}: ${widget.varietyName}  |  ${'diag_crop_field'.tr()}: ${widget.fieldName}",
-                          style: const TextStyle(
-                              color: AppTheme.textSecondary, fontSize: 13),
                         ),
                         const SizedBox(height: 16),
                         const Divider(),
