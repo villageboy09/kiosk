@@ -35,6 +35,7 @@
   "home_bottom_nav_home": "Home",
   "home_bottom_nav_advisories": "Advisories",
   "home_bottom_nav_settings": "Settings",
+  "home_bottom_nav_reels": "Reels",
   "home_quick_actions": "Quick Actions",
   "home_feature_weather_title": "Weather",
   "home_feature_weather_subtitle": "Live Updates",
@@ -598,5 +599,30 @@
   "diag_no_crops_saved": "You haven't saved any crops in 'My Crops' section yet.",
   "notifications_title": "Notifications",
   "notifications_empty": "No notifications yet",
-  "notifications_empty_desc": "Any crop advisory or market price updates will appear here."
+  "notifications_empty_desc": "Any crop advisory or market price updates will appear here.",
+
+  "problems_view_treatments": "View Treatments",
+  "problems_category_other": "Other",
+  "problems_your_crop_is_healthy": "Your crop looks healthy at this stage.",
+
+  "reels_comments": "Comments",
+  "reels_no_video": "Could not load video",
+  "reels_retry": "Retry",
+  "reels_follow": "Follow",
+  "reels_call": "Call",
+  "reels_share": "Share",
+  "reels_muted": "Muted",
+  "reels_sound": "Sound",
+  "reels_save": "Save",
+  "reels_saved_snack": "Reel saved!",
+  "reels_unsaved_snack": "Reel removed from saved!",
+  "reels_add_comment": "Add a comment...",
+  "reels_dialer_error": "Could not open dialer",
+
+  "diag_loading_1": "AI is diagnosing your plant...",
+  "diag_loading_2": "Analyzing leaf structure and patterns...",
+  "diag_loading_3": "Detecting potential pest/disease signatures...",
+  "diag_loading_4": "Matching results with agricultural database...",
+  "diag_loading_5": "Generating diagnosis and recovery plan...",
+  "reels_error_load": "Could not load video"
 }

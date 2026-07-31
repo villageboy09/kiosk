@@ -41,6 +41,65 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
   }
 
   Future<_WeatherSummary> _fetchWeather() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Check cache first (30 mins validity)
+    final cachedJson = prefs.getString('cached_weather_raw_api_data');
+    final cachedLoc = prefs.getString('cached_weather_resolved_location');
+    final cachedTimeStr = prefs.getString('cached_weather_timestamp');
+
+    if (cachedJson != null && cachedLoc != null && cachedTimeStr != null) {
+      final cachedTime = DateTime.tryParse(cachedTimeStr);
+      if (cachedTime != null && DateTime.now().difference(cachedTime).inMinutes < 30) {
+        try {
+          final data = json.decode(cachedJson);
+          final today = data['days'][0];
+          final hours = (today['hours'] as List)
+              .take(12)
+              .map((h) => _HourlyData(
+                    time: h['datetime']?.substring(0, 5) ?? '00:00',
+                    temp: (h['temp'] ?? 0.0).toDouble(),
+                    icon: h['icon'] ?? 'clear-day',
+                  ))
+              .toList();
+
+          final dailyList = (data['days'] as List)
+              .take(7)
+              .map((d) => _DailyData(
+                    date: d['datetime'] ?? '',
+                    temp: (d['temp'] ?? 0.0).toDouble(),
+                    tempMax: (d['tempmax'] ?? 0.0).toDouble(),
+                    tempMin: (d['tempmin'] ?? 0.0).toDouble(),
+                    conditions: d['conditions'] ?? 'N/A',
+                    icon: d['icon'] ?? 'clear-day',
+                    humidity: (d['humidity'] ?? 0.0).toDouble(),
+                    windSpeed: (d['windspeed'] ?? 0.0).toDouble(),
+                    precipProb: (d['precipprob'] ?? 0.0).toDouble(),
+                  ))
+              .toList();
+
+          final summary = _WeatherSummary(
+            location: cachedLoc,
+            temp: (today['temp'] ?? 0.0).toDouble(),
+            tempMax: (today['tempmax'] ?? 0.0).toDouble(),
+            tempMin: (today['tempmin'] ?? 0.0).toDouble(),
+            conditions: today['conditions'] ?? 'N/A',
+            icon: today['icon'] ?? 'clear-day',
+            humidity: (today['humidity'] ?? 0.0).toDouble(),
+            windSpeed: (today['windspeed'] ?? 0.0).toDouble(),
+            precipProb: (today['precipprob'] ?? 0.0).toDouble(),
+            hourly: hours,
+            daily: dailyList,
+            latitude: prefs.getDouble('cached_weather_latitude') ?? 0.0,
+            longitude: prefs.getDouble('cached_weather_longitude') ?? 0.0,
+          );
+
+          _loadOrFetchAIAdvisory(summary);
+          return summary;
+        } catch (_) {}
+      }
+    }
+
     final apiKey = dotenv.env['WEATHER_API_KEY'];
     if (apiKey == null || apiKey.isEmpty) {
       throw Exception("Weather API key missing");
@@ -119,6 +178,13 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
       longitude: lon,
     );
 
+    // Save to cache
+    await prefs.setString('cached_weather_raw_api_data', jsonEncode(data));
+    await prefs.setString('cached_weather_resolved_location', locationName);
+    await prefs.setString('cached_weather_timestamp', DateTime.now().toIso8601String());
+    await prefs.setDouble('cached_weather_latitude', lat);
+    await prefs.setDouble('cached_weather_longitude', lon);
+
     // Try loading AI advisory after weather is loaded
     _loadOrFetchAIAdvisory(summary);
 
@@ -195,8 +261,15 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
       return null;
     }
 
+    final locale = context.locale.languageCode;
+    final langName = locale == 'te'
+        ? 'Telugu'
+        : locale == 'hi'
+            ? 'Hindi'
+            : 'English';
+
     final prompt = """
-You are an expert AI Agricultural Advisor. Analyze the following real-time weather data for ${weather.location}:
+You are an expert AI Agricultural Advisor. Analyze the following real-time weather data and 7-day forecast for ${weather.location}:
 - Current Temp: ${weather.temp.round()}°C (Max: ${weather.tempMax.round()}°C, Min: ${weather.tempMin.round()}°C)
 - Current Humidity: ${weather.humidity.round()}%
 - Current Wind Speed: ${weather.windSpeed.round()} km/h
@@ -204,6 +277,11 @@ You are an expert AI Agricultural Advisor. Analyze the following real-time weath
 - 7-Day Forecast: ${weather.daily.map((d) => "${d.date}: ${d.conditions} (Temp: ${d.temp.round()}°C, Rain: ${d.precipProb.round()}%)").join(', ')}
 
 Return a JSON object containing dynamic agricultural advisories and recommended crops suited for these conditions.
+
+Crucially, generate advisories that are highly specific to the current point of time and the actual 7-day weather forecast (e.g. specific to the next 24-48 hours, or the current week's weather pattern like incoming rains, high temperature spikes, wind storms, or dry spells). Do NOT give generalized seasonal farming tips; focus on immediate action items for the farmer based on this week's exact weather changes.
+
+You MUST output all the JSON values (specifically crop names, descriptions, soil types, water requirements, and advisories) in the $langName language. Ensure that the JSON keys remain exactly as defined (in English) but the string values are translated/written in $langName.
+
 Keep all crop descriptions, soil types, and advisories highly concise (under 20 words each) to prevent truncating the JSON response.
 Do NOT output any other text than the JSON block itself. Output raw JSON ONLY.
 Format:
@@ -324,6 +402,20 @@ Format:
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         systemOverlayStyle: SystemUiOverlayStyle.dark,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: AppTheme.primary),
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('cached_weather_raw_api_data');
+              await prefs.remove('cached_weather_resolved_location');
+              await prefs.remove('cached_weather_timestamp');
+              setState(() {
+                _weatherFuture = _fetchWeather();
+              });
+            },
+          ),
+        ],
       ),
       body: FutureBuilder<_WeatherSummary>(
         future: _weatherFuture,
@@ -411,6 +503,7 @@ Format:
         Expanded(
           child: TabBarView(
             controller: _tabController,
+            physics: const NeverScrollableScrollPhysics(),
             children: [
               _buildTodayTab(weather),
               _buildSeasonalTab(weather, seasonInfo),
@@ -1206,147 +1299,431 @@ Format:
   }
 
   _SeasonInfo _getSeasonInfo(int month) {
+    final locale = context.locale.languageCode;
+
     if (month >= 6 && month <= 10) {
       // Kharif
-      return _SeasonInfo(
-        name: 'Kharif (Monsoon)',
-        duration: 'June - October',
-        description: 'Characterized by high temperatures and plentiful rainfall. Ideal for water-intensive crops.',
-        advisories: [
-          'Ensure proper drainage channels in fields to prevent waterlogging during heavy downpours.',
-          'Postpone spraying pesticides or applying fertilizers if heavy rain is forecasted within 24 hours.',
-          'High humidity conditions favor fungal outbreaks. Inspect leaves regularly for spots or rust.',
-          'Clean field bunds and carry out timely weeding to avoid nutrient competition.',
-        ],
-        recommendedCrops: [
-          _CropRecommendation(
-            name: 'Paddy (Rice)',
-            duration: '120-150 Days',
-            soilType: 'Clayey or Clay Loam',
-            waterReq: 'High (Flooded / standing water)',
-            icon: '🌾',
-            description: 'The staple grain of the monsoon season. Thrives in heavy clay soil that retains moisture.',
-          ),
-          _CropRecommendation(
-            name: 'Maize (Corn)',
-            duration: '90-110 Days',
-            soilType: 'Well-drained Sandy Loam',
-            waterReq: 'Moderate',
-            icon: '🌽',
-            description: 'Requires warm weather and well-aerated soils. Highly sensitive to waterlogging.',
-          ),
-          _CropRecommendation(
-            name: 'Cotton',
-            duration: '150-180 Days',
-            soilType: 'Deep Black Soil (Regur)',
-            waterReq: 'Moderate (Dry climate during ripening)',
-            icon: '☁️',
-            description: 'Cash crop requiring bright sunshine, moderate rainfall, and rich black soil with good moisture holding capacity.',
-          ),
-          _CropRecommendation(
-            name: 'Soybean',
-            duration: '100-120 Days',
-            soilType: 'Loamy Soil',
-            waterReq: 'Moderate',
-            icon: '🌱',
-            description: 'An excellent nitrogen-fixing crop that improves soil health and yields high-protein seeds.',
-          ),
-        ],
-      );
+      if (locale == 'te') {
+        return _SeasonInfo(
+          name: 'ఖరీఫ్ (వర్షాకాలం)',
+          duration: 'జూన్ - అక్టోబర్',
+          description: 'అధిక ఉష్ణోగ్రతలు మరియు సమృద్ధిగా వర్షపాతం ఉంటుంది. నీటి ఆధారిత పంటలకు అనుకూలం.',
+          advisories: [
+            'భారీ వర్షాల సమయంలో నీరు నిల్వ ఉండకుండా పొలంలో సరైన డ్రైనేజీ కాలువలను ఏర్పాటు చేయండి.',
+            '24 గంటల్లో భారీ వర్షం కురిసే అవకాశం ఉంటే పురుగుమందులు చల్లడం లేదా ఎరువులు వేయడం వాయిదా వేయండి.',
+            'అధిక తేమ పరిస్థితులు శిలీంధ్రాల వ్యాప్తికి దారితీస్తాయి. ఆకులను క్రమం తప్పకుండా గమనించండి.',
+            'పోషకాల కోసం పోటీని నివారించడానికి పొలాల గట్లను శుభ్రం చేయండి మరియు సకాలంలో కలుపు తీయండి.',
+          ],
+          recommendedCrops: [
+            _CropRecommendation(
+              name: 'వరి (ప్యాడీ)',
+              duration: '120-150 రోజులు',
+              soilType: 'మట్టి లేదా క్లే లోమ్',
+              waterReq: 'అధికం (నిల్వ నీరు)',
+              icon: '🌾',
+              description: 'వర్షాకాలపు ప్రధాన ఆహార ధాన్యం. తేమను నిలుపుకునే జిగురు మట్టిలో బాగా పెరుగుతుంది.',
+            ),
+            _CropRecommendation(
+              name: 'మొక్కజొన్న (కార్న్)',
+              duration: '90-110 రోజులు',
+              soilType: 'ఇసుకతో కూడిన మోరప నేలలు',
+              waterReq: 'మధ్యస్థం',
+              icon: '🌽',
+              description: 'వెచ్చని వాతావరణం అవసరం. నీరు నిల్వ ఉండే నేలలకు ఇది సున్నితమైనది.',
+            ),
+            _CropRecommendation(
+              name: 'పత్తి (కాటన్)',
+              duration: '150-180 రోజులు',
+              soilType: 'నల్ల రేగడి నేలలు',
+              waterReq: 'మధ్యస్థం',
+              icon: '☁️',
+              description: 'ఎండ మరియు నల్ల రేగడి నేలలు అవసరమయ్యే వాణిజ్య పంట.',
+            ),
+            _CropRecommendation(
+              name: 'సోయాబీన్',
+              duration: '100-120 రోజులు',
+              soilType: 'సోయాబీన్ నేలలు',
+              waterReq: 'మధ్యస్థం',
+              icon: '🌱',
+              description: 'నత్రజని స్థిరీకరణను పెంచి, నేల ఆరోగ్యాన్ని మెరుగుపరిచే పంట.',
+            ),
+          ],
+        );
+      } else if (locale == 'hi') {
+        return _SeasonInfo(
+          name: 'खरीफ (मानसून)',
+          duration: 'जून - अक्टूबर',
+          description: 'उच्च तापमान और प्रचुर वर्षा की विशेषता। पानी वाली फसलों के लिए आदर्श।',
+          advisories: [
+            'भारी बारिश के दौरान जलभराव को रोकने के लिए खेतों में उचित जल निकासी की व्यवस्था करें।',
+            'यदि 24 घंटे के भीतर भारी बारिश का अनुमान हो तो कीटनाशकों या उर्वरकों का छिड़काव स्थगित करें।',
+            'उच्च आर्द्रता की स्थिति कवक के प्रकोप को बढ़ावा देती है। पत्तियों का नियमित निरीक्षण करें।',
+            'पोषक तत्वों की प्रतिस्पर्धा से बचने के लिए समय पर निराई-गुड़ाई करें।',
+          ],
+          recommendedCrops: [
+            _CropRecommendation(
+              name: 'धान (चावल)',
+              duration: '120-150 दिन',
+              soilType: 'मटियार या दोमट मिट्टी',
+              waterReq: 'उच्च (खड़ा पानी)',
+              icon: '🌾',
+              description: 'मानसून की मुख्य फसल। पानी रोकने वाली दोमट या मटियार मिट्टी में सबसे अच्छी होती है।',
+            ),
+            _CropRecommendation(
+              name: 'मक्का',
+              duration: '90-110 दिन',
+              soilType: 'बलुई दोमट मिट्टी',
+              waterReq: 'मध्यम',
+              icon: '🌽',
+              description: 'गर्म मौसम की आवश्यकता। जलभराव के प्रति संवेदनशील।',
+            ),
+            _CropRecommendation(
+              name: 'कपास',
+              duration: '150-180 दिन',
+              soilType: 'काली मिट्टी',
+              waterReq: 'मध्यम',
+              icon: '☁️',
+              description: 'काली मिट्टी में प्रचुर धूप and मध्यम वर्षा के साथ उगने वाली नकदी फसल।',
+            ),
+            _CropRecommendation(
+              name: 'सोयाबीन',
+              duration: '100-120 दिन',
+              soilType: 'दोमट मिट्टी',
+              waterReq: 'मध्यम',
+              icon: '🌱',
+              description: 'मिट्टी की उर्वरता बढ़ाने और नाइट्रोजन स्थिरीकरण करने वाली फसल।',
+            ),
+          ],
+        );
+      } else {
+        return _SeasonInfo(
+          name: 'Kharif (Monsoon)',
+          duration: 'June - October',
+          description: 'Characterized by high temperatures and plentiful rainfall. Ideal for water-intensive crops.',
+          advisories: [
+            'Ensure proper drainage channels in fields to prevent waterlogging during heavy downpours.',
+            'Postpone spraying pesticides or applying fertilizers if heavy rain is forecasted within 24 hours.',
+            'High humidity conditions favor fungal outbreaks. Inspect leaves regularly for spots or rust.',
+            'Clean field bunds and carry out timely weeding to avoid nutrient competition.',
+          ],
+          recommendedCrops: [
+            _CropRecommendation(
+              name: 'Paddy (Rice)',
+              duration: '120-150 Days',
+              soilType: 'Clayey or Clay Loam',
+              waterReq: 'High (Flooded / standing water)',
+              icon: '🌾',
+              description: 'The staple grain of the monsoon season. Thrives in heavy clay soil that retains moisture.',
+            ),
+            _CropRecommendation(
+              name: 'Maize (Corn)',
+              duration: '90-110 Days',
+              soilType: 'Well-drained Sandy Loam',
+              waterReq: 'Moderate',
+              icon: '🌽',
+              description: 'Requires warm weather and well-aerated soils. Highly sensitive to waterlogging.',
+            ),
+            _CropRecommendation(
+              name: 'Cotton',
+              duration: '150-180 Days',
+              soilType: 'Deep Black Soil (Regur)',
+              waterReq: 'Moderate (Dry climate during ripening)',
+              icon: '☁️',
+              description: 'Cash crop requiring bright sunshine, moderate rainfall, and rich black soil with good moisture holding capacity.',
+            ),
+            _CropRecommendation(
+              name: 'Soybean',
+              duration: '100-120 Days',
+              soilType: 'Loamy Soil',
+              waterReq: 'Moderate',
+              icon: '🌱',
+              description: 'An excellent nitrogen-fixing crop that improves soil health and yields high-protein seeds.',
+            ),
+          ],
+        );
+      }
     } else if (month == 11 || month == 12 || month <= 2) {
       // Rabi
-      return _SeasonInfo(
-        name: 'Rabi (Winter)',
-        duration: 'November - February',
-        description: 'Sown in winter and harvested in spring. Requires cool climate and moderate irrigation.',
-        advisories: [
-          'Monitor soil moisture levels closely; irrigate during critical stages like crown root initiation in wheat.',
-          'Watch out for morning dew/frost which can trigger powdery mildew. Spray recommended fungicides proactively.',
-          'Optimize water usage using drip or sprinkler irrigation to conserve groundwater.',
-          'Keep fields free from weeds during the first 30-45 days of crop growth.',
-        ],
-        recommendedCrops: [
-          _CropRecommendation(
-            name: 'Wheat',
-            duration: '120-140 Days',
-            soilType: 'Fertile Clayey Loam',
-            waterReq: 'Moderate (Requires 4-6 timely irrigations)',
-            icon: '🌾',
-            description: 'The premier winter cereal crop. Requires a cool growing period and bright sunny weather at ripening.',
-          ),
-          _CropRecommendation(
-            name: 'Chickpea (Bengal Gram)',
-            duration: '100-110 Days',
-            soilType: 'Light to Medium Loam',
-            waterReq: 'Low (Drought-resistant)',
-            icon: '🧆',
-            description: 'A pulse crop that thrives in residual soil moisture and cool winter nights without needing excessive irrigation.',
-          ),
-          _CropRecommendation(
-            name: 'Mustard',
-            duration: '110-130 Days',
-            soilType: 'Sandy Loam to Clay Loam',
-            waterReq: 'Low to Moderate',
-            icon: '🌼',
-            description: 'An oilseed crop that tolerates dry winter conditions and adds beautiful yellow flowers to the landscape.',
-          ),
-          _CropRecommendation(
-            name: 'Potato',
-            duration: '90-120 Days',
-            soilType: 'Loose, Well-aerated Sandy Loam',
-            waterReq: 'Moderate (Frequent light waterings)',
-            icon: '🥔',
-            description: 'High-yielding tuber crop that needs loose, organic-rich soil to allow tubers to grow freely.',
-          ),
-        ],
-      );
+      if (locale == 'te') {
+        return _SeasonInfo(
+          name: 'రబీ (శీతాకాలం)',
+          duration: 'నవంబర్ - ఫిబ్రవరి',
+          description: 'శీతాకాలంలో విత్తుతారు మరియు వసంతకాలంలో కోస్తారు. చల్లని వాతావరణం మరియు పరిమిత నీటి పారుదల అవసరం.',
+          advisories: [
+            'నేల తేమను నిశితంగా గమనించండి; గోధుమలో కిరీటం వేరు ఏర్పడే దశల వద్ద ఖచ్చితంగా నీరు పెట్టండి.',
+            'పౌడరీ మిల్డో వ్యాప్తిని అరికట్టడానికి ఉదయం పడే మంచుపై నిఘా ఉంచండి. అవసరమైన శీలీంద్ర నాశిని పిచికారీ చేయండి.',
+            'డ్రిప్ లేదా స్ప్రింక్లర్ పద్ధతుల ద్వారా నీటిని ఆదా చేయండి.',
+            'పంట వేసిన మొదటి 30-45 రోజులలో పొలంలో కలుపు లేకుండా చూసుకోండి.',
+          ],
+          recommendedCrops: [
+            _CropRecommendation(
+              name: 'గోధుమ (వీట్)',
+              duration: '120-140 రోజులు',
+              soilType: ' సారవంతమైన క్లే లోమ్',
+              waterReq: 'మధ్యస్థం (4-6 నీటి తడులు)',
+              icon: '🌾',
+              description: 'శీతాకాలపు ప్రధాన తృణధాన్యం. పెరిగేటప్పుడు చలి, పక్వానికి వచ్చేటప్పుడు ఎండ అవసరం.',
+            ),
+            _CropRecommendation(
+              name: 'శనగలు (బెంగాల్ గ్రామ్)',
+              duration: '100-110 రోజులు',
+              soilType: 'తేలికపాటి నుండి మధ్యస్థ లోమ్',
+              waterReq: 'అల్పం (కరువును తట్టుకుంటుంది)',
+              icon: '🧆',
+              description: 'నేలలోని తేమను ఉపయోగించుకుని తక్కువ నీటితో పండే పప్పుధాన్యపు పంట.',
+            ),
+            _CropRecommendation(
+              name: 'ఆవాలు (మస్టర్డ్)',
+              duration: '110-130 రోజులు',
+              soilType: 'ఇసుక లోమ్ నుండి క్లే లోమ్',
+              waterReq: 'అల్పం నుండి మధ్యస్థం',
+              icon: '🌼',
+              description: 'తక్కువ ఉష్ణోగ్రతలను మరియు పొడి వాతావరణాన్ని తట్టుకుని పండే నూనెగింజల పంట.',
+            ),
+            _CropRecommendation(
+              name: 'బంగాళాదుంప (పొటాటో)',
+              duration: '90-120 రోజులు',
+              soilType: 'సడలైన ఇసుక లోమ్ నేలలు',
+              waterReq: 'మధ్యస్థం',
+              icon: '🥔',
+              description: 'దుంపలు బాగా పెరగడానికి సేంద్రియ ఎరువులు మరియు సడలైన నేల అవసరమయ్యే పంట.',
+            ),
+          ],
+        );
+      } else if (locale == 'hi') {
+        return _SeasonInfo(
+          name: 'रबी (शीतकाल)',
+          duration: 'नवंबर - फरवरी',
+          description: 'सर्दियों में बोई जाने वाली और वसंत में काटी जाने वाली फसलें। ठंडी जलवायु की आवश्यकता।',
+          advisories: [
+            'मिट्टी की नमी की बारीकी से निगरानी करें; गेहूं में ताज जड़ बनने की नाजुक अवस्था में सिंचाई करें।',
+            'सुबह की ओस/पाला से चूर्णिल आसिता (पाउडर माइल्ड्यू) का खतरा रहता है। अनुशंसित कवकनाशी का छिड़काव करें।',
+            'टपक सिंचाई (ड्रिप) या स्प्रिंकलर का उपयोग करके पानी की बचत करें।',
+            'फसलों की वृद्धि के शुरुआती 30-45 दिनों में खेत को खरपतवार मुक्त रखें।',
+          ],
+          recommendedCrops: [
+            _CropRecommendation(
+              name: 'गेहूं',
+              duration: '120-140 दिन',
+              soilType: 'उर्वरक दोमट मिट्टी',
+              waterReq: 'मध्यम (4-6 सिंचाई)',
+              icon: '🌾',
+              description: 'सर्दियों की प्रमुख अनाज फसल। ठंडे मौसम और पकने के समय खिली धूप की जरूरत।',
+            ),
+            _CropRecommendation(
+              name: 'चना',
+              duration: '100-110 दिन',
+              soilType: 'हल्की से मध्यम दोमट',
+              waterReq: 'कम (सूखा-सहनशील)',
+              icon: '🧆',
+              description: 'कम सिंचाई में मिट्टी की अवशिष्ट नमी पर उगने वाली दलहनी फसल।',
+            ),
+            _CropRecommendation(
+              name: 'सरसों',
+              duration: '110-130 दिन',
+              soilType: 'बलुई दोमट मिट्टी',
+              waterReq: 'कम से मध्यम',
+              icon: '🌼',
+              description: 'सर्दियों की शुष्क परिस्थितियों को सहन करने वाली तिलहनी फसल।',
+            ),
+            _CropRecommendation(
+              name: 'आलू',
+              duration: '90-120 दिन',
+              soilType: 'भुरभुरी बलुई दोमट',
+              waterReq: 'मध्यम (हल्की सिंचाई)',
+              icon: '🥔',
+              description: 'भुरभुरी और पोषक तत्वों से भरपूर मिट्टी में उगने वाली कंद फसल।',
+            ),
+          ],
+        );
+      } else {
+        return _SeasonInfo(
+          name: 'Rabi (Winter)',
+          duration: 'November - February',
+          description: 'Sown in winter and harvested in spring. Requires cool climate and moderate irrigation.',
+          advisories: [
+            'Monitor soil moisture levels closely; irrigate during critical stages like crown root initiation in wheat.',
+            'Watch out for morning dew/frost which can trigger powdery mildew. Spray recommended fungicides proactively.',
+            'Optimize water usage using drip or sprinkler irrigation to conserve groundwater.',
+            'Keep fields free from weeds during the first 30-45 days of crop growth.',
+          ],
+          recommendedCrops: [
+            _CropRecommendation(
+              name: 'Wheat',
+              duration: '120-140 Days',
+              soilType: 'Fertile Clayey Loam',
+              waterReq: 'Moderate (Requires 4-6 timely irrigations)',
+              icon: '🌾',
+              description: 'The premier winter cereal crop. Requires a cool growing period and bright sunny weather at ripening.',
+            ),
+            _CropRecommendation(
+              name: 'Chickpea (Bengal Gram)',
+              duration: '100-110 Days',
+              soilType: 'Light to Medium Loam',
+              waterReq: 'Low (Drought-resistant)',
+              icon: '🧆',
+              description: 'A pulse crop that thrives in residual soil moisture and cool winter nights without needing excessive irrigation.',
+            ),
+            _CropRecommendation(
+              name: 'Mustard',
+              duration: '110-130 Days',
+              soilType: 'Sandy Loam to Clay Loam',
+              waterReq: 'Low to Moderate',
+              icon: '🌼',
+              description: 'An oilseed crop that tolerates dry winter conditions and adds beautiful yellow flowers to the landscape.',
+            ),
+            _CropRecommendation(
+              name: 'Potato',
+              duration: '90-120 Days',
+              soilType: 'Loose, Well-aerated Sandy Loam',
+              waterReq: 'Moderate (Frequent light waterings)',
+              icon: '🥔',
+              description: 'High-yielding tuber crop that needs loose, organic-rich soil to allow tubers to grow freely.',
+            ),
+          ],
+        );
+      }
     } else {
       // Zaid
-      return _SeasonInfo(
-        name: 'Zaid (Summer)',
-        duration: 'March - May',
-        description: 'Short summer season between Rabi and Kharif. Crops need warm dry weather and continuous irrigation.',
-        advisories: [
-          'Irrigate frequently during morning or evening hours to prevent high evaporation losses.',
-          'Use mulching (straw or plastic sheets) to conserve soil moisture and suppress summer weeds.',
-          'Watch out for sucking pests like whiteflies and thrips, which multiply rapidly in warm weather.',
-          'Harvest melons and gourds in the morning to retain maximum freshness and shelf life.',
-        ],
-        recommendedCrops: [
-          _CropRecommendation(
-            name: 'Watermelon / Musk Melon',
-            duration: '80-90 Days',
-            soilType: 'Sandy / Alluvial Riverbeds',
-            waterReq: 'Moderate (Regular light watering)',
-            icon: '🍉',
-            description: 'Delicious hot-weather fruits that thrive in sandy soils with warm days and cool nights.',
-          ),
-          _CropRecommendation(
-            name: 'Cucumber',
-            duration: '60-70 Days',
-            soilType: 'Sandy Loam rich in organic matter',
-            waterReq: 'Moderate',
-            icon: '🥒',
-            description: 'Fast-growing summer vegetable. Trellising helps keep fruits clean and disease-free.',
-          ),
-          _CropRecommendation(
-            name: 'Moong Bean (Green Gram)',
-            duration: '65-75 Days',
-            soilType: 'Well-drained Loamy Soil',
-            waterReq: 'Low',
-            icon: '🌱',
-            description: 'Quick-maturing legume that enriches the soil with nitrogen and fits perfectly in the summer window.',
-          ),
-          _CropRecommendation(
-            name: 'Sunflower',
-            duration: '90-100 Days',
-            soilType: 'Deep, Fertile Loam',
-            waterReq: 'Moderate',
-            icon: '🌻',
-            description: 'Drought-tolerant oilseed crop with bright yellow heads that follow the path of the sun.',
-          ),
-        ],
-      );
+      if (locale == 'te') {
+        return _SeasonInfo(
+          name: 'జైద్ (వేసవి కాలం)',
+          duration: 'మార్చి - మే',
+          description: 'రబీ మరియు ఖరీఫ్ మధ్య స్వల్ప కాల వేసవి కాలం. వెచ్చని పొడి వాతావరణం మరియు నిరంతర నీటి తడులు అవసరం.',
+          advisories: [
+            'ఆవిరి నష్టాలను నివారించడానికి ఉదయం లేదా సాయంత్రం వేళల్లో తరచుగా నీరు పెట్టండి.',
+            'నేల తేమను కాపాడటానికి మరియు కలుపు నివారణకు ఎండుగడ్డితో మల్చింగ్ చేయండి.',
+            'వేడి వాతావరణంలో వేగంగా వృద్ధి చెండే తెల్లదోమలు, తామర పురుగులపై నిఘా ఉంచండి.',
+            'తాజాదనం కోల్పోకుండా పుచ్చకాయలు మరియు గుమ్మడికాయలను ఉదయమే కోయండి.',
+          ],
+          recommendedCrops: [
+            _CropRecommendation(
+              name: 'పుచ్చకాయ / కర్బూజ',
+              duration: '80-90 రోజులు',
+              soilType: 'ఇసుక నేలలు / నదీ పడకలు',
+              waterReq: 'మధ్యస్థం (క్రమం తప్పకుండా తేలికపాటి తడులు)',
+              icon: '🍉',
+              description: 'వేడి వాతావరణంలో ఇసుక నేలల్లో బాగా పండే తీపి పండ్లు.',
+            ),
+            _CropRecommendation(
+              name: 'దోసకాయ (కుకుంబర్)',
+              duration: '60-70 రోజులు',
+              soilType: 'సేంద్రియ పదార్థాలు గల ఇసుక లోమ్',
+              waterReq: 'మధ్యస్థం',
+              icon: '🥒',
+              description: 'వేగంగా పెరిగే వేసవి కూరగాయ. తీగెలను పైకి పాకించడం ద్వారా కాయలు శుభ్రంగా ఉంటాయి.',
+            ),
+            _CropRecommendation(
+              name: 'పెసర (గ్రీన్ గ్రామ్)',
+              duration: '65-75 రోజులు',
+              soilType: 'నీరు నిల్వ ఉండని లోమీ నేలలు',
+              waterReq: 'అల్పం',
+              icon: '🌱',
+              description: 'త్వరగా పండే పప్పుధాన్యపు పంట. ఇది నేలలో నత్రజనిని స్థిరీకరిస్తుంది.',
+            ),
+            _CropRecommendation(
+              name: 'పొద్దుతిరుగుడు (సన్ ఫ్లవర్)',
+              duration: '90-100 రోజులు',
+              soilType: 'సారవంతమైన లోమ్ నేలలు',
+              waterReq: 'మధ్యస్థం',
+              icon: '🌻',
+              description: 'కరువును తట్టుకునే నూనెగింజల పంట. పూలు సూర్యుని వైపు తిరుగుతాయి.',
+            ),
+          ],
+        );
+      } else if (locale == 'hi') {
+        return _SeasonInfo(
+          name: 'जायद (गर्मी)',
+          duration: 'मार्च - मई',
+          description: 'रबी और खरीफ के बीच की छोटी गर्मी की ऋतु। फसलों को निरंतर सिंचाई की आवश्यकता।',
+          advisories: [
+            'वाष्पीकरण से बचने के लिए सुबह या शाम के समय बार-बार सिंचाई करें।',
+            'मिट्टी की नमी बनाए रखने और खरपतवार रोकने के लिए पुआल की मल्चिंग करें।',
+            'गर्म मौसम में तेजी से बढ़ने वाले रसचूषक कीटों (जैसे सफेद मक्खी) पर नजर रखें।',
+            'ताजगी बनाए रखने के लिए तरबूज और खरबूज की तुड़ाई सुबह के समय ही करें।',
+          ],
+          recommendedCrops: [
+            _CropRecommendation(
+              name: 'तरबूज / खरबूज',
+              duration: '80-90 दिन',
+              soilType: 'बलुई / रेतीली नदी तट की मिट्टी',
+              waterReq: 'मध्यम (नियमित हल्की सिंचाई)',
+              icon: '🍉',
+              description: 'गर्म मौसम के फल जो रेतीली मिट्टी और तेज धूप में अच्छे होते हैं।',
+            ),
+            _CropRecommendation(
+              name: 'खीरा',
+              duration: '60-70 दिन',
+              soilType: 'कार्बनिक पदार्थों से भरपूर बलुई दोमट',
+              waterReq: 'मध्यम',
+              icon: '🥒',
+              description: 'तेजी से बढ़ने वाली गर्मी की सब्जी। मचान विधि से फल साफ रहते हैं।',
+            ),
+            _CropRecommendation(
+              name: 'मूंग',
+              duration: '65-75 दिन',
+              soilType: 'अच्छी जल निकासी वाली दोमट मिट्टी',
+              waterReq: 'कम',
+              icon: '🌱',
+              description: 'जल्दी पकने वाली दलहनी फसल जो मिट्टी में नाइट्रोजन बढ़ाती है।',
+            ),
+            _CropRecommendation(
+              name: 'सूरजमुखी',
+              duration: '90-100 दिन',
+              soilType: 'गहरी उपजाऊ दोमट मिट्टी',
+              waterReq: 'मध्यम',
+              icon: '🌻',
+              description: 'सूखा-सहनशील तिलहनी फसल जिसके फूल सूर्य की दिशा में घूमते हैं।',
+            ),
+          ],
+        );
+      } else {
+        return _SeasonInfo(
+          name: 'Zaid (Summer)',
+          duration: 'March - May',
+          description: 'Short summer season between Rabi and Kharif. Crops need warm dry weather and continuous irrigation.',
+          advisories: [
+            'Irrigate frequently during morning or evening hours to prevent high evaporation losses.',
+            'Use mulching (straw or plastic sheets) to conserve soil moisture and suppress summer weeds.',
+            'Watch out for sucking pests like whiteflies and thrips, which multiply rapidly in warm weather.',
+            'Harvest melons and gourds in the morning to retain maximum freshness and shelf life.',
+          ],
+          recommendedCrops: [
+            _CropRecommendation(
+              name: 'Watermelon / Musk Melon',
+              duration: '80-90 Days',
+              soilType: 'Sandy / Alluvial Riverbeds',
+              waterReq: 'Moderate (Regular light watering)',
+              icon: '🍉',
+              description: 'Delicious hot-weather fruits that thrive in sandy soils with warm days and cool nights.',
+            ),
+            _CropRecommendation(
+              name: 'Cucumber',
+              duration: '60-70 Days',
+              soilType: 'Sandy Loam rich in organic matter',
+              waterReq: 'Moderate',
+              icon: '🥒',
+              description: 'Fast-growing summer vegetable. Trellising helps keep fruits clean and disease-free.',
+            ),
+            _CropRecommendation(
+              name: 'Moong Bean (Green Gram)',
+              duration: '65-75 Days',
+              soilType: 'Well-drained Loamy Soil',
+              waterReq: 'Low',
+              icon: '🌱',
+              description: 'Quick-maturing legume that enriches the soil with nitrogen and fits perfectly in the summer window.',
+            ),
+            _CropRecommendation(
+              name: 'Sunflower',
+              duration: '90-100 Days',
+              soilType: 'Deep, Fertile Loam',
+              waterReq: 'Moderate',
+              icon: '🌻',
+              description: 'Drought-tolerant oilseed crop with bright yellow heads that follow the path of the sun.',
+            ),
+          ],
+        );
+      }
     }
   }
 

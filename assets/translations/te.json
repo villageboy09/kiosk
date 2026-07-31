@@ -37,6 +37,7 @@
   "home_bottom_nav_home": "హోమ్",
   "home_bottom_nav_advisories": "సలహాలు",
   "home_bottom_nav_settings": "సెట్టింగ్‌లు",
+  "home_bottom_nav_reels": "రీల్స్",
   "home_quick_actions": "త్వరిత చర్యలు",
   "home_feature_weather_title": "వాతావరణం",
   "home_feature_weather_subtitle": "ప్రత్యక్ష నవీకరణలు",
@@ -598,5 +599,30 @@
   "diag_no_crops_saved": "మీరు 'నా పంటలు' విభాగంలో ఇంకా ఏ పంటలనూ భద్రపరచలేదు.",
   "notifications_title": "నోటిఫికేషన్లు",
   "notifications_empty": "ఇంకా ఎలాంటి నోటిఫికేషన్లు లేవు",
-  "notifications_empty_desc": "పంటల సలహాలు లేదా మార్కెట్ ధరల తాజా వివరాలు ఇక్కడ కనిపిస్తాయి."
+  "notifications_empty_desc": "పంటల సలహాలు లేదా మార్కెట్ ధరల తాజా వివరాలు ఇక్కడ కనిపిస్తాయి.",
+
+  "problems_view_treatments": "చికిత్సలు చూడండి",
+  "problems_category_other": "ఇతర",
+  "problems_your_crop_is_healthy": "మీ పంట ఈ దశలో ఆరోగ్యంగా ఉన్నట్లు కనిపిస్తోంది.",
+
+  "reels_comments": "వ్యాఖ్యలు",
+  "reels_no_video": "వీడియో లోడ్ అవలేదు",
+  "reels_retry": "మళ్ళీ ప్రయత్నించు",
+  "reels_follow": "అనుసరించు",
+  "reels_call": "కాల్ చేయి",
+  "reels_share": "పంచుకో",
+  "reels_muted": "మ్యూట్",
+  "reels_sound": "శబ్దం",
+  "reels_save": "సేవ్",
+  "reels_saved_snack": "రీల్ సేవ్ చేయబడింది!",
+  "reels_unsaved_snack": "రీల్ సేవ్ చేసినవాటి నుండి తీసివేయబడింది!",
+  "reels_add_comment": "వ్యాఖ్య జోడించండి...",
+  "reels_dialer_error": "డయలర్ తెరవలేకపోయింది",
+
+  "diag_loading_1": "ఏఐ మీ మొక్కను నిర్ధారిస్తోంది...",
+  "diag_loading_2": "ఆకు నిర్మాణం మరియు నమూనాలను విశ్లేషిస్తోంది...",
+  "diag_loading_3": "సంభావ్య తెగుళ్ళు/వ్యాధుల సంకేతాలు గుర్తిస్తోంది...",
+  "diag_loading_4": "వ్యవసాయ డేటాబేస్‌తో ఫలితాలను సరిపోల్చుతోంది...",
+  "diag_loading_5": "నిర్ధారణ మరియు పునరుద్ధరణ ప్రణాళికను రూపొందిస్తోంది...",
+  "reels_error_load": "వీడియో లోడ్ అవలేదు"
 }

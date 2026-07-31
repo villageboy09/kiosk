@@ -322,7 +322,7 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
       child: GridView.builder(
         padding: const EdgeInsets.all(24),
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 280,
+          maxCrossAxisExtent: 320,
           childAspectRatio: 0.78,
           crossAxisSpacing: 20,
           mainAxisSpacing: 20,
@@ -451,7 +451,7 @@ class _CropCard extends StatelessWidget {
                     Text(
                       crop.cropName,
                       style: const TextStyle(
-                        fontSize: 17,
+                        fontSize: 16,
                         fontWeight: FontWeight.w900,
                         color: AppTheme.textPrimary,
                         letterSpacing: -0.4,

@@ -1,7 +1,7 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/widgets/skeletons/shimmer_grid_skeleton.dart';
 import 'package:cropsync/widgets/states/app_empty_state.dart';
 import '../models/farmer_crop.dart';
@@ -107,29 +107,14 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
         surfaceTintColor: Colors.transparent,
         backgroundColor: AppTheme.appBarBg,
         systemOverlayStyle: SystemUiOverlayStyle.dark,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              widget.stage.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.appBarTitle,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              widget.crop.cropName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.getTextStyle(
-                context,
-                fontWeight: FontWeight.w500,
-                fontSize: 13,
-                color: AppTheme.appBarText.withValues(alpha: 0.6),
-              ),
-            ),
-          ],
+        title: Text(
+          widget.stage.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTheme.appBarTitle.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       body: Column(
@@ -156,7 +141,7 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
     return AppEmptyState(
       icon: Icons.check_circle_outline_rounded,
       title: context.tr('no_problems_found'),
-      subtitle: 'Your crop looks healthy at this stage.',
+      subtitle: context.tr('problems_your_crop_is_healthy'),
     );
   }
 
@@ -180,7 +165,7 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
     return GridView.builder(
       padding: const EdgeInsets.all(24),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 280,
+        maxCrossAxisExtent: 320,
         childAspectRatio: 0.72,
         crossAxisSpacing: 20,
         mainAxisSpacing: 20,
@@ -264,63 +249,69 @@ class _ProblemCard extends StatelessWidget {
             Expanded(
               flex: 4,
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Category Chip
+                    // Category chip + Problem Name grouped at top
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Category Chip
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: categoryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: Text(
+                            problem.category ?? context.tr('problems_category_other'),
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: categoryColor,
+                              letterSpacing: 0.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        // Problem Name
+                        Text(
+                          problem.name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.textPrimary,
+                            letterSpacing: -0.2,
+                            height: 1.25,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                    // View Treatments pill button pinned at bottom
                     Container(
+                      width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                          horizontal: 10, vertical: 7),
                       decoration: BoxDecoration(
-                        color: categoryColor.withValues(alpha: 0.1),
+                        color: AppTheme.textPrimary,
                         borderRadius: BorderRadius.circular(100),
                       ),
                       child: Text(
-                        problem.category ?? 'Other',
-                        style: TextStyle(
-                          
+                        context.tr('problems_view_treatments'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
                           fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          color: categoryColor,
-                          letterSpacing: 0.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    // Problem Name
-                    Text(
-                      problem.name,
-                      style: const TextStyle(
-                        
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: AppTheme.textPrimary,
-                        letterSpacing: -0.3,
-                        height: 1.2,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Spacer(),
-                    // Interaction hint
-                    const Row(
-                      children: [
-                        Text(
-                          'View Treatments',
-                          style: TextStyle(
-                            
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(Icons.arrow_forward_ios_rounded,
-                            size: 10, color: AppTheme.textPrimary),
-                      ],
                     ),
                   ],
                 ),

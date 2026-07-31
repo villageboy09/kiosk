@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cropsync/services/location_service.dart';
@@ -92,14 +94,42 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     return 'https://kiosk.cropsync.in/api/commodity/$capitalized.png';
   }
 
-  Future<void> _fetchPrices() async {
+  Future<void> _fetchPrices({bool force = false}) async {
     if (_currentState.isEmpty) return;
 
-    setState(() {
-      _isLoading = true;
-      _statusMessage = context.tr('fetching_state_prices');
-      _allPrices = [];
-    });
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'cached_market_prices_$_currentState';
+    
+    if (force) {
+      await prefs.remove(cacheKey);
+    }
+
+    final cachedData = prefs.getString(cacheKey);
+
+    if (cachedData != null) {
+      try {
+        final Map<String, dynamic> cachedMap = jsonDecode(cachedData);
+        final records = cachedMap['records'] as List?;
+        final date = cachedMap['date']?.toString() ?? '';
+        if (records != null && records.isNotEmpty) {
+          final cachedPrices = records
+              .whereType<Map<String, dynamic>>()
+              .map((record) => MarketPrice.fromJson(record))
+              .toList();
+          setState(() {
+            _allPrices = cachedPrices;
+            _latestDate = date;
+            _isLoading = false;
+          });
+        }
+      } catch (_) {}
+    } else {
+      setState(() {
+        _isLoading = true;
+        _statusMessage = context.tr('fetching_state_prices');
+        _allPrices = [];
+      });
+    }
 
     try {
       final response = await ApiService.getLiveStateMarketPrices(_currentState);
@@ -115,6 +145,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
             _allPrices = [];
             _statusMessage = context
                 .tr('no_prices_for_state', namedArgs: {'state': _currentState});
+            _isLoading = false;
           });
           return;
         }
@@ -127,7 +158,10 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
         setState(() {
           _allPrices = allFetchedPrices;
           _latestDate = response['date']?.toString() ?? _latestDate;
+          _isLoading = false;
         });
+
+        await prefs.setString(cacheKey, jsonEncode(response));
       } else {
         final fallback = await ApiService.getStateMarketPrices(_currentState);
         if (!mounted) return;
@@ -141,26 +175,28 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
               [];
           setState(() {
             _allPrices = allFetchedPrices;
+            _isLoading = false;
           });
+          await prefs.setString(cacheKey, jsonEncode(fallback));
         } else {
           setState(() {
             _statusMessage = response['error'] ??
                 fallback['error'] ??
                 context.tr('failed_fetch');
-            _allPrices = [];
+            if (_allPrices.isEmpty) {
+              _allPrices = [];
+            }
+            _isLoading = false;
           });
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _statusMessage = context.tr('error_fetching_prices');
-          _allPrices = [];
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
+          if (_allPrices.isEmpty) {
+            _statusMessage = context.tr('error_fetching_prices');
+            _allPrices = [];
+          }
           _isLoading = false;
         });
       }
@@ -286,6 +322,10 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: AppTheme.appBarText),
+            onPressed: () => _fetchPrices(force: true),
+          ),
+          IconButton(
+            icon: const Icon(Icons.my_location_rounded, color: AppTheme.appBarText),
             onPressed: _getCurrentLocation,
           ),
         ],
@@ -297,7 +337,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _fetchPrices,
+          onRefresh: () => _fetchPrices(force: true),
           child: _isLoading
               ? _buildShimmerEffect()
               : _allPrices.isEmpty

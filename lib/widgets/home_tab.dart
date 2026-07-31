@@ -197,7 +197,7 @@ class _HomeTabState extends State<HomeTab> {
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            padding: const EdgeInsets.only(left: 20, right: 20, top: 24, bottom: 80),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 600),
               child: _ServicesGrid(

@@ -1,7 +1,9 @@
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 // google_fonts import removed — AppTheme.getTextStyle() handles font selection
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -228,23 +230,56 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({bool force = false}) async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+
+    final prefs = await SharedPreferences.getInstance();
+    if (force) {
+      await prefs.remove('cached_chc_equipments');
+      await prefs.remove('cached_chc_crops');
+    }
+
+    final locale = context.locale.languageCode;
+    final cachedEquip = prefs.getString('cached_chc_equipments');
+    final cachedCrops = prefs.getString('cached_chc_crops');
+
+    if (cachedEquip != null && cachedCrops != null) {
+      try {
+        final List<dynamic> equipList = jsonDecode(cachedEquip);
+        final List<dynamic> cropsList = jsonDecode(cachedCrops);
+        setState(() {
+          _equipments = equipList.map((e) => Equipment.fromJson(e)).toList();
+          _crops = cropsList.map((c) => Crop.fromJson(c)).toList();
+          _isLoading = false;
+        });
+      } catch (_) {}
+    } else {
+      setState(() => _isLoading = true);
+    }
+
     try {
       final user = AuthService.currentUser;
-      final locale = context.locale.languageCode;
-      
+
       final equipmentsData = await ApiService.getCHCEquipments(
           isMember: _state.isMember, clientCode: user?.clientCode);
-      _equipments = equipmentsData.map((e) => Equipment.fromJson(e)).toList();
-      
+
       final cropsData = await ApiService.getCrops(lang: locale);
-      _crops = cropsData.map((c) => Crop.fromJson(c)).toList();
+
+      if (mounted) {
+        setState(() {
+          _equipments = equipmentsData.map((e) => Equipment.fromJson(e)).toList();
+          _crops = cropsData.map((c) => Crop.fromJson(c)).toList();
+          _isLoading = false;
+        });
+
+        await prefs.setString('cached_chc_equipments', jsonEncode(equipmentsData));
+        await prefs.setString('cached_chc_crops', jsonEncode(cropsData));
+      }
     } catch (e) {
-      // Silent error handling
+      if (mounted && _equipments.isEmpty) {
+        setState(() => _isLoading = false);
+      }
     }
-    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _loadBookedDates() async {
@@ -811,7 +846,11 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
         centerTitle: false,
         actions: [
           _MemberBadge(isMember: _state.isMember),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: AppTheme.appBarText),
+            onPressed: () => _loadData(force: true),
+          ),
           IconButton(
             icon: const Icon(Icons.receipt_long_rounded, color: AppTheme.appBarText),
             onPressed: _showBookingsBottomSheet,

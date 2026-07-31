@@ -35,6 +35,7 @@
   "home_bottom_nav_home": "होम",
   "home_bottom_nav_advisories": "सलाह",
   "home_bottom_nav_settings": "सेटिंग्स",
+  "home_bottom_nav_reels": "रील्स",
   "home_quick_actions": "त्वरित कार्रवाइयां",
   "home_feature_weather_title": "मौसम",
   "home_feature_weather_subtitle": "लाइव अपडेट",
@@ -597,5 +598,30 @@
   "diag_no_crops_saved": "आपने अभी तक 'मेरी फसलें' अनुभाग में कोई फसल नहीं बचाई है।",
   "notifications_title": "सूचनाएं",
   "notifications_empty": "अभी तक कोई सूचना नहीं",
-  "notifications_empty_desc": "कोई भी फसल सलाह या बाजार मूल्य अपडेट यहां दिखाई देगा।"
+  "notifications_empty_desc": "कोई भी फसल सलाह या बाजार मूल्य अपडेट यहां दिखाई देगा।",
+
+  "problems_view_treatments": "उपचार देखें",
+  "problems_category_other": "अन्य",
+  "problems_your_crop_is_healthy": "आपकी फसल इस चरण में स्वस्थ दिख रही है।",
+
+  "reels_comments": "टिप्पणियाँ",
+  "reels_no_video": "वीडियो लोड नहीं हो सका",
+  "reels_retry": "पुनः प्रयास करें",
+  "reels_follow": "फ़ॉलो करें",
+  "reels_call": "कॉल करें",
+  "reels_share": "शेयर करें",
+  "reels_muted": "म्यूट",
+  "reels_sound": "आवाज़",
+  "reels_save": "सेव करें",
+  "reels_saved_snack": "रील सेव हो गई!",
+  "reels_unsaved_snack": "रील सेव से हटा दी गई!",
+  "reels_add_comment": "टिप्पणी जोड़ें...",
+  "reels_dialer_error": "डायलर नहीं खुल सका",
+
+  "diag_loading_1": "एआई आपके पौधे का निदान कर रहा है...",
+  "diag_loading_2": "पत्ती की संरचना और पैटर्न विश्लेषण हो रहा है...",
+  "diag_loading_3": "संभावित कीट/रोग संकेत पहचाने जा रहे हैं...",
+  "diag_loading_4": "कृषि डेटाबेस से परिणाम मिलाए जा रहे हैं...",
+  "diag_loading_5": "निदान और रिकवरी प्लान तैयार हो रहा है...",
+  "reels_error_load": "वीडियो लोड नहीं हो सका"
 }

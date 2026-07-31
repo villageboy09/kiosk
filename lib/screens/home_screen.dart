@@ -1,6 +1,7 @@
 import 'package:cropsync/screens/crop_advisory_grid_screen.dart';
 import 'package:cropsync/screens/profile_screen.dart';
 import 'package:cropsync/screens/settings_screen.dart';
+import 'package:cropsync/screens/reels_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/location_service.dart';
 import 'package:cropsync/models/user.dart';
@@ -17,7 +18,6 @@ import 'package:shimmer/shimmer.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cropsync/screens/plant_analysis_screen.dart';
 import 'package:cropsync/screens/notifications_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Main home screen - Zepto-inspired clean architecture
 class HomeScreen extends StatefulWidget {
@@ -88,7 +88,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       if (user != null) {
         final currentUser = user;
-        NotificationService.subscribeToDistrictTopic(currentUser, lang: context.locale.languageCode);
+        NotificationService.subscribeToDistrictTopic(currentUser,
+            lang: context.locale.languageCode);
         setState(() {
           _farmerName = currentUser.name;
           _profileImageUrl = currentUser.profileImageUrl;
@@ -103,126 +104,162 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<int> _getAvailableRequests() async {
-    final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now();
-    final times = prefs.getStringList('nvidia_request_timestamps') ?? [];
-    
-    final validTimes = times.where((t) {
-      final dt = DateTime.tryParse(t);
-      if (dt == null) return false;
-      return now.difference(dt).inSeconds < 60;
-    }).toList();
-    
-    return (40 - validTimes.length).clamp(0, 40).toInt();
+  Widget _buildGridButton({
+    required BuildContext context,
+    required VoidCallback onTap,
+    required Gradient gradient,
+    required IconData icon,
+    required Color shadowColor,
+  }) {
+    return Container(
+      width: 84,
+      height: 84,
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: onTap,
+          child: Center(
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 36,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
-  void _showImageSourceSheet() {
+  void _showImageSourceSheet() async {
     HapticFeedback.selectionClick();
-    showModalBottomSheet(
+    final String? action = await showModalBottomSheet<String>(
       context: context,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'diag_select_source'.tr(),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              FutureBuilder<int>(
-                future: _getAvailableRequests(),
-                builder: (context, snapshot) {
-                  final reqs = snapshot.data ?? 40;
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 4, bottom: 12),
-                    child: Text(
-                      'diag_rate_limit'.tr(args: [reqs.toString()]),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: reqs < 5 ? Colors.red : Colors.grey[600],
-                        fontWeight: FontWeight.w600,
+                const SizedBox(height: 24),
+                const Text(
+                  "Choose Action",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  "Select a source to diagnose your crop's health",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildGridButton(
+                      context: context,
+                      onTap: () => Navigator.pop(context, 'camera'),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFBBF24), Color(0xFFD97706)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
+                      icon: Icons.camera_alt_rounded,
+                      shadowColor: const Color(0xFFD97706).withValues(alpha: 0.3),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                leading: const Icon(Icons.camera_alt_rounded, color: AppTheme.primary),
-                title: Text('diag_camera'.tr()),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage(ImageSource.camera);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library_rounded, color: AppTheme.primary),
-                title: Text('diag_gallery'.tr()),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage(ImageSource.gallery);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.eco_rounded, color: AppTheme.primary),
-                title: Text('diag_tab_crops'.tr()),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const PlantAnalysisScreen(),
+                    _buildGridButton(
+                      context: context,
+                      onTap: () => Navigator.pop(context, 'gallery'),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF34D399), Color(0xFF047857)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      icon: Icons.image_rounded,
+                      shadowColor: const Color(0xFF047857).withValues(alpha: 0.3),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-            ],
+                    _buildGridButton(
+                      context: context,
+                      onTap: () => Navigator.pop(context, 'crops'),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFD97706), Color(0xFF78350F)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      icon: Icons.eco_rounded,
+                      shadowColor: const Color(0xFF78350F).withValues(alpha: 0.3),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
           ),
         );
       },
     );
-  }
 
-  Future<void> _pickImage(ImageSource source) async {
-    HapticFeedback.mediumImpact();
-    final picker = ImagePicker();
-    try {
-      final XFile? photo = await picker.pickImage(
-        source: source,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
+    if (action == null || !mounted) return;
+
+    // Small delay to ensure the bottom sheet slide down completes cleanly
+    await Future.delayed(const Duration(milliseconds: 250));
+
+    if (!mounted) return;
+
+    if (action == 'camera') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const PlantAnalysisScreen(initialSource: ImageSource.camera),
+        ),
       );
-
-      if (photo != null && mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => PlantAnalysisScreen(imagePath: photo.path),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error picking image: $e")),
-        );
-      }
+    } else if (action == 'gallery') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const PlantAnalysisScreen(initialSource: ImageSource.gallery),
+        ),
+      );
+    } else if (action == 'crops') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const PlantAnalysisScreen(),
+        ),
+      );
     }
   }
+
+
 
   void _onNavTap(int index) {
     if (_selectedIndex != index) {
@@ -263,6 +300,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
       const CropAdvisoryGridScreen(key: ValueKey('advisory_tab')),
       const SettingsScreen(key: ValueKey('settings_tab')),
+      const ReelsScreen(key: ValueKey('reels_tab')),
     ];
 
     return PopScope(
@@ -277,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       },
       child: Scaffold(
         backgroundColor: AppTheme.background,
-        appBar: _selectedIndex == 1 ? null : _buildCurvedAppBar(),
+        appBar: (_selectedIndex == 1 || _selectedIndex == 3) ? null : _buildCurvedAppBar(),
         body: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           child: _isLoading
@@ -288,46 +326,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   children: screens,
                 ),
         ),
-        floatingActionButton: _selectedIndex == 0
-            ? AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  return Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      Positioned(
-                        width: 56 + (_pulseController.value * 28),
-                        height: 56 + (_pulseController.value * 28),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFF16A34A).withValues(alpha: (1.0 - _pulseController.value) * 0.35),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        width: 56 + (_pulseController.value * 14),
-                        height: 56 + (_pulseController.value * 14),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFF16A34A).withValues(alpha: (1.0 - _pulseController.value) * 0.65),
-                          ),
-                        ),
-                      ),
-                      FloatingActionButton(
-                        onPressed: _showImageSourceSheet,
-                        backgroundColor: const Color(0xFF16A34A),
-                        shape: const CircleBorder(),
-                        elevation: 6,
-                        child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 28),
-                      ),
-                    ],
-                  );
-                },
-              )
-            : null,
         bottomNavigationBar: _buildBottomNav(),
       ),
     );
@@ -400,10 +398,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildBottomNav() {
     return Container(
+      height: 72,
       decoration: BoxDecoration(
         color: Colors.white,
-        border:
-            const Border(top: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
+        border: const Border(top: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -416,33 +414,54 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         color: Colors.transparent,
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _NavItem(
-                  icon: Icons.home_outlined,
-                  activeIcon: Icons.home_rounded,
-                  label: 'home_bottom_nav_home'.tr(),
-                  isActive: _selectedIndex == 0,
-                  onTap: () => _onNavTap(0),
-                  activeColor: AppTheme.primary,
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.home_outlined,
+                    activeIcon: Icons.home_rounded,
+                    label: 'home_bottom_nav_home'.tr(),
+                    isActive: _selectedIndex == 0,
+                    onTap: () => _onNavTap(0),
+                    activeColor: AppTheme.primary,
+                  ),
                 ),
-                _NavItem(
-                  icon: Icons.eco_outlined,
-                  activeIcon: Icons.eco,
-                  label: 'home_bottom_nav_advisories'.tr(),
-                  isActive: _selectedIndex == 1,
-                  onTap: () => _onNavTap(1),
-                  activeColor: AppTheme.primary,
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.eco_outlined,
+                    activeIcon: Icons.eco,
+                    label: 'home_bottom_nav_advisories'.tr(),
+                    isActive: _selectedIndex == 1,
+                    onTap: () => _onNavTap(1),
+                    activeColor: AppTheme.primary,
+                  ),
                 ),
-                _NavItem(
-                  icon: Icons.settings_outlined,
-                  activeIcon: Icons.settings,
-                  label: 'home_bottom_nav_settings'.tr(),
-                  isActive: _selectedIndex == 2,
-                  onTap: () => _onNavTap(2),
-                  activeColor: AppTheme.primary,
+                Expanded(
+                  child: _AnimatedCameraTab(
+                    animationController: _pulseController,
+                    onTap: _showImageSourceSheet,
+                  ),
+                ),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.settings_outlined,
+                    activeIcon: Icons.settings,
+                    label: 'home_bottom_nav_settings'.tr(),
+                    isActive: _selectedIndex == 2,
+                    onTap: () => _onNavTap(2),
+                    activeColor: AppTheme.primary,
+                  ),
+                ),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.video_library_outlined,
+                    activeIcon: Icons.video_library_rounded,
+                    label: 'home_bottom_nav_reels'.tr(),
+                    isActive: _selectedIndex == 3,
+                    onTap: () => _onNavTap(3),
+                    activeColor: AppTheme.primary,
+                  ),
                 ),
               ],
             ),
@@ -453,7 +472,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 }
 
-/// Floating Nav Item - Modern Icon-Only with Indicator
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
@@ -475,36 +493,39 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(100),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: isActive ? activeColor.withValues(alpha: 0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              size: 24,
-              color: isActive ? activeColor : const Color(0xFF9CA3AF),
-            ),
-            if (isActive) ...[
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: activeColor,
-                  letterSpacing: 0.2,
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: double.infinity,
+        height: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                isActive ? activeIcon : icon,
+                size: 24,
+                color: isActive ? activeColor : const Color(0xFF9CA3AF),
+              ),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+                    color: isActive ? activeColor : const Color(0xFF9CA3AF),
+                    letterSpacing: 0.1,
+                  ),
                 ),
               ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -559,7 +580,8 @@ class WiggleBellButton extends StatefulWidget {
   State<WiggleBellButton> createState() => _WiggleBellButtonState();
 }
 
-class _WiggleBellButtonState extends State<WiggleBellButton> with SingleTickerProviderStateMixin {
+class _WiggleBellButtonState extends State<WiggleBellButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
@@ -614,7 +636,8 @@ class _WiggleBellButtonState extends State<WiggleBellButton> with SingleTickerPr
                   HapticFeedback.selectionClick();
                   NotificationService.unreadNotifier.value = 0;
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const NotificationsScreen()),
                   );
                 },
                 splashRadius: 24,
@@ -652,3 +675,88 @@ class _WiggleBellButtonState extends State<WiggleBellButton> with SingleTickerPr
   }
 }
 
+class _AnimatedCameraTab extends StatelessWidget {
+  final AnimationController animationController;
+  final VoidCallback onTap;
+
+  const _AnimatedCameraTab({
+    required this.animationController,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 60,
+        height: 60,
+        alignment: Alignment.center,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            // Pulse Ring 1 (Fades out as it grows)
+            AnimatedBuilder(
+              animation: animationController,
+              builder: (context, child) {
+                return Container(
+                  width: 42 + (animationController.value * 18),
+                  height: 42 + (animationController.value * 18),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF10B981).withValues(
+                      alpha: (1.0 - animationController.value) * 0.45,
+                    ),
+                  ),
+                );
+              },
+            ),
+            // Pulse Ring 2 (Alternating pulse ripple)
+            AnimatedBuilder(
+              animation: animationController,
+              builder: (context, child) {
+                final double val = (animationController.value + 0.5) % 1.0;
+                return Container(
+                  width: 42 + (val * 12),
+                  height: 42 + (val * 12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF10B981).withValues(
+                      alpha: (1.0 - val) * 0.6,
+                    ),
+                  ),
+                );
+              },
+            ),
+            // Core Static Button
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Color(0xFF34D399), Color(0xFF059669)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x3310B981),
+                    blurRadius: 6,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.camera_alt_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

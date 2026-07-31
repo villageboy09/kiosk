@@ -156,8 +156,8 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
               sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 300,
                   mainAxisSpacing: 16,
                   crossAxisSpacing: 16,
                   childAspectRatio: 0.85,

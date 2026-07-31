@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:cropsync/models/crop_problem.dart';
@@ -15,14 +16,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class PlantAnalysisScreen extends StatefulWidget {
   final String? imagePath;
-  const PlantAnalysisScreen({super.key, this.imagePath});
+  final ImageSource? initialSource;
+  const PlantAnalysisScreen({super.key, this.imagePath, this.initialSource});
 
   @override
   State<PlantAnalysisScreen> createState() => _PlantAnalysisScreenState();
 }
 
 class _PlantAnalysisScreenState extends State<PlantAnalysisScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
 
   // AI Diagnosis Tab State
@@ -34,6 +36,23 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen>
   String? _activeImagePath;
   final ImagePicker _picker = ImagePicker();
 
+  // Preparation state for launching picker
+  bool _isPreparingPicker = false;
+  ImageSource? _selectedSource;
+  Timer? _prepareTimer;
+  int _prepareCountdown = 2;
+
+  // Dynamic loading texts — resolved at runtime so locale is respected
+  int _loadingTextIndex = 0;
+  Timer? _loadingTimer;
+  List<String> get _loadingTexts => [
+    context.tr('diag_loading_1'),
+    context.tr('diag_loading_2'),
+    context.tr('diag_loading_3'),
+    context.tr('diag_loading_4'),
+    context.tr('diag_loading_5'),
+  ];
+
   // My Crops Forecast Tab State
   List<dynamic> _savedCrops = [];
   bool _isLoadingCrops = false;
@@ -44,18 +63,69 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen>
     super.initState();
     _activeImagePath = widget.imagePath;
     _tabController = TabController(length: 2, vsync: this);
-    if (widget.imagePath == null) {
+    if (widget.imagePath == null && widget.initialSource == null) {
       _tabController.index = 1;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSavedCrops();
+      if (widget.initialSource != null) {
+        _startPrepareTimer(widget.initialSource!);
+      }
     });
   }
 
   @override
   void dispose() {
+    _prepareTimer?.cancel();
+    _loadingTimer?.cancel();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _startPrepareTimer(ImageSource source) {
+    _prepareTimer?.cancel();
+    setState(() {
+      _isPreparingPicker = true;
+      _selectedSource = source;
+      _prepareCountdown = 2;
+    });
+
+    _prepareTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        if (_prepareCountdown > 1) {
+          setState(() {
+            _prepareCountdown--;
+          });
+        } else {
+          timer.cancel();
+          setState(() {
+            _isPreparingPicker = false;
+          });
+          _localPickImage(_selectedSource!);
+        }
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  void _switchPrepareSource() {
+    if (_selectedSource == ImageSource.camera) {
+      _startPrepareTimer(ImageSource.gallery);
+    } else {
+      _startPrepareTimer(ImageSource.camera);
+    }
+  }
+
+  void _cancelPrepare() {
+    _prepareTimer?.cancel();
+    setState(() {
+      _isPreparingPicker = false;
+      _selectedSource = null;
+    });
+    if (_activeImagePath == null) {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<int> _getAvailableRequests() async {
@@ -132,6 +202,18 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen>
       _isLoading = true;
       _errorMsg = null;
       _analysisResult = null;
+      _loadingTextIndex = 0;
+    });
+
+    _loadingTimer?.cancel();
+    _loadingTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (mounted && _isLoading) {
+        setState(() {
+          _loadingTextIndex = (_loadingTextIndex + 1) % _loadingTexts.length;
+        });
+      } else {
+        timer.cancel();
+      }
     });
 
     final nvidiaKey = dotenv.env['NVIDIA_API_KEY'];
@@ -152,6 +234,14 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen>
               ? 'Hindi'
               : 'English';
 
+      final cropsList = await ApiService.getCrops(lang: locale);
+      final formattedCrops = cropsList
+          .map((c) => {
+                'id': c['id'],
+                'name': c['name'],
+              })
+          .toList();
+
       final problemsList = await ApiService.getProblems(lang: locale);
       _problemsList = problemsList;
 
@@ -160,6 +250,7 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen>
                 'id': p['id'],
                 'name': p['name'],
                 'category': p['category'],
+                'crop_id': p['crop_id'],
               })
           .toList();
 
@@ -181,6 +272,7 @@ Your task is to perform an advanced plant health diagnosis and visual analysis o
 Follow these strict rules:
 1. First, verify if the image shows a plant, crop, leaf, stem, fruit, or root. If the image is of something else (like a person, a room, a household object, or text), you must set "is_plant" to false and explain why in the "reason" field.
 2. If it is a plant:
+   - Identify the crop shown in the image from the database list of crops: ${jsonEncode(formattedCrops)}. Set "detected_crop_id" to its exact integer ID and "detected_crop_name" to its name. If the crop in the image is not in this database list, set "detected_crop_id" to null and "detected_crop_name" to the name of the crop you identify.
    - Identify if the plant is completely **healthy**. If so, set "health_status" to "healthy" and "matched_problem_name" to "Healthy Plant".
    - Check for **physical damages** (e.g. stem breakage, lodging, wilting, torn leaves, animal damage). If detected, set "health_status" to "physical_damage".
    - Check for **nutrient deficiencies** (e.g. chlorosis/yellowing, necrosis, purpling leaves, stunted growth). If detected, set "health_status" to "deficiency".
@@ -190,16 +282,18 @@ Follow these strict rules:
 5. Compare your diagnosis with our database of known problems to find matches. Here is the database list:
 ${jsonEncode(formattedProblems)}
 
-If it matches one of these database items, set "matched_problem_id" to its exact integer ID, and "matched_problem_name" to its name.
+Crucially, make sure that the matched problem's "crop_id" matches the "detected_crop_id" of the crop you identified in step 2. For example, if you detect Rice/Paddy Blast, match it with the Blast problem that is associated with the Paddy/Rice crop (detected_crop_id matching its crop_id), NOT wheat, maize, or other crops. If it matches one of these database items, set "matched_problem_id" to its exact integer ID, and "matched_problem_name" to its name.
 6. Provide general fallback AI control measures in "ai_control_measures".
 
-You MUST output the JSON values (specifically "matched_problem_name", "health_status", "observed_symptoms", "ai_analysis", "recovery_recommendations", "reason", and "ai_control_measures") in the $langName language. Ensure that the JSON keys remain exactly as defined (in English) but the string values are translated/written in $langName.
+You MUST output the JSON values (specifically "matched_problem_name", "detected_crop_name", "health_status", "observed_symptoms", "ai_analysis", "recovery_recommendations", "reason", and "ai_control_measures") in the $langName language. Ensure that the JSON keys remain exactly as defined (in English) but the string values are translated/written in $langName.
 
 Output RAW JSON ONLY. Do not wrap in markdown or any conversational text.
 Format:
 {
   "is_plant": true,
   "reason": "",
+  "detected_crop_id": null or number,
+  "detected_crop_name": "Paddy" or similar,
   "matched_problem_id": null or number,
   "matched_problem_name": "identified problem name or 'Healthy Plant'",
   "health_status": "healthy" or "diseased" or "deficiency" or "physical_damage" or "pest_infestation",
@@ -280,18 +374,24 @@ Format:
           _hasVerifiedAdvisory = hasVerifiedAdvisory;
           _isLoading = false;
         });
+        _loadingTimer?.cancel();
       } else {
         setState(() {
           _isLoading = false;
-          _errorMsg =
-              "API returned status: ${response.statusCode}. Please try again.";
+          _errorMsg = response.statusCode == 503
+              ? "The AI model is currently busy or starting up. Please try again in a few moments."
+              : response.statusCode == 429
+                  ? "Too many requests. Please wait a moment before trying again."
+                  : "API Error: ${response.statusCode}. Please try again.";
         });
+        _loadingTimer?.cancel();
       }
     } catch (e) {
       setState(() {
         _isLoading = false;
         _errorMsg = "Connection error. Please check your internet connection.";
       });
+      _loadingTimer?.cancel();
       debugPrint("Vision API error: $e");
     }
   }
@@ -372,6 +472,17 @@ Format:
           _analysisResult = null;
           _errorMsg = null;
         });
+        // Auto-run analysis
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (mounted && _activeImagePath != null) {
+            _analyzeImage();
+          }
+        });
+      } else {
+        // If cancelled and we don't have an active image path yet, go back
+        if (mounted && _activeImagePath == null) {
+          Navigator.of(context).pop();
+        }
       }
     } catch (e) {
       setState(() {
@@ -381,6 +492,107 @@ Format:
   }
 
   Widget _buildDiagnosisTab() {
+    if (_isPreparingPicker) {
+      final isCamera = _selectedSource == ImageSource.camera;
+      return Center(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF0FDF4),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isCamera ? Icons.camera_alt_rounded : Icons.photo_library_rounded,
+                    size: 48,
+                    color: const Color(0xFF16A34A),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  isCamera ? "Opening Camera..." : "Opening Gallery...",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  "Starting in $_prepareCountdown seconds. You can switch to the other option below.",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: 140,
+                  child: LinearProgressIndicator(
+                    backgroundColor: Colors.green.withValues(alpha: 0.1),
+                    color: Colors.green,
+                    minHeight: 4,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 50,
+                        child: OutlinedButton(
+                          onPressed: _cancelPrepare,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.grey, width: 1.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            "Cancel",
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: SizedBox(
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _switchPrepareSource,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF16A34A),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            isCamera ? "Use Gallery" : "Use Camera",
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (_activeImagePath == null) {
       return Center(
         child: SingleChildScrollView(
@@ -429,7 +641,7 @@ Format:
                       child: SizedBox(
                         height: 56,
                         child: ElevatedButton.icon(
-                          onPressed: () => _localPickImage(ImageSource.camera),
+                          onPressed: () => _startPrepareTimer(ImageSource.camera),
                           icon: const Icon(Icons.camera_alt_rounded,
                               color: Colors.white),
                           label: const Text(
@@ -453,7 +665,7 @@ Format:
                       child: SizedBox(
                         height: 56,
                         child: OutlinedButton.icon(
-                          onPressed: () => _localPickImage(ImageSource.gallery),
+                          onPressed: () => _startPrepareTimer(ImageSource.gallery),
                           icon: const Icon(Icons.photo_library_rounded,
                               color: Color(0xFF16A34A)),
                           label: const Text(
@@ -501,8 +713,6 @@ Format:
       child: Column(
         children: [
           Container(
-            height: 320,
-            width: double.infinity,
             margin: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
@@ -514,11 +724,20 @@ Format:
                 ),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Image.file(
-                File(_activeImagePath!),
-                fit: BoxFit.cover,
+            child: AspectRatio(
+              aspectRatio: 1.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.file(
+                      File(_activeImagePath!),
+                      fit: BoxFit.cover,
+                    ),
+                    if (_isLoading) const LaserScannerOverlay(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -580,13 +799,24 @@ Format:
                 padding: const EdgeInsets.all(32),
                 child: Column(
                   children: [
-                    const CircularProgressIndicator(color: AppTheme.primary),
-                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: 140,
+                      child: LinearProgressIndicator(
+                        backgroundColor: Colors.green.withValues(alpha: 0.1),
+                        color: Colors.green,
+                        minHeight: 4,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     Text(
-                      'diag_loading'.tr(),
+                      _loadingTexts[_loadingTextIndex],
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary),
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
+                        fontSize: 15,
+                      ),
                     ),
                   ],
                 ),
@@ -670,6 +900,8 @@ Format:
         ? List<String>.from(result['recovery_recommendations'])
         : <String>[];
 
+    final detectedCropName = result['detected_crop_name']?.toString();
+
     Color statusColor;
     String statusTextKey;
     IconData statusIcon;
@@ -748,12 +980,27 @@ Format:
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: Text(
-                        problemName,
-                        style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimary),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            problemName,
+                            style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary),
+                          ),
+                          if (detectedCropName != null && detectedCropName.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              "Crop: $detectedCropName",
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primary),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -1131,6 +1378,12 @@ class _CropForecastModalState extends State<_CropForecastModal> {
         }
       }
 
+      if (mounted) {
+        setState(() {
+          _currentStageResolved = currentStageName;
+        });
+      }
+
       // 4. Fetch Farmer Location Context
       final currentUser = await AuthService.getCurrentUser();
       final region = currentUser?.district ?? 'Andhra Pradesh';
@@ -1190,8 +1443,11 @@ Formatting and Language Rules:
         if (mounted) {
           setState(() {
             _modalLoading = false;
-            _modalError =
-                "API Error: ${response.statusCode}. Please try again.";
+            _modalError = response.statusCode == 503
+                ? "The AI model is currently busy or starting up. Please try again in a few moments."
+                : response.statusCode == 429
+                    ? "Too many requests. Please wait a moment before trying again."
+                    : "API Error: ${response.statusCode}. Please try again.";
           });
         }
       }
@@ -1207,10 +1463,14 @@ Formatting and Language Rules:
 
   @override
   Widget build(BuildContext context) {
+    final sowingDate = DateTime.tryParse(widget.sowingDateStr) ?? DateTime.now();
+    final daysSinceSowing = DateTime.now().difference(sowingDate).inDays;
+
     return Padding(
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
+        width: double.infinity,
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.85,
         ),
@@ -1219,14 +1479,110 @@ Formatting and Language Rules:
             ? Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(height: 16),
-                  const CircularProgressIndicator(color: AppTheme.primary),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
+                  // Crop Info Card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Crop Image
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: 60,
+                            height: 60,
+                            color: const Color(0xFFE2E8F0),
+                            child: () {
+                              final imgUrl = widget.crop['crop_image_url']?.toString() ?? widget.crop['image_url']?.toString();
+                              return imgUrl != null && imgUrl.isNotEmpty
+                                  ? SafeNetworkImage(
+                                      imageUrl: imgUrl,
+                                      fit: BoxFit.cover,
+                                      placeholder: const Icon(Icons.eco_rounded, color: Color(0xFF16A34A), size: 28),
+                                    )
+                                  : const Icon(Icons.eco_rounded, color: Color(0xFF16A34A), size: 28);
+                            }(),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Crop Details Text Column
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.cropName,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                "Field: ${widget.fieldName}  |  Variety: ${widget.varietyName}",
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                "Days since sowing: $daysSinceSowing days",
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              if (_currentStageResolved != null) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFDCFCE7),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                                  ),
+                                  child: Text(
+                                    _currentStageResolved!,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF15803D),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: 140,
+                    child: LinearProgressIndicator(
+                      backgroundColor: Colors.green.withValues(alpha: 0.1),
+                      color: Colors.green,
+                      minHeight: 4,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   Text(
                     'diag_loading_forecast'.tr(),
                     style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        fontSize: 15,
                         color: AppTheme.textPrimary),
                   ),
                   const SizedBox(height: 16),
@@ -1380,6 +1736,82 @@ Formatting and Language Rules:
                     ),
                   ),
       ),
+    );
+  }
+}
+
+class LaserScannerOverlay extends StatefulWidget {
+  const LaserScannerOverlay({super.key});
+
+  @override
+  State<LaserScannerOverlay> createState() => _LaserScannerOverlayState();
+}
+
+class _LaserScannerOverlayState extends State<LaserScannerOverlay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            // Soft scanning green gradient overlay
+            Positioned.fill(
+              child: Container(
+                color: Colors.green.withValues(alpha: 0.08),
+              ),
+            ),
+            // Moving laser line
+            Align(
+              alignment: Alignment(0, (_animation.value * 2.0) - 1.0),
+              child: Container(
+                height: 4,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.8),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                  gradient: const LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      Color(0xFF34D399),
+                      Color(0xFF059669),
+                      Color(0xFF34D399),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
