@@ -127,10 +127,10 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
                 return SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 20.0, vertical: 20.0),
+                      horizontal: 24.0, vertical: 32.0),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight - 40,
+                      minHeight: constraints.maxHeight - 64,
                     ),
                     child: Center(
                       child: ConstrainedBox(
@@ -140,7 +140,7 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen>
                           child: SlideTransition(
                             position: _slideAnim,
                             child: Container(
-                              padding: const EdgeInsets.all(22),
+                              padding: EdgeInsets.zero,
                               decoration: const BoxDecoration(
                                 color: Colors.transparent, // Completely removed card backdrop
                               ),

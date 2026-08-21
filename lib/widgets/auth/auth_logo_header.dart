@@ -39,11 +39,11 @@ class AuthLogoHeader extends StatelessWidget {
             textAlign: textAlign,
             style: const TextStyle(
               
-              fontSize: 32,
+              fontSize: 26,
               fontWeight: FontWeight.w900,
               color: AppTheme.textPrimary,
-              letterSpacing: -1,
-              height: 1.1,
+              letterSpacing: -0.5,
+              height: 1.3,
             ),
           ),
           const SizedBox(height: 12),

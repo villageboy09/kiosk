@@ -2,7 +2,6 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 
 import 'package:cropsync/main.dart';
 
@@ -11,12 +10,8 @@ void main() {
 
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({
-      'is_logged_in': true,
-      'current_user': jsonEncode({
-        'user_id': 'test_user',
-        'name': 'Test User',
-        'phone_number': '9999999999',
-      }),
+      'is_logged_in': false,
+      'language_selected': false,
     });
     await EasyLocalization.ensureInitialized();
   });
@@ -32,8 +27,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
-
+    await tester.pump();
     expect(find.byType(MaterialApp), findsOneWidget);
   });
 }

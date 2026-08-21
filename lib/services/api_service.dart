@@ -131,18 +131,45 @@ class ApiService {
 
   /// Register a new user
   static Future<Map<String, dynamic>> registerUser(
-      String name, String phoneNumber, String clientCode) async {
+      String name, String phoneNumber, String clientCode, {
+        String? role,
+        String? password,
+        String? securityQuestion,
+        String? securityAnswer,
+        String? username,
+        String? email,
+      }) async {
     final url = Uri.parse('$baseUrl/api.php?action=register_user');
 
     try {
+      final body = {
+        'name': name,
+        'phone_number': phoneNumber,
+        'client_code': clientCode,
+      };
+      if (role != null) {
+        body['role'] = role;
+      }
+      if (password != null) {
+        body['password'] = password;
+      }
+      if (securityQuestion != null) {
+        body['security_question'] = securityQuestion;
+      }
+      if (securityAnswer != null) {
+        body['security_answer'] = securityAnswer;
+      }
+      if (username != null) {
+        body['username'] = username;
+      }
+      if (email != null) {
+        body['email'] = email;
+      }
+      
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'name': name,
-          'phone_number': phoneNumber,
-          'client_code': clientCode,
-        }),
+        body: jsonEncode(body),
       );
 
       if (response.statusCode == 200) {

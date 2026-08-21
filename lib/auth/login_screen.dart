@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,7 +8,9 @@ import 'package:cropsync/navigation/app_routes.dart';
 import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
 import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
+import 'package:cropsync/screens/operator/operator_dashboard.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/widgets/auth/auth_alert_banner.dart';
 import 'package:cropsync/widgets/auth/auth_logo_header.dart';
@@ -19,40 +20,50 @@ class LoginScreen extends StatefulWidget {
 
   const LoginScreen({super.key, this.initialPhoneNumber});
 
+  /// Exposes strict phone validation for login
+  static String? validatePhoneNumber(String rawPhone) =>
+      _LoginScreenState.validatePhoneNumber(rawPhone);
+
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  final TextEditingController _pinController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
   final FocusNode _phoneFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
 
   late final AnimationController _animController;
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
   Timer? _errorTimer;
 
-  // Selected role: 'farmer', 'retailer', 'officer', or null for role selection landing
-  String? _selectedRole;
+  // Default active role is 'farmer' (most common user)
+  String _selectedRole = 'farmer';
 
   @override
   void initState() {
     super.initState();
     _phoneFocusNode.addListener(_onFocusChange);
+    _passwordFocusNode.addListener(_onFocusChange);
+
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 850),
+      duration: const Duration(milliseconds: 750),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _animController,
       curve: Curves.easeOutCubic,
     );
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08),
+      begin: const Offset(0, 0.06),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _animController,
@@ -62,8 +73,8 @@ class _LoginScreenState extends State<LoginScreen>
 
     final digits = widget.initialPhoneNumber?.replaceAll(RegExp(r'\D'), '');
     if (digits != null) {
-      _pinController.text =
-          digits.length > 10 ? digits.substring(0, 10) : digits;
+      _phoneController.text =
+          digits.length > 10 ? digits.substring(digits.length - 10) : digits;
     }
   }
 
@@ -75,20 +86,115 @@ class _LoginScreenState extends State<LoginScreen>
   void dispose() {
     _errorTimer?.cancel();
     _phoneFocusNode.removeListener(_onFocusChange);
+    _passwordFocusNode.removeListener(_onFocusChange);
     _phoneFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
     _animController.dispose();
-    _pinController.dispose();
     super.dispose();
   }
 
   void _showError(String message) {
     _errorTimer?.cancel();
+    if (!mounted) return;
     setState(() => _errorMessage = message);
     _errorTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) {
         setState(() => _errorMessage = null);
       }
     });
+  }
+
+  /// Strict phone number validation:
+  /// - Exact 10 digits
+  /// - Must start with 6, 7, 8, or 9
+  /// - Rejects numbers with fewer than 4 unique digits (e.g. 9999999998, 9898989898)
+  /// - Rejects runs of 4+ consecutive identical digits (e.g. 9999, 8888, 0000)
+  /// - Rejects any single digit appearing 5 or more times
+  /// - Rejects 6+ sequential digits (e.g. 123456, 987654)
+  /// - Rejects repeated multi-digit patterns and dummy numbers
+  static String? validatePhoneNumber(String rawPhone) {
+    final clean = rawPhone.trim().replaceAll(RegExp(r'\D'), '');
+    if (clean.isEmpty) {
+      return 'signup_error_phone'.tr();
+    }
+    if (clean.length != 10) {
+      return 'Please enter a valid 10-digit mobile number';
+    }
+    if (!RegExp(r'^[6-9]').hasMatch(clean)) {
+      return 'Mobile number must start with 6, 7, 8, or 9';
+    }
+
+    // 1. Check distinct unique digits (real numbers have at least 4 unique digits)
+    final uniqueDigits = clean.split('').toSet();
+    if (uniqueDigits.length < 4) {
+      return 'Invalid mobile number: too few distinct digits';
+    }
+
+    // 2. Check consecutive identical digits (e.g., 9999, 8888, 0000)
+    if (RegExp(r'(\d)\1{3,}').hasMatch(clean)) {
+      return 'Invalid mobile number: consecutive repeating digits';
+    }
+
+    // 3. Check max frequency of any single digit (no digit should appear 5+ times)
+    final digitCounts = <String, int>{};
+    for (var i = 0; i < clean.length; i++) {
+      final char = clean[i];
+      digitCounts[char] = (digitCounts[char] ?? 0) + 1;
+      if (digitCounts[char]! >= 5) {
+        return 'Invalid mobile number: digit "$char" repeated too many times';
+      }
+    }
+
+    // 4. Check sequential 6+ digit ascending/descending patterns or full sequences
+    const sequentialPatterns = [
+      '0123456789',
+      '1234567890',
+      '9876543210',
+      '8765432109',
+      '9123456789',
+      '123456',
+      '234567',
+      '345678',
+      '456789',
+      '567890',
+      '987654',
+      '876543',
+      '765432',
+      '654321',
+      '543210',
+    ];
+    for (final seq in sequentialPatterns) {
+      if (clean.contains(seq)) {
+        return 'Invalid mobile number: sequential pattern detected';
+      }
+    }
+
+    // 5. Check repeated 2-digit, 3-digit, or 5-digit chunks
+    if (RegExp(r'^(\d{2})\1{3,}$').hasMatch(clean)) {
+      return 'Invalid mobile number: repetitive pattern';
+    }
+    if (RegExp(r'^(\d{3})\1{2}').hasMatch(clean)) {
+      return 'Invalid mobile number: repetitive pattern';
+    }
+    if (RegExp(r'^(\d{5})\1$').hasMatch(clean)) {
+      return 'Invalid mobile number: repetitive pattern';
+    }
+
+    // 6. Dummy numbers filter
+    const dummyNumbers = {
+      '9876543210',
+      '9876543211',
+      '9800000000',
+      '9000000000',
+      '9123456780',
+    };
+    if (dummyNumbers.contains(clean)) {
+      return 'Invalid mobile number: please enter a real contact number';
+    }
+
+    return null;
   }
 
   Future<void> _selectPhoneNumber() async {
@@ -173,14 +279,18 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'We couldn\'t automatically read your SIM details.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.textSecondary,
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    'We couldn\'t automatically read your SIM details. You can type your number manually.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
               ] else ...[
                 ...simList.map((sim) {
                   final int slot = sim['slot'] as int? ?? 1;
@@ -228,8 +338,11 @@ class _LoginScreenState extends State<LoginScreen>
                             cleanNum = cleanNum.substring(2);
                           }
                           cleanNum = cleanNum.replaceAll(RegExp(r'\D'), '');
+                          if (cleanNum.length > 10) {
+                            cleanNum = cleanNum.substring(cleanNum.length - 10);
+                          }
                           setState(() {
-                            _pinController.text = cleanNum;
+                            _phoneController.text = cleanNum;
                           });
                         }
                         Navigator.pop(context);
@@ -238,7 +351,7 @@ class _LoginScreenState extends State<LoginScreen>
                   );
                 }),
               ],
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
             ],
           ),
         );
@@ -247,16 +360,39 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _login() async {
-    final pin = _pinController.text.trim();
-    if (pin.length != 10) {
-      _showError('login_pin_length_error'.tr());
+    final phone = _phoneController.text.trim();
+    final password = _passwordController.text.trim();
+
+    final phoneError = validatePhoneNumber(phone);
+    if (phoneError != null) {
+      _showError(phoneError);
+      return;
+    }
+
+    if (_selectedRole == 'chc_operator') {
+      if (password.isEmpty) {
+        _showError('Password is required for CHC Operator');
+        return;
+      }
+      setState(() => _isLoading = true);
+      try {
+        await OperatorAuthService.login(phone, password);
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const OperatorDashboard()),
+        );
+      } catch (e) {
+        _showError(e.toString().replaceFirst('Exception: ', ''));
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      // Direct login to optimize performance (saves a redundant checkUser network call)
-      await AuthService.login(pin, role: _selectedRole);
+      await AuthService.login(phone, role: _selectedRole);
       if (!mounted) return;
 
       final loggedInUser = AuthService.currentUser;
@@ -280,13 +416,13 @@ class _LoginScreenState extends State<LoginScreen>
       final errorStr = error.toString().toLowerCase();
       // If user is not registered, redirect to signup
       if (errorStr.contains('not found') || errorStr.contains('register')) {
-        _showError('login_user_not_registered_redirect'.tr());
+        _showError('No account found with this number. Redirecting to registration...');
         await Future.delayed(const Duration(milliseconds: 1200));
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
           AppRoutes.slideFromRight(
-            SignupScreen(initialPhoneNumber: pin),
+            SignupScreen(initialPhoneNumber: phone),
           ),
         );
       } else {
@@ -297,275 +433,515 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Color _getRoleThemeColor() {
-    switch (_selectedRole) {
-      case 'retailer':
-        return const Color(0xFF1565C0);
-      case 'officer':
-        return const Color(0xFF00695C);
-      case 'farmer':
-      default:
-        return const Color(0xFF2E7D32);
-    }
-  }
-
   String _getRoleTitle() {
     switch (_selectedRole) {
       case 'retailer':
         return 'role_retailer_title'.tr();
       case 'officer':
         return 'role_officer_title'.tr();
+      case 'chc_operator':
+        return 'role_chc_operator_title'.tr();
+      case 'content_creator':
+        return 'role_content_creator_title'.tr();
       case 'farmer':
       default:
         return 'role_farmer_title'.tr();
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        if (_selectedRole != null) {
-          HapticFeedback.lightImpact();
-          setState(() {
-            _selectedRole = null;
-            _pinController.clear();
-          });
-        } else {
-          // Go back to SignupScreen
-          HapticFeedback.lightImpact();
-          Navigator.pushReplacement(
-            context,
-            AppRoutes.slideFromRight(const SignupScreen()),
-          );
-        }
-      },
-      child: Scaffold(
-        backgroundColor: AppTheme.background,
-        resizeToAvoidBottomInset: true,
-        body: SafeArea(
-          child: Stack(
+  IconData _getRoleIcon() {
+    switch (_selectedRole) {
+      case 'retailer':
+        return Icons.storefront_rounded;
+      case 'officer':
+        return Icons.verified_user_rounded;
+      case 'chc_operator':
+        return Icons.agriculture_rounded;
+      case 'content_creator':
+        return Icons.video_camera_front_rounded;
+      case 'farmer':
+      default:
+        return Icons.eco_rounded;
+    }
+  }
+
+  void _showRolePicker() {
+    HapticFeedback.selectionClick();
+    final roles = [
+      {'key': 'farmer', 'title': 'role_farmer_title'.tr(), 'desc': 'Access crop advisories & services', 'icon': Icons.eco_rounded},
+      {'key': 'chc_operator', 'title': 'role_chc_operator_title'.tr(), 'desc': 'Custom Hiring Center & equipment', 'icon': Icons.agriculture_rounded},
+      {'key': 'retailer', 'title': 'role_retailer_title'.tr(), 'desc': 'Fertilizers & seeds retail partner', 'icon': Icons.storefront_rounded},
+      {'key': 'officer', 'title': 'role_officer_title'.tr(), 'desc': 'Agricultural Extension Officer', 'icon': Icons.verified_user_rounded},
+      {'key': 'content_creator', 'title': 'role_content_creator_title'.tr(), 'desc': 'Farming videos & reels creator', 'icon': Icons.video_camera_front_rounded},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: ConstrainedBox(
-                      constraints:
-                          BoxConstraints(minHeight: constraints.maxHeight - 48),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 450),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: FadeTransition(
-                              opacity: _fadeAnimation,
-                              child: SlideTransition(
-                                position: _slideAnimation,
-                                child: AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 350),
-                                  switchInCurve: Curves.easeInOutCubic,
-                                  switchOutCurve: Curves.easeInOutCubic,
-                                  transitionBuilder: (Widget child,
-                                      Animation<double> animation) {
-                                    return FadeTransition(
-                                      opacity: animation,
-                                      child: SlideTransition(
-                                        position: Tween<Offset>(
-                                          begin: const Offset(0.08, 0),
-                                          end: Offset.zero,
-                                        ).animate(animation),
-                                        child: child,
-                                      ),
-                                    );
-                                  },
-                                  child: _selectedRole == null
-                                      ? KeyedSubtree(
-                                          key: const ValueKey(
-                                              'RoleSelectionView'),
-                                          child: _buildRoleSelectionView(),
-                                        )
-                                      : KeyedSubtree(
-                                          key: const ValueKey('LoginInputView'),
-                                          child: _buildLoginInputView(),
-                                        ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(Icons.person_pin_rounded,
+                          color: AppTheme.textPrimary, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      'choose_role'.tr(),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
                       ),
                     ),
-                  );
-                },
-              ),
-              if (_selectedRole != null)
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                        color: AppTheme.textPrimary, size: 24),
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      setState(() {
-                        _selectedRole = null;
-                        _pinController.clear();
-                      });
-                    },
-                  ),
+                  ],
                 ),
-              AuthAlertBanner(message: _errorMessage),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  itemCount: roles.length,
+                  itemBuilder: (context, index) {
+                    final role = roles[index];
+                    final isSelected = _selectedRole == role['key'];
+
+                    return GestureDetector(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() {
+                          _selectedRole = role['key'] as String;
+                          _passwordController.clear();
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppTheme.textPrimary
+                              : const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isSelected
+                                ? AppTheme.textPrimary
+                                : const Color(0xFFE5E7EB),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Colors.white.withValues(alpha: 0.15)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                role['icon'] as IconData,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppTheme.textPrimary,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    role['title'] as String,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    role['desc'] as String,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: isSelected
+                                          ? Colors.white70
+                                          : AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              isSelected
+                                  ? Icons.check_circle_rounded
+                                  : Icons.radio_button_off_rounded,
+                              color: isSelected
+                                  ? Colors.white
+                                  : const Color(0xFFD1D5DB),
+                              size: 20,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isTablet = constraints.maxWidth >= 600;
+                final isShort = constraints.maxHeight < 700;
+
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: SlideTransition(
+                        position: _slideAnimation,
+                        child: isTablet
+                            ? _buildTabletLayout(constraints)
+                            : _buildPhoneLayout(isShort),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            AuthAlertBanner(message: _errorMessage),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildRoleSelectionView() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
+  /// Responsive Single-Column Mobile Phone Layout (< 600px)
+  Widget _buildPhoneLayout(bool isShort) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: 24,
+        vertical: isShort ? 16 : 28,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AuthLogoHeader(
+            title: 'login_welcome_back'.tr(),
+            subtitle: 'Log in with your registered mobile number',
+            logoHeight: isShort ? 60 : 80,
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: isShort ? 18 : 24),
+          _buildRoleSelectorPill(isCompact: isShort),
+          SizedBox(height: isShort ? 14 : 20),
+          _buildPhoneInputField(isCompact: isShort),
+          if (_selectedRole == 'chc_operator') ...[
+            SizedBox(height: isShort ? 12 : 16),
+            _buildPasswordInputField(isCompact: isShort),
+          ],
+          SizedBox(height: isShort ? 20 : 28),
+          _buildSubmitButton(isCompact: isShort),
+          SizedBox(height: isShort ? 14 : 20),
+          _buildSignupLink(isCompact: isShort),
+        ],
+      ),
+    );
+  }
+
+  /// Responsive Two-Column Tablet Layout (>= 600px)
+  Widget _buildTabletLayout(BoxConstraints constraints) {
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 1100),
+        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 36),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Left Hero Branding & Value Badges
+            Expanded(
+              flex: 5,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 48),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Image.asset(
+                      'assets/icons/app_icon.png',
+                      width: 76,
+                      height: 76,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.eco_rounded,
+                        size: 76,
+                        color: Color(0xFF16A34A),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'CropSync',
+                      style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Smart Farming, Simplified.',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    _buildTabletValueBadge(
+                      icon: Icons.flash_on_rounded,
+                      title: '1-Tap SIM Login',
+                      subtitle: 'Instant phone number autofill without typing',
+                    ),
+                    const SizedBox(height: 14),
+                    _buildTabletValueBadge(
+                      icon: Icons.eco_rounded,
+                      title: 'Smart Crop Advisory',
+                      subtitle: 'Direct disease detection & spray schedules',
+                    ),
+                    const SizedBox(height: 14),
+                    _buildTabletValueBadge(
+                      icon: Icons.groups_rounded,
+                      title: 'Connected Community',
+                      subtitle: 'Join verified farmers, retailers & officers',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Right Column: Elevated Form Card
+            Expanded(
+              flex: 5,
+              child: Container(
+                padding: const EdgeInsets.all(36),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(
+                    color: const Color(0xFFE5E7EB),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'login_welcome_back'.tr(),
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Enter your 10-digit mobile number to access your account.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildRoleSelectorPill(isCompact: false),
+                    const SizedBox(height: 18),
+                    _buildPhoneInputField(isCompact: false),
+                    if (_selectedRole == 'chc_operator') ...[
+                      const SizedBox(height: 16),
+                      _buildPasswordInputField(isCompact: false),
+                    ],
+                    const SizedBox(height: 24),
+                    _buildSubmitButton(isCompact: false),
+                    const SizedBox(height: 18),
+                    _buildSignupLink(isCompact: false),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabletValueBadge({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
       children: [
-        const SizedBox(height: 10),
-        AuthLogoHeader(
-          title: 'login_welcome_back'.tr(),
-          subtitle: 'login_select_role_subtitle'.tr(),
-          textAlign: TextAlign.center,
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, size: 20, color: AppTheme.textPrimary),
         ),
-        const SizedBox(height: 32),
-
-        // 1. Farmer Card (Prominent green card outline)
-        _buildRoleCard(
-          role: 'farmer',
-          title: 'role_farmer_title'.tr(),
-          description: 'role_farmer_desc'.tr(),
-          icon: Icons.agriculture_rounded,
-          startColor: Colors.transparent,
-          endColor: Colors.transparent,
-          themeColor: const Color(0xFF2E7D32),
-          isPrimary: true,
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
-
-        // 2. Retailer Card (Blue card outline)
-        _buildRoleCard(
-          role: 'retailer',
-          title: 'role_retailer_title'.tr(),
-          description: 'role_retailer_desc'.tr(),
-          icon: Icons.storefront_rounded,
-          startColor: Colors.transparent,
-          endColor: Colors.transparent,
-          themeColor: const Color(0xFF1565C0),
-          isPrimary: false,
-        ),
-        const SizedBox(height: 16),
-
-        // 3. Extension Officer Card (Teal card outline)
-        _buildRoleCard(
-          role: 'officer',
-          title: 'role_officer_title'.tr(),
-          description: 'role_officer_desc'.tr(),
-          icon: Icons.verified_user_rounded,
-          startColor: Colors.transparent,
-          endColor: Colors.transparent,
-          themeColor: const Color(0xFF00695C),
-          isPrimary: false,
-        ),
-        const SizedBox(height: 30),
       ],
     );
   }
 
-  Widget _buildRoleCard({
-    required String role,
-    required String title,
-    required String description,
-    required IconData icon,
-    required Color startColor,
-    required Color endColor,
-    required Color themeColor,
-    required bool isPrimary,
-  }) {
+  /// Modern Role Selector Dropdown Pill
+  Widget _buildRoleSelectorPill({required bool isCompact}) {
     return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        setState(() {
-          _selectedRole = role;
-          _pinController.clear();
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+      onTap: _showRolePicker,
+      child: Container(
+        height: isCompact ? 54 : 60,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(100),
           border: Border.all(
-            color: themeColor.withValues(alpha: isPrimary ? 0.35 : 0.15),
-            width: isPrimary ? 2.0 : 1.2,
+            color: const Color(0xFFE5E7EB),
+            width: 1.5,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: themeColor.withValues(alpha: isPrimary ? 0.08 : 0.04),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: themeColor.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                icon,
-                size: isPrimary ? 32 : 28,
-                color: themeColor,
-              ),
-            ),
-            const SizedBox(width: 16),
+            Icon(_getRoleIcon(), size: 20, color: AppTheme.textPrimary),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
+                  const Text(
+                    'LOGGING IN AS',
                     style: TextStyle(
-                      fontSize: isPrimary ? 18 : 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      color: AppTheme.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 6),
                   Text(
-                    description,
+                    _getRoleTitle(),
                     style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
-                      height: 1.4,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            const Padding(
-              padding: EdgeInsets.only(top: 4.0),
-              child: Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 14,
-                color: Color(0xFF94A3B8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Change',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 16, color: AppTheme.textPrimary),
+                ],
               ),
             ),
           ],
@@ -574,100 +950,252 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildLoginInputView() {
+  /// Direct Manual & SIM Auto-Detect Phone Input Field
+  Widget _buildPhoneInputField({required bool isCompact}) {
+    final currentPhone = _phoneController.text.trim();
+    final isPhone10Digits = currentPhone.length == 10;
+    final phoneError =
+        currentPhone.isNotEmpty ? validatePhoneNumber(currentPhone) : null;
+    final isPhoneValid = isPhone10Digits && phoneError == null;
+
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 10),
-        AuthLogoHeader(
-          title: _getRoleTitle(),
-          subtitle: 'enter_field'.tr(
-            namedArgs: {'field': 'phone_number'.tr()},
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _phoneFocusNode.requestFocus(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: isCompact ? 56 : 64,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(
+                color: _phoneFocusNode.hasFocus
+                    ? AppTheme.textPrimary
+                    : (phoneError != null && currentPhone.length == 10
+                        ? Colors.redAccent
+                        : AppTheme.border.withValues(alpha: 0.5)),
+                width: _phoneFocusNode.hasFocus ? 2.0 : 1.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 20, right: 12),
+                  child: AnimatedScale(
+                    scale: _phoneFocusNode.hasFocus ? 1.15 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.smartphone_rounded,
+                      size: 22,
+                      color: _phoneFocusNode.hasFocus
+                          ? AppTheme.textPrimary
+                          : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                // Indian Prefix
+                Text(
+                  '+91 ',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: _phoneFocusNode.hasFocus
+                        ? AppTheme.textPrimary
+                        : const Color(0xFF6B7280),
+                  ),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _phoneController,
+                    focusNode: _phoneFocusNode,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
+                    onChanged: (val) {
+                      setState(() {});
+                    },
+                    decoration: const InputDecoration(
+                      hintText: '10-digit mobile number',
+                      hintStyle: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textHint,
+                      ),
+                      border: InputBorder.none,
+                      filled: false,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+
+                // Real-time Validity Icon or Clear Button
+                if (_phoneController.text.isNotEmpty) ...[
+                  if (isPhoneValid)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 6),
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF16A34A),
+                        size: 20,
+                      ),
+                    )
+                  else if (currentPhone.length == 10 && phoneError != null)
+                    Tooltip(
+                      message: phoneError,
+                      child: const Padding(
+                        padding: EdgeInsets.only(right: 6),
+                        child: Icon(
+                          Icons.error_outline_rounded,
+                          color: Colors.redAccent,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.cancel_outlined,
+                      color: Color(0xFF9CA3AF),
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        _phoneController.clear();
+                      });
+                    },
+                    tooltip: 'Clear',
+                  ),
+                ],
+
+                // Auto Detect SIM Button (Primary 1-Tap Action)
+                Tooltip(
+                  message: 'Detect SIM',
+                  child: InkWell(
+                    onTap: () {
+                      _phoneFocusNode.unfocus();
+                      _selectPhoneNumber();
+                    },
+                    borderRadius: BorderRadius.circular(100),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.sim_card_outlined,
+                            color: AppTheme.textPrimary,
+                            size: 16,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'SIM',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 24),
-        _buildPhoneField(),
-        const SizedBox(height: 16),
-        _buildHintChip(),
-        const SizedBox(height: 24),
-        _buildSubmitButton(),
-        const SizedBox(height: 20),
-        if (_selectedRole == 'farmer') ...[
-          _buildSignupLink(),
-          const SizedBox(height: 16),
-        ],
+
+        // Inline Error Message
+        if (currentPhone.length == 10 && phoneError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 16, right: 16),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  size: 14,
+                  color: Colors.redAccent,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    phoneError,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
 
-  Widget _buildPhoneField() {
-    final themeColor = _getRoleThemeColor();
-    final hasInput = _pinController.text.isNotEmpty;
+  /// Password field for CHC Operator
+  Widget _buildPasswordInputField({required bool isCompact}) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: _selectPhoneNumber,
+      onTap: () => _passwordFocusNode.requestFocus(),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        height: 64,
+        height: isCompact ? 56 : 64,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
-            color:
-                _phoneFocusNode.hasFocus ? themeColor : const Color(0xFFD1D5DB),
-            width: _phoneFocusNode.hasFocus ? 2.0 : 1.5,
+            color: _passwordFocusNode.hasFocus
+                ? AppTheme.textPrimary
+                : AppTheme.border.withValues(alpha: 0.5),
+            width: _passwordFocusNode.hasFocus ? 2.0 : 1.5,
           ),
-          boxShadow: _phoneFocusNode.hasFocus || hasInput
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ]
-              : null,
         ),
         child: Row(
           children: [
             Padding(
-              padding: const EdgeInsets.only(left: 24, right: 14),
+              padding: const EdgeInsets.only(left: 20, right: 12),
               child: Icon(
-                Icons.phone_rounded,
-                color: _phoneFocusNode.hasFocus
-                    ? themeColor
-                    : const Color(0xFF9CA3AF),
+                Icons.lock_outline_rounded,
                 size: 22,
+                color: _passwordFocusNode.hasFocus
+                    ? AppTheme.textPrimary
+                    : AppTheme.textSecondary,
               ),
             ),
             Expanded(
               child: TextField(
-                controller: _pinController,
-                focusNode: _phoneFocusNode,
-                readOnly: true,
-                onTap: _selectPhoneNumber,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-                onChanged: (val) {
-                  setState(() {});
-                },
-                style: AppTheme.getTextStyle(
-                  context,
-                  fontSize: 16,
-                  color: const Color(0xFF111827),
-                  fontWeight: FontWeight.w600,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'phone_number'.tr(),
-                  hintStyle: AppTheme.getTextStyle(
-                    context,
-                    color: const Color(0xFF9CA3AF),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                controller: _passwordController,
+                focusNode: _passwordFocusNode,
+                obscureText: _obscurePassword,
+                decoration: const InputDecoration(
+                  hintText: 'Enter Password',
+                  hintStyle: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textHint,
                   ),
                   border: InputBorder.none,
                   filled: false,
@@ -678,160 +1206,134 @@ class _LoginScreenState extends State<LoginScreen>
                   isDense: true,
                   contentPadding: EdgeInsets.zero,
                 ),
-              ),
-            ),
-            if (hasInput)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.cancel_outlined,
-                    color: Colors.redAccent,
-                    size: 20,
-                  ),
-                  onPressed: () {
-                    HapticFeedback.mediumImpact();
-                    setState(() {
-                      _pinController.clear();
-                    });
-                  },
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
                 ),
               ),
-            const SizedBox(width: 16),
+            ),
+            IconButton(
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: AppTheme.textSecondary,
+                size: 20,
+              ),
+              onPressed: () {
+                setState(() => _obscurePassword = !_obscurePassword);
+              },
+            ),
+            const SizedBox(width: 8),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHintChip() {
-    String hintText = 'login_hint_farmer'.tr();
-    if (_selectedRole == 'retailer') {
-      hintText = 'login_hint_retailer'.tr();
-    } else if (_selectedRole == 'officer') {
-      hintText = 'login_hint_officer'.tr();
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(100),
+  /// Sign In Action Button
+  Widget _buildSubmitButton({required bool isCompact}) {
+    final phone = _phoneController.text.trim();
+    final isPhoneValid = validatePhoneNumber(phone) == null;
+    final bool canProceed = isPhoneValid &&
+        (_selectedRole != 'chc_operator' ||
+            _passwordController.text.trim().isNotEmpty);
+
+    final bool isButtonDisabled = _isLoading || !canProceed;
+
+    return ElevatedButton(
+      onPressed: isButtonDisabled
+          ? null
+          : () {
+              HapticFeedback.mediumImpact();
+              _login();
+            },
+      style: ElevatedButton.styleFrom(
+        backgroundColor:
+            isButtonDisabled ? const Color(0xFFD1D5DB) : AppTheme.textPrimary,
+        minimumSize: Size(double.infinity, isCompact ? 56 : 64),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(100),
+        ),
+        elevation: isButtonDisabled ? 0 : 3,
       ),
-      child: Row(
+      child: _isLoading
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                  color: Colors.white, strokeWidth: 3),
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'login_submit'.tr(),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 20,
+                  color: Colors.white,
+                ),
+              ],
+            ),
+    );
+  }
+
+  /// Create Account Outlined Link Button
+  Widget _buildSignupLink({required bool isCompact}) {
+    return OutlinedButton(
+      onPressed: () {
+        HapticFeedback.lightImpact();
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.slideFromRight(
+            SignupScreen(
+              initialPhoneNumber: _phoneController.text.isNotEmpty
+                  ? _phoneController.text.trim()
+                  : null,
+            ),
+          ),
+        );
+      },
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5),
+        minimumSize: Size(double.infinity, isCompact ? 52 : 60),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(100),
+        ),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.info_outline_rounded,
-              size: 16, color: AppTheme.textSecondary),
-          const SizedBox(width: 8),
-          Text(
-            hintText,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.w600,
+          Icon(
+            Icons.person_add_outlined,
+            size: 18,
+            color: AppTheme.textPrimary,
+          ),
+          SizedBox(width: 8),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'New to CropSync? Create Account',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSubmitButton() {
-    final canProceed = _pinController.text.length == 10;
-    final bool isButtonDisabled = _isLoading || !canProceed;
-    final themeColor = _getRoleThemeColor();
-
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 300),
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: isButtonDisabled
-            ? null
-            : () {
-                HapticFeedback.mediumImpact();
-                _login();
-              },
-        style: ElevatedButton.styleFrom(
-          backgroundColor:
-              isButtonDisabled ? const Color(0xFFD1D5DB) : themeColor,
-          minimumSize: const Size(double.infinity, 64),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(100),
-          ),
-          elevation: isButtonDisabled ? 0 : 4,
-          shadowColor: themeColor.withValues(alpha: 0.3),
-        ),
-        child: _isLoading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 3),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'login_submit'.tr(),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 20,
-                    color: Colors.white,
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-
-  Widget _buildSignupLink() {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 300),
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: () {
-          Navigator.pushReplacement(
-            context,
-            AppRoutes.slideFromRight(
-              const SignupScreen(),
-            ),
-          );
-        },
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppTheme.textSecondary,
-          side: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5),
-          minimumSize: const Size(double.infinity, 64),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(100),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.person_add_rounded,
-              size: 20,
-              color: AppTheme.textSecondary,
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'signup_create_account'.tr(),
-              style: const TextStyle(
-                fontSize: 15,
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
