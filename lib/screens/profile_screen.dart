@@ -4,6 +4,7 @@
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/welcome_screen.dart';
+import 'package:cropsync/screens/creator/creator_studio_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
@@ -830,6 +831,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildMenuCard() {
     return Column(
       children: [
+        SizedBox(
+          width: double.infinity,
+          child: _buildMenuPill(
+            icon: Icons.video_collection_rounded,
+            iconColor: AppTheme.accentGreen,
+            bgColor: const Color(0xFFF0FDF4),
+            title: 'creator_studio_title'.tr(),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CreatorStudioScreen()),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(

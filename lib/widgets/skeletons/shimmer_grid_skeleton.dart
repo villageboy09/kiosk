@@ -9,6 +9,8 @@ class ShimmerGridSkeleton extends StatelessWidget {
   final double crossAxisSpacing;
   final double mainAxisSpacing;
   final BorderRadius borderRadius;
+  final bool shrinkWrap;
+  final ScrollPhysics? physics;
 
   const ShimmerGridSkeleton({
     super.key,
@@ -19,11 +21,15 @@ class ShimmerGridSkeleton extends StatelessWidget {
     this.crossAxisSpacing = 16,
     this.mainAxisSpacing = 16,
     this.borderRadius = const BorderRadius.all(Radius.circular(20)),
+    this.shrinkWrap = false,
+    this.physics,
   });
 
   @override
   Widget build(BuildContext context) {
     return GridView.builder(
+      shrinkWrap: shrinkWrap,
+      physics: physics,
       padding: const EdgeInsets.all(16),
       gridDelegate: maxCrossAxisExtent != null
           ? SliverGridDelegateWithMaxCrossAxisExtent(

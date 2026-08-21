@@ -9,10 +9,8 @@ class AuthService {
   static const String _userKey = 'current_user';
   static const String _isLoggedInKey = 'is_logged_in';
 
-  static User? _currentUser;
-
   /// Get the current logged-in user
-  static User? get currentUser => _currentUser;
+  static User? currentUser;
 
   /// Check if user is logged in
   static Future<bool> isLoggedIn() async {
@@ -24,7 +22,7 @@ class AuthService {
   static Future<User> login(String userId, {String? role}) async {
     final user = await ApiService.loginWithUserId(userId, role: role);
     await _saveUserSession(user);
-    _currentUser = user;
+    currentUser = user;
     
     // Subscribe to Firebase notifications asynchronously in background to avoid blocking login!
     // Since this can be slow (esp. on Android), we do not await it.
@@ -52,35 +50,35 @@ class AuthService {
 
     if (userJson != null) {
       final userData = jsonDecode(userJson) as Map<String, dynamic>;
-      _currentUser = User.fromJson(userData);
-      return _currentUser;
+      currentUser = User.fromJson(userData);
+      return currentUser;
     }
     return null;
   }
 
   /// Refresh user data from server
   static Future<User?> refreshUserData() async {
-    if (_currentUser == null) {
+    if (currentUser == null) {
       await loadUserSession();
     }
 
-    if (_currentUser != null) {
+    if (currentUser != null) {
       try {
         String? role;
-        if (_currentUser!.membershipType == 'Retailer') {
+        if (currentUser!.membershipType == 'Retailer') {
           role = 'retailer';
-        } else if (_currentUser!.membershipType == 'Officer') {
+        } else if (currentUser!.membershipType == 'Officer') {
           role = 'officer';
         } else {
           role = 'farmer';
         }
-        final user = await ApiService.getUserProfile(_currentUser!.userId, role: role);
+        final user = await ApiService.getUserProfile(currentUser!.userId, role: role);
         await _saveUserSession(user);
-        _currentUser = user;
+        currentUser = user;
         return user;
       } catch (e) {
         // Return cached user if refresh fails
-        return _currentUser;
+        return currentUser;
       }
     }
     return null;
@@ -91,13 +89,13 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userKey);
     await prefs.setBool(_isLoggedInKey, false);
-    _currentUser = null;
+    currentUser = null;
   }
 
   /// Get current user, loading from storage if needed
   static Future<User?> getCurrentUser() async {
-    if (_currentUser != null) {
-      return _currentUser;
+    if (currentUser != null) {
+      return currentUser;
     }
     return await loadUserSession();
   }
@@ -105,6 +103,6 @@ class AuthService {
   /// Update local user data (for profile updates)
   static Future<void> updateLocalUser(User user) async {
     await _saveUserSession(user);
-    _currentUser = user;
+    currentUser = user;
   }
 }

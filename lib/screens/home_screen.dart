@@ -1,6 +1,6 @@
 import 'package:cropsync/screens/crop_advisory_grid_screen.dart';
 import 'package:cropsync/screens/profile_screen.dart';
-import 'package:cropsync/screens/settings_screen.dart';
+import 'package:cropsync/screens/news/news_feed_screen.dart';
 import 'package:cropsync/screens/reels_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/location_service.dart';
@@ -30,6 +30,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _selectedIndex = 0;
   String _farmerName = 'Farmer';
+  String? _clientCode;
 
   bool _isLoading = true;
   String? _profileImageUrl;
@@ -93,6 +94,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         setState(() {
           _farmerName = currentUser.name;
           _profileImageUrl = currentUser.profileImageUrl;
+          _clientCode = currentUser.clientCode;
         });
       }
 
@@ -296,10 +298,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         greeting: currentGreeting,
         farmerName: _farmerName,
         profileImageUrl: _profileImageUrl,
+        clientCode: _clientCode,
         onTabSelected: _onNavTap,
       ),
       const CropAdvisoryGridScreen(key: ValueKey('advisory_tab')),
-      const SettingsScreen(key: ValueKey('settings_tab')),
+      const NewsFeedScreen(key: ValueKey('news_tab')),
       const ReelsScreen(key: ValueKey('reels_tab')),
     ];
 
@@ -315,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       },
       child: Scaffold(
         backgroundColor: AppTheme.background,
-        appBar: (_selectedIndex == 1 || _selectedIndex == 3) ? null : _buildCurvedAppBar(),
+        appBar: (_selectedIndex == 1 || _selectedIndex == 2 || _selectedIndex == 3) ? null : _buildCurvedAppBar(),
         body: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           child: _isLoading
@@ -445,9 +448,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 Expanded(
                   child: _NavItem(
-                    icon: Icons.settings_outlined,
-                    activeIcon: Icons.settings,
-                    label: 'home_bottom_nav_settings'.tr(),
+                    icon: Icons.newspaper_outlined,
+                    activeIcon: Icons.newspaper_rounded,
+                    label: 'home_bottom_nav_news'.tr(),
                     isActive: _selectedIndex == 2,
                     onTap: () => _onNavTap(2),
                     activeColor: AppTheme.primary,

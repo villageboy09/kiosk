@@ -5,6 +5,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chewie/chewie.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/farmer_analytics_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -287,6 +288,16 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
 
   void _showDetails(SeedVariety variety) {
     HapticFeedback.lightImpact();
+
+    // Log farmer seed variety view
+    FarmerAnalyticsService.logSeedVarietyView(
+      seedId: variety.id,
+      varietyName: variety.varietyName,
+      cropName: variety.cropName,
+      price: variety.price,
+      averageYield: variety.averageYield,
+    );
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -547,6 +558,14 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
       );
 
       if (result['success'] == true) {
+        // Log seed booking
+        FarmerAnalyticsService.logSeedBooking(
+          seedId: widget.variety.id,
+          varietyName: widget.variety.varietyName,
+          cropName: widget.variety.cropName,
+          quantity: _quantity,
+        );
+
         if (!mounted) return;
         _showSuccessPopup(context.tr('purchase_request_sent'));
       } else {

@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/farmer_analytics_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -246,6 +247,14 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   borderRadius: BorderRadius.circular(100),
                   borderSide: BorderSide.none,
                 ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(100),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(100),
+                  borderSide: BorderSide.none,
+                ),
               ),
               onChanged: (value) {
                 if (value.length > 2 || value.isEmpty) {
@@ -372,11 +381,20 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
 
   Widget _buildProductCard(Product product) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (_) => ProductDetailsScreen(product: product)),
-      ),
+      onTap: () {
+        FarmerAnalyticsService.logShopItemView(
+          productId: product.id,
+          productName: product.name,
+          category: product.category,
+          price: product.price,
+          advertiserName: product.advertiserName,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => ProductDetailsScreen(product: product)),
+        );
+      },
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,

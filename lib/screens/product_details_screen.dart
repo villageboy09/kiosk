@@ -5,6 +5,7 @@
 import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/farmer_analytics_service.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
@@ -204,6 +205,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       if (result['success'] != true) {
         throw Exception(result['error'] ?? 'Failed to send enquiry');
       }
+
+      // Log farmer shop enquiry
+      FarmerAnalyticsService.logShopEnquiry(
+        productId: widget.product.id,
+        productName: widget.product.name,
+        advertiserId: widget.product.advertiserId,
+        advertiserName: widget.product.advertiserName,
+      );
 
       if (!mounted) return;
       _showSuccessPopup(context.tr('enquiry_sent_success'));

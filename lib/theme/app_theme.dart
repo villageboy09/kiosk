@@ -19,12 +19,14 @@ class AppTheme {
   static const Color background =
       Color(0xFFF9FAFB); // Slightly cooler, modern grey
   static const Color bg = background; // Alias for backward compatibility
+  static const Color backgroundCream = background;
   static const Color card = Color(0xFFFFFFFF);
 
   /// Text colors
   static const Color textPrimary =
       Color(0xFF111827); // Darker, crisper contrast
   static const Color text = textPrimary; // Alias for backward compatibility
+  static const Color textDark = textPrimary;
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color textHint = Color(0xFF9CA3AF);
   static const Color textOnPrimary = Color(0xFFFFFFFF);
@@ -44,6 +46,7 @@ class AppTheme {
   static const Color border = Color(0xFFD1D5DB);
 
   /// Feature card accent colors
+  static const Color accentGreen = Color(0xFF22C55E);
   static const Color accentOrange = Color(0xFFE65100);
   static const Color accentBrown = Color(0xFF5D4037);
   static const Color accentBlue = Color(0xFF1565C0);

@@ -4,6 +4,7 @@ import 'package:cropsync/welcome_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/services/update_service.dart';
+import 'package:cropsync/services/farmer_analytics_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/widgets/responsive/app_viewport.dart';
 import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
@@ -41,6 +42,9 @@ Future<void> main() async {
     AuthService.loadUserSession(),
     OperatorAuthService.loadSession(),
   ]);
+
+  // Flush any offline analytics logs
+  FarmerAnalyticsService.initAndFlush();
 
   if (AuthService.currentUser != null) {
     try {

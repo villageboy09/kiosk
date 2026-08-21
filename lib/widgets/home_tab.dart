@@ -20,6 +20,7 @@ class HomeTab extends StatefulWidget {
   final String greeting;
   final String farmerName;
   final String? profileImageUrl;
+  final String? clientCode;
   final void Function(int) onTabSelected;
 
   const HomeTab({
@@ -27,6 +28,7 @@ class HomeTab extends StatefulWidget {
     required this.greeting,
     required this.farmerName,
     this.profileImageUrl,
+    this.clientCode,
     required this.onTabSelected,
   });
 
@@ -38,15 +40,27 @@ class _HomeTabState extends State<HomeTab> {
   FarmerCrop? _firstCrop;
   bool _isLoadingCrop = true;
   String? _stageImageUrl;
+  String? _clientCode;
   Locale? _lastLocale;
 
   @override
   void initState() {
     super.initState();
+    _clientCode = widget.clientCode ?? AuthService.currentUser?.clientCode;
     GlobalNotifiers.selectionAdded.addListener(_onSelectionChanged);
     GlobalNotifiers.selectionDeleted.addListener(_onSelectionChanged);
     GlobalNotifiers.selectionUpdated.addListener(_onSelectionChanged);
     _loadFirstCrop();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.clientCode != oldWidget.clientCode) {
+      setState(() {
+        _clientCode = widget.clientCode;
+      });
+    }
   }
 
   @override
@@ -96,6 +110,11 @@ class _HomeTabState extends State<HomeTab> {
       if (currentUser == null) {
         if (mounted) setState(() => _isLoadingCrop = false);
         return;
+      }
+      if (mounted) {
+        setState(() {
+          _clientCode = currentUser.clientCode ?? _clientCode;
+        });
       }
 
       final locale = _getLocale();
@@ -205,6 +224,7 @@ class _HomeTabState extends State<HomeTab> {
                 firstCrop: _firstCrop,
                 isLoadingCrop: _isLoadingCrop,
                 stageImageUrl: _stageImageUrl,
+                clientCode: _clientCode ?? widget.clientCode,
               ),
             ),
           ),
@@ -220,13 +240,21 @@ class _ServicesGrid extends StatelessWidget {
   final FarmerCrop? firstCrop;
   final bool isLoadingCrop;
   final String? stageImageUrl;
+  final String? clientCode;
 
   const _ServicesGrid({
     required this.onTabSelected,
     required this.firstCrop,
     required this.isLoadingCrop,
     this.stageImageUrl,
+    this.clientCode,
   });
+
+  bool get _shouldShowNewsCard {
+    if (clientCode == null) return true;
+    final code = clientCode!.trim().toUpperCase();
+    return code.isEmpty || code == 'HYD001' || code == 'NULL';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -240,28 +268,16 @@ class _ServicesGrid extends StatelessWidget {
         childAspectRatio: 0.85,
       ),
       children: [
-        if (isLoadingCrop)
-          _ServiceCard(
-            title: 'home_feature_advisory_title'.tr(),
-            subtitle: '${'loading'.tr()}...',
-            color: AppTheme.primary,
-            onTap: () {},
-          )
-        else if (firstCrop == null)
-          _ServiceCard(
-            title: 'Add your first crop',
-            subtitle: 'add_first_crop'.tr(),
-            color: AppTheme.primary,
-            onTap: () => onTabSelected(2),
-          )
-        else
-          _ServiceCard(
-            title: firstCrop!.cropName,
-            subtitle: firstCrop!.currentStageName ?? 'stage'.tr(),
-            imageUrl: stageImageUrl ?? firstCrop!.cropImageUrl,
-            color: AppTheme.primary,
-            onTap: () => onTabSelected(1),
-          ),
+        _ServiceCard(
+          title: 'home_feature_advisory_title'.tr(),
+          subtitle: firstCrop != null
+              ? firstCrop!.cropName
+              : 'home_feature_advisory_subtitle'.tr(),
+          imageUrl: firstCrop?.cropImageUrl,
+          imagePath: firstCrop?.cropImageUrl == null ? 'assets/images/seed_varieties.jpg' : null,
+          color: AppTheme.primary,
+          onTap: () => onTabSelected(1),
+        ),
         _ServiceCard(
           title: 'home_feature_weather_title'.tr(),
           subtitle: 'home_feature_weather_subtitle'.tr(),
@@ -290,13 +306,23 @@ class _ServicesGrid extends StatelessWidget {
           color: AppTheme.accentBlue,
           onTap: () => _navigateTo(context, const SeedVarietiesScreen()),
         ),
-        _ServiceCard(
-          title: 'chc_title'.tr(),
-          subtitle: 'chc_book_now'.tr(),
-          imagePath: 'assets/images/custom_hiring_center.jpg',
-          color: AppTheme.accentPurple,
-          onTap: () => _navigateTo(context, const CHCBookingScreen()),
-        ),
+        if (_shouldShowNewsCard)
+          _ServiceCard(
+            title: 'home_feature_news_title'.tr(),
+            subtitle: 'home_feature_news_subtitle'.tr(),
+            imagePath: 'assets/images/custom_hiring_center.jpg',
+            imageUrl: 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=600&q=80',
+            color: AppTheme.accentTeal,
+            onTap: () => onTabSelected(2),
+          )
+        else
+          _ServiceCard(
+            title: 'chc_title'.tr(),
+            subtitle: 'chc_book_now'.tr(),
+            imagePath: 'assets/images/custom_hiring_center.jpg',
+            color: AppTheme.accentPurple,
+            onTap: () => _navigateTo(context, const CHCBookingScreen()),
+          ),
       ],
     );
   }

@@ -10,12 +10,20 @@ import 'package:shimmer/shimmer.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/theme/app_theme.dart';
 
+import 'package:cropsync/services/farmer_analytics_service.dart';
+
 // Enum to manage the state of the identification button
 enum IdentificationState { initial, loading, success, error }
 
 class AdvisoryDetailScreen extends StatefulWidget {
   final CropProblem problem;
-  const AdvisoryDetailScreen({super.key, required this.problem});
+  final String? cropName;
+
+  const AdvisoryDetailScreen({
+    super.key,
+    required this.problem,
+    this.cropName,
+  });
 
   @override
   State<AdvisoryDetailScreen> createState() => _AdvisoryDetailScreenState();
@@ -112,6 +120,15 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
         symptoms: advisoryData['symptoms'] as String? ?? 'N/A',
         notes: advisoryData['notes'] as String?,
         recommendations: recommendations,
+      );
+
+      // Log interaction
+      FarmerAnalyticsService.logControlMeasureView(
+        problemId: widget.problem.id,
+        problemName: widget.problem.name,
+        advisoryId: advisoryId,
+        cropName: widget.cropName,
+        category: widget.problem.category,
       );
 
       return advisory;
