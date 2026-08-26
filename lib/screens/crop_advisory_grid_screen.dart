@@ -78,7 +78,7 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Could not load crops. Please check connection.';
+          _errorMessage = 'error_loading_crops'.tr();
           _isLoading = false;
         });
       }
@@ -173,7 +173,7 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
                     children: [
                       // Subtitle
                       Text(
-                        'Select a crop to explore all diseases, pests, and control remedies.',
+                        'advisory_grid_subtitle'.tr(),
                         style: TextStyle(
                           fontSize: isTablet ? 15 : 13,
                           color: AppTheme.textSecondary,
@@ -201,46 +201,57 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
                             ),
                           ],
                         ),
-                        child: TextField(
-                          controller: _searchController,
-                          textAlignVertical: TextAlignVertical.center,
-                          style: TextStyle(
-                            fontSize: isTablet ? 15 : 14,
-                            color: AppTheme.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Search crops (e.g. Rice, Cotton, Chilli)...',
-                            hintStyle: TextStyle(
-                              fontSize: isTablet ? 14 : 13,
-                              color: const Color(0xFF9CA3AF),
-                              fontWeight: FontWeight.w500,
+                        child: Center(
+                          child: TextField(
+                            controller: _searchController,
+                            textAlignVertical: TextAlignVertical.center,
+                            style: TextStyle(
+                              fontSize: isTablet ? 15 : 14,
+                              color: AppTheme.textPrimary,
+                              fontWeight: FontWeight.w600,
                             ),
-                            prefixIcon: const Icon(
-                              Icons.search_rounded,
-                              color: Color(0xFF9CA3AF),
-                              size: 22,
-                            ),
-                            suffixIcon: _searchQuery.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(
-                                      Icons.clear_rounded,
-                                      color: Color(0xFF9CA3AF),
-                                      size: 18,
-                                    ),
-                                    onPressed: () => _searchController.clear(),
-                                  )
-                                : null,
-                            filled: false,
-                            fillColor: Colors.transparent,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            errorBorder: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
+                            decoration: InputDecoration(
+                              hintText: 'advisory_search_crop_hint'.tr(),
+                              hintStyle: TextStyle(
+                                fontSize: isTablet ? 14 : 13,
+                                color: const Color(0xFF9CA3AF),
+                                fontWeight: FontWeight.w500,
+                              ),
+                              isDense: true,
+                              prefixIcon: const Icon(
+                                Icons.search_rounded,
+                                color: Color(0xFF9CA3AF),
+                                size: 22,
+                              ),
+                              prefixIconConstraints: const BoxConstraints(
+                                minWidth: 44,
+                                minHeight: 44,
+                              ),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(
+                                        Icons.clear_rounded,
+                                        color: Color(0xFF9CA3AF),
+                                        size: 18,
+                                      ),
+                                      onPressed: () => _searchController.clear(),
+                                    )
+                                  : null,
+                              suffixIconConstraints: const BoxConstraints(
+                                minWidth: 44,
+                                minHeight: 44,
+                              ),
+                              filled: false,
+                              fillColor: Colors.transparent,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
                             ),
                           ),
                         ),
@@ -275,12 +286,12 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
                   ),
                 )
               else if (_filteredCrops.isEmpty)
-                const SliverFillRemaining(
+                SliverFillRemaining(
                   hasScrollBody: false,
                   child: AppEmptyState(
                     icon: Icons.eco_rounded,
-                    title: 'No crops found',
-                    subtitle: 'Try searching with another crop name.',
+                    title: 'no_crops_found'.tr(),
+                    subtitle: 'no_crops_found_sub'.tr(),
                   ),
                 )
               else

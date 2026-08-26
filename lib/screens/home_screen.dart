@@ -188,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 28),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _buildGridButton(
                       context: context,
@@ -201,6 +201,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       icon: Icons.camera_alt_rounded,
                       shadowColor: const Color(0xFFD97706).withValues(alpha: 0.3),
                     ),
+                    const SizedBox(width: 32),
                     _buildGridButton(
                       context: context,
                       onTap: () => Navigator.pop(context, 'gallery'),
@@ -211,17 +212,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                       icon: Icons.image_rounded,
                       shadowColor: const Color(0xFF047857).withValues(alpha: 0.3),
-                    ),
-                    _buildGridButton(
-                      context: context,
-                      onTap: () => Navigator.pop(context, 'crops'),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFD97706), Color(0xFF78350F)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      icon: Icons.eco_rounded,
-                      shadowColor: const Color(0xFF78350F).withValues(alpha: 0.3),
                     ),
                   ],
                 ),
@@ -250,12 +240,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const PlantAnalysisScreen(initialSource: ImageSource.gallery),
-        ),
-      );
-    } else if (action == 'crops') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const PlantAnalysisScreen(),
         ),
       );
     }

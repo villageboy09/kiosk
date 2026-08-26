@@ -443,7 +443,7 @@ class _SignupScreenState extends State<SignupScreen>
         return;
       }
 
-      await AuthService.login(phone);
+      await AuthService.login(phone, role: _selectedRole);
 
       if (!mounted) return;
       HapticFeedback.heavyImpact();

@@ -69,6 +69,8 @@ class AuthService {
           role = 'retailer';
         } else if (currentUser!.membershipType == 'Officer') {
           role = 'officer';
+        } else if (currentUser!.isCreator) {
+          role = 'content_creator';
         } else {
           role = 'farmer';
         }
@@ -98,6 +100,15 @@ class AuthService {
       return currentUser;
     }
     return await loadUserSession();
+  }
+
+  /// Check if the currently logged in user is a creator
+  static bool get isCurrentUserCreator => currentUser?.isCreator ?? false;
+
+  /// Check asynchronously if current user is a creator
+  static Future<bool> isCreator() async {
+    final user = await getCurrentUser();
+    return user?.isCreator ?? false;
   }
 
   /// Update local user data (for profile updates)

@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:cropsync/models/reel_model.dart';
 import 'package:cropsync/services/reels_service.dart';
+import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/screens/creator/creator_studio_screen.dart';
 import 'package:cropsync/theme/app_theme.dart';
 
@@ -22,11 +23,22 @@ class _ReelsScreenState extends State<ReelsScreen> {
   List<Reel> _reels = [];
   bool _isLoading = true;
   bool _hasError = false;
+  bool _isCreator = false;
 
   @override
   void initState() {
     super.initState();
+    _checkCreatorStatus();
     _loadReels();
+  }
+
+  Future<void> _checkCreatorStatus() async {
+    final isCreator = await AuthService.isCreator();
+    if (mounted) {
+      setState(() {
+        _isCreator = isCreator;
+      });
+    }
   }
 
   Future<void> _loadReels() async {
@@ -211,37 +223,38 @@ class _ReelsScreenState extends State<ReelsScreen> {
                           ],
                         ),
                       ),
-                      InkWell(
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const CreatorStudioScreen()),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.video_call_rounded, color: AppTheme.accentGreen, size: 18),
-                              SizedBox(width: 5),
-                              Text(
-                                'Studio',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                      if (_isCreator)
+                        InkWell(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const CreatorStudioScreen()),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.video_call_rounded, color: AppTheme.accentGreen, size: 18),
+                                SizedBox(width: 5),
+                                Text(
+                                  'Studio',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -644,21 +657,24 @@ class _ReelItemState extends State<ReelItem> {
                         children: [
                           Expanded(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(100),
                               ),
-                              child: TextField(
-                                controller: commentInputController,
-                                style: const TextStyle(color: Colors.white, fontSize: 14),
-                                decoration: InputDecoration(
-                                  hintText: 'reels_add_comment'.tr(),
-                                  hintStyle: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.35), fontSize: 13.5),
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                              child: Center(
+                                child: TextField(
+                                  controller: commentInputController,
+                                  textAlignVertical: TextAlignVertical.center,
+                                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                                  decoration: InputDecoration(
+                                    hintText: 'reels_add_comment'.tr(),
+                                    hintStyle: TextStyle(
+                                        color: Colors.white.withValues(alpha: 0.35), fontSize: 13.5),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
                                 ),
                               ),
                             ),

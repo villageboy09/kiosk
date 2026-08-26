@@ -88,4 +88,10 @@ class User {
       membershipType: membershipType ?? this.membershipType,
     );
   }
+
+  /// Returns true if user has a creator/content creator role
+  bool get isCreator {
+    final type = membershipType?.toLowerCase().trim() ?? '';
+    return type == 'creator' || type == 'content creator' || type == 'content_creator';
+  }
 }

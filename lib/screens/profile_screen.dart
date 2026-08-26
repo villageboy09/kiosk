@@ -542,7 +542,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 24),
                         _buildUserDetailsList(user),
                         const SizedBox(height: 16),
-                        _buildMenuCard(),
+                        _buildMenuCard(user),
                         const SizedBox(height: 16),
                         _buildLogoutCard(),
                         const SizedBox(height: 40),
@@ -828,24 +828,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   class DashedLinePainter extends CustomPainter { ... }
   */
 
-  Widget _buildMenuCard() {
+  Widget _buildMenuCard(User user) {
     return Column(
       children: [
-        SizedBox(
-          width: double.infinity,
-          child: _buildMenuPill(
-            icon: Icons.video_collection_rounded,
-            iconColor: AppTheme.accentGreen,
-            bgColor: const Color(0xFFF0FDF4),
-            title: 'creator_studio_title'.tr(),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CreatorStudioScreen()),
-              );
-            },
+        if (user.isCreator) ...[
+          SizedBox(
+            width: double.infinity,
+            child: _buildMenuPill(
+              icon: Icons.video_collection_rounded,
+              iconColor: AppTheme.accentGreen,
+              bgColor: const Color(0xFFF0FDF4),
+              title: 'creator_studio_title'.tr(),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CreatorStudioScreen()),
+                );
+              },
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 12),
+        ],
         Row(
           children: [
             Expanded(

@@ -1047,6 +1047,8 @@ function registerUser($pdo) {
     $userId = $input['phone_number'] ?? ''; // Using phone_number as user_id per requirement
     $name = $input['name'] ?? '';
     $clientCode = $input['client_code'] ?? 'HYD001';
+    $role = $input['role'] ?? 'farmer';
+    $username = $input['username'] ?? '';
     
     if (empty($userId) || empty($name)) {
         echo json_encode(['success' => false, 'error' => 'Name and Phone number are required']);
@@ -1068,10 +1070,20 @@ function registerUser($pdo) {
         $stmt = $pdo->prepare("INSERT INTO users (user_id, name, phone_number, client_code) VALUES (?, ?, ?, ?)");
         $stmt->execute([$userId, $name, $userId, $clientCode]); // phone_number is same as user_id
 
+        // If registered as content creator, create creator record
+        if ($role === 'content_creator' || $role === 'creator') {
+            $cUsername = !empty($username) ? $username : 'creator_' . substr($userId, -6);
+            $stmtC = $pdo->prepare("INSERT INTO creators (username, display_name, profile_image_url, is_verified, phone_number, bio) VALUES (?, ?, NULL, 1, ?, 'Agricultural Content Creator') ON DUPLICATE KEY UPDATE display_name = VALUES(display_name)");
+            $stmtC->execute([$cUsername, $name, $userId]);
+        }
+
         // Fetch user object to return
         $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
         $stmt->execute([$userId]);
         $newUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($role === 'content_creator' || $role === 'creator') {
+            $newUser['membership_type'] = 'Creator';
+        }
 
         echo json_encode(['success' => true, 'message' => 'User registered successfully', 'user' => $newUser]);
     } catch (PDOException $e) {
@@ -1148,6 +1160,35 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                 ]
             ];
         }
+    } elseif ($role === 'content_creator' || $role === 'creator') {
+        $stmtCreator = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? OR username = ? LIMIT 1");
+        $stmtCreator->execute([$userId, $userId]);
+        $creator = $stmtCreator->fetch(PDO::FETCH_ASSOC);
+        if ($creator) {
+            return [
+                'success' => true,
+                'role' => 'content_creator',
+                'creator_id' => (int)$creator['id'],
+                'user' => [
+                    'user_id' => $creator['phone_number'] ?: $userId,
+                    'name' => $creator['display_name'] ?: $creator['username'],
+                    'phone_number' => $creator['phone_number'] ?: $userId,
+                    'profile_image_url' => $creator['profile_image_url'],
+                    'membership_type' => 'Creator'
+                ]
+            ];
+        }
+        $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
+        $stmtFarmer->execute([$userId, $userId]);
+        $user = $stmtFarmer->fetch(PDO::FETCH_ASSOC);
+        if ($user) {
+            $user['membership_type'] = 'Creator';
+            return [
+                'success' => true,
+                'role' => 'content_creator',
+                'user' => $user
+            ];
+        }
     } elseif ($role === 'farmer') {
         $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
         $stmtFarmer->execute([$userId, $userId]);
@@ -1166,11 +1207,13 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
             UNION ALL
             (SELECT 'officer' AS role, id FROM extension_officers WHERE contact_number = ? LIMIT 1)
             UNION ALL
+            (SELECT 'content_creator' AS role, id FROM creators WHERE phone_number = ? LIMIT 1)
+            UNION ALL
             (SELECT 'farmer' AS role, user_id AS id FROM users WHERE user_id = ? LIMIT 1)
             UNION ALL
             (SELECT 'farmer' AS role, user_id AS id FROM users WHERE phone_number = ? LIMIT 1)
         ");
-        $stmt->execute([$userId, $userId, $userId, $userId]);
+        $stmt->execute([$userId, $userId, $userId, $userId, $userId]);
         $match = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($match) {
@@ -1217,6 +1260,24 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                             'district' => $officer['coverage_district'],
                             'region' => $officer['coverage_district'],
                             'membership_type' => 'Officer'
+                        ]
+                    ];
+                }
+            } elseif ($matchedRole === 'content_creator') {
+                $stmtC = $pdo->prepare("SELECT * FROM creators WHERE id = ? LIMIT 1");
+                $stmtC->execute([$matchedId]);
+                $creator = $stmtC->fetch(PDO::FETCH_ASSOC);
+                if ($creator) {
+                    return [
+                        'success' => true,
+                        'role' => 'content_creator',
+                        'creator_id' => (int)$creator['id'],
+                        'user' => [
+                            'user_id' => $creator['phone_number'] ?: $userId,
+                            'name' => $creator['display_name'] ?: $creator['username'],
+                            'phone_number' => $creator['phone_number'] ?: $userId,
+                            'profile_image_url' => $creator['profile_image_url'],
+                            'membership_type' => 'Creator'
                         ]
                     ];
                 }

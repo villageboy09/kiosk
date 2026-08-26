@@ -129,7 +129,7 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Could not load problems. Please try again.';
+          _errorMessage = 'error_loading_problems'.tr();
           _isLoading = false;
         });
       }
@@ -266,7 +266,7 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
             Text(
               widget.stage != null
                   ? widget.stage!.name
-                  : 'Sowing to Harvesting Advisory',
+                  : 'advisory_sowing_to_harvest'.tr(),
               style: TextStyle(
                 fontSize: isTablet ? 12 : 11,
                 color: AppTheme.textSecondary,
@@ -285,7 +285,7 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
               parent: BouncingScrollPhysics(),
             ),
             slivers: [
-              // Search & Filter Tabs Section
+              // Search & Category Chips Section
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
@@ -315,46 +315,57 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
                             ),
                           ],
                         ),
-                        child: TextField(
-                          controller: _searchController,
-                          textAlignVertical: TextAlignVertical.center,
-                          style: TextStyle(
-                            fontSize: isTablet ? 15 : 14,
-                            color: AppTheme.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Search diseases, pests, or deficiencies...',
-                            hintStyle: TextStyle(
-                              fontSize: isTablet ? 13.5 : 12.5,
-                              color: const Color(0xFF9CA3AF),
-                              fontWeight: FontWeight.w500,
+                        child: Center(
+                          child: TextField(
+                            controller: _searchController,
+                            textAlignVertical: TextAlignVertical.center,
+                            style: TextStyle(
+                              fontSize: isTablet ? 15 : 14,
+                              color: AppTheme.textPrimary,
+                              fontWeight: FontWeight.w600,
                             ),
-                            prefixIcon: const Icon(
-                              Icons.search_rounded,
-                              color: Color(0xFF9CA3AF),
-                              size: 20,
-                            ),
-                            suffixIcon: _searchQuery.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(
-                                      Icons.clear_rounded,
-                                      color: Color(0xFF9CA3AF),
-                                      size: 18,
-                                    ),
-                                    onPressed: () => _searchController.clear(),
-                                  )
-                                : null,
-                            filled: false,
-                            fillColor: Colors.transparent,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            errorBorder: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
+                            decoration: InputDecoration(
+                              hintText: 'advisory_search_problems_hint'.tr(),
+                              hintStyle: TextStyle(
+                                fontSize: isTablet ? 13.5 : 12.5,
+                                color: const Color(0xFF9CA3AF),
+                                fontWeight: FontWeight.w500,
+                              ),
+                              isDense: true,
+                              prefixIcon: const Icon(
+                                Icons.search_rounded,
+                                color: Color(0xFF9CA3AF),
+                                size: 20,
+                              ),
+                              prefixIconConstraints: const BoxConstraints(
+                                minWidth: 44,
+                                minHeight: 44,
+                              ),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(
+                                        Icons.clear_rounded,
+                                        color: Color(0xFF9CA3AF),
+                                        size: 18,
+                                      ),
+                                      onPressed: () => _searchController.clear(),
+                                    )
+                                  : null,
+                              suffixIconConstraints: const BoxConstraints(
+                                minWidth: 44,
+                                minHeight: 44,
+                              ),
+                              filled: false,
+                              fillColor: Colors.transparent,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
                             ),
                           ),
                         ),
@@ -369,15 +380,15 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
                         physics: const BouncingScrollPhysics(),
                         child: Row(
                           children: [
-                            _buildFilterChip('all', 'All Problems', Icons.grid_view_rounded),
+                            _buildFilterChip('all', 'advisory_filter_all'.tr(), Icons.grid_view_rounded),
                             const SizedBox(width: 8),
-                            _buildFilterChip('disease', '🦠 Diseases', null),
+                            _buildFilterChip('disease', '🦠 ${'advisory_filter_disease'.tr()}', null),
                             const SizedBox(width: 8),
-                            _buildFilterChip('pest', '🐛 Pests & Insects', null),
+                            _buildFilterChip('pest', '🐛 ${'advisory_filter_pest'.tr()}', null),
                             const SizedBox(width: 8),
-                            _buildFilterChip('deficiency', '🌿 Deficiencies', null),
+                            _buildFilterChip('deficiency', '🌿 ${'advisory_filter_deficiency'.tr()}', null),
                             const SizedBox(width: 8),
-                            _buildFilterChip('other', '🌱 Other', null),
+                            _buildFilterChip('other', '🌱 ${'advisory_filter_other'.tr()}', null),
                           ],
                         ),
                       ),
@@ -415,10 +426,10 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
                   hasScrollBody: false,
                   child: AppEmptyState(
                     icon: Icons.eco_rounded,
-                    title: 'No problems found',
+                    title: 'no_problems_found'.tr(),
                     subtitle: _searchQuery.isNotEmpty
-                        ? 'No match for "$_searchQuery". Try another keyword.'
-                        : 'Your crop has no recorded problems for this category.',
+                        ? 'no_problems_search_sub'.tr(args: [_searchQuery])
+                        : 'no_problems_category_sub'.tr(),
                   ),
                 )
               else

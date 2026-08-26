@@ -3,6 +3,7 @@ import 'package:cropsync/models/news_article.dart';
 import 'package:cropsync/screens/news/news_detail_screen.dart';
 import 'package:cropsync/screens/creator/creator_studio_screen.dart';
 import 'package:cropsync/services/news_service.dart';
+import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -25,6 +26,7 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
   List<NewsArticle> _articles = [];
   bool _isLoading = true;
   String? _errorMessage;
+  bool _isCreator = false;
 
   final List<Map<String, dynamic>> _categories = [
     {'key': 'all', 'label': 'news_category_all', 'icon': Icons.grid_view_rounded},
@@ -38,6 +40,7 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
   @override
   void initState() {
     super.initState();
+    _checkCreatorStatus();
     _loadArticles();
     _searchController.addListener(() {
       final text = _searchController.text.trim();
@@ -46,6 +49,15 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
         _filterArticles();
       }
     });
+  }
+
+  Future<void> _checkCreatorStatus() async {
+    final isCreator = await AuthService.isCreator();
+    if (mounted) {
+      setState(() {
+        _isCreator = isCreator;
+      });
+    }
   }
 
   @override
@@ -123,8 +135,62 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
+      appBar: AppBar(
+        title: Text(
+          'news_title'.tr().isNotEmpty ? 'news_title'.tr() : 'Krishi News',
+          style: AppTheme.appBarTitle,
+        ),
+        centerTitle: false,
+        backgroundColor: AppTheme.appBarBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
+        leading: Navigator.canPop(context)
+            ? AppTheme.backButton(context, color: AppTheme.appBarText)
+            : null,
+        automaticallyImplyLeading: false,
+        actions: [
+          if (_isCreator)
+            Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: Center(
+                child: InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const CreatorStudioScreen()),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_note_rounded, color: AppTheme.primary, size: 18),
+                        SizedBox(width: 4),
+                        Text(
+                          'Studio',
+                          style: TextStyle(
+                            color: AppTheme.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
       body: SafeArea(
-        top: false,
         child: RefreshIndicator.adaptive(
           onRefresh: _loadArticles,
           color: AppTheme.primary,
@@ -139,86 +205,23 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
                   color: Colors.white,
                   padding: EdgeInsets.fromLTRB(
                     isTablet ? 28 : 16,
-                    16,
+                    12,
                     isTablet ? 28 : 16,
                     14,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Screen Header Title
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primary.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.newspaper_rounded,
-                              color: AppTheme.primary,
-                              size: 22,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'news_title'.tr(),
-                                  style: TextStyle(
-                                    fontSize: isTablet ? 22 : 19,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF111827),
-                                  ),
-                                ),
-                                Text(
-                                  'news_subtitle'.tr(),
-                                  style: TextStyle(
-                                    fontSize: isTablet ? 13 : 12,
-                                    color: const Color(0xFF6B7280),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          InkWell(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const CreatorStudioScreen()),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.edit_note_rounded, color: AppTheme.primary, size: 18),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Studio',
-                                    style: TextStyle(
-                                      color: AppTheme.primary,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                      // Subtitle
+                      Text(
+                        'news_subtitle'.tr(),
+                        style: TextStyle(
+                          fontSize: isTablet ? 14 : 13,
+                          color: const Color(0xFF6B7280),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
 
                       // Pill-Shaped Search Bar
                       Container(
@@ -238,46 +241,57 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
                             ),
                           ],
                         ),
-                        child: TextField(
-                          controller: _searchController,
-                          textAlignVertical: TextAlignVertical.center,
-                          style: TextStyle(
-                            fontSize: isTablet ? 15 : 14,
-                            color: AppTheme.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'news_search_hint'.tr(),
-                            hintStyle: TextStyle(
-                              fontSize: isTablet ? 13.5 : 12.5,
-                              color: const Color(0xFF9CA3AF),
-                              fontWeight: FontWeight.w500,
+                        child: Center(
+                          child: TextField(
+                            controller: _searchController,
+                            textAlignVertical: TextAlignVertical.center,
+                            style: TextStyle(
+                              fontSize: isTablet ? 15 : 14,
+                              color: AppTheme.textPrimary,
+                              fontWeight: FontWeight.w600,
                             ),
-                            prefixIcon: const Icon(
-                              Icons.search_rounded,
-                              color: Color(0xFF9CA3AF),
-                              size: 20,
-                            ),
-                            suffixIcon: _searchQuery.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(
-                                      Icons.clear_rounded,
-                                      color: Color(0xFF9CA3AF),
-                                      size: 18,
-                                    ),
-                                    onPressed: () => _searchController.clear(),
-                                  )
-                                : null,
-                            filled: false,
-                            fillColor: Colors.transparent,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            errorBorder: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
+                            decoration: InputDecoration(
+                              hintText: 'news_search_hint'.tr(),
+                              hintStyle: TextStyle(
+                                fontSize: isTablet ? 13.5 : 12.5,
+                                color: const Color(0xFF9CA3AF),
+                                fontWeight: FontWeight.w500,
+                              ),
+                              isDense: true,
+                              prefixIcon: const Icon(
+                                Icons.search_rounded,
+                                color: Color(0xFF9CA3AF),
+                                size: 20,
+                              ),
+                              prefixIconConstraints: const BoxConstraints(
+                                minWidth: 44,
+                                minHeight: 44,
+                              ),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(
+                                        Icons.clear_rounded,
+                                        color: Color(0xFF9CA3AF),
+                                        size: 18,
+                                      ),
+                                      onPressed: () => _searchController.clear(),
+                                    )
+                                  : null,
+                              suffixIconConstraints: const BoxConstraints(
+                                minWidth: 44,
+                                minHeight: 44,
+                              ),
+                              filled: false,
+                              fillColor: Colors.transparent,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
                             ),
                           ),
                         ),

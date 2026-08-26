@@ -139,12 +139,12 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
               child: _buildEmptyState(),
             )
           else ...[
-            const SliverPadding(
-              padding: EdgeInsets.fromLTRB(20, 24, 20, 0),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
               sliver: SliverToBoxAdapter(
                 child: Text(
-                  'Select Stage',
-                  style: TextStyle(
+                  'select_stage'.tr(),
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: AppTheme.textPrimary,
@@ -290,7 +290,7 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
                                       color: Colors.white, size: 14),
                                   const SizedBox(width: 4),
                                   Text(
-                                    '${widget.crop.daysSinceSowing} days',
+                                    'days_count'.tr(args: [widget.crop.daysSinceSowing.toString()]),
                                     style: AppTheme.getTextStyle(
                                       context,
                                       fontSize: 12,
@@ -327,9 +327,9 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const AppEmptyState(
+    return AppEmptyState(
       icon: Icons.spa_rounded,
-      title: 'No stages available',
+      title: 'no_stages_available'.tr(),
     );
   }
 
@@ -347,6 +347,17 @@ class _StageGridCard extends StatefulWidget {
 
 class _StageGridCardState extends State<_StageGridCard> {
   bool _isPressed = false;
+
+  Widget _buildFallbackIcon() {
+    return Container(
+      color: const Color(0xFFF3F4F6),
+      child: const Icon(
+        Icons.eco_rounded,
+        color: Color(0xFF9CA3AF),
+        size: 40,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -402,23 +413,9 @@ class _StageGridCardState extends State<_StageGridCard> {
                                   ),
                                 ),
                               ),
-                              errorWidget: (_, __, ___) => Container(
-                                color: const Color(0xFFF3F4F6),
-                                child: const Icon(
-                                  Icons.eco_rounded,
-                                  color: Color(0xFF9CA3AF),
-                                  size: 40,
-                                ),
-                              ),
+                              errorWidget: (_, __, ___) => _buildFallbackIcon(),
                             )
-                          : Container(
-                              color: const Color(0xFFF3F4F6),
-                              child: const Icon(
-                                Icons.eco_rounded,
-                                color: Color(0xFF9CA3AF),
-                                size: 40,
-                              ),
-                            ),
+                          : _buildFallbackIcon(),
                       if (isCurrent)
                         Positioned(
                           top: 10,
@@ -429,9 +426,9 @@ class _StageGridCardState extends State<_StageGridCard> {
                               color: const Color(0xFF2E7D32),
                               borderRadius: BorderRadius.circular(100),
                             ),
-                            child: const Text(
-                              'Current',
-                              style: TextStyle(
+                            child: Text(
+                              'current_stage'.tr(),
+                              style: const TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
