@@ -526,6 +526,34 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
   }
 }
 
+String _getLocalizedCategory(String? category) {
+  if (category == null || category.trim().isEmpty) {
+    return 'category_advisory'.tr();
+  }
+  final cat = category.toLowerCase().trim();
+  if (cat.contains('fung')) return 'category_fungal_disease'.tr();
+  if (cat.contains('insect') ||
+      cat.contains('pest') ||
+      cat.contains('borer') ||
+      cat.contains('worm') ||
+      cat.contains('పురుగు') ||
+      cat.contains('కీటక')) {
+    return 'category_insect_pest'.tr();
+  }
+  if (cat.contains('bacter')) return 'category_bacterial_disease'.tr();
+  if (cat.contains('virus') || cat.contains('viral')) return 'category_viral_disease'.tr();
+  if (cat.contains('nutrient') || cat.contains('deficiency') || cat.contains('లోపం')) {
+    return 'category_nutrient_deficiency'.tr();
+  }
+  if (cat.contains('abiotic')) return 'category_abiotic_disorder'.tr();
+  if (cat.contains('nematode')) return 'category_nematode'.tr();
+  if (cat.contains('weed')) return 'category_weed'.tr();
+  if (cat.contains('disease') || cat.contains('తెగులు') || cat.contains('रोग')) {
+    return 'category_disease'.tr();
+  }
+  return category;
+}
+
 class _ProblemCard extends StatelessWidget {
   final CropProblem problem;
   final bool isTablet;
@@ -542,6 +570,7 @@ class _ProblemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasImage = problem.imageUrl1 != null && problem.imageUrl1!.isNotEmpty;
+    final isTelugu = context.locale.languageCode == 'te';
 
     return Material(
       color: Colors.transparent,
@@ -597,17 +626,17 @@ class _ProblemCard extends StatelessWidget {
                     else
                       _buildFallbackIcon(),
 
-                    // Category Pill on Image
+                    // Category Pill on Image (Translated)
                     Positioned(
                       top: 8,
                       left: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
-                          vertical: 3,
+                          vertical: 3.5,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.65),
+                          color: Colors.black.withValues(alpha: 0.70),
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: Row(
@@ -622,15 +651,19 @@ class _ProblemCard extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 5),
-                            Text(
-                              problem.category ?? 'Advisory',
-                              style: const TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
+                            ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: isTablet ? 160 : 105),
+                              child: Text(
+                                _getLocalizedCategory(problem.category),
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  height: isTelugu ? 1.3 : 1.1,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -658,7 +691,7 @@ class _ProblemCard extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                         color: AppTheme.textPrimary,
                         letterSpacing: -0.2,
-                        height: 1.25,
+                        height: isTelugu ? 1.45 : 1.25,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -672,23 +705,24 @@ class _ProblemCard extends StatelessWidget {
                         color: const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(100),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Flexible(
                             child: Text(
-                              'View Control Remedies',
+                              'view_treatment_guide'.tr(),
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 color: AppTheme.textPrimary,
+                                height: isTelugu ? 1.35 : 1.15,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          SizedBox(width: 4),
-                          Icon(
+                          const SizedBox(width: 4),
+                          const Icon(
                             Icons.arrow_forward_rounded,
                             size: 11,
                             color: AppTheme.textPrimary,

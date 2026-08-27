@@ -202,136 +202,164 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
               .where((r) => r.type.toLowerCase() == 'biological')
               .toList();
 
-          return Stack(
-            children: [
-              CustomScrollView(
-                slivers: [
-                  _buildSliverAppBar(images),
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        // Category badge if available
-                        if (widget.problem.category != null)
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 24),
-                            child: Wrap(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _getCategoryColor(
-                                            widget.problem.category!)
-                                        .withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(100),
-                                    border: Border.all(
-                                      color: _getCategoryColor(
-                                              widget.problem.category!)
-                                          .withValues(alpha: 0.2),
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    widget.problem.category!,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w900,
-                                      color: _getCategoryColor(
-                                          widget.problem.category!),
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+          final isTelugu = context.locale.languageCode == 'te';
 
-                        // Symptoms section
-                        _buildSectionCard(
-                          title: context.tr('symptoms_title'),
-                          content: advisory.symptoms,
-                          icon: Icons.visibility_rounded,
+          return CustomScrollView(
+            slivers: [
+              _buildSliverAppBar(images),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    // Category badge if available (Translated)
+                    if (widget.problem.category != null)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 24),
+                        child: Wrap(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _getCategoryColor(
+                                        widget.problem.category!)
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(100),
+                                border: Border.all(
+                                  color: _getCategoryColor(
+                                          widget.problem.category!)
+                                      .withValues(alpha: 0.2),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Text(
+                                _getLocalizedCategory(widget.problem.category!),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: _getCategoryColor(
+                                      widget.problem.category!),
+                                  letterSpacing: 0.5,
+                                  height: isTelugu ? 1.4 : 1.15,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
 
-                        if (advisory.notes != null)
-                          _buildSectionCard(
-                            title: context.tr('notes_title'),
-                            content: advisory.notes!,
-                            icon: Icons.edit_note_rounded,
-                          ),
-
-                        // Management/Remedies section
-                        if (advisory.recommendations.isNotEmpty) ...[
-                          Padding(
-                            padding:
-                                const EdgeInsets.only(top: 32.0, bottom: 20.0),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.medical_services_rounded,
-                                    color: AppTheme.textPrimary, size: 28),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    context.tr('management_title'),
-                                    style: const TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w900,
-                                      color: AppTheme.textPrimary,
-                                      letterSpacing: -0.6,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Chemical treatments section
-                          if (chemicalRecs.isNotEmpty) ...[
-                            _buildTreatmentTypeHeader(
-                              context.tr('chemical_treatments'),
-                              Icons.biotech_rounded,
-                              const Color(0xFF2563EB),
-                              chemicalRecs.length,
-                            ),
-                            ...chemicalRecs
-                                .map((rec) => _buildRecommendationCard(rec)),
-                          ],
-
-                          // Biological treatments section
-                          if (biologicalRecs.isNotEmpty) ...[
-                            _buildTreatmentTypeHeader(
-                              context.tr('biological_treatments'),
-                              Icons.eco_rounded,
-                              const Color(0xFF059669),
-                              biologicalRecs.length,
-                            ),
-                            ...biologicalRecs
-                                .map((rec) => _buildRecommendationCard(rec)),
-                          ],
-                        ],
-
-                        // Invisible spacer for the floating button
-                        const SizedBox(height: 120),
-                      ]),
+                    // Symptoms section
+                    _buildSectionCard(
+                      title: context.tr('symptoms_title'),
+                      content: advisory.symptoms,
+                      icon: Icons.visibility_rounded,
+                      isTelugu: isTelugu,
                     ),
-                  ),
-                ],
-              ),
-              // Floating button positioned at the bottom
-              Positioned(
-                bottom: 24,
-                left: 24,
-                right: 24,
-                child: _buildFloatingIdentificationButton(),
+
+                    if (advisory.notes != null && advisory.notes!.isNotEmpty)
+                      _buildSectionCard(
+                        title: context.tr('notes_title'),
+                        content: advisory.notes!,
+                        icon: Icons.edit_note_rounded,
+                        isTelugu: isTelugu,
+                      ),
+
+                    // Management/Remedies section
+                    if (advisory.recommendations.isNotEmpty) ...[
+                      Padding(
+                        padding:
+                            const EdgeInsets.only(top: 28.0, bottom: 16.0),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.medical_services_rounded,
+                                color: AppTheme.textPrimary, size: 28),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                context.tr('management_title'),
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppTheme.textPrimary,
+                                  letterSpacing: -0.6,
+                                  height: isTelugu ? 1.4 : 1.2,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Chemical treatments section
+                      if (chemicalRecs.isNotEmpty) ...[
+                        _buildTreatmentTypeHeader(
+                          context.tr('chemical_treatments'),
+                          Icons.biotech_rounded,
+                          const Color(0xFF2563EB),
+                          chemicalRecs.length,
+                          isTelugu,
+                        ),
+                        ...chemicalRecs
+                            .map((rec) => _buildRecommendationCard(rec, isTelugu)),
+                      ],
+
+                      // Biological treatments section
+                      if (biologicalRecs.isNotEmpty) ...[
+                        _buildTreatmentTypeHeader(
+                          context.tr('biological_treatments'),
+                          Icons.eco_rounded,
+                          const Color(0xFF059669),
+                          biologicalRecs.length,
+                          isTelugu,
+                        ),
+                        ...biologicalRecs
+                            .map((rec) => _buildRecommendationCard(rec, isTelugu)),
+                      ],
+                    ],
+
+                    // Non-sticky Problem Identification Button
+                    Padding(
+                      padding: const EdgeInsets.only(top: 24.0, bottom: 32.0),
+                      child: _buildIdentificationButton(isTelugu),
+                    ),
+                  ]),
+                ),
               ),
             ],
           );
         },
       ),
     );
+  }
+
+  String _getLocalizedCategory(String? category) {
+    if (category == null || category.trim().isEmpty) {
+      return 'category_advisory'.tr();
+    }
+    final cat = category.toLowerCase().trim();
+    if (cat.contains('fung')) return 'category_fungal_disease'.tr();
+    if (cat.contains('insect') ||
+        cat.contains('pest') ||
+        cat.contains('borer') ||
+        cat.contains('worm') ||
+        cat.contains('పురుగు') ||
+        cat.contains('కీటక')) {
+      return 'category_insect_pest'.tr();
+    }
+    if (cat.contains('bacter')) return 'category_bacterial_disease'.tr();
+    if (cat.contains('virus') || cat.contains('viral')) return 'category_viral_disease'.tr();
+    if (cat.contains('nutrient') || cat.contains('deficiency') || cat.contains('లోపం')) {
+      return 'category_nutrient_deficiency'.tr();
+    }
+    if (cat.contains('abiotic')) return 'category_abiotic_disorder'.tr();
+    if (cat.contains('nematode')) return 'category_nematode'.tr();
+    if (cat.contains('weed')) return 'category_weed'.tr();
+    if (cat.contains('disease') || cat.contains('తెగులు') || cat.contains('रोग')) {
+      return 'category_disease'.tr();
+    }
+    return category;
   }
 
   Color _getCategoryColor(String category) {
@@ -356,10 +384,10 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
   }
 
   Widget _buildTreatmentTypeHeader(
-      String title, IconData icon, Color color, int count) {
+      String title, IconData icon, Color color, int count, bool isTelugu) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16, top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(20),
@@ -373,15 +401,16 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             child: Text(
               title,
               style: TextStyle(
-                fontSize: 17,
+                fontSize: 16,
                 fontWeight: FontWeight.w900,
                 color: color,
                 letterSpacing: -0.3,
+                height: isTelugu ? 1.4 : 1.2,
               ),
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
               color: color,
               borderRadius: BorderRadius.circular(100),
@@ -389,7 +418,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             child: Text(
               '$count',
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w900,
                 color: Colors.white,
               ),
@@ -399,7 +428,6 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       ),
     );
   }
-
   Widget _buildSliverAppBar(List<String?> images) {
     return SliverAppBar(
       expandedHeight: 320.0,
@@ -469,7 +497,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
           itemCount: images.length,
           itemBuilder: (context, index) {
             return Hero(
-              tag: 'problem_image_${widget.problem.id}',
+              tag: 'problem_image_${widget.problem.id}_$index',
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -514,6 +542,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             );
           },
         ),
+
         if (images.length > 1)
           Positioned(
             bottom: 64.0,
@@ -543,6 +572,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
     required String title,
     required String content,
     required IconData icon,
+    required bool isTelugu,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16.0),
@@ -566,30 +596,39 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             children: [
               Icon(icon, color: AppTheme.textPrimary, size: 24),
               const SizedBox(width: 12),
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: AppTheme.textPrimary,
-                      letterSpacing: -0.4)),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: AppTheme.textPrimary,
+                    letterSpacing: -0.4,
+                    height: isTelugu ? 1.4 : 1.2,
+                  ),
+                ),
+              ),
             ],
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16.0),
             child: Divider(height: 1, thickness: 1),
           ),
-          Text(content,
-              style: const TextStyle(
-                  fontSize: 15,
-                  height: 1.6,
-                  color: AppTheme.textSecondary,
-                  fontWeight: FontWeight.w600)),
+          Text(
+            content,
+            style: TextStyle(
+              fontSize: 15,
+              height: isTelugu ? 1.75 : 1.6,
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildRecommendationCard(AdvisoryRecommendation rec) {
+  Widget _buildRecommendationCard(AdvisoryRecommendation rec, bool isTelugu) {
     final isChemical = rec.type.toLowerCase() == 'chemical';
     final typeColor =
         isChemical ? const Color(0xFF2563EB) : const Color(0xFF059669);
@@ -631,32 +670,16 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(rec.name,
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: AppTheme.textPrimary,
-                            letterSpacing: -0.4)),
-                    if (rec.altName != null && rec.altName!.isNotEmpty)
-                      Container(
-                        margin: const EdgeInsets.only(top: 6),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        child: Text(
-                          rec.altName!,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                    Text(
+                      rec.name,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textPrimary,
+                        letterSpacing: -0.4,
+                        height: isTelugu ? 1.45 : 1.25,
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -666,8 +689,8 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
           // Stage scope badge
           if (rec.stageScope != null && rec.stageScope != 'All Stages')
             Container(
-              margin: const EdgeInsets.only(top: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(top: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
                 color: const Color(0xFFFEF3C7),
                 borderRadius: BorderRadius.circular(100),
@@ -677,7 +700,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.schedule_rounded,
-                      size: 14, color: Color(0xFFD97706)),
+                      size: 13, color: Color(0xFFD97706)),
                   const SizedBox(width: 6),
                   Text(
                     rec.stageScope!,
@@ -693,25 +716,37 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             ),
 
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 20.0),
+            padding: EdgeInsets.symmetric(vertical: 18.0),
             child: Divider(height: 1, thickness: 1),
           ),
 
           if (rec.dose != null && rec.dose!.isNotEmpty)
             _buildDetailRow(
-                Icons.science_rounded, context.tr('dose_title'), rec.dose!),
+              Icons.science_rounded,
+              context.tr('dose_title'),
+              rec.dose!,
+              isTelugu,
+            ),
           if (rec.method != null && rec.method!.isNotEmpty)
-            _buildDetailRow(Icons.water_drop_rounded,
-                context.tr('method_title'), rec.method!),
+            _buildDetailRow(
+              Icons.water_drop_rounded,
+              context.tr('method_title'),
+              rec.method!,
+              isTelugu,
+            ),
           if (rec.notes != null && rec.notes!.isNotEmpty)
             _buildDetailRow(
-                Icons.notes_rounded, context.tr('notes_row_title'), rec.notes!),
+              Icons.notes_rounded,
+              context.tr('notes_row_title'),
+              rec.notes!,
+              isTelugu,
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildFloatingIdentificationButton() {
+  Widget _buildIdentificationButton(bool isTelugu) {
     bool isDisabled = _identificationState == IdentificationState.loading ||
         _identificationState == IdentificationState.success;
 
@@ -732,25 +767,25 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
         scale: _isButtonPressed ? 0.96 : 1.0,
         duration: const Duration(milliseconds: 150),
         child: Container(
-          height: 64,
+          height: 60,
           decoration: BoxDecoration(
             color: _identificationState == IdentificationState.success
                 ? AppTheme.success
                 : AppTheme.textPrimary,
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
                 color: (_identificationState == IdentificationState.success
                         ? AppTheme.success
                         : AppTheme.textPrimary)
-                    .withValues(alpha: 0.2),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                    .withValues(alpha: 0.15),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
           child: Center(
-            child: _buildButtonChild(),
+            child: _buildButtonChild(isTelugu),
           ),
         ),
       ),
@@ -758,7 +793,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
   }
 
   // Helper widget to build the content inside the button
-  Widget _buildButtonChild() {
+  Widget _buildButtonChild(bool isTelugu) {
     switch (_identificationState) {
       case IdentificationState.loading:
         return const SizedBox(
@@ -773,12 +808,16 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             const Icon(Icons.check_circle_outline_rounded,
                 color: Colors.white, size: 24),
             const SizedBox(width: 10),
-            Text(context.tr('marked_identified'),
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                    letterSpacing: 0.2)),
+            Text(
+              context.tr('marked_identified'),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+                letterSpacing: 0.2,
+                height: isTelugu ? 1.35 : 1.15,
+              ),
+            ),
           ],
         );
       case IdentificationState.initial:
@@ -788,12 +827,16 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
           children: [
             const Icon(Icons.flag_rounded, color: Colors.white, size: 24),
             const SizedBox(width: 10),
-            Text(context.tr('i_have_this_problem'),
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                    letterSpacing: 0.2)),
+            Text(
+              context.tr('i_have_this_problem'),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+                letterSpacing: 0.2,
+                height: isTelugu ? 1.35 : 1.15,
+              ),
+            ),
           ],
         );
     }
@@ -807,9 +850,9 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
     return Icons.settings_rounded;
   }
 
-  Widget _buildDetailRow(IconData icon, String title, String value) {
+  Widget _buildDetailRow(IconData icon, String title, String value, bool isTelugu) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.only(bottom: 14.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -821,24 +864,31 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             ),
             child: Icon(icon, size: 18, color: AppTheme.textPrimary),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.textPrimary,
-                        fontSize: 15,
-                        letterSpacing: -0.2)),
-                const SizedBox(height: 4),
-                Text(value,
-                    style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        height: 1.5)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                    fontSize: 14.5,
+                    letterSpacing: -0.2,
+                    height: isTelugu ? 1.35 : 1.15,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    height: isTelugu ? 1.65 : 1.5,
+                  ),
+                ),
               ],
             ),
           ),
@@ -949,6 +999,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
         children: [
           PageView.builder(
             controller: _pageController,
+            physics: const BouncingScrollPhysics(),
             itemCount: widget.imageUrls.length,
             onPageChanged: (index) {
               setState(() {
@@ -956,12 +1007,13 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
               });
             },
             itemBuilder: (context, index) {
-              return Hero(
-                tag: '${widget.tagPrefix}_$index',
-                child: InteractiveViewer(
-                  minScale: 1.0,
-                  maxScale: 4.0,
-                  child: Center(
+              return Center(
+                child: Hero(
+                  tag: '${widget.tagPrefix}_$index',
+                  child: InteractiveViewer(
+                    minScale: 1.0,
+                    maxScale: 4.0,
+                    clipBehavior: Clip.none,
                     child: CachedNetworkImage(
                       imageUrl: widget.imageUrls[index],
                       fit: BoxFit.contain,
@@ -979,20 +1031,24 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
               );
             },
           ),
+
+          // Close button on top right
           Positioned(
             top: MediaQuery.of(context).padding.top + 16,
-            left: 16,
+            right: 16,
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.5),
+                color: Colors.black.withValues(alpha: 0.6),
                 shape: BoxShape.circle,
               ),
               child: IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 26),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
           ),
+
+          // Page index counter
           if (widget.imageUrls.length > 1)
             Positioned(
               bottom: MediaQuery.of(context).padding.bottom + 24,
@@ -1002,15 +1058,16 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.5),
+                    color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(100),
                   ),
                   child: Text(
                     '${_currentIndex + 1} / ${widget.imageUrls.length}',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ),

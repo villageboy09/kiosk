@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/services/creator_service.dart';
 import 'package:cropsync/services/auth_service.dart';
@@ -19,7 +18,6 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
   final _titleController = TextEditingController();
   final _summaryController = TextEditingController();
   final _contentController = TextEditingController();
-  final _imageUrlController = TextEditingController();
   final _authorController = TextEditingController(text: 'CropSync Agri Desk');
   final _sourceController = TextEditingController(text: 'CropSync Insights');
 
@@ -57,7 +55,6 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
     _titleController.dispose();
     _summaryController.dispose();
     _contentController.dispose();
-    _imageUrlController.dispose();
     _authorController.dispose();
     _sourceController.dispose();
     super.dispose();
@@ -74,7 +71,6 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
       if (image != null) {
         setState(() {
           _pickedImage = image;
-          _imageUrlController.clear();
         });
       }
     } catch (e) {
@@ -92,15 +88,23 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
   Future<void> _publishArticle() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final imageUrl = _imageUrlController.text.trim().isNotEmpty
-        ? _imageUrlController.text.trim()
-        : (_pickedImage != null
-            ? 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=800&q=80'
-            : 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=800&q=80');
+    if (_pickedImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please select an article cover image'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      return;
+    }
+
+    final imageUrl = _pickedImage!.path.startsWith('http')
+        ? _pickedImage!.path
+        : 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=800&q=80';
 
     setState(() => _isPublishing = true);
 
-    final success = await CreatorService.createNewsArticle(
+    final result = await CreatorService.createNewsArticleDetailed(
       title: _titleController.text.trim(),
       summary: _summaryController.text.trim(),
       content: _contentController.text.trim(),
@@ -115,14 +119,14 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
     if (!mounted) return;
     setState(() => _isPublishing = false);
 
-    if (success) {
+    if (result.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
               const Icon(Icons.check_circle_rounded, color: Colors.white),
               const SizedBox(width: 10),
-              Expanded(child: Text('upload_news_success'.tr())),
+              Expanded(child: Text(result.message ?? 'upload_news_success'.tr())),
             ],
           ),
           backgroundColor: AppTheme.accentGreen,
@@ -133,7 +137,7 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Failed to publish article. Please check your connection and try again.'),
+          content: Text(result.error ?? 'Failed to publish article. Please check your connection and try again.'),
           backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
         ),
@@ -217,7 +221,6 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
 
   Widget _buildCoverImageSection() {
     final hasPickedImage = _pickedImage != null;
-    final hasUrlImage = _imageUrlController.text.trim().isNotEmpty;
 
     return Container(
       decoration: BoxDecoration(
@@ -242,21 +245,6 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
                 height: 180,
                 width: double.infinity,
                 fit: BoxFit.cover,
-              ),
-            )
-          else if (hasUrlImage)
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: CachedNetworkImage(
-                imageUrl: _imageUrlController.text.trim(),
-                height: 180,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => Container(
-                  height: 140,
-                  color: Colors.grey.shade200,
-                  child: const Center(child: Icon(Icons.broken_image, size: 40, color: Colors.grey)),
-                ),
               ),
             )
           else
@@ -323,29 +311,6 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
                   ),
                 ),
               ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: TextField(
-              controller: _imageUrlController,
-              decoration: InputDecoration(
-                hintText: 'Or paste image URL (https://...)',
-                hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                isDense: true,
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.check_rounded, size: 18),
-                  onPressed: () => setState(() {}),
-                ),
-              ),
-              onSubmitted: (_) => setState(() {}),
             ),
           ),
         ],

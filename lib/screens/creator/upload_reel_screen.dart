@@ -17,9 +17,7 @@ class UploadReelScreen extends StatefulWidget {
 class _UploadReelScreenState extends State<UploadReelScreen> {
   final _formKey = GlobalKey<FormState>();
   final _captionController = TextEditingController();
-  final _audioController = TextEditingController(text: 'Original Audio');
   final _phoneController = TextEditingController();
-  final _videoUrlController = TextEditingController();
 
   final ImagePicker _picker = ImagePicker();
   XFile? _pickedVideo;
@@ -57,9 +55,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
   @override
   void dispose() {
     _captionController.dispose();
-    _audioController.dispose();
     _phoneController.dispose();
-    _videoUrlController.dispose();
     _videoPlayerController?.dispose();
     super.dispose();
   }
@@ -73,7 +69,6 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
       if (file != null) {
         setState(() {
           _pickedVideo = file;
-          _videoUrlController.clear();
         });
         _initializeVideoPlayer(File(file.path));
       }
@@ -111,29 +106,6 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     }
   }
 
-  Future<void> _initializeUrlVideo(String url) async {
-    if (url.trim().isEmpty) return;
-    setState(() => _isInitializingVideo = true);
-    await _videoPlayerController?.dispose();
-
-    try {
-      final controller = VideoPlayerController.networkUrl(Uri.parse(url.trim()));
-      await controller.initialize();
-      controller.setLooping(true);
-      controller.play();
-      if (mounted) {
-        setState(() {
-          _videoPlayerController = controller;
-          _isInitializingVideo = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isInitializingVideo = false);
-      }
-    }
-  }
-
   void _toggleTag(String tag) {
     setState(() {
       if (_selectedTags.contains(tag)) {
@@ -147,13 +119,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
   Future<void> _publishReel() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final videoUrl = _videoUrlController.text.trim().isNotEmpty
-        ? _videoUrlController.text.trim()
-        : (_pickedVideo != null
-            ? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
-            : '');
-
-    if (videoUrl.isEmpty) {
+    if (_pickedVideo == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('upload_reel_select_video'.tr()),
@@ -163,15 +129,17 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
       return;
     }
 
+    final videoUrl = _pickedVideo!.path.startsWith('http')
+        ? _pickedVideo!.path
+        : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+
     setState(() => _isPublishing = true);
 
     final tags = _selectedTags.join(', ');
-    final success = await CreatorService.uploadReel(
+    final result = await CreatorService.uploadReelDetailed(
       videoUrl: videoUrl,
       caption: _captionController.text.trim(),
-      musicTitle: _audioController.text.trim().isNotEmpty
-          ? _audioController.text.trim()
-          : 'Original Audio',
+      musicTitle: 'Original Audio',
       phoneNumber: _phoneController.text.trim(),
       tags: tags,
     );
@@ -179,14 +147,14 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     if (!mounted) return;
     setState(() => _isPublishing = false);
 
-    if (success) {
+    if (result.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
               const Icon(Icons.check_circle_rounded, color: Colors.white),
               const SizedBox(width: 10),
-              Expanded(child: Text('upload_reel_success'.tr())),
+              Expanded(child: Text(result.message ?? 'upload_reel_success'.tr())),
             ],
           ),
           backgroundColor: AppTheme.accentGreen,
@@ -197,7 +165,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Failed to publish reel. Please check your connection and try again.'),
+          content: Text(result.error ?? 'Failed to publish reel. Please check your connection and try again.'),
           backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
         ),
@@ -213,7 +181,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close_rounded, color: AppTheme.textDark),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.textDark, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
@@ -249,29 +217,22 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
             ),
           ),
         ],
+        centerTitle: true,
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildVideoPickerSection(),
-                  const SizedBox(height: 20),
-                  _buildFormFieldsSection(),
-                  const SizedBox(height: 20),
-                  _buildTagsSection(),
-                  const SizedBox(height: 30),
-                  _buildSubmitButton(),
-                  const SizedBox(height: 30),
-                ],
-              ),
-            ),
-          ),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          children: [
+            _buildVideoPickerSection(),
+            const SizedBox(height: 20),
+            _buildFormFieldsSection(),
+            const SizedBox(height: 20),
+            _buildTagsSection(),
+            const SizedBox(height: 32),
+            _buildPublishButton(),
+            const SizedBox(height: 40),
+          ],
         ),
       ),
     );
@@ -281,7 +242,6 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     final hasVideo = _videoPlayerController != null && _videoPlayerController!.value.isInitialized;
 
     return Container(
-      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -411,29 +371,6 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: TextField(
-              controller: _videoUrlController,
-              decoration: InputDecoration(
-                hintText: 'upload_reel_url_hint'.tr(),
-                hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                isDense: true,
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-                  onPressed: () => _initializeUrlVideo(_videoUrlController.text),
-                ),
-              ),
-              onSubmitted: _initializeUrlVideo,
-            ),
-          ),
         ],
       ),
     );
@@ -481,21 +418,6 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
               }
               return null;
             },
-          ),
-          const SizedBox(height: 14),
-          TextFormField(
-            controller: _audioController,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.music_note_rounded, color: AppTheme.accentGreen, size: 20),
-              hintText: 'upload_reel_audio_hint'.tr(),
-              hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-              filled: true,
-              fillColor: Colors.grey.shade50,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-            ),
           ),
           const SizedBox(height: 14),
           TextFormField(
@@ -576,7 +498,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     );
   }
 
-  Widget _buildSubmitButton() {
+  Widget _buildPublishButton() {
     return SizedBox(
       width: double.infinity,
       height: 52,

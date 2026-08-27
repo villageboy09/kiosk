@@ -1,7 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/news_article.dart';
 import 'package:cropsync/screens/news/news_detail_screen.dart';
-import 'package:cropsync/screens/creator/creator_studio_screen.dart';
+import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:cropsync/services/news_service.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
@@ -156,11 +156,7 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
               padding: const EdgeInsets.only(right: 14),
               child: Center(
                 child: InkWell(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const CreatorStudioScreen()),
-                    );
-                  },
+                  onTap: () => CreatorHomeScreen.navigateToStudio(context),
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

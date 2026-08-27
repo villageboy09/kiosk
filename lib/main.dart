@@ -1,5 +1,6 @@
 import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/screens/operator/operator_dashboard.dart';
+import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:cropsync/welcome_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/operator_auth_service.dart';
@@ -59,12 +60,14 @@ Future<void> main() async {
     SystemUiMode.edgeToEdge,
   );
 
-  // Set system UI overlay style
+  // Set system UI overlay style with transparent status and navigation bars for Android 15+ edge-to-edge
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.white,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
@@ -147,13 +150,15 @@ class _MyAppState extends State<MyApp> {
             return const OperatorDashboard();
           }
 
-          // Regular farmer session
+          // Regular user session (Farmer, Creator, Retailer, Officer)
           if (data['farmer'] == true) {
             final user = AuthService.currentUser;
-            if (user?.membershipType == 'Retailer') {
+            if (user?.isRetailer == true || user?.membershipType == 'Retailer') {
               return const RetailerDashboard();
-            } else if (user?.membershipType == 'Officer') {
+            } else if (user?.isOfficer == true || user?.membershipType == 'Officer') {
               return const ExtensionOfficerDashboard();
+            } else if (user?.isCreator == true || user?.membershipType == 'Creator') {
+              return const CreatorHomeScreen();
             }
             return const HomeScreen();
           }

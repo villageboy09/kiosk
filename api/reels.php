@@ -17,6 +17,27 @@ require_once __DIR__ . '/../config.php';
 try {
     if (isset($pdo) && $pdo instanceof PDO) {
         $pdo->exec("SET NAMES utf8mb4");
+
+        // Auto-migrate all reels columns if missing
+        $reelsColsCheck = [
+            'music_title' => "ALTER TABLE `reels` ADD COLUMN `music_title` VARCHAR(200) DEFAULT 'Original Audio'",
+            'phone_number' => "ALTER TABLE `reels` ADD COLUMN `phone_number` VARCHAR(20) DEFAULT NULL",
+            'tags' => "ALTER TABLE `reels` ADD COLUMN `tags` VARCHAR(255) DEFAULT NULL",
+            'views_count' => "ALTER TABLE `reels` ADD COLUMN `views_count` INT DEFAULT 0",
+            'likes_count' => "ALTER TABLE `reels` ADD COLUMN `likes_count` INT DEFAULT 0",
+            'saves_count' => "ALTER TABLE `reels` ADD COLUMN `saves_count` INT DEFAULT 0",
+            'comments_count' => "ALTER TABLE `reels` ADD COLUMN `comments_count` INT DEFAULT 0",
+            'is_active' => "ALTER TABLE `reels` ADD COLUMN `is_active` TINYINT(1) DEFAULT 1",
+            'created_at' => "ALTER TABLE `reels` ADD COLUMN `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        ];
+        foreach ($reelsColsCheck as $rCol => $rSql) {
+            try {
+                $cChk = $pdo->query("SHOW COLUMNS FROM `reels` LIKE '$rCol'");
+                if (!$cChk || !$cChk->fetch()) {
+                    $pdo->exec($rSql);
+                }
+            } catch (Throwable $e) {}
+        }
     }
 } catch (Throwable $e) {}
 
@@ -48,9 +69,12 @@ function formatCountShorthandReels($count) {
     return strval($count);
 }
 
-$action = isset($_GET['action']) ? $_GET['action'] : '';
-$phoneNumber = isset($_GET['phone_number']) ? trim($_GET['phone_number']) : '';
-$farmerUsername = isset($_GET['username']) ? trim($_GET['username']) : (isset($_GET['farmer_username']) ? trim($_GET['farmer_username']) : '');
+$rawInput = file_get_contents("php://input");
+$postData = !empty($rawInput) ? json_decode($rawInput, true) : null;
+
+$action = isset($_GET['action']) ? $_GET['action'] : (isset($_POST['action']) ? $_POST['action'] : ($postData['action'] ?? ''));
+$phoneNumber = isset($_GET['phone_number']) ? trim($_GET['phone_number']) : (isset($_POST['phone_number']) ? trim($_POST['phone_number']) : ($postData['phone_number'] ?? ''));
+$farmerUsername = isset($_GET['username']) ? trim($_GET['username']) : (isset($_GET['farmer_username']) ? trim($_GET['farmer_username']) : (isset($_POST['username']) ? trim($_POST['username']) : ($postData['username'] ?? ($postData['farmer_username'] ?? ''))));
 
 // --- API Router ---
 
@@ -107,8 +131,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
             $creatorId = intval($creator['id']);
 
-            $rStmt = $pdo->prepare("SELECT r.*, c.username AS creator_username, c.display_name AS creator_display_name, c.profile_image_url AS creator_profile_image_url, c.is_verified AS creator_is_verified, c.phone_number AS creator_phone_number FROM reels r JOIN creators c ON r.creator_id = c.id WHERE r.creator_id = ? ORDER BY r.id DESC");
-            $rStmt->execute([$creatorId]);
+            $creatorPhone = trim($creator['phone_number'] ?? $phoneNumber);
+
+            $rStmt = $pdo->prepare("SELECT r.*, c.username AS creator_username, c.display_name AS creator_display_name, c.profile_image_url AS creator_profile_image_url, c.is_verified AS creator_is_verified, c.phone_number AS creator_phone_number FROM reels r LEFT JOIN creators c ON r.creator_id = c.id WHERE r.creator_id = ? OR (r.phone_number = ? AND r.phone_number != '') ORDER BY r.id DESC");
+            $rStmt->execute([$creatorId, $creatorPhone]);
             $rawReels = $rStmt->fetchAll(PDO::FETCH_ASSOC);
 
             $reels = [];
@@ -116,6 +142,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             foreach ($rawReels as $r) {
                 $rId = intval($r['id']);
                 $v = intval($r['views_count']); $l = intval($r['likes_count']); $s = intval($r['saves_count']); $c = intval($r['comments_count']);
+
+                // Live accuracy sync from child tables
+                try {
+                    $lkStmt = $pdo->prepare("SELECT COUNT(*) FROM reel_likes WHERE reel_id = ?");
+                    $lkStmt->execute([$rId]);
+                    $realLikes = intval($lkStmt->fetchColumn() ?: 0);
+                    if ($realLikes > $l) $l = $realLikes;
+                } catch (Throwable $e) {}
+
+                try {
+                    $cmStmt = $pdo->prepare("SELECT COUNT(*) FROM reel_comments WHERE reel_id = ?");
+                    $cmStmt->execute([$rId]);
+                    $realComments = intval($cmStmt->fetchColumn() ?: 0);
+                    if ($realComments > $c) $c = $realComments;
+                } catch (Throwable $e) {}
+
+                try {
+                    $svStmt = $pdo->prepare("SELECT COUNT(*) FROM reel_actions WHERE reel_id = ? AND action_type = 'save'");
+                    $svStmt->execute([$rId]);
+                    $realSaves = intval($svStmt->fetchColumn() ?: 0);
+                    if ($realSaves > $s) $s = $realSaves;
+                } catch (Throwable $e) {}
+
                 $totalViews += $v; $totalLikes += $l; $totalSaves += $s; $totalComments += $c;
                 $reels[] = [
                     'id' => $rId,
@@ -134,30 +183,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     'createdAt' => $r['created_at'],
                     'creator' => [
                         'id' => $creatorId,
-                        'username' => $r['creator_username'],
-                        'displayName' => $r['creator_display_name'],
-                        'profileImageUrl' => $r['creator_profile_image_url'] ?? '',
-                        'isVerified' => (bool)$r['creator_is_verified'],
-                        'phoneNumber' => $r['creator_phone_number'] ?? ''
+                        'username' => $r['creator_username'] ?? $creator['username'],
+                        'displayName' => $r['creator_display_name'] ?? $creator['display_name'],
+                        'profileImageUrl' => $r['creator_profile_image_url'] ?? ($creator['profile_image_url'] ?? ''),
+                        'isVerified' => (bool)($r['creator_is_verified'] ?? $creator['is_verified']),
+                        'phoneNumber' => $r['creator_phone_number'] ?? ($creator['phone_number'] ?? '')
                     ]
                 ];
             }
+
+            // Real-time call & inquiry actions
+            $callCount = 0;
+            $shareCount = 0;
+            if (!empty($rawReels)) {
+                $reelIds = array_column($rawReels, 'id');
+                if (!empty($reelIds)) {
+                    $placeholders = implode(',', array_fill(0, count($reelIds), '?'));
+                    try {
+                        $actStmt = $pdo->prepare("SELECT action_type, COUNT(*) as cnt FROM reel_actions WHERE reel_id IN ($placeholders) GROUP BY action_type");
+                        $actStmt->execute($reelIds);
+                        while ($row = $actStmt->fetch(PDO::FETCH_ASSOC)) {
+                            $aType = strtolower($row['action_type']);
+                            if (in_array($aType, ['call', 'enquiry', 'inquiry', 'whatsapp', 'phone'])) {
+                                $callCount += intval($row['cnt']);
+                            } elseif ($aType === 'share') {
+                                $shareCount += intval($row['cnt']);
+                            }
+                        }
+                    } catch (Throwable $e) {}
+                }
+            }
+
+            // News articles count & stats
+            $articles = [];
+            try {
+                $artStmt = $pdo->prepare("SELECT * FROM news_articles WHERE author = ? OR author = ? ORDER BY id DESC");
+                $artStmt->execute([$creator['display_name'], $creator['username']]);
+                $articles = $artStmt->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($articles as $a) {
+                    $totalViews += intval($a['views_count']);
+                    $totalLikes += intval($a['likes_count']);
+                    $totalComments += intval($a['comments_count']);
+                }
+            } catch (Throwable $e) {}
 
             $stats = [
                 'totalViews' => $totalViews,
                 'totalLikes' => $totalLikes,
                 'totalComments' => $totalComments,
                 'totalSaves' => $totalSaves,
-                'totalCalls' => 0,
-                'totalShares' => 0,
-                'engagementRate' => $totalViews > 0 ? round((($totalLikes + $totalComments + $totalSaves) / $totalViews) * 100, 1) : 0.0,
+                'totalCalls' => $callCount,
+                'totalShares' => $shareCount,
+                'engagementRate' => $totalViews > 0 ? round((($totalLikes + $totalComments + $totalSaves + $shareCount) / $totalViews) * 100, 1) : 0.0,
                 'avgWatchDurationSeconds' => 18.5,
                 'totalReels' => count($reels),
-                'totalArticles' => 0
+                'totalArticles' => count($articles)
             ];
 
             http_response_code(200);
-            echo json_encode(['success' => true, 'creator' => $creator, 'stats' => $stats, 'reels' => $reels, 'articles' => []]);
+            echo json_encode(['success' => true, 'creator' => $creator, 'stats' => $stats, 'reels' => $reels, 'articles' => $articles]);
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['error' => $e->getMessage()]);
@@ -499,9 +583,57 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 1)");
-            $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
-            $reelId = intval($pdo->lastInsertId());
+            try {
+                $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 1)");
+                $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
+                $reelId = intval($pdo->lastInsertId());
+            } catch (Throwable $dbErr) {
+                // Auto repair reels schema and columns if missing
+                try {
+                    $pdo->exec("CREATE TABLE IF NOT EXISTS `reels` (
+                        `id` INT AUTO_INCREMENT PRIMARY KEY,
+                        `creator_id` INT NOT NULL,
+                        `video_url` VARCHAR(500) NOT NULL,
+                        `caption` TEXT NOT NULL,
+                        `music_title` VARCHAR(200) DEFAULT 'Original Audio',
+                        `phone_number` VARCHAR(20) NULL,
+                        `tags` VARCHAR(255) NULL,
+                        `views_count` INT DEFAULT 0,
+                        `likes_count` INT DEFAULT 0,
+                        `saves_count` INT DEFAULT 0,
+                        `comments_count` INT DEFAULT 0,
+                        `is_active` TINYINT(1) DEFAULT 1,
+                        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        INDEX `idx_reel_creator` (`creator_id`),
+                        INDEX `idx_reel_active` (`is_active`),
+                        INDEX `idx_reel_created` (`created_at`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+                    $repairCols = [
+                        'music_title' => "ALTER TABLE `reels` ADD COLUMN `music_title` VARCHAR(200) DEFAULT 'Original Audio'",
+                        'phone_number' => "ALTER TABLE `reels` ADD COLUMN `phone_number` VARCHAR(20) DEFAULT NULL",
+                        'tags' => "ALTER TABLE `reels` ADD COLUMN `tags` VARCHAR(255) DEFAULT NULL",
+                        'views_count' => "ALTER TABLE `reels` ADD COLUMN `views_count` INT DEFAULT 0",
+                        'likes_count' => "ALTER TABLE `reels` ADD COLUMN `likes_count` INT DEFAULT 0",
+                        'saves_count' => "ALTER TABLE `reels` ADD COLUMN `saves_count` INT DEFAULT 0",
+                        'comments_count' => "ALTER TABLE `reels` ADD COLUMN `comments_count` INT DEFAULT 0",
+                        'is_active' => "ALTER TABLE `reels` ADD COLUMN `is_active` TINYINT(1) DEFAULT 1",
+                        'created_at' => "ALTER TABLE `reels` ADD COLUMN `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                    ];
+                    foreach ($repairCols as $cName => $cSql) {
+                        try {
+                            $colCheck = $pdo->query("SHOW COLUMNS FROM `reels` LIKE '$cName'");
+                            if (!$colCheck || !$colCheck->fetch()) {
+                                $pdo->exec($cSql);
+                            }
+                        } catch (Throwable $e) {}
+                    }
+                } catch (Throwable $e) {}
+
+                $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 1)");
+                $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
+                $reelId = intval($pdo->lastInsertId());
+            }
 
             http_response_code(201);
             echo json_encode(["success" => true, "message" => "Reel uploaded successfully", "reel_id" => $reelId]);

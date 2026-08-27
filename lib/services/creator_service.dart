@@ -7,6 +7,20 @@ import 'package:cropsync/models/reel_model.dart';
 import 'package:cropsync/models/news_article.dart';
 import 'package:cropsync/services/api_service.dart';
 
+class CreatorActionResult {
+  final bool success;
+  final String? message;
+  final String? error;
+  final dynamic data;
+
+  const CreatorActionResult({
+    required this.success,
+    this.message,
+    this.error,
+    this.data,
+  });
+}
+
 class CreatorService {
   static const String _studioCacheKey = 'cropsync_creator_studio_cache_v1';
   static String get _apiEndpoint => '${ApiService.baseUrl}/api.php';
@@ -32,14 +46,9 @@ class CreatorService {
     }
   }
 
-  /// Fetch creator studio dashboard data (KPIs, reels, articles, trends)
+  /// Fetch creator studio dashboard data (KPIs, reels, articles, trends) in real time
   static Future<CreatorStudioData> getStudioData({bool forceRefresh = false}) async {
     final user = await _getUserDetails();
-
-    if (!forceRefresh) {
-      final cached = await _getCachedStudioData();
-      if (cached != null) return cached;
-    }
 
     final queryParams = {
       'action': 'get_creator_studio_data',
@@ -51,7 +60,7 @@ class CreatorService {
     final url = Uri.parse(_apiEndpoint).replace(queryParameters: queryParams);
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         if (decoded is Map<String, dynamic> && decoded['success'] == true) {
@@ -71,7 +80,7 @@ class CreatorService {
         if (user['phone']!.isNotEmpty) 'phone_number': user['phone']!,
         if (user['name']!.isNotEmpty) 'user_name': user['name']!,
       });
-      final response = await http.get(secondaryUrl).timeout(const Duration(seconds: 8));
+      final response = await http.get(secondaryUrl).timeout(const Duration(seconds: 6));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         if (decoded is Map<String, dynamic> && decoded['success'] == true) {
@@ -90,8 +99,8 @@ class CreatorService {
     return _getDefaultStudioData(user['name'] ?? 'Agri Creator', user['phone'] ?? '');
   }
 
-  /// Upload and publish a new Reel
-  static Future<bool> uploadReel({
+  /// Upload and publish a new Reel with rich result
+  static Future<CreatorActionResult> uploadReelDetailed({
     required String videoUrl,
     required String caption,
     String musicTitle = 'Original Audio',
@@ -100,7 +109,7 @@ class CreatorService {
     int? creatorId,
   }) async {
     final user = await _getUserDetails();
-    final phone = phoneNumber ?? user['phone'] ?? '';
+    final phone = (phoneNumber != null && phoneNumber.isNotEmpty) ? phoneNumber : (user['phone'] ?? '');
     final creatorName = user['name'] ?? 'Agri Creator';
 
     final payload = {
@@ -114,45 +123,97 @@ class CreatorService {
       if (creatorId != null && creatorId > 0) 'creator_id': creatorId,
     };
 
+    // 1. Primary endpoint: api.php?action=upload_reel
     try {
+      final primaryUrl = Uri.parse('$_apiEndpoint?action=upload_reel');
       final response = await http
           .post(
-            Uri.parse(_apiEndpoint),
+            primaryUrl,
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(payload),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        return decoded['success'] == true;
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['success'] == true) {
+            return CreatorActionResult(
+              success: true,
+              message: decoded['message']?.toString() ?? 'Reel published successfully',
+              data: decoded,
+            );
+          } else if (decoded['error'] != null) {
+            return CreatorActionResult(
+              success: false,
+              error: decoded['error'].toString(),
+            );
+          }
+        }
       }
     } catch (e) {
-      debugPrint('CreatorService: uploadReel failed: $e');
+      debugPrint('CreatorService: uploadReel primary failed: $e');
     }
 
-    // Try secondary endpoint
+    // 2. Secondary endpoint: reels.php?action=upload
     try {
+      final secondaryUrl = Uri.parse('$_reelsEndpoint?action=upload');
       final response = await http
           .post(
-            Uri.parse(_reelsEndpoint),
+            secondaryUrl,
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               ...payload,
               'action': 'upload',
             }),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        return decoded['success'] == true;
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['success'] == true) {
+            return CreatorActionResult(
+              success: true,
+              message: decoded['message']?.toString() ?? 'Reel published successfully',
+              data: decoded,
+            );
+          } else if (decoded['error'] != null) {
+            return CreatorActionResult(
+              success: false,
+              error: decoded['error'].toString(),
+            );
+          }
+        }
       }
     } catch (e) {
       debugPrint('CreatorService: uploadReel secondary failed: $e');
     }
 
-    return false;
+    return const CreatorActionResult(
+      success: false,
+      error: 'Failed to publish reel. Please check your connection and try again.',
+    );
+  }
+
+  /// Upload and publish a new Reel (backward-compatible bool signature)
+  static Future<bool> uploadReel({
+    required String videoUrl,
+    required String caption,
+    String musicTitle = 'Original Audio',
+    String? phoneNumber,
+    String? tags,
+    int? creatorId,
+  }) async {
+    final result = await uploadReelDetailed(
+      videoUrl: videoUrl,
+      caption: caption,
+      musicTitle: musicTitle,
+      phoneNumber: phoneNumber,
+      tags: tags,
+      creatorId: creatorId,
+    );
+    return result.success;
   }
 
   /// Delete a Reel
@@ -160,11 +221,11 @@ class CreatorService {
     try {
       final response = await http
           .post(
-            Uri.parse(_apiEndpoint),
+            Uri.parse('$_apiEndpoint?action=delete_reel'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'action': 'delete_reel', 'reel_id': reelId}),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
@@ -181,7 +242,7 @@ class CreatorService {
     try {
       final response = await http
           .post(
-            Uri.parse(_apiEndpoint),
+            Uri.parse('$_apiEndpoint?action=toggle_reel_status'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'action': 'toggle_reel_status',
@@ -189,7 +250,7 @@ class CreatorService {
               'is_active': isActive ? 1 : 0,
             }),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
@@ -201,8 +262,8 @@ class CreatorService {
     return false;
   }
 
-  /// Create and publish a news article
-  static Future<bool> createNewsArticle({
+  /// Create and publish a news article with rich result
+  static Future<CreatorActionResult> createNewsArticleDetailed({
     required String title,
     required String summary,
     required String content,
@@ -214,7 +275,7 @@ class CreatorService {
     String status = 'published',
   }) async {
     final user = await _getUserDetails();
-    final authorName = author ?? user['name'] ?? 'CropSync Agri Desk';
+    final authorName = (author != null && author.isNotEmpty) ? author : (user['name'] ?? 'CropSync Agri Desk');
 
     final payload = {
       'action': 'create_news_article',
@@ -224,29 +285,73 @@ class CreatorService {
       'category': category,
       'image_url': imageUrl ?? '',
       'author': authorName,
-      'source_name': sourceName ?? 'CropSync Desk',
+      'source_name': (sourceName != null && sourceName.isNotEmpty) ? sourceName : 'CropSync Desk',
       'is_featured': isFeatured ? 1 : 0,
       'status': status,
       'phone_number': user['phone'] ?? '',
     };
 
     try {
+      final primaryUrl = Uri.parse('$_apiEndpoint?action=create_news_article');
       final response = await http
           .post(
-            Uri.parse(_apiEndpoint),
+            primaryUrl,
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(payload),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        return decoded['success'] == true;
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['success'] == true) {
+            return CreatorActionResult(
+              success: true,
+              message: decoded['message']?.toString() ?? 'Article published successfully',
+              data: decoded,
+            );
+          } else if (decoded['error'] != null) {
+            return CreatorActionResult(
+              success: false,
+              error: decoded['error'].toString(),
+            );
+          }
+        }
       }
     } catch (e) {
       debugPrint('CreatorService: createNewsArticle failed: $e');
     }
-    return false;
+
+    return const CreatorActionResult(
+      success: false,
+      error: 'Failed to publish article. Please check your connection and try again.',
+    );
+  }
+
+  /// Create and publish a news article (backward-compatible bool signature)
+  static Future<bool> createNewsArticle({
+    required String title,
+    required String summary,
+    required String content,
+    required String category,
+    String? imageUrl,
+    String? author,
+    String? sourceName,
+    bool isFeatured = false,
+    String status = 'published',
+  }) async {
+    final result = await createNewsArticleDetailed(
+      title: title,
+      summary: summary,
+      content: content,
+      category: category,
+      imageUrl: imageUrl,
+      author: author,
+      sourceName: sourceName,
+      isFeatured: isFeatured,
+      status: status,
+    );
+    return result.success;
   }
 
   /// Delete a News Article
@@ -254,11 +359,11 @@ class CreatorService {
     try {
       final response = await http
           .post(
-            Uri.parse(_apiEndpoint),
+            Uri.parse('$_apiEndpoint?action=delete_news_article'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'action': 'delete_news_article', 'article_id': articleId}),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
@@ -275,7 +380,7 @@ class CreatorService {
     try {
       final response = await http
           .post(
-            Uri.parse(_apiEndpoint),
+            Uri.parse('$_apiEndpoint?action=toggle_news_status'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'action': 'toggle_news_status',
@@ -283,7 +388,7 @@ class CreatorService {
               'status': status,
             }),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));

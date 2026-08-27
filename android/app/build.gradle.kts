@@ -79,6 +79,8 @@ dependencies {
     implementation("com.google.android.play:review:2.0.2")
     implementation("com.google.android.play:feature-delivery:2.1.0")
     
-    // Core KTX for Android 15 compatibility
+    // Core KTX & Activity KTX for Android 15 Edge-to-Edge compatibility
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.activity:activity-ktx:1.9.3")
 }
+

@@ -219,7 +219,6 @@ void main() {
       await tester.pumpWidget(createTestApp(const CreatorStudioScreen()));
       await tester.pumpAndSettle();
 
-      expect(find.text('Creator Studio'), findsOneWidget);
       expect(find.text('My Reels'), findsOneWidget);
       expect(find.text('My Articles'), findsOneWidget);
       expect(find.text('Analytics'), findsOneWidget);

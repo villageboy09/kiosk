@@ -7,7 +7,7 @@ import 'package:video_player/video_player.dart';
 import 'package:cropsync/models/reel_model.dart';
 import 'package:cropsync/services/reels_service.dart';
 import 'package:cropsync/services/auth_service.dart';
-import 'package:cropsync/screens/creator/creator_studio_screen.dart';
+import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:cropsync/theme/app_theme.dart';
 
 class ReelsScreen extends StatefulWidget {
@@ -17,19 +17,35 @@ class ReelsScreen extends StatefulWidget {
   State<ReelsScreen> createState() => _ReelsScreenState();
 }
 
-class _ReelsScreenState extends State<ReelsScreen> {
-  final PageController _pageController = PageController();
+class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
+  late final PageController _pageController;
   int _focusedIndex = 0;
   List<Reel> _reels = [];
   bool _isLoading = true;
   bool _hasError = false;
   bool _isCreator = false;
+  bool _isMuted = false;
+
+  // Video controller pool: caches active index, index+1, and index-1 for instant 0ms playback
+  final Map<int, VideoPlayerController> _controllers = {};
+  final Set<int> _initializingIndices = {};
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _pageController = PageController();
     _checkCreatorStatus();
     _loadReels();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _pauseCurrentVideo();
+    } else if (state == AppLifecycleState.resumed) {
+      _playCurrentVideo();
+    }
   }
 
   Future<void> _checkCreatorStatus() async {
@@ -54,6 +70,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
           _reels = reels;
           _isLoading = false;
         });
+
+        if (_reels.isNotEmpty) {
+          _preloadSurrounding(0);
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -65,10 +85,127 @@ class _ReelsScreenState extends State<ReelsScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
+  void _preloadSurrounding(int centerIndex) {
+    if (_reels.isEmpty) return;
+
+    // Indices to keep warm: previous, current, next
+    final targetIndices = [
+      centerIndex,
+      if (centerIndex + 1 < _reels.length) centerIndex + 1,
+      if (centerIndex - 1 >= 0) centerIndex - 1,
+    ];
+
+    // 1. Initialize needed controllers
+    for (final index in targetIndices) {
+      if (!_controllers.containsKey(index) && !_initializingIndices.contains(index)) {
+        _initControllerForIndex(index);
+      }
+    }
+
+    // 2. Play active video & pause surrounding preloaded videos
+    for (final entry in _controllers.entries) {
+      final idx = entry.key;
+      final controller = entry.value;
+
+      if (idx == centerIndex) {
+        controller.setVolume(_isMuted ? 0.0 : 1.0);
+        controller.setLooping(true);
+        controller.play();
+      } else {
+        controller.pause();
+        controller.setVolume(0.0);
+      }
+    }
+
+    // 3. Gracefully dispose distant controllers in background to prevent memory buildup
+    final toRemove = _controllers.keys
+        .where((key) => (key - centerIndex).abs() > 1)
+        .toList();
+
+    for (final key in toRemove) {
+      final controller = _controllers.remove(key);
+      Future.microtask(() {
+        controller?.pause();
+        controller?.dispose();
+      });
+    }
+  }
+
+  Future<void> _initControllerForIndex(int index) async {
+    if (index < 0 || index >= _reels.length) return;
+    _initializingIndices.add(index);
+
+    final reel = _reels[index];
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(reel.videoUrl),
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
+
+    try {
+      await controller.initialize();
+      controller.setLooping(true);
+
+      if (mounted) {
+        setState(() {
+          _controllers[index] = controller;
+          _initializingIndices.remove(index);
+
+          // If this is the active index, start playing immediately
+          if (index == _focusedIndex) {
+            controller.setVolume(_isMuted ? 0.0 : 1.0);
+            controller.play();
+          } else {
+            controller.pause();
+            controller.setVolume(0.0);
+          }
+        });
+      } else {
+        controller.dispose();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _initializingIndices.remove(index);
+        });
+      }
+      controller.dispose();
+    }
+  }
+
+  void _pauseCurrentVideo() {
+    final controller = _controllers[_focusedIndex];
+    if (controller != null && controller.value.isInitialized) {
+      controller.pause();
+    }
+  }
+
+  void _playCurrentVideo() {
+    final controller = _controllers[_focusedIndex];
+    if (controller != null && controller.value.isInitialized) {
+      controller.setVolume(_isMuted ? 0.0 : 1.0);
+      controller.play();
+    }
+  }
+
+  void _onPageChanged(int index) {
+    if (_focusedIndex == index) return;
+
+    // Immediately update index and preload surrounding videos
+    setState(() {
+      _focusedIndex = index;
+    });
+
+    _preloadSurrounding(index);
+  }
+
+  void _toggleGlobalMute() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _isMuted = !_isMuted;
+    });
+
+    final activeController = _controllers[_focusedIndex];
+    activeController?.setVolume(_isMuted ? 0.0 : 1.0);
   }
 
   void _onReelUpdated(int index, Reel updatedReel) {
@@ -77,6 +214,17 @@ class _ReelsScreenState extends State<ReelsScreen> {
         _reels[index] = updatedReel;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pageController.dispose();
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    _controllers.clear();
+    super.dispose();
   }
 
   @override
@@ -170,24 +318,33 @@ class _ReelsScreenState extends State<ReelsScreen> {
           ),
           child: Stack(
             children: [
+              // Snappy, silky-smooth PageView with preloaded buffer items
               PageView.builder(
                 controller: _pageController,
                 scrollDirection: Axis.vertical,
+                physics: const PageScrollPhysics(
+                  parent: BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                ),
+                allowImplicitScrolling: true,
+                padEnds: false,
                 itemCount: _reels.length,
-                onPageChanged: (index) {
-                  setState(() {
-                    _focusedIndex = index;
-                  });
-                },
+                onPageChanged: _onPageChanged,
                 itemBuilder: (context, index) {
                   return ReelItem(
                     key: ValueKey('reel_${_reels[index].id}'),
                     reel: _reels[index],
                     isActive: index == _focusedIndex,
+                    controller: _controllers[index],
+                    isMuted: _isMuted,
+                    onToggleMute: _toggleGlobalMute,
                     onReelChanged: (updated) => _onReelUpdated(index, updated),
                   );
                 },
               ),
+
+              // Header bar
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -225,11 +382,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                       ),
                       if (_isCreator)
                         InkWell(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const CreatorStudioScreen()),
-                            );
-                          },
+                          onTap: () => CreatorHomeScreen.navigateToStudio(context),
                           borderRadius: BorderRadius.circular(20),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -270,12 +423,18 @@ class _ReelsScreenState extends State<ReelsScreen> {
 class ReelItem extends StatefulWidget {
   final Reel reel;
   final bool isActive;
+  final VideoPlayerController? controller;
+  final bool isMuted;
+  final VoidCallback onToggleMute;
   final ValueChanged<Reel> onReelChanged;
 
   const ReelItem({
     super.key,
     required this.reel,
     required this.isActive,
+    this.controller,
+    required this.isMuted,
+    required this.onToggleMute,
     required this.onReelChanged,
   });
 
@@ -283,58 +442,25 @@ class ReelItem extends StatefulWidget {
   State<ReelItem> createState() => _ReelItemState();
 }
 
-class _ReelItemState extends State<ReelItem> {
-  late VideoPlayerController _videoController;
-  bool _isInitialized = false;
+class _ReelItemState extends State<ReelItem> with SingleTickerProviderStateMixin {
   bool _isPlaying = true;
-  bool _isMuted = false;
   bool _showPlayPauseOverlay = false;
   bool _showHeartOverlay = false;
-  bool _hasError = false;
   late Reel _currentReel;
   DateTime? _playStartTime;
+  late AnimationController _heartAnimController;
 
   @override
   void initState() {
     super.initState();
     _currentReel = widget.reel;
-    _initializeVideo();
-  }
+    _heartAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
 
-  Future<void> _initializeVideo() async {
-    setState(() {
-      _hasError = false;
-      _isInitialized = false;
-    });
-
-    try {
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(_currentReel.videoUrl),
-      );
-      _videoController.addListener(_videoListener);
-      await _videoController.initialize();
-
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-          _videoController.setLooping(true);
-          if (widget.isActive) {
-            _videoController.play();
-            _isPlaying = true;
-            _playStartTime = DateTime.now();
-          }
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _hasError = true);
-      }
-    }
-  }
-
-  void _videoListener() {
-    if (_videoController.value.hasError && mounted) {
-      setState(() => _hasError = true);
+    if (widget.isActive) {
+      _playStartTime = DateTime.now();
     }
   }
 
@@ -347,17 +473,17 @@ class _ReelItemState extends State<ReelItem> {
       });
     }
 
-    if (_isInitialized && !_hasError) {
+    if (widget.isActive != oldWidget.isActive) {
       if (widget.isActive) {
-        _videoController.play();
+        _playStartTime = DateTime.now();
         setState(() {
           _isPlaying = true;
-          _playStartTime = DateTime.now();
         });
       } else {
-        _videoController.pause();
-        setState(() => _isPlaying = false);
         _logWatchDuration();
+        setState(() {
+          _isPlaying = false;
+        });
       }
     }
   }
@@ -365,9 +491,9 @@ class _ReelItemState extends State<ReelItem> {
   void _logWatchDuration() {
     if (_playStartTime != null) {
       final seconds = DateTime.now().difference(_playStartTime!).inSeconds;
-      if (seconds > 2) {
-        final isCompleted = _videoController.value.duration.inSeconds > 0 &&
-            seconds >= _videoController.value.duration.inSeconds;
+      if (seconds >= 1) {
+        final duration = widget.controller?.value.duration.inSeconds ?? 0;
+        final isCompleted = duration > 0 && seconds >= duration;
         ReelsService.logWatch(_currentReel.id, seconds, isCompleted);
       }
       _playStartTime = null;
@@ -377,24 +503,28 @@ class _ReelItemState extends State<ReelItem> {
   @override
   void dispose() {
     _logWatchDuration();
-    _videoController.removeListener(_videoListener);
-    _videoController.dispose();
+    _heartAnimController.dispose();
     super.dispose();
   }
 
   void _togglePlayPause() {
-    if (!_isInitialized) return;
+    final controller = widget.controller;
+    if (controller == null || !controller.value.isInitialized) return;
+
     HapticFeedback.selectionClick();
-    setState(() {
-      if (_isPlaying) {
-        _videoController.pause();
+    if (controller.value.isPlaying) {
+      controller.pause();
+      setState(() {
         _isPlaying = false;
-      } else {
-        _videoController.play();
+        _showPlayPauseOverlay = true;
+      });
+    } else {
+      controller.play();
+      setState(() {
         _isPlaying = true;
-      }
-      _showPlayPauseOverlay = true;
-    });
+        _showPlayPauseOverlay = true;
+      });
+    }
 
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) {
@@ -405,26 +535,18 @@ class _ReelItemState extends State<ReelItem> {
     });
   }
 
-  void _toggleMute() {
-    if (!_isInitialized) return;
-    HapticFeedback.selectionClick();
-    setState(() {
-      _isMuted = !_isMuted;
-      _videoController.setVolume(_isMuted ? 0.0 : 1.0);
-    });
-  }
-
   Future<void> _handleDoubleTap() async {
     HapticFeedback.mediumImpact();
     setState(() {
       _showHeartOverlay = true;
     });
+    _heartAnimController.forward(from: 0.0);
 
     if (!_currentReel.hasLiked) {
       await _handleLikeToggle();
     }
 
-    Future.delayed(const Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 700), () {
       if (mounted) {
         setState(() {
           _showHeartOverlay = false;
@@ -451,7 +573,6 @@ class _ReelItemState extends State<ReelItem> {
     });
     widget.onReelChanged(updated);
 
-    // Call backend
     final result = await ReelsService.toggleLike(_currentReel.id);
     if (mounted && result['likes'] != null) {
       final synced = _currentReel.copyWith(
@@ -493,7 +614,6 @@ class _ReelItemState extends State<ReelItem> {
       ),
     );
 
-    // Call backend
     final result = await ReelsService.toggleSave(_currentReel.id);
     if (mounted && result['saves'] != null) {
       final synced = _currentReel.copyWith(
@@ -540,7 +660,6 @@ class _ReelItemState extends State<ReelItem> {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Column(
                   children: [
-                    // Drag pill
                     Container(
                       width: 40,
                       height: 4,
@@ -550,7 +669,6 @@ class _ReelItemState extends State<ReelItem> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    // Header
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -565,7 +683,6 @@ class _ReelItemState extends State<ReelItem> {
                       ],
                     ),
                     const Divider(color: Colors.white12, height: 20),
-                    // Comments list
                     Expanded(
                       child: sheetComments.isEmpty
                           ? Center(
@@ -584,73 +701,72 @@ class _ReelItemState extends State<ReelItem> {
                                 ],
                               ),
                             )
-                              : ListView.separated(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  itemCount: sheetComments.length,
-                                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                                  itemBuilder: (context, index) {
-                                    final comment = sheetComments[index];
-                                    return Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 16,
-                                          backgroundColor: AppTheme.accentGreen.withValues(alpha: 0.2),
-                                          child: Text(
-                                            comment.farmerUsername.isNotEmpty
-                                                ? comment.farmerUsername[0].toUpperCase()
-                                                : 'F',
-                                            style: const TextStyle(
-                                              color: AppTheme.accentGreen,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13,
-                                            ),
-                                          ),
+                          : ListView.separated(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: sheetComments.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                final comment = sheetComments[index];
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: AppTheme.accentGreen.withValues(alpha: 0.2),
+                                      child: Text(
+                                        comment.farmerUsername.isNotEmpty
+                                            ? comment.farmerUsername[0].toUpperCase()
+                                            : 'F',
+                                        style: const TextStyle(
+                                          color: AppTheme.accentGreen,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
                                         ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
                                             children: [
-                                              Row(
-                                                children: [
-                                                  Text(
-                                                    comment.farmerUsername,
-                                                    style: const TextStyle(
-                                                      color: Colors.white70,
-                                                      fontSize: 12.5,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    '• ${comment.formattedTimeAgo}',
-                                                    style: TextStyle(
-                                                      color: Colors.white.withValues(alpha: 0.4),
-                                                      fontSize: 11,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 3),
                                               Text(
-                                                comment.commentText,
+                                                comment.farmerUsername,
                                                 style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 13.5,
-                                                  height: 1.3,
+                                                  color: Colors.white70,
+                                                  fontSize: 12.5,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                '• ${comment.formattedTimeAgo}',
+                                                style: TextStyle(
+                                                  color: Colors.white.withValues(alpha: 0.4),
+                                                  fontSize: 11,
                                                 ),
                                               ),
                                             ],
                                           ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            comment.commentText,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13.5,
+                                              height: 1.3,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
                     ),
                     const Divider(color: Colors.white12, height: 1),
-                    // Comment input
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: Row(
@@ -727,63 +843,72 @@ class _ReelItemState extends State<ReelItem> {
 
   @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
+    final isInitialized = controller != null && controller.value.isInitialized;
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Video Player Background
+        // High-Performance Smooth Video Surface with Instant Cover
         GestureDetector(
           onTap: _togglePlayPause,
           onDoubleTap: _handleDoubleTap,
-          child: _hasError
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline_rounded,
-                          color: Colors.redAccent, size: 48),
-                      const SizedBox(height: 12),
-                      Text(
-                        'reels_error_load'.tr(),
-                        style: const TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: _initializeVideo,
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
-                        label: Text('reels_retry'.tr()),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.accentGreen,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 10),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(100)),
-                        ),
-                      ),
-                    ],
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // 1. Placeholder gradient & branding while video buffers
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                   ),
-                )
-              : _isInitialized
-                  ? SizedOverflowBox(
-                      size: Size.infinite,
-                      alignment: Alignment.center,
-                      child: FittedBox(
-                        fit: BoxFit.cover,
-                        child: SizedBox(
-                          width: _videoController.value.size.width,
-                          height: _videoController.value.size.height,
-                          child: VideoPlayer(_videoController),
-                        ),
-                      ),
-                    )
-                  : const Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentGreen),
+                ),
+                child: Center(
+                  child: Opacity(
+                    opacity: 0.15,
+                    child: Icon(
+                      Icons.agriculture_rounded,
+                      size: 120,
+                      color: AppTheme.accentGreen.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+              ),
+
+              // 2. Hardware-accelerated Video Player with smooth crossfade
+              if (isInitialized)
+                AnimatedOpacity(
+                  opacity: 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
+                        width: controller.value.size.width,
+                        height: controller.value.size.height,
+                        child: VideoPlayer(controller),
                       ),
                     ),
+                  ),
+                )
+              else
+                const Center(
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentGreen),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
 
-        // Gradient overlay for better text readability
+        // Gradient overlays for text readability
         Positioned.fill(
           child: IgnorePointer(
             child: Container(
@@ -795,7 +920,7 @@ class _ReelItemState extends State<ReelItem> {
                     Colors.transparent,
                     Colors.black87,
                   ],
-                  stops: [0.0, 0.2, 0.6, 1.0],
+                  stops: [0.0, 0.18, 0.55, 1.0],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -807,19 +932,21 @@ class _ReelItemState extends State<ReelItem> {
         // Animated Heart Overlay on double tap
         if (_showHeartOverlay)
           Center(
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.8, end: 1.2),
-              duration: const Duration(milliseconds: 300),
-              builder: (context, scale, child) {
-                return Transform.scale(
-                  scale: scale,
-                  child: const Icon(
-                    Icons.favorite_rounded,
-                    color: Colors.red,
-                    size: 100,
-                  ),
-                );
-              },
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.6, end: 1.25).animate(
+                CurvedAnimation(
+                  parent: _heartAnimController,
+                  curve: Curves.elasticOut,
+                ),
+              ),
+              child: const Icon(
+                Icons.favorite_rounded,
+                color: Colors.redAccent,
+                size: 110,
+                shadows: [
+                  Shadow(color: Colors.black54, blurRadius: 16),
+                ],
+              ),
             ),
           ),
 
@@ -827,15 +954,15 @@ class _ReelItemState extends State<ReelItem> {
         if (_showPlayPauseOverlay)
           Center(
             child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                color: Colors.black54,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 _isPlaying ? Icons.play_arrow_rounded : Icons.pause_rounded,
                 color: Colors.white,
-                size: 48,
+                size: 44,
               ),
             ),
           ),
@@ -853,42 +980,18 @@ class _ReelItemState extends State<ReelItem> {
               Row(
                 children: [
                   ClipOval(
-                    child: SizedBox(
-                      width: 36,
-                      height: 36,
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      color: AppTheme.accentGreen.withValues(alpha: 0.25),
+                      alignment: Alignment.center,
                       child: _currentReel.creator.profileImageUrl.isNotEmpty
                           ? Image.network(
                               _currentReel.creator.profileImageUrl,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: AppTheme.accentGreen.withValues(alpha: 0.3),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  _currentReel.creator.displayName.isNotEmpty
-                                      ? _currentReel.creator.displayName[0].toUpperCase()
-                                      : 'F',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
+                              errorBuilder: (_, __, ___) => _buildAvatarFallback(),
                             )
-                          : Container(
-                              color: AppTheme.accentGreen.withValues(alpha: 0.3),
-                              alignment: Alignment.center,
-                              child: Text(
-                                _currentReel.creator.displayName.isNotEmpty
-                                    ? _currentReel.creator.displayName[0].toUpperCase()
-                                    : 'F',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
+                          : _buildAvatarFallback(),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -907,6 +1010,7 @@ class _ReelItemState extends State<ReelItem> {
                                   color: Colors.white,
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
+                                  shadows: [Shadow(color: Colors.black87, blurRadius: 4)],
                                 ),
                               ),
                             ),
@@ -923,8 +1027,9 @@ class _ReelItemState extends State<ReelItem> {
                         Text(
                           '@${_currentReel.creator.username}',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
+                            color: Colors.white.withValues(alpha: 0.75),
                             fontSize: 11.5,
+                            shadows: const [Shadow(color: Colors.black87, blurRadius: 4)],
                           ),
                         ),
                       ],
@@ -942,6 +1047,7 @@ class _ReelItemState extends State<ReelItem> {
                   color: Colors.white,
                   fontSize: 13,
                   height: 1.35,
+                  shadows: [Shadow(color: Colors.black87, blurRadius: 4)],
                 ),
               ),
               const SizedBox(height: 8),
@@ -962,6 +1068,7 @@ class _ReelItemState extends State<ReelItem> {
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 11.5,
+                        shadows: [Shadow(color: Colors.black87, blurRadius: 4)],
                       ),
                     ),
                   ),
@@ -1003,7 +1110,7 @@ class _ReelItemState extends State<ReelItem> {
                     }
                   },
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 16),
               ],
 
               // Like Action
@@ -1015,7 +1122,7 @@ class _ReelItemState extends State<ReelItem> {
                 label: _currentReel.likes,
                 onTap: _handleLikeToggle,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
               // Comment Action
               _buildActionButton(
@@ -1024,7 +1131,7 @@ class _ReelItemState extends State<ReelItem> {
                 label: _currentReel.commentsCount.toString(),
                 onTap: _showCommentsBottomSheet,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
               // Share Action
               _buildActionButton(
@@ -1043,16 +1150,16 @@ class _ReelItemState extends State<ReelItem> {
                   );
                 },
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
               // Mute/Volume Action
               _buildActionButton(
-                icon: _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                icon: widget.isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
                 iconColor: Colors.white,
-                label: _isMuted ? 'reels_muted'.tr() : 'reels_sound'.tr(),
-                onTap: _toggleMute,
+                label: widget.isMuted ? 'reels_muted'.tr() : 'reels_sound'.tr(),
+                onTap: widget.onToggleMute,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
               // Save Action
               _buildActionButton(
@@ -1067,24 +1174,28 @@ class _ReelItemState extends State<ReelItem> {
           ),
         ),
 
-        // Slim Bottom Progress Bar
-        if (_isInitialized)
+        // Decoupled Bottom Progress Bar (Prevents full widget tree rebuilds)
+        if (isInitialized)
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: VideoProgressIndicator(
-              _videoController,
-              allowScrubbing: true,
-              colors: const VideoProgressColors(
-                playedColor: AppTheme.accentGreen,
-                bufferedColor: Colors.white24,
-                backgroundColor: Colors.white10,
-              ),
-              padding: EdgeInsets.zero,
-            ),
+            child: _ReelProgressBar(controller: controller),
           ),
       ],
+    );
+  }
+
+  Widget _buildAvatarFallback() {
+    return Text(
+      _currentReel.creator.displayName.isNotEmpty
+          ? _currentReel.creator.displayName[0].toUpperCase()
+          : 'F',
+      style: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: 14,
+      ),
     );
   }
 
@@ -1103,7 +1214,7 @@ class _ReelItemState extends State<ReelItem> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.35),
                 shape: BoxShape.circle,
@@ -1111,10 +1222,10 @@ class _ReelItemState extends State<ReelItem> {
               child: Icon(
                 icon,
                 color: iconColor,
-                size: 26,
+                size: 25,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               label,
               style: const TextStyle(
@@ -1129,6 +1240,40 @@ class _ReelItemState extends State<ReelItem> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Decoupled Lightweight Progress Bar to prevent rebuilding parent widget on video progress ticks
+class _ReelProgressBar extends StatelessWidget {
+  final VideoPlayerController controller;
+
+  const _ReelProgressBar({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<VideoPlayerValue>(
+      valueListenable: controller,
+      builder: (context, value, child) {
+        if (!value.isInitialized || value.duration.inMilliseconds == 0) {
+          return const SizedBox.shrink();
+        }
+
+        final progress = (value.position.inMilliseconds / value.duration.inMilliseconds)
+            .clamp(0.0, 1.0);
+
+        return Container(
+          height: 2.5,
+          color: Colors.white10,
+          alignment: Alignment.centerLeft,
+          child: FractionallySizedBox(
+            widthFactor: progress,
+            child: Container(
+              color: AppTheme.accentGreen,
+            ),
+          ),
+        );
+      },
     );
   }
 }

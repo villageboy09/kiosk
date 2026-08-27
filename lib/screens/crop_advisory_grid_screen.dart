@@ -442,6 +442,7 @@ class _CropCard extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                         color: AppTheme.textPrimary,
                         letterSpacing: -0.2,
+                        height: context.locale.languageCode == 'te' ? 1.45 : 1.25,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -456,12 +457,13 @@ class _CropCard extends StatelessWidget {
                             color: const Color(0xFFECFDF5),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
-                            'Advisory Available',
+                          child: Text(
+                            'advisory_available'.tr(),
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF047857),
+                              color: const Color(0xFF047857),
+                              height: context.locale.languageCode == 'te' ? 1.35 : 1.15,
                             ),
                           ),
                         ),

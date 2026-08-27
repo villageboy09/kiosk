@@ -9,6 +9,7 @@ import 'package:cropsync/widgets/auth/auth_logo_header.dart';
 import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
 import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
+import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/auth/login_screen.dart';
@@ -448,15 +449,20 @@ class _SignupScreenState extends State<SignupScreen>
       if (!mounted) return;
       HapticFeedback.heavyImpact();
       final user = AuthService.currentUser;
-      if (user?.membershipType == 'Retailer') {
+      if (user?.isRetailer == true || user?.membershipType == 'Retailer' || _selectedRole == 'retailer') {
         Navigator.pushReplacement(
           context,
           AppRoutes.fade(const RetailerDashboard()),
         );
-      } else if (user?.membershipType == 'Officer') {
+      } else if (user?.isOfficer == true || user?.membershipType == 'Officer' || _selectedRole == 'officer') {
         Navigator.pushReplacement(
           context,
           AppRoutes.fade(const ExtensionOfficerDashboard()),
+        );
+      } else if (user?.isCreator == true || user?.membershipType == 'Creator' || _selectedRole == 'content_creator') {
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const CreatorHomeScreen()),
         );
       } else {
         Navigator.pushReplacement(
@@ -532,7 +538,7 @@ class _SignupScreenState extends State<SignupScreen>
         AuthLogoHeader(
           title: 'signup_title'.tr(),
           subtitle: 'signup_subtitle'.tr(),
-          logoHeight: isShortScreen ? 54 : 68,
+          logoHeight: isShortScreen ? 46 : 54,
         ),
         SizedBox(height: isShortScreen ? 14 : 20),
         _buildRoleToggle(compact: isShortScreen),
@@ -862,55 +868,176 @@ class _SignupScreenState extends State<SignupScreen>
     );
   }
 
-  Widget _buildSecurityQuestionDropdown({bool compact = false}) {
+  void _showSecurityQuestionBottomSheet() {
+    HapticFeedback.selectionClick();
     final questions = ['security_q1', 'security_q2', 'security_q3', 'security_q4'];
-    return Container(
-      height: compact ? 56 : 64,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(
-          color: AppTheme.border.withValues(alpha: 0.5),
-          width: 1.5,
-        ),
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.help_outline_rounded,
-            size: 22,
-            color: AppTheme.textSecondary,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFBBF7D0)),
+                        ),
+                        child: const Icon(
+                          Icons.security_rounded,
+                          color: Color(0xFF16A34A),
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'select_security_question'.tr(),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'security_question_desc'.tr(),
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                color: AppTheme.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    children: questions.map((q) {
+                      final isSelected = _selectedSecurityQuestion == q;
+                      return InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() {
+                            _selectedSecurityQuestion = q;
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFFAFAFA),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFF86EFAC) : const Color(0xFFE5E7EB),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  q.tr(),
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                    color: isSelected ? const Color(0xFF15803D) : AppTheme.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Icon(
+                                isSelected ? Icons.check_circle_rounded : Icons.radio_button_off_rounded,
+                                color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFD1D5DB),
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedSecurityQuestion,
-                isExpanded: true,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+        );
+      },
+    );
+  }
+
+  Widget _buildSecurityQuestionTile({bool compact = false}) {
+    return GestureDetector(
+      onTap: _showSecurityQuestionBottomSheet,
+      child: Container(
+        height: compact ? 56 : 64,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: AppTheme.border.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.help_outline_rounded,
+              size: 22,
+              color: AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _selectedSecurityQuestion.tr(),
                 style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 14.5,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
                 ),
-                items: questions.map((q) {
-                  return DropdownMenuItem<String>(
-                    value: q,
-                    child: Text(q.tr()),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      _selectedSecurityQuestion = val;
-                    });
-                  }
-                },
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-          ),
-        ],
+            const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+          ],
+        ),
       ),
     );
   }
@@ -1145,7 +1272,7 @@ class _SignupScreenState extends State<SignupScreen>
             compact: isShortScreen,
           ),
           SizedBox(height: isShortScreen ? 10 : 14),
-          _buildSecurityQuestionDropdown(compact: isShortScreen),
+          _buildSecurityQuestionTile(compact: isShortScreen),
           SizedBox(height: isShortScreen ? 10 : 14),
           _buildCustomTextField(
             controller: _securityAnswerController,

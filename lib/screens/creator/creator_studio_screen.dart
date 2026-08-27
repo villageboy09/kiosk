@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -7,6 +8,7 @@ import 'package:cropsync/models/creator_studio_model.dart';
 import 'package:cropsync/models/reel_model.dart';
 import 'package:cropsync/models/news_article.dart';
 import 'package:cropsync/services/creator_service.dart';
+import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:cropsync/screens/creator/upload_reel_screen.dart';
 import 'package:cropsync/screens/creator/upload_news_screen.dart';
 import 'package:cropsync/screens/news/news_detail_screen.dart';
@@ -22,16 +24,44 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
   late TabController _tabController;
   CreatorStudioData? _studioData;
   bool _isLoading = true;
+  Timer? _liveRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _loadStudioData();
+    _loadStudioData(forceRefresh: true);
+    CreatorHomeScreen.tabNotifier.addListener(_onCreatorTabChanged);
+
+    // Auto-refresh real-time metrics every 10 seconds while on Studio tab
+    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted && CreatorHomeScreen.tabNotifier.value == 0) {
+        _loadStudioDataSilent();
+      }
+    });
+  }
+
+  void _onCreatorTabChanged() {
+    if (CreatorHomeScreen.tabNotifier.value == 0 && mounted) {
+      _loadStudioDataSilent();
+    }
+  }
+
+  Future<void> _loadStudioDataSilent() async {
+    try {
+      final data = await CreatorService.getStudioData(forceRefresh: true);
+      if (mounted) {
+        setState(() {
+          _studioData = data;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    _liveRefreshTimer?.cancel();
+    CreatorHomeScreen.tabNotifier.removeListener(_onCreatorTabChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -207,45 +237,14 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.textDark, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'creator_studio_title'.tr(),
-              style: const TextStyle(
-                color: AppTheme.textDark,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              'creator_studio_subtitle'.tr(),
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
-            ),
-          ],
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: ElevatedButton.icon(
-              onPressed: _showCreateActionSheet,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('Create', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accentGreen,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              ),
-            ),
-          ),
-        ],
-        bottom: TabBar(
+        scrolledUnderElevation: 0,
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.textDark, size: 20),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
+        title: TabBar(
           controller: _tabController,
           labelColor: AppTheme.primaryDark,
           unselectedLabelColor: Colors.grey.shade600,
@@ -258,6 +257,7 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
             Tab(text: 'creator_tab_analytics'.tr()),
           ],
         ),
+        centerTitle: true,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.accentGreen))

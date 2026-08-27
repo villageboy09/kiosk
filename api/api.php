@@ -32,6 +32,134 @@ try {
             }
         } catch (Throwable $e) {}
 
+        // Multi-role columns on users table
+        try {
+            $stmtRole = $pdo->query("SHOW COLUMNS FROM users LIKE 'role'");
+            if (!$stmtRole->fetch()) {
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `role` VARCHAR(50) NOT NULL DEFAULT 'farmer'");
+                $pdo->exec("ALTER TABLE `users` ADD INDEX `idx_users_role` (`role`)");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtMemb = $pdo->query("SHOW COLUMNS FROM users LIKE 'membership_type'");
+            if (!$stmtMemb->fetch()) {
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `membership_type` VARCHAR(50) DEFAULT 'Farmer'");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtEmail = $pdo->query("SHOW COLUMNS FROM users LIKE 'email'");
+            if (!$stmtEmail->fetch()) {
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `email` VARCHAR(150) DEFAULT NULL");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtPass = $pdo->query("SHOW COLUMNS FROM users LIKE 'password_hash'");
+            if (!$stmtPass->fetch()) {
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `password_hash` VARCHAR(255) DEFAULT NULL");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtSecQ = $pdo->query("SHOW COLUMNS FROM users LIKE 'security_question'");
+            if (!$stmtSecQ->fetch()) {
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `security_question` VARCHAR(100) DEFAULT NULL");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtSecA = $pdo->query("SHOW COLUMNS FROM users LIKE 'security_answer'");
+            if (!$stmtSecA->fetch()) {
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `security_answer` VARCHAR(255) DEFAULT NULL");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtVer = $pdo->query("SHOW COLUMNS FROM users LIKE 'is_verified'");
+            if (!$stmtVer->fetch()) {
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `is_verified` TINYINT(1) DEFAULT 1");
+            }
+        } catch (Throwable $e) {}
+
+        // Auto-migrate all required creators table columns
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `creators` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `user_id` VARCHAR(50) NULL,
+                `username` VARCHAR(100) NOT NULL UNIQUE,
+                `display_name` VARCHAR(150) NOT NULL,
+                `profile_image_url` VARCHAR(500) NULL,
+                `is_verified` TINYINT(1) DEFAULT 1,
+                `phone_number` VARCHAR(20) NULL,
+                `email` VARCHAR(150) DEFAULT NULL,
+                `bio` TEXT NULL,
+                `followers_count` INT DEFAULT 0,
+                `following_count` INT DEFAULT 0,
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_creator_user_id` (`user_id`),
+                INDEX `idx_creator_phone` (`phone_number`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtCVer = $pdo->query("SHOW COLUMNS FROM creators LIKE 'is_verified'");
+            if (!$stmtCVer->fetch()) {
+                $pdo->exec("ALTER TABLE `creators` ADD COLUMN `is_verified` TINYINT(1) DEFAULT 1");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtCUser = $pdo->query("SHOW COLUMNS FROM creators LIKE 'user_id'");
+            if (!$stmtCUser->fetch()) {
+                $pdo->exec("ALTER TABLE `creators` ADD COLUMN `user_id` VARCHAR(50) DEFAULT NULL");
+                $pdo->exec("ALTER TABLE `creators` ADD INDEX `idx_creator_user_id` (`user_id`)");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtCEmail = $pdo->query("SHOW COLUMNS FROM creators LIKE 'email'");
+            if (!$stmtCEmail->fetch()) {
+                $pdo->exec("ALTER TABLE `creators` ADD COLUMN `email` VARCHAR(150) DEFAULT NULL");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtCFoll = $pdo->query("SHOW COLUMNS FROM creators LIKE 'followers_count'");
+            if (!$stmtCFoll->fetch()) {
+                $pdo->exec("ALTER TABLE `creators` ADD COLUMN `followers_count` INT DEFAULT 0");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtCFoll2 = $pdo->query("SHOW COLUMNS FROM creators LIKE 'following_count'");
+            if (!$stmtCFoll2->fetch()) {
+                $pdo->exec("ALTER TABLE `creators` ADD COLUMN `following_count` INT DEFAULT 0");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtCPhone = $pdo->query("SHOW COLUMNS FROM creators LIKE 'phone_number'");
+            if (!$stmtCPhone->fetch()) {
+                $pdo->exec("ALTER TABLE `creators` ADD COLUMN `phone_number` VARCHAR(20) DEFAULT NULL");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtCBio = $pdo->query("SHOW COLUMNS FROM creators LIKE 'bio'");
+            if (!$stmtCBio->fetch()) {
+                $pdo->exec("ALTER TABLE `creators` ADD COLUMN `bio` TEXT NULL");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $stmtCProf = $pdo->query("SHOW COLUMNS FROM creators LIKE 'profile_image_url'");
+            if (!$stmtCProf->fetch()) {
+                $pdo->exec("ALTER TABLE `creators` ADD COLUMN `profile_image_url` VARCHAR(500) DEFAULT NULL");
+            }
+        } catch (Throwable $e) {}
+
         try {
             $stmtCol = $pdo->query("SHOW COLUMNS FROM chc_bookings LIKE 'amount_paid'");
             if (!$stmtCol->fetch()) {
@@ -113,17 +241,38 @@ try {
                 INDEX `idx_comment_article` (`article_id`, `created_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
-            // Creators table for Reels
+            // Creators table for Reels & Content Creators
             $pdo->exec("CREATE TABLE IF NOT EXISTS `creators` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `user_id` VARCHAR(50) NULL,
                 `username` VARCHAR(100) NOT NULL UNIQUE,
                 `display_name` VARCHAR(150) NOT NULL,
                 `profile_image_url` VARCHAR(500) NULL,
                 `is_verified` TINYINT(1) DEFAULT 1,
                 `phone_number` VARCHAR(20) NULL,
+                `email` VARCHAR(150) DEFAULT NULL,
                 `bio` TEXT NULL,
-                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                `followers_count` INT DEFAULT 0,
+                `following_count` INT DEFAULT 0,
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_creator_phone` (`phone_number`),
+                INDEX `idx_creator_user_id` (`user_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            try {
+                $stmtCUser = $pdo->query("SHOW COLUMNS FROM creators LIKE 'user_id'");
+                if (!$stmtCUser->fetch()) {
+                    $pdo->exec("ALTER TABLE `creators` ADD COLUMN `user_id` VARCHAR(50) NULL");
+                    $pdo->exec("ALTER TABLE `creators` ADD INDEX `idx_creator_user_id` (`user_id`)");
+                }
+            } catch (Throwable $e) {}
+
+            try {
+                $stmtCEmail = $pdo->query("SHOW COLUMNS FROM creators LIKE 'email'");
+                if (!$stmtCEmail->fetch()) {
+                    $pdo->exec("ALTER TABLE `creators` ADD COLUMN `email` VARCHAR(150) DEFAULT NULL");
+                }
+            } catch (Throwable $e) {}
 
             // Reels table
             $pdo->exec("CREATE TABLE IF NOT EXISTS `reels` (
@@ -144,6 +293,26 @@ try {
                 INDEX `idx_reel_active` (`is_active`),
                 INDEX `idx_reel_created` (`created_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            $reelsColumnsToCheck = [
+                'music_title' => "ALTER TABLE `reels` ADD COLUMN `music_title` VARCHAR(200) DEFAULT 'Original Audio'",
+                'phone_number' => "ALTER TABLE `reels` ADD COLUMN `phone_number` VARCHAR(20) DEFAULT NULL",
+                'tags' => "ALTER TABLE `reels` ADD COLUMN `tags` VARCHAR(255) DEFAULT NULL",
+                'views_count' => "ALTER TABLE `reels` ADD COLUMN `views_count` INT DEFAULT 0",
+                'likes_count' => "ALTER TABLE `reels` ADD COLUMN `likes_count` INT DEFAULT 0",
+                'saves_count' => "ALTER TABLE `reels` ADD COLUMN `saves_count` INT DEFAULT 0",
+                'comments_count' => "ALTER TABLE `reels` ADD COLUMN `comments_count` INT DEFAULT 0",
+                'is_active' => "ALTER TABLE `reels` ADD COLUMN `is_active` TINYINT(1) DEFAULT 1",
+                'created_at' => "ALTER TABLE `reels` ADD COLUMN `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ];
+            foreach ($reelsColumnsToCheck as $rcCol => $rcSql) {
+                try {
+                    $st = $pdo->query("SHOW COLUMNS FROM `reels` LIKE '$rcCol'");
+                    if (!$st || !$st->fetch()) {
+                        $pdo->exec($rcSql);
+                    }
+                } catch (Throwable $e) {}
+            }
 
             // Reel Likes table
             $pdo->exec("CREATE TABLE IF NOT EXISTS `reel_likes` (
@@ -414,7 +583,9 @@ try {
     // Do not block API execution if any DB setup fails
 }
 
-$action = $_GET['action'] ?? '';
+$rawInput = file_get_contents('php://input');
+$jsonParsed = !empty($rawInput) ? json_decode($rawInput, true) : null;
+$action = $_GET['action'] ?? $_POST['action'] ?? ($jsonParsed['action'] ?? '');
 
 switch ($action) {
     case 'apply_migration':
@@ -1043,49 +1214,215 @@ function sendBookingCompletionSMS($phone, $serviceSummary, $amount, $operatorId 
 }
 
 function registerUser($pdo) {
-    $input = json_decode(file_get_contents('php://input'), true);
-    $userId = $input['phone_number'] ?? ''; // Using phone_number as user_id per requirement
-    $name = $input['name'] ?? '';
-    $clientCode = $input['client_code'] ?? 'HYD001';
-    $role = $input['role'] ?? 'farmer';
-    $username = $input['username'] ?? '';
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $rawPhone = $input['phone_number'] ?? $input['user_id'] ?? '';
+    $cleanPhone = preg_replace('/[^0-9]/', '', $rawPhone);
+    $userId = strlen($cleanPhone) > 10 ? substr($cleanPhone, -10) : $cleanPhone;
     
-    if (empty($userId) || empty($name)) {
-        echo json_encode(['success' => false, 'error' => 'Name and Phone number are required']);
+    $name = trim($input['name'] ?? '');
+    $clientCode = $input['client_code'] ?? 'HYD001';
+    $role = trim($input['role'] ?? 'farmer');
+    $username = trim($input['username'] ?? '');
+    $password = trim($input['password'] ?? '');
+    $securityQuestion = trim($input['security_question'] ?? '');
+    $securityAnswer = trim($input['security_answer'] ?? '');
+    $email = trim($input['email'] ?? '');
+    $district = $input['district'] ?? null;
+    $village = $input['village'] ?? null;
+    $mandal = $input['mandal'] ?? null;
+    
+    if (empty($userId)) {
+        echo json_encode(['success' => false, 'error' => 'Phone number is required']);
         return;
+    }
+    if (empty($name)) {
+        if ($role === 'content_creator' && !empty($username)) {
+            $name = $username;
+        } else {
+            $name = 'CropSync ' . ucfirst(str_replace('_', ' ', $role));
+        }
+    }
+
+    $membershipType = 'Farmer';
+    if ($role === 'content_creator' || $role === 'creator') {
+        $role = 'content_creator';
+        $membershipType = 'Creator';
+    } elseif ($role === 'retailer') {
+        $membershipType = 'Retailer';
+    } elseif ($role === 'officer') {
+        $membershipType = 'Officer';
+    } elseif ($role === 'chc_operator') {
+        $membershipType = 'CHC Operator';
     }
 
     try {
-        // Check if user already exists
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
-        $stmt->execute([$userId]);
+        // Check if user already exists in users table
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? OR phone_number = ?");
+        $stmt->execute([$userId, $userId, '91' . $userId]);
         $existingUser = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($existingUser) {
-            echo json_encode(['success' => false, 'error' => 'User with this phone number already exists']);
-            return;
+            // Update existing user record with the selected role and profile data
+            $passHash = !empty($password) ? password_hash($password, PASSWORD_DEFAULT) : null;
+            $updateSql = "UPDATE users SET name = ?, role = ?, membership_type = ?, client_code = COALESCE(?, client_code)";
+            $params = [$name, $role, $membershipType, $clientCode];
+
+            if (!empty($email)) {
+                $updateSql .= ", email = ?";
+                $params[] = $email;
+            }
+            if (!empty($passHash)) {
+                $updateSql .= ", password_hash = ?";
+                $params[] = $passHash;
+            }
+            if (!empty($securityQuestion)) {
+                $updateSql .= ", security_question = ?, security_answer = ?";
+                $params[] = $securityQuestion;
+                $params[] = $securityAnswer;
+            }
+            if (!empty($district)) {
+                $updateSql .= ", district = ?";
+                $params[] = $district;
+            }
+            if (!empty($village)) {
+                $updateSql .= ", village = ?";
+                $params[] = $village;
+            }
+            if (!empty($mandal)) {
+                $updateSql .= ", mandal = ?";
+                $params[] = $mandal;
+            }
+
+            $updateSql .= " WHERE user_id = ? OR phone_number = ?";
+            $params[] = $userId;
+            $params[] = $userId;
+
+            $stmtUp = $pdo->prepare($updateSql);
+            $stmtUp->execute($params);
+        } else {
+            // Insert new user
+            $passHash = !empty($password) ? password_hash($password, PASSWORD_DEFAULT) : null;
+            $stmt = $pdo->prepare("
+                INSERT INTO users (user_id, name, phone_number, client_code, role, membership_type, email, password_hash, security_question, security_answer, district, village, mandal) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $userId, 
+                $name, 
+                $userId, 
+                $clientCode, 
+                $role, 
+                $membershipType, 
+                !empty($email) ? $email : null,
+                $passHash,
+                !empty($securityQuestion) ? $securityQuestion : null,
+                !empty($securityAnswer) ? $securityAnswer : null,
+                $district,
+                $village,
+                $mandal
+            ]);
         }
 
-        // Insert new user
-        $stmt = $pdo->prepare("INSERT INTO users (user_id, name, phone_number, client_code) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$userId, $name, $userId, $clientCode]); // phone_number is same as user_id
-
-        // If registered as content creator, create creator record
-        if ($role === 'content_creator' || $role === 'creator') {
+        // Secondary table synchronizations for specialized roles:
+        if ($role === 'content_creator') {
             $cUsername = !empty($username) ? $username : 'creator_' . substr($userId, -6);
-            $stmtC = $pdo->prepare("INSERT INTO creators (username, display_name, profile_image_url, is_verified, phone_number, bio) VALUES (?, ?, NULL, 1, ?, 'Agricultural Content Creator') ON DUPLICATE KEY UPDATE display_name = VALUES(display_name)");
-            $stmtC->execute([$cUsername, $name, $userId]);
+            try {
+                $cStmt = $pdo->prepare("
+                    INSERT INTO creators (user_id, username, display_name, profile_image_url, is_verified, phone_number, email, bio) 
+                    VALUES (?, ?, ?, NULL, 1, ?, ?, 'Agricultural Content Creator') 
+                    ON DUPLICATE KEY UPDATE 
+                        display_name = VALUES(display_name), 
+                        user_id = VALUES(user_id), 
+                        email = COALESCE(VALUES(email), email),
+                        phone_number = VALUES(phone_number)
+                ");
+                $cStmt->execute([$userId, $cUsername, $name, $userId, !empty($email) ? $email : null]);
+            } catch (Throwable $e) {
+                // If column was missing, auto-patch schema and retry safely
+                try {
+                    $pdo->exec("ALTER TABLE `creators` ADD COLUMN `is_verified` TINYINT(1) DEFAULT 1");
+                } catch (Throwable $ig) {}
+                try {
+                    $pdo->exec("ALTER TABLE `creators` ADD COLUMN `user_id` VARCHAR(50) DEFAULT NULL");
+                } catch (Throwable $ig) {}
+                try {
+                    $pdo->exec("ALTER TABLE `creators` ADD COLUMN `email` VARCHAR(150) DEFAULT NULL");
+                } catch (Throwable $ig) {}
+                try {
+                    $cStmt2 = $pdo->prepare("
+                        INSERT INTO creators (user_id, username, display_name, is_verified, phone_number, email, bio) 
+                        VALUES (?, ?, ?, 1, ?, ?, 'Agricultural Content Creator') 
+                        ON DUPLICATE KEY UPDATE 
+                            display_name = VALUES(display_name)
+                    ");
+                    $cStmt2->execute([$userId, $cUsername, $name, $userId, !empty($email) ? $email : null]);
+                } catch (Throwable $e2) {
+                    error_log('Creator sync warning: ' . $e2->getMessage());
+                }
+            }
+        } elseif ($role === 'retailer') {
+            $retCode = 'RET_' . substr($userId, -4);
+            $retStmt = $pdo->prepare("
+                INSERT INTO retailer_partners (owner_name, shop_name, contact_number, email, referral_code, client_code, district, mandal, village)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    owner_name = VALUES(owner_name),
+                    email = COALESCE(VALUES(email), email)
+            ");
+            $retStmt->execute([
+                $name, 
+                $name . ' Agri Center', 
+                $userId, 
+                !empty($email) ? $email : null, 
+                $retCode, 
+                $clientCode,
+                $district,
+                $mandal,
+                $village
+            ]);
+        } elseif ($role === 'officer') {
+            $offStmt = $pdo->prepare("
+                INSERT INTO extension_officers (name, contact_number, email, coverage_district, coverage_mandal)
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    name = VALUES(name),
+                    email = COALESCE(VALUES(email), email)
+            ");
+            $offStmt->execute([
+                $name, 
+                $userId, 
+                !empty($email) ? $email : null, 
+                $district, 
+                $mandal
+            ]);
+        } elseif ($role === 'chc_operator') {
+            $opStmt = $pdo->prepare("
+                INSERT INTO chc_operators (name, phone_number, password, client_code, status)
+                VALUES (?, ?, ?, ?, 'Active')
+                ON DUPLICATE KEY UPDATE 
+                    name = VALUES(name),
+                    password = VALUES(password)
+            ");
+            $opStmt->execute([
+                $name, 
+                $userId, 
+                !empty($password) ? $password : $clientCode, 
+                $clientCode
+            ]);
         }
 
-        // Fetch user object to return
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
-        $stmt->execute([$userId]);
-        $newUser = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($role === 'content_creator' || $role === 'creator') {
-            $newUser['membership_type'] = 'Creator';
+        // Fetch fresh user object to return
+        $res = loginWithRoleChecking($pdo, $userId, $role);
+        if ($res['success']) {
+            echo json_encode(['success' => true, 'message' => 'User registered successfully', 'user' => $res['user'], 'role' => $res['role']]);
+        } else {
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
+            $stmt->execute([$userId]);
+            $newUser = $stmt->fetch(PDO::FETCH_ASSOC);
+            $newUser['role'] = $role;
+            $newUser['membership_type'] = $membershipType;
+            echo json_encode(['success' => true, 'message' => 'User registered successfully', 'user' => $newUser, 'role' => $role]);
         }
-
-        echo json_encode(['success' => true, 'message' => 'User registered successfully', 'user' => $newUser]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
@@ -1102,7 +1439,7 @@ function checkUser($pdo) {
     try {
         $res = loginWithRoleChecking($pdo, $userId, $role);
         if ($res['success']) {
-            echo json_encode(['success' => true, 'exists' => true, 'user' => $res['user']]);
+            echo json_encode(['success' => true, 'exists' => true, 'user' => $res['user'], 'role' => $res['role'] ?? $role]);
         } else {
             echo json_encode(['success' => true, 'exists' => false]);
         }
@@ -1111,15 +1448,16 @@ function checkUser($pdo) {
     }
 }
 
-
 function loginWithRoleChecking($pdo, $userId, $role = null) {
-    // Ensure PDO throws exceptions for robustness and clear error reporting
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // If role is explicitly provided, target only the single matching table for maximum performance
+    $cleanPhone = preg_replace('/[^0-9]/', '', $userId);
+    $last10 = strlen($cleanPhone) > 10 ? substr($cleanPhone, -10) : $cleanPhone;
+
+    // 1. If role is explicitly specified, target that role's logic directly
     if ($role === 'retailer') {
-        $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? LIMIT 1");
-        $stmtRet->execute([$userId]);
+        $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
+        $stmtRet->execute([$userId, $last10, '91' . $last10]);
         $retailer = $stmtRet->fetch(PDO::FETCH_ASSOC);
         if ($retailer) {
             return [
@@ -1127,7 +1465,7 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                 'role' => 'retailer',
                 'retailer_id' => (int)$retailer['id'],
                 'user' => [
-                    'user_id' => $userId,
+                    'user_id' => $last10,
                     'name' => $retailer['owner_name'],
                     'phone_number' => $retailer['contact_number'],
                     'village' => $retailer['village'],
@@ -1135,13 +1473,14 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                     'district' => $retailer['district'],
                     'region' => $retailer['region'],
                     'client_code' => $retailer['client_code'],
+                    'role' => 'retailer',
                     'membership_type' => 'Retailer'
                 ]
             ];
         }
     } elseif ($role === 'officer') {
-        $stmtOff = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? LIMIT 1");
-        $stmtOff->execute([$userId]);
+        $stmtOff = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
+        $stmtOff->execute([$userId, $last10, '91' . $last10]);
         $officer = $stmtOff->fetch(PDO::FETCH_ASSOC);
         if ($officer) {
             return [
@@ -1149,20 +1488,21 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                 'role' => 'officer',
                 'officer_id' => (int)$officer['id'],
                 'user' => [
-                    'user_id' => $userId,
+                    'user_id' => $last10,
                     'name' => $officer['name'],
                     'phone_number' => $officer['contact_number'],
                     'village' => $officer['coverage_mandal'],
                     'mandal' => $officer['coverage_mandal'],
                     'district' => $officer['coverage_district'],
                     'region' => $officer['coverage_district'],
+                    'role' => 'officer',
                     'membership_type' => 'Officer'
                 ]
             ];
         }
     } elseif ($role === 'content_creator' || $role === 'creator') {
-        $stmtCreator = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? OR username = ? LIMIT 1");
-        $stmtCreator->execute([$userId, $userId]);
+        $stmtCreator = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? OR phone_number = ? OR user_id = ? OR username = ? LIMIT 1");
+        $stmtCreator->execute([$userId, $last10, $last10, $userId]);
         $creator = $stmtCreator->fetch(PDO::FETCH_ASSOC);
         if ($creator) {
             return [
@@ -1170,18 +1510,20 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                 'role' => 'content_creator',
                 'creator_id' => (int)$creator['id'],
                 'user' => [
-                    'user_id' => $creator['phone_number'] ?: $userId,
+                    'user_id' => $creator['phone_number'] ?: $last10,
                     'name' => $creator['display_name'] ?: $creator['username'],
-                    'phone_number' => $creator['phone_number'] ?: $userId,
+                    'phone_number' => $creator['phone_number'] ?: $last10,
                     'profile_image_url' => $creator['profile_image_url'],
+                    'role' => 'content_creator',
                     'membership_type' => 'Creator'
                 ]
             ];
         }
-        $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
-        $stmtFarmer->execute([$userId, $userId]);
+        $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+        $stmtFarmer->execute([$userId, $userId, $last10]);
         $user = $stmtFarmer->fetch(PDO::FETCH_ASSOC);
         if ($user) {
+            $user['role'] = 'content_creator';
             $user['membership_type'] = 'Creator';
             return [
                 'success' => true,
@@ -1190,110 +1532,164 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
             ];
         }
     } elseif ($role === 'farmer') {
-        $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
-        $stmtFarmer->execute([$userId, $userId]);
+        $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+        $stmtFarmer->execute([$userId, $userId, $last10]);
         $user = $stmtFarmer->fetch(PDO::FETCH_ASSOC);
         if ($user) {
+            $user['role'] = 'farmer';
+            $user['membership_type'] = 'Farmer';
             return [
                 'success' => true,
                 'role' => 'farmer',
                 'user' => $user
             ];
         }
-    } else {
-        // Fallback to UNION lookup if role is not supplied (for backward compatibility)
-        $stmt = $pdo->prepare("
-            (SELECT 'retailer' AS role, id FROM retailer_partners WHERE contact_number = ? LIMIT 1)
-            UNION ALL
-            (SELECT 'officer' AS role, id FROM extension_officers WHERE contact_number = ? LIMIT 1)
-            UNION ALL
-            (SELECT 'content_creator' AS role, id FROM creators WHERE phone_number = ? LIMIT 1)
-            UNION ALL
-            (SELECT 'farmer' AS role, user_id AS id FROM users WHERE user_id = ? LIMIT 1)
-            UNION ALL
-            (SELECT 'farmer' AS role, user_id AS id FROM users WHERE phone_number = ? LIMIT 1)
-        ");
-        $stmt->execute([$userId, $userId, $userId, $userId, $userId]);
-        $match = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
 
-        if ($match) {
-            $matchedRole = $match['role'];
-            $matchedId = $match['id'];
+    // 2. Fallback: Role was not passed or not matched yet.
+    // Check users table first for stored role:
+    $stmtU = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+    $stmtU->execute([$userId, $userId, $last10]);
+    $userRow = $stmtU->fetch(PDO::FETCH_ASSOC);
 
-            if ($matchedRole === 'retailer') {
-                $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE id = ? LIMIT 1");
-                $stmtRet->execute([$matchedId]);
-                $retailer = $stmtRet->fetch(PDO::FETCH_ASSOC);
-                if ($retailer) {
-                    return [
-                        'success' => true,
-                        'role' => 'retailer',
-                        'retailer_id' => (int)$retailer['id'],
-                        'user' => [
-                            'user_id' => $userId,
-                            'name' => $retailer['owner_name'],
-                            'phone_number' => $retailer['contact_number'],
-                            'village' => $retailer['village'],
-                            'mandal' => $retailer['mandal'],
-                            'district' => $retailer['district'],
-                            'region' => $retailer['region'],
-                            'client_code' => $retailer['client_code'],
-                            'membership_type' => 'Retailer'
-                        ]
-                    ];
-                }
-            } elseif ($matchedRole === 'officer') {
-                $stmtOff = $pdo->prepare("SELECT * FROM extension_officers WHERE id = ? LIMIT 1");
-                $stmtOff->execute([$matchedId]);
-                $officer = $stmtOff->fetch(PDO::FETCH_ASSOC);
-                if ($officer) {
-                    return [
-                        'success' => true,
-                        'role' => 'officer',
-                        'officer_id' => (int)$officer['id'],
-                        'user' => [
-                            'user_id' => $userId,
-                            'name' => $officer['name'],
-                            'phone_number' => $officer['contact_number'],
-                            'village' => $officer['coverage_mandal'],
-                            'mandal' => $officer['coverage_mandal'],
-                            'district' => $officer['coverage_district'],
-                            'region' => $officer['coverage_district'],
-                            'membership_type' => 'Officer'
-                        ]
-                    ];
-                }
-            } elseif ($matchedRole === 'content_creator') {
-                $stmtC = $pdo->prepare("SELECT * FROM creators WHERE id = ? LIMIT 1");
-                $stmtC->execute([$matchedId]);
-                $creator = $stmtC->fetch(PDO::FETCH_ASSOC);
-                if ($creator) {
-                    return [
-                        'success' => true,
-                        'role' => 'content_creator',
-                        'creator_id' => (int)$creator['id'],
-                        'user' => [
-                            'user_id' => $creator['phone_number'] ?: $userId,
-                            'name' => $creator['display_name'] ?: $creator['username'],
-                            'phone_number' => $creator['phone_number'] ?: $userId,
-                            'profile_image_url' => $creator['profile_image_url'],
-                            'membership_type' => 'Creator'
-                        ]
-                    ];
-                }
-            } elseif ($matchedRole === 'farmer') {
-                $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? LIMIT 1");
-                $stmtFarmer->execute([$matchedId]);
-                $user = $stmtFarmer->fetch(PDO::FETCH_ASSOC);
-                if ($user) {
-                    return [
-                        'success' => true,
-                        'role' => 'farmer',
-                        'user' => $user
-                    ];
-                }
-            }
+    if ($userRow && !empty($userRow['role'])) {
+        $storedRole = strtolower($userRow['role']);
+        if ($storedRole === 'content_creator' || $storedRole === 'creator') {
+            $cStmt = $pdo->prepare("SELECT * FROM creators WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+            $cStmt->execute([$last10, $last10, $userRow['phone_number']]);
+            $cRow = $cStmt->fetch(PDO::FETCH_ASSOC);
+            return [
+                'success' => true,
+                'role' => 'content_creator',
+                'creator_id' => $cRow ? (int)$cRow['id'] : null,
+                'user' => array_merge($userRow, [
+                    'name' => $cRow['display_name'] ?? $userRow['name'],
+                    'profile_image_url' => $cRow['profile_image_url'] ?? $userRow['profile_image_url'],
+                    'role' => 'content_creator',
+                    'membership_type' => 'Creator'
+                ])
+            ];
+        } elseif ($storedRole === 'retailer') {
+            $rStmt = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? OR contact_number = ? LIMIT 1");
+            $rStmt->execute([$userId, $last10]);
+            $rRow = $rStmt->fetch(PDO::FETCH_ASSOC);
+            return [
+                'success' => true,
+                'role' => 'retailer',
+                'retailer_id' => $rRow ? (int)$rRow['id'] : null,
+                'user' => array_merge($userRow, [
+                    'role' => 'retailer',
+                    'membership_type' => 'Retailer'
+                ])
+            ];
+        } elseif ($storedRole === 'officer') {
+            $oStmt = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? OR contact_number = ? LIMIT 1");
+            $oStmt->execute([$userId, $last10]);
+            $oRow = $oStmt->fetch(PDO::FETCH_ASSOC);
+            return [
+                'success' => true,
+                'role' => 'officer',
+                'officer_id' => $oRow ? (int)$oRow['id'] : null,
+                'user' => array_merge($userRow, [
+                    'role' => 'officer',
+                    'membership_type' => 'Officer'
+                ])
+            ];
+        } elseif ($storedRole === 'chc_operator') {
+            return [
+                'success' => true,
+                'role' => 'chc_operator',
+                'user' => array_merge($userRow, [
+                    'role' => 'chc_operator',
+                    'membership_type' => 'CHC Operator'
+                ])
+            ];
+        } else {
+            return [
+                'success' => true,
+                'role' => 'farmer',
+                'user' => array_merge($userRow, [
+                    'role' => 'farmer',
+                    'membership_type' => 'Farmer'
+                ])
+            ];
         }
+    }
+
+    // 3. Fallback: Lookup in specialized tables if users table didn't have role
+    $stmtC = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? OR user_id = ? LIMIT 1");
+    $stmtC->execute([$last10, $last10]);
+    $creator = $stmtC->fetch(PDO::FETCH_ASSOC);
+    if ($creator) {
+        return [
+            'success' => true,
+            'role' => 'content_creator',
+            'creator_id' => (int)$creator['id'],
+            'user' => [
+                'user_id' => $creator['phone_number'] ?: $last10,
+                'name' => $creator['display_name'] ?: $creator['username'],
+                'phone_number' => $creator['phone_number'] ?: $last10,
+                'profile_image_url' => $creator['profile_image_url'],
+                'role' => 'content_creator',
+                'membership_type' => 'Creator'
+            ]
+        ];
+    }
+
+    $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? OR contact_number = ? LIMIT 1");
+    $stmtRet->execute([$userId, $last10]);
+    $retailer = $stmtRet->fetch(PDO::FETCH_ASSOC);
+    if ($retailer) {
+        return [
+            'success' => true,
+            'role' => 'retailer',
+            'retailer_id' => (int)$retailer['id'],
+            'user' => [
+                'user_id' => $last10,
+                'name' => $retailer['owner_name'],
+                'phone_number' => $retailer['contact_number'],
+                'village' => $retailer['village'],
+                'mandal' => $retailer['mandal'],
+                'district' => $retailer['district'],
+                'region' => $retailer['region'],
+                'client_code' => $retailer['client_code'],
+                'role' => 'retailer',
+                'membership_type' => 'Retailer'
+            ]
+        ];
+    }
+
+    $stmtOff = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? OR contact_number = ? LIMIT 1");
+    $stmtOff->execute([$userId, $last10]);
+    $officer = $stmtOff->fetch(PDO::FETCH_ASSOC);
+    if ($officer) {
+        return [
+            'success' => true,
+            'role' => 'officer',
+            'officer_id' => (int)$officer['id'],
+            'user' => [
+                'user_id' => $last10,
+                'name' => $officer['name'],
+                'phone_number' => $officer['contact_number'],
+                'village' => $officer['coverage_mandal'],
+                'mandal' => $officer['coverage_mandal'],
+                'district' => $officer['coverage_district'],
+                'region' => $officer['coverage_district'],
+                'role' => 'officer',
+                'membership_type' => 'Officer'
+            ]
+        ];
+    }
+
+    if ($userRow) {
+        return [
+            'success' => true,
+            'role' => 'farmer',
+            'user' => array_merge($userRow, [
+                'role' => 'farmer',
+                'membership_type' => 'Farmer'
+            ])
+        ];
     }
 
     return [
@@ -1333,7 +1729,7 @@ function getUserProfile($pdo) {
     try {
         $res = loginWithRoleChecking($pdo, $userId, $role);
         if ($res['success']) {
-            echo json_encode(['success' => true, 'user' => $res['user']]);
+            echo json_encode(['success' => true, 'user' => $res['user'], 'role' => $res['role'] ?? $role]);
         } else {
             echo json_encode(['success' => false, 'message' => 'User not found']);
         }
@@ -4326,13 +4722,25 @@ function logReelWatch($pdo) {
             return;
         }
 
-        $stmt = $pdo->prepare("INSERT INTO reel_watch_analytics (reel_id, farmer_username, phone_number, user_id, watch_duration_seconds, is_completed) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$reelId, $farmerUsername, $phoneNumber, $userId, $duration, $isCompleted]);
-
-        // Increment view count on reel
+        // 1. Increment view count on reel immediately
         $pdo->prepare("UPDATE reels SET views_count = views_count + 1 WHERE id = ?")->execute([$reelId]);
 
-        echo json_encode(['success' => true, 'message' => 'Watch analytics recorded']);
+        // 2. Insert into reel_watch_analytics
+        try {
+            $stmt = $pdo->prepare("INSERT INTO reel_watch_analytics (reel_id, farmer_username, phone_number, user_id, watch_duration_seconds, is_completed) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$reelId, $farmerUsername, $phoneNumber, $userId, $duration, $isCompleted]);
+        } catch (Throwable $e) {}
+
+        $vStmt = $pdo->prepare("SELECT views_count FROM reels WHERE id = ?");
+        $vStmt->execute([$reelId]);
+        $viewsCount = intval($vStmt->fetchColumn() ?: 0);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Watch analytics recorded',
+            'views_count' => $viewsCount,
+            'viewsRaw' => $viewsCount
+        ]);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
@@ -4426,9 +4834,57 @@ function uploadReel($pdo) {
             }
         }
 
-        $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 1)");
-        $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
-        $reelId = intval($pdo->lastInsertId());
+        try {
+            $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 1)");
+            $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
+            $reelId = intval($pdo->lastInsertId());
+        } catch (Throwable $dbErr) {
+            // Auto repair reels schema and all columns if missing
+            try {
+                $pdo->exec("CREATE TABLE IF NOT EXISTS `reels` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `creator_id` INT NOT NULL,
+                    `video_url` VARCHAR(500) NOT NULL,
+                    `caption` TEXT NOT NULL,
+                    `music_title` VARCHAR(200) DEFAULT 'Original Audio',
+                    `phone_number` VARCHAR(20) NULL,
+                    `tags` VARCHAR(255) NULL,
+                    `views_count` INT DEFAULT 0,
+                    `likes_count` INT DEFAULT 0,
+                    `saves_count` INT DEFAULT 0,
+                    `comments_count` INT DEFAULT 0,
+                    `is_active` TINYINT(1) DEFAULT 1,
+                    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX `idx_reel_creator` (`creator_id`),
+                    INDEX `idx_reel_active` (`is_active`),
+                    INDEX `idx_reel_created` (`created_at`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+                $repairCols = [
+                    'music_title' => "ALTER TABLE `reels` ADD COLUMN `music_title` VARCHAR(200) DEFAULT 'Original Audio'",
+                    'phone_number' => "ALTER TABLE `reels` ADD COLUMN `phone_number` VARCHAR(20) DEFAULT NULL",
+                    'tags' => "ALTER TABLE `reels` ADD COLUMN `tags` VARCHAR(255) DEFAULT NULL",
+                    'views_count' => "ALTER TABLE `reels` ADD COLUMN `views_count` INT DEFAULT 0",
+                    'likes_count' => "ALTER TABLE `reels` ADD COLUMN `likes_count` INT DEFAULT 0",
+                    'saves_count' => "ALTER TABLE `reels` ADD COLUMN `saves_count` INT DEFAULT 0",
+                    'comments_count' => "ALTER TABLE `reels` ADD COLUMN `comments_count` INT DEFAULT 0",
+                    'is_active' => "ALTER TABLE `reels` ADD COLUMN `is_active` TINYINT(1) DEFAULT 1",
+                    'created_at' => "ALTER TABLE `reels` ADD COLUMN `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                ];
+                foreach ($repairCols as $cName => $cSql) {
+                    try {
+                        $colCheck = $pdo->query("SHOW COLUMNS FROM `reels` LIKE '$cName'");
+                        if (!$colCheck || !$colCheck->fetch()) {
+                            $pdo->exec($cSql);
+                        }
+                    } catch (Throwable $e) {}
+                }
+            } catch (Throwable $e) {}
+
+            $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 1)");
+            $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
+            $reelId = intval($pdo->lastInsertId());
+        }
 
         $newReel = [
             'id' => $reelId,
@@ -4449,11 +4905,11 @@ function uploadReel($pdo) {
             'created_at' => date('Y-m-d H:i:s'),
             'creator' => [
                 'id' => $creatorId,
-                'username' => $creator['username'],
-                'displayName' => $creator['display_name'],
+                'username' => $creator['username'] ?? 'creator_' . $creatorId,
+                'displayName' => $creator['display_name'] ?? ($creatorName ?: 'Agri Creator'),
                 'profileImageUrl' => $creator['profile_image_url'] ?? '',
-                'isVerified' => (bool)$creator['is_verified'],
-                'phoneNumber' => $creator['phone_number'] ?? ''
+                'isVerified' => !empty($creator['is_verified']),
+                'phoneNumber' => $creator['phone_number'] ?? $phoneNumber
             ]
         ];
 
@@ -4463,7 +4919,7 @@ function uploadReel($pdo) {
             'reel_id' => $reelId,
             'reel' => $newReel
         ]);
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
 }
@@ -4481,15 +4937,15 @@ function deleteReel($pdo) {
             return;
         }
 
-        $pdo->prepare("DELETE FROM reel_likes WHERE reel_id = ?")->execute([$reelId]);
-        $pdo->prepare("DELETE FROM reel_comments WHERE reel_id = ?")->execute([$reelId]);
-        $pdo->prepare("DELETE FROM reel_actions WHERE reel_id = ?")->execute([$reelId]);
-        $pdo->prepare("DELETE FROM reel_watch_analytics WHERE reel_id = ?")->execute([$reelId]);
+        try { $pdo->prepare("DELETE FROM reel_likes WHERE reel_id = ?")->execute([$reelId]); } catch (Throwable $e) {}
+        try { $pdo->prepare("DELETE FROM reel_comments WHERE reel_id = ?")->execute([$reelId]); } catch (Throwable $e) {}
+        try { $pdo->prepare("DELETE FROM reel_actions WHERE reel_id = ?")->execute([$reelId]); } catch (Throwable $e) {}
+        try { $pdo->prepare("DELETE FROM reel_watch_analytics WHERE reel_id = ?")->execute([$reelId]); } catch (Throwable $e) {}
         $stmt = $pdo->prepare("DELETE FROM reels WHERE id = ?");
         $stmt->execute([$reelId]);
 
         echo json_encode(['success' => true, 'message' => 'Reel deleted successfully']);
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
 }
@@ -4512,7 +4968,7 @@ function toggleReelStatus($pdo) {
         $stmt->execute([$isActive, $reelId]);
 
         echo json_encode(['success' => true, 'message' => 'Reel status updated', 'is_active' => $isActive]);
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
 }
@@ -4543,9 +4999,38 @@ function createNewsArticle($pdo) {
             $imageUrl = 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=800&q=80';
         }
 
-        $stmt = $pdo->prepare("INSERT INTO news_articles (title, summary, content, category, image_url, author, source_name, views_count, likes_count, comments_count, is_featured, status, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, NOW())");
-        $stmt->execute([$title, $summary, $content, $category, $imageUrl, $author, $sourceName, $isFeatured, $status]);
-        $articleId = intval($pdo->lastInsertId());
+        try {
+            $stmt = $pdo->prepare("INSERT INTO news_articles (title, summary, content, category, image_url, author, source_name, views_count, likes_count, comments_count, is_featured, status, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, NOW())");
+            $stmt->execute([$title, $summary, $content, $category, $imageUrl, $author, $sourceName, $isFeatured, $status]);
+            $articleId = intval($pdo->lastInsertId());
+        } catch (Throwable $dbErr) {
+            // Auto repair news_articles table if missing
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `news_articles` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `title` VARCHAR(255) NOT NULL,
+                `summary` TEXT NOT NULL,
+                `content` LONGTEXT NOT NULL,
+                `category` VARCHAR(50) NOT NULL DEFAULT 'Govt Schemes',
+                `image_url` VARCHAR(500) NULL,
+                `author` VARCHAR(100) DEFAULT 'CropSync Desk',
+                `source_name` VARCHAR(100) DEFAULT 'Krishi Jagran / Govt Portal',
+                `views_count` INT DEFAULT 0,
+                `likes_count` INT DEFAULT 0,
+                `comments_count` INT DEFAULT 0,
+                `is_featured` TINYINT(1) DEFAULT 0,
+                `status` ENUM('published', 'draft') DEFAULT 'published',
+                `published_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX `idx_news_cat` (`category`),
+                INDEX `idx_news_published` (`published_at`),
+                INDEX `idx_news_featured` (`is_featured`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            $stmt = $pdo->prepare("INSERT INTO news_articles (title, summary, content, category, image_url, author, source_name, views_count, likes_count, comments_count, is_featured, status, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, NOW())");
+            $stmt->execute([$title, $summary, $content, $category, $imageUrl, $author, $sourceName, $isFeatured, $status]);
+            $articleId = intval($pdo->lastInsertId());
+        }
 
         $newArticle = [
             'id' => $articleId,
@@ -4574,7 +5059,7 @@ function createNewsArticle($pdo) {
             'article_id' => $articleId,
             'article' => $newArticle
         ]);
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
 }
@@ -4637,8 +5122,9 @@ function getCreatorStudioData($pdo) {
 
         $creator = resolveOrCreateCreator($pdo, $phoneNumber, !empty($userName) ? $userName : $username);
         $creatorId = intval($creator['id']);
+        $creatorPhone = trim($creator['phone_number'] ?? $phoneNumber);
 
-        // 1. Fetch Creator's Reels
+        // 1. Fetch Creator's Reels (Live stats)
         $reelsStmt = $pdo->prepare("
             SELECT r.*,
             c.username AS creator_username,
@@ -4647,11 +5133,11 @@ function getCreatorStudioData($pdo) {
             c.is_verified AS creator_is_verified,
             c.phone_number AS creator_phone_number
             FROM reels r
-            JOIN creators c ON r.creator_id = c.id
-            WHERE r.creator_id = ?
+            LEFT JOIN creators c ON r.creator_id = c.id
+            WHERE r.creator_id = ? OR (r.phone_number = ? AND r.phone_number != '')
             ORDER BY r.id DESC
         ");
-        $reelsStmt->execute([$creatorId]);
+        $reelsStmt->execute([$creatorId, $creatorPhone]);
         $rawReels = $reelsStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $reels = [];
@@ -4666,6 +5152,28 @@ function getCreatorStudioData($pdo) {
             $lCount = intval($r['likes_count']);
             $sCount = intval($r['saves_count']);
             $cCount = intval($r['comments_count']);
+
+            // Real-time live count sync directly from child tables
+            try {
+                $lkStmt = $pdo->prepare("SELECT COUNT(*) FROM reel_likes WHERE reel_id = ?");
+                $lkStmt->execute([$rId]);
+                $realLikes = intval($lkStmt->fetchColumn() ?: 0);
+                if ($realLikes > $lCount) $lCount = $realLikes;
+            } catch (Throwable $e) {}
+
+            try {
+                $cmStmt = $pdo->prepare("SELECT COUNT(*) FROM reel_comments WHERE reel_id = ?");
+                $cmStmt->execute([$rId]);
+                $realComments = intval($cmStmt->fetchColumn() ?: 0);
+                if ($realComments > $cCount) $cCount = $realComments;
+            } catch (Throwable $e) {}
+
+            try {
+                $svStmt = $pdo->prepare("SELECT COUNT(*) FROM reel_actions WHERE reel_id = ? AND action_type = 'save'");
+                $svStmt->execute([$rId]);
+                $realSaves = intval($svStmt->fetchColumn() ?: 0);
+                if ($realSaves > $sCount) $sCount = $realSaves;
+            } catch (Throwable $e) {}
 
             $totalReelViews += $vCount;
             $totalReelLikes += $lCount;
@@ -4693,11 +5201,11 @@ function getCreatorStudioData($pdo) {
                 'createdAt' => $r['created_at'],
                 'creator' => [
                     'id' => $creatorId,
-                    'username' => $r['creator_username'],
-                    'displayName' => $r['creator_display_name'],
-                    'profileImageUrl' => $r['creator_profile_image_url'] ?? '',
-                    'isVerified' => (bool)$r['creator_is_verified'],
-                    'phoneNumber' => $r['creator_phone_number'] ?? ''
+                    'username' => $r['creator_username'] ?? $creator['username'],
+                    'displayName' => $r['creator_display_name'] ?? $creator['display_name'],
+                    'profileImageUrl' => $r['creator_profile_image_url'] ?? ($creator['profile_image_url'] ?? ''),
+                    'isVerified' => (bool)($r['creator_is_verified'] ?? $creator['is_verified']),
+                    'phoneNumber' => $r['creator_phone_number'] ?? ($creator['phone_number'] ?? '')
                 ]
             ];
         }
@@ -4744,30 +5252,38 @@ function getCreatorStudioData($pdo) {
             ];
         }
 
-        // 3. Conversion Actions (Calls & Shares)
+        // 3. Conversion Actions (Calls, WhatsApp, Inquiries & Shares)
         $callCount = 0;
         $shareCount = 0;
-        if (!empty($reels)) {
+        if (!empty($rawReels)) {
             $reelIds = array_column($rawReels, 'id');
             if (!empty($reelIds)) {
                 $placeholders = implode(',', array_fill(0, count($reelIds), '?'));
-                $actStmt = $pdo->prepare("SELECT action_type, COUNT(*) as cnt FROM reel_actions WHERE reel_id IN ($placeholders) GROUP BY action_type");
-                $actStmt->execute($reelIds);
-                while ($row = $actStmt->fetch(PDO::FETCH_ASSOC)) {
-                    if ($row['action_type'] === 'call') $callCount = intval($row['cnt']);
-                    if ($row['action_type'] === 'share') $shareCount = intval($row['cnt']);
-                }
+                try {
+                    $actStmt = $pdo->prepare("SELECT action_type, COUNT(*) as cnt FROM reel_actions WHERE reel_id IN ($placeholders) GROUP BY action_type");
+                    $actStmt->execute($reelIds);
+                    while ($row = $actStmt->fetch(PDO::FETCH_ASSOC)) {
+                        $aType = strtolower($row['action_type']);
+                        if (in_array($aType, ['call', 'enquiry', 'inquiry', 'whatsapp', 'phone'])) {
+                            $callCount += intval($row['cnt']);
+                        } elseif ($aType === 'share') {
+                            $shareCount += intval($row['cnt']);
+                        }
+                    }
+                } catch (Throwable $e) {}
             }
         }
 
         // 4. Watch Time
-        $avgDuration = 18; // Default realistic duration in seconds
-        $watchStmt = $pdo->prepare("SELECT AVG(watch_duration_seconds) as avg_d FROM reel_watch_analytics WHERE reel_id IN (SELECT id FROM reels WHERE creator_id = ?)");
-        $watchStmt->execute([$creatorId]);
-        $avgRes = $watchStmt->fetchColumn();
-        if ($avgRes) {
-            $avgDuration = round(floatval($avgRes), 1);
-        }
+        $avgDuration = 18.0;
+        try {
+            $watchStmt = $pdo->prepare("SELECT AVG(watch_duration_seconds) as avg_d FROM reel_watch_analytics WHERE reel_id IN (SELECT id FROM reels WHERE creator_id = ?)");
+            $watchStmt->execute([$creatorId]);
+            $avgRes = $watchStmt->fetchColumn();
+            if ($avgRes) {
+                $avgDuration = round(floatval($avgRes), 1);
+            }
+        } catch (Throwable $e) {}
 
         $totalViews = $totalReelViews + $totalArtViews;
         $totalLikes = $totalReelLikes + $totalArtLikes;

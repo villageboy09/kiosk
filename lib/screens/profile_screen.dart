@@ -4,7 +4,7 @@
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/welcome_screen.dart';
-import 'package:cropsync/screens/creator/creator_studio_screen.dart';
+import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
@@ -603,38 +603,93 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   user.name,
                   style: const TextStyle(
-                    fontSize: 32,
+                    fontSize: 30,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
                     letterSpacing: -0.8,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(100),
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.phone_rounded,
-                          color: Colors.white, size: 16),
-                      const SizedBox(width: 10),
-                      Text(
-                        user.phoneNumber ?? '',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: user.isCreator
+                            ? const Color(0xFF10B981)
+                            : (user.isRetailer
+                                ? const Color(0xFFF59E0B)
+                                : (user.isOfficer
+                                    ? const Color(0xFF3B82F6)
+                                    : const Color(0xFF16A34A))),
+                        borderRadius: BorderRadius.circular(100),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            user.isCreator
+                                ? Icons.verified_rounded
+                                : (user.isRetailer
+                                    ? Icons.storefront_rounded
+                                    : (user.isOfficer
+                                        ? Icons.security_rounded
+                                        : Icons.eco_rounded)),
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            user.isCreator
+                                ? 'Verified Creator'
+                                : (user.isRetailer
+                                    ? 'Retailer Partner'
+                                    : (user.isOfficer
+                                        ? 'Extension Officer'
+                                        : 'Farmer')),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(100),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.phone_rounded, color: Colors.white, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            user.phoneNumber ?? '',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
               ],
@@ -839,11 +894,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               iconColor: AppTheme.accentGreen,
               bgColor: const Color(0xFFF0FDF4),
               title: 'creator_studio_title'.tr(),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CreatorStudioScreen()),
-                );
-              },
+              onTap: () => CreatorHomeScreen.navigateToStudio(context),
             ),
           ),
           const SizedBox(height: 12),

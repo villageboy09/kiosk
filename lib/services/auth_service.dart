@@ -65,14 +65,16 @@ class AuthService {
     if (currentUser != null) {
       try {
         String? role;
-        if (currentUser!.membershipType == 'Retailer') {
+        if (currentUser!.isRetailer) {
           role = 'retailer';
-        } else if (currentUser!.membershipType == 'Officer') {
+        } else if (currentUser!.isOfficer) {
           role = 'officer';
         } else if (currentUser!.isCreator) {
           role = 'content_creator';
+        } else if (currentUser!.isOperator) {
+          role = 'chc_operator';
         } else {
-          role = 'farmer';
+          role = currentUser!.role ?? 'farmer';
         }
         final user = await ApiService.getUserProfile(currentUser!.userId, role: role);
         await _saveUserSession(user);

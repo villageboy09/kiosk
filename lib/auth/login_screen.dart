@@ -9,6 +9,7 @@ import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
 import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
 import 'package:cropsync/screens/operator/operator_dashboard.dart';
+import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
@@ -396,15 +397,20 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
 
       final loggedInUser = AuthService.currentUser;
-      if (loggedInUser?.membershipType == 'Retailer') {
+      if (loggedInUser?.isRetailer == true || loggedInUser?.membershipType == 'Retailer' || _selectedRole == 'retailer') {
         Navigator.pushReplacement(
           context,
           AppRoutes.fade(const RetailerDashboard()),
         );
-      } else if (loggedInUser?.membershipType == 'Officer') {
+      } else if (loggedInUser?.isOfficer == true || loggedInUser?.membershipType == 'Officer' || _selectedRole == 'officer') {
         Navigator.pushReplacement(
           context,
           AppRoutes.fade(const ExtensionOfficerDashboard()),
+        );
+      } else if (loggedInUser?.isCreator == true || loggedInUser?.membershipType == 'Creator' || _selectedRole == 'content_creator') {
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const CreatorHomeScreen()),
         );
       } else {
         Navigator.pushReplacement(
@@ -680,9 +686,8 @@ class _LoginScreenState extends State<LoginScreen>
         children: [
           AuthLogoHeader(
             title: 'login_welcome_back'.tr(),
-            subtitle: 'Log in with your registered mobile number',
-            logoHeight: isShort ? 60 : 80,
-            textAlign: TextAlign.center,
+            subtitle: 'login_subtitle'.tr(),
+            logoHeight: isShort ? 46 : 54,
           ),
           SizedBox(height: isShort ? 18 : 24),
           _buildRoleSelectorPill(isCompact: isShort),
