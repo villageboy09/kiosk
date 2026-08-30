@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use, use_build_context_synchronously
+﻿// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -1370,7 +1370,7 @@ class _CHCCropSelector extends StatelessWidget {
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: const Color(0xFF111827).withOpacity(0.18),
+                              color: const Color(0xFF111827).withValues(alpha: 0.18),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             )
@@ -1386,12 +1386,12 @@ class _CHCCropSelector extends StatelessWidget {
                         height: 52,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? Colors.white.withOpacity(0.12)
+                              ? Colors.white.withValues(alpha: 0.12)
                               : Colors.white,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isSelected
-                                ? Colors.white.withOpacity(0.2)
+                                ? Colors.white.withValues(alpha: 0.2)
                                 : const Color(0xFFE5E7EB),
                           ),
                         ),
@@ -1997,7 +1997,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.1),
+                      color: AppTheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -2069,7 +2069,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
             decoration: BoxDecoration(
               color: AppTheme.surface,
               borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-              border: Border.all(color: AppTheme.border.withOpacity(0.3)),
+              border: Border.all(color: AppTheme.border.withValues(alpha: 0.3)),
             ),
             child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2160,10 +2160,10 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.5)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -2182,7 +2182,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
               padding: const EdgeInsets.symmetric(
                   horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingSm),
               decoration: BoxDecoration(
-                color: _statusColor(status).withOpacity(0.08),
+                color: _statusColor(status).withValues(alpha: 0.08),
               ),
               child: Row(
                 children: [
@@ -2459,14 +2459,14 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                     color: const Color(0xFFF0F7FF),
                     borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                     border: Border.all(
-                        color: const Color(0xFF2196F3).withOpacity(0.15)),
+                        color: const Color(0xFF2196F3).withValues(alpha: 0.15)),
                   ),
                   child: Row(
                     children: [
                       CircleAvatar(
                         radius: 20,
                         backgroundColor:
-                            const Color(0xFF2196F3).withOpacity(0.15),
+                            const Color(0xFF2196F3).withValues(alpha: 0.15),
                         backgroundImage: (_isValidStr(operatorImage))
                             ? NetworkImage(operatorImage!)
                             : null,
@@ -2569,7 +2569,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: _taskStatusColor(taskStatus).withOpacity(0.1),
+                        color: _taskStatusColor(taskStatus).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       ),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -2650,12 +2650,12 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
                         vertical: AppTheme.spacingSm),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(colors: [
-                        AppTheme.primary.withOpacity(0.08),
-                        AppTheme.primary.withOpacity(0.03),
+                        AppTheme.primary.withValues(alpha: 0.08),
+                        AppTheme.primary.withValues(alpha: 0.03),
                       ]),
                       borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       border:
-                          Border.all(color: AppTheme.primary.withOpacity(0.2)),
+                          Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       children: [
@@ -2717,7 +2717,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
             width: 24,
             height: 24,
             decoration: BoxDecoration(
-                color: color.withOpacity(0.1), shape: BoxShape.circle),
+                color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
             child: Icon(icon, size: 13, color: color),
           ),
           const SizedBox(width: 10),
@@ -2748,7 +2748,7 @@ class _CHCBookingsBottomSheetState extends State<_CHCBookingsBottomSheet> {
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-        border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.5)),
       ),
       child: Column(children: [
         Text(label,
@@ -2905,3 +2905,5 @@ class _ShimmerBox extends StatelessWidget {
     );
   }
 }
+
+

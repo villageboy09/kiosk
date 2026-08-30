@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 
@@ -267,3 +267,5 @@ class _InfoRow {
   const _InfoRow(
       {required this.icon, required this.label, required this.value});
 }
+
+

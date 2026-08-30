@@ -1,4 +1,4 @@
-// lib/screens/product_details_screen.dart
+﻿// lib/screens/product_details_screen.dart
 
 // ignore_for_file: use_build_context_synchronously
 
@@ -604,3 +604,5 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 }
+
+

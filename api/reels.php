@@ -42,9 +42,9 @@ try {
 } catch (Throwable $e) {}
 
 // CDN Configuration (Enable for faster asset delivery)
-define('CDN_ENABLED', true);
+define('CDN_ENABLED', false);
 define('CDN_BASE_URL', 'https://cdn.cropsync.in/'); // CDN endpoint
-define('ORIGINAL_BASE_URL', 'https://kiosk.cropsync.in/'); // Base domain of your main files
+define('ORIGINAL_BASE_URL', 'http://kiosk.cropsync.in/'); // Base domain of your main files
 
 // Helper to rewrite media urls using the CDN
 function rewriteToCDN($url) {
@@ -260,7 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             c.phone_number AS creator_phone_number,
             c.bio AS creator_bio
             FROM reels r
-            JOIN creators c ON r.creator_id = c.id
+            LEFT JOIN creators c ON r.creator_id = c.id
             WHERE r.is_active = 1
             ORDER BY r.id DESC
         ");
@@ -299,17 +299,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $hasSaved = $checkSaved->fetch() !== false;
             }
 
+            $creatorUsername = !empty($reel['creator_username']) ? $reel['creator_username'] : 'farmer_' . substr($reel['phone_number'] ?? '123456', -4);
+            $creatorDisplayName = !empty($reel['creator_display_name']) ? $reel['creator_display_name'] : (!empty($reel['phone_number']) ? 'Farmer (' . substr($reel['phone_number'], -4) . ')' : 'Agri Creator');
+            $creatorProfileImage = !empty($reel['creator_profile_image_url']) ? $reel['creator_profile_image_url'] : 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80';
+
             $response[] = [
                 "id" => $reelId,
                 "videoUrl" => rewriteToCDN($reel['video_url']),
                 "creator" => [
                     "id" => intval($reel['creator_id']),
-                    "username" => $reel['creator_username'],
-                    "displayName" => $reel['creator_display_name'],
-                    "profileImageUrl" => rewriteToCDN($reel['creator_profile_image_url']),
-                    "isVerified" => boolval($reel['creator_is_verified']),
+                    "username" => $creatorUsername,
+                    "displayName" => $creatorDisplayName,
+                    "profileImageUrl" => rewriteToCDN($creatorProfileImage),
+                    "isVerified" => boolval($reel['creator_is_verified'] ?? 0),
                     "phoneNumber" => $reel['creator_phone_number'] ?: $reel['phone_number'],
-                    "bio" => $reel['creator_bio']
+                    "bio" => $reel['creator_bio'] ?? 'Agri Creator'
                 ],
                 "caption" => $reel['caption'],
                 "musicTitle" => $reel['music_title'] ?? 'Original Audio',
@@ -553,13 +557,48 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // 6. Action: Upload Reel
     elseif ($action === 'upload' || $action === 'upload_reel') {
-        $videoUrl = trim($data['video_url'] ?? $data['videoUrl'] ?? '');
-        $caption = trim($data['caption'] ?? '');
-        $musicTitle = trim($data['music_title'] ?? $data['musicTitle'] ?? 'Original Audio');
-        $phoneNumber = trim($data['phone_number'] ?? $data['phoneNumber'] ?? '');
-        $creatorName = trim($data['creator_name'] ?? $data['displayName'] ?? '');
-        $creatorId = intval($data['creator_id'] ?? 0);
-        $tags = trim($data['tags'] ?? '');
+        $videoUrl = trim($data['video_url'] ?? $data['videoUrl'] ?? $_POST['video_url'] ?? $_POST['videoUrl'] ?? '');
+        $caption = trim($data['caption'] ?? $_POST['caption'] ?? '');
+        $musicTitle = trim($data['music_title'] ?? $data['musicTitle'] ?? $_POST['music_title'] ?? $_POST['musicTitle'] ?? 'Original Audio');
+        $phoneNumber = trim($data['phone_number'] ?? $data['phoneNumber'] ?? $_POST['phone_number'] ?? $_POST['phoneNumber'] ?? '');
+        $creatorName = trim($data['creator_name'] ?? $data['displayName'] ?? $_POST['creator_name'] ?? $_POST['displayName'] ?? '');
+        $creatorId = intval($data['creator_id'] ?? $_POST['creator_id'] ?? 0);
+        $tags = trim($data['tags'] ?? $_POST['tags'] ?? '');
+
+        // Handle direct multipart video file upload to /Reels/ folder
+        $uploadDir = dirname(__DIR__) . '/Reels/';
+        if (!is_dir($uploadDir)) {
+            @mkdir($uploadDir, 0777, true);
+        }
+
+        $fileUploaded = false;
+        if (isset($_FILES['video_file']) && $_FILES['video_file']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['video_file']['name'], PATHINFO_EXTENSION));
+            if (empty($ext)) $ext = 'mp4';
+            $safeName = 'reel_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            if (move_uploaded_file($_FILES['video_file']['tmp_name'], $uploadDir . $safeName)) {
+                $videoUrl = 'http://kiosk.cropsync.in/Reels/' . $safeName;
+                $fileUploaded = true;
+            }
+        } elseif (isset($_FILES['video']) && $_FILES['video']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['video']['name'], PATHINFO_EXTENSION));
+            if (empty($ext)) $ext = 'mp4';
+            $safeName = 'reel_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            if (move_uploaded_file($_FILES['video']['tmp_name'], $uploadDir . $safeName)) {
+                $videoUrl = 'http://kiosk.cropsync.in/Reels/' . $safeName;
+                $fileUploaded = true;
+            }
+        }
+
+        // Ensure video URL is strictly in http://kiosk.cropsync.in/Reels/ format
+        if (!empty($videoUrl) && !$fileUploaded) {
+            if (strpos($videoUrl, 'commondatastorage.googleapis.com') !== false) {
+                $bName = basename($videoUrl);
+                $videoUrl = 'http://kiosk.cropsync.in/Reels/' . $bName;
+            } elseif (strpos($videoUrl, 'http://') !== 0 && strpos($videoUrl, 'https://') !== 0) {
+                $videoUrl = 'http://kiosk.cropsync.in/Reels/' . ltrim($videoUrl, '/');
+            }
+        }
 
         if (empty($videoUrl) || empty($caption)) {
             http_response_code(400);

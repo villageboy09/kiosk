@@ -129,15 +129,20 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
       return;
     }
 
+    final safeBaseName = _pickedVideo!.name.isNotEmpty
+        ? _pickedVideo!.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')
+        : 'video.mp4';
+    final fileName = 'reel_${DateTime.now().millisecondsSinceEpoch}_$safeBaseName';
     final videoUrl = _pickedVideo!.path.startsWith('http')
         ? _pickedVideo!.path
-        : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+        : 'http://kiosk.cropsync.in/Reels/$fileName';
 
     setState(() => _isPublishing = true);
 
     final tags = _selectedTags.join(', ');
     final result = await CreatorService.uploadReelDetailed(
       videoUrl: videoUrl,
+      videoFile: File(_pickedVideo!.path),
       caption: _captionController.text.trim(),
       musicTitle: 'Original Audio',
       phoneNumber: _phoneController.text.trim(),
@@ -538,3 +543,5 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     );
   }
 }
+
+

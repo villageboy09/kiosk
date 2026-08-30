@@ -363,220 +363,7 @@ try {
                 INDEX `idx_watch_reel` (`reel_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
-            // Seed agricultural news articles if table is empty
-            $stmtCount = $pdo->query("SELECT COUNT(*) FROM `news_articles`");
-            if ($stmtCount && $stmtCount->fetchColumn() == 0) {
-                $seedNews = [
-                    [
-                        'title' => 'PM-Kisan 19th Installment: ₹2,000 Direct Financial Assistance Disbursed to Farmers',
-                        'summary' => 'The central government has released the 19th installment under PM-KISAN. Over 9.5 crore farmers across India will receive DBT financial assistance directly into Aadhaar-linked bank accounts.',
-                        'content' => "Under the Pradhan Mantri Kisan Samman Nidhi (PM-KISAN) scheme, the 19th installment of direct financial assistance has been officially disbursed.\n\nKey Highlights for Farmers:\n1. Eligible beneficiaries will receive ₹2,000 directly transferred into their DBT-enabled bank accounts.\n2. Farmers are advised to complete e-KYC via OTP on the official PM-KISAN portal or nearby Rythu Bharosa Kendras (RBKs) / CSC centres.\n3. Ensure your bank account is linked to your Aadhaar number to prevent payment rejections.\n4. Check your payment status using your registered mobile number or Aadhaar on the portal.\n\nFor grievances or assistance, farmers can contact the Kisan Call Centre at toll-free number 1800-180-1551.",
-                        'category' => 'Govt Schemes',
-                        'image_url' => 'https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=800&q=80',
-                        'author' => 'Agri News Desk',
-                        'source_name' => 'Ministry of Agriculture',
-                        'views_count' => 1420,
-                        'likes_count' => 96,
-                        'comments_count' => 14,
-                        'is_featured' => 1
-                    ],
-                    [
-                        'title' => 'Subsidies on Agricultural Drones Up to 50% Announced for Small & Marginal Farmers',
-                        'summary' => 'State Agriculture Departments announce high-tech drone subsidies for spraying nano-urea, micronutrients, and crop protection chemicals to reduce cultivation costs.',
-                        'content' => "Agricultural drones are transforming farming by enabling uniform chemical spraying, reducing water wastage by 90%, and preventing human exposure to hazardous pesticides.\n\nEligibility & Subsidy Structure:\n• Small, marginal, and women farmers: Up to 50% subsidy (maximum ₹5 Lakhs) for purchasing Kisan Drones.\n• Farmer Producer Organizations (FPOs) and CHCs: Up to 75% financial grant for community service centers.\n• Training: Certified pilot training is being provided at district Krishi Vigyan Kendras (KVKs).\n\nFarmers can apply through their state agri portal or through the CropSync CHC Drone Booking service tab directly.",
-                        'category' => 'Tech & Drones',
-                        'image_url' => 'https://images.unsplash.com/photo-1527061011665-3652c757a4d4?auto=format&fit=crop&w=800&q=80',
-                        'author' => 'Krishi Tech Wing',
-                        'source_name' => 'Department of Agri-Tech',
-                        'views_count' => 1050,
-                        'likes_count' => 84,
-                        'comments_count' => 9,
-                        'is_featured' => 1
-                    ],
-                    [
-                        'title' => 'Minimum Support Price (MSP) for Paddy and Cotton Revised Upwards for Kharif Season',
-                        'summary' => 'Government increases the Minimum Support Price for Grade A Paddy and Medium/Long Staple Cotton to ensure 50% profit margin over production cost.',
-                        'content' => "The Cabinet Committee on Economic Affairs has approved the revised Minimum Support Prices (MSP) for all mandated Kharif crops for the upcoming procurement cycle.\n\nRevised MSP Rates:\n• Common Paddy: ₹2,300 per quintal (Increase of ₹117)\n• Grade A Paddy: ₹2,320 per quintal\n• Medium Staple Cotton: ₹7,121 per quintal\n• Long Staple Cotton: ₹7,521 per quintal\n• Red Gram (Tur/Arhar): ₹7,550 per quintal\n• Chilli / Maize: Revised procurement guidelines issued.\n\nProcurement will be conducted through PACS, RBKs, and Agricultural Market Committees (AMCs) starting from October.",
-                        'category' => 'Market & MSP',
-                        'image_url' => 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=800&q=80',
-                        'author' => 'Market Intelligence Unit',
-                        'source_name' => 'Agri Market Watch',
-                        'views_count' => 1680,
-                        'likes_count' => 132,
-                        'comments_count' => 24,
-                        'is_featured' => 0
-                    ],
-                    [
-                        'title' => 'Weather Advisory: Moderate to Heavy Rainfall Expected Across Southern & Central Districts',
-                        'summary' => 'IMD forecasts active monsoon conditions. Farmers advised to ensure proper drainage in low-lying cotton and chilli fields to prevent root rot and nutrient leaching.',
-                        'content' => "The India Meteorological Department (IMD) has issued a weather bulletin predicting widespread moderate to heavy rainfall over the next 4 to 5 days.\n\nKey Agricultural Precautions:\n1. Clear farm drainage channels to prevent water stagnation around root zones of Chilli, Cotton, and Maize.\n2. Postpone foliar spraying of insecticides and urea until clear weather prevails.\n3. In Paddy nurseries and transplanted fields, maintain optimum standing water level (2-3 cm) and drain excess floodwater.\n4. Protect harvested grains and seed storage rooms from dampness.\n\nStay tuned to CropSync Live Weather Radar for hourly forecasts.",
-                        'category' => 'Weather & Climate',
-                        'image_url' => 'https://images.unsplash.com/photo-1534088568595-a066f410bcda?auto=format&fit=crop&w=800&q=80',
-                        'author' => 'IMD Agromet Advisory',
-                        'source_name' => 'IMD Weather Desk',
-                        'views_count' => 910,
-                        'likes_count' => 52,
-                        'comments_count' => 6,
-                        'is_featured' => 0
-                    ],
-                    [
-                        'title' => 'Integrated Pest Management: Controlling Fall Armyworm in Maize and Borer in Paddy',
-                        'summary' => 'Agricultural scientists recommend biological controls, pheromone traps, and eco-friendly bio-pesticides before applying chemical measures.',
-                        'content' => "Early detection is key to managing devastating crop pests like the Fall Armyworm in Maize and Yellow Stem Borer in Rice.\n\nRecommended Control Protocol:\n• Install Pheromone Traps @ 4–5 traps per acre for early monitoring.\n• Release Trichogramma egg parasitoids @ 20,000 per acre at 10-day intervals.\n• For chemical intervention: Spray Emamectin Benzoate 5% SG @ 80g/acre or Chlorantraniliprole 18.5% SC @ 60ml/acre with 200 liters of water during evening hours.\n\nCheck the CropSync Advisory tab for step-by-step diagnostic photo cards and localized remedies.",
-                        'category' => 'Farming Tips',
-                        'image_url' => 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=800&q=80',
-                        'author' => 'Dr. R. K. Sharma (Entomologist)',
-                        'source_name' => 'Central Crop Research Institute',
-                        'views_count' => 1230,
-                        'likes_count' => 108,
-                        'comments_count' => 12,
-                        'is_featured' => 0
-                    ]
-                ];
-
-                $insertStmt = $pdo->prepare("INSERT INTO `news_articles` (`title`, `summary`, `content`, `category`, `image_url`, `author`, `source_name`, `views_count`, `likes_count`, `comments_count`, `is_featured`, `status`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published')");
-                foreach ($seedNews as $n) {
-                    $insertStmt->execute([
-                        $n['title'], $n['summary'], $n['content'], $n['category'], $n['image_url'], $n['author'], $n['source_name'], $n['views_count'], $n['likes_count'], $n['comments_count'], $n['is_featured']
-                    ]);
-                }
-            }
-
-            // Seed Creators and Reels if empty
-            $stmtCreatorsCount = $pdo->query("SELECT COUNT(*) FROM `creators`");
-            if ($stmtCreatorsCount && $stmtCreatorsCount->fetchColumn() == 0) {
-                $creators = [
-                    [
-                        'id' => 1,
-                        'username' => 'ramesh_kalyan',
-                        'display_name' => 'Dr. Ramesh Kalyan',
-                        'profile_image_url' => 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80',
-                        'is_verified' => 1,
-                        'phone_number' => '+919876543210',
-                        'bio' => 'Senior Agronomist & Organic Paddy Cultivation Specialist'
-                    ],
-                    [
-                        'id' => 2,
-                        'username' => 'agri_tech_india',
-                        'display_name' => 'AgriTech India',
-                        'profile_image_url' => 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-                        'is_verified' => 1,
-                        'phone_number' => '+919876543211',
-                        'bio' => 'Precision Agriculture, Smart Drip Irrigation & IoT Sensors'
-                    ],
-                    [
-                        'id' => 3,
-                        'username' => 'suresh_village_boy',
-                        'display_name' => 'Suresh Kumar',
-                        'profile_image_url' => 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=200&q=80',
-                        'is_verified' => 1,
-                        'phone_number' => '+919876543212',
-                        'bio' => 'Natural Farming Practitioner & Bio-Pesticide Educator'
-                    ],
-                    [
-                        'id' => 4,
-                        'username' => 'organic_ananya',
-                        'display_name' => 'Ananya Rao',
-                        'profile_image_url' => 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-                        'is_verified' => 1,
-                        'phone_number' => '+919876543213',
-                        'bio' => 'Vermicompost, Jeevamrutham & Soil Microbe Regeneration'
-                    ]
-                ];
-
-                $insCreator = $pdo->prepare("INSERT INTO `creators` (`id`, `username`, `display_name`, `profile_image_url`, `is_verified`, `phone_number`, `bio`) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                foreach ($creators as $c) {
-                    $insCreator->execute([
-                        $c['id'], $c['username'], $c['display_name'], $c['profile_image_url'], $c['is_verified'], $c['phone_number'], $c['bio']
-                    ]);
-                }
-            }
-
-            $stmtReelsCount = $pdo->query("SELECT COUNT(*) FROM `reels`");
-            if ($stmtReelsCount && $stmtReelsCount->fetchColumn() == 0) {
-                $seedReels = [
-                    [
-                        'id' => 1,
-                        'creator_id' => 1,
-                        'video_url' => 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-                        'caption' => 'Harvesting organic rice using modern combined harvester machinery. Crop yield is exceptional this season! 🌾 #organicfarming #riceharvest #agritech',
-                        'music_title' => 'Original Audio - Dr. Ramesh Kalyan',
-                        'phone_number' => '+919876543210',
-                        'tags' => 'organic,rice,harvest,machinery',
-                        'views_count' => 12400,
-                        'likes_count' => 1250,
-                        'saves_count' => 320,
-                        'comments_count' => 4
-                    ],
-                    [
-                        'id' => 2,
-                        'creator_id' => 2,
-                        'video_url' => 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-                        'caption' => 'Drip irrigation system setup in my tomato field. Highly water-efficient and boosts flowering! 🍅💧 #savewater #irrigation #tomatofarming',
-                        'music_title' => 'Nature Sounds - Water Flow',
-                        'phone_number' => '+919876543211',
-                        'tags' => 'drip,irrigation,tomato,water',
-                        'views_count' => 8900,
-                        'likes_count' => 890,
-                        'saves_count' => 210,
-                        'comments_count' => 3
-                    ],
-                    [
-                        'id' => 3,
-                        'creator_id' => 3,
-                        'video_url' => 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-                        'caption' => 'Best organic pest control spray demo using neem oil & soap solution. Safe and chemical-free! 🌱🐛 #organicpestcontrol #sustainableagri',
-                        'music_title' => 'Original Audio - Suresh Kumar',
-                        'phone_number' => '+919876543212',
-                        'tags' => 'neem,pestcontrol,organic,safe',
-                        'views_count' => 21500,
-                        'likes_count' => 2100,
-                        'saves_count' => 580,
-                        'comments_count' => 4
-                    ],
-                    [
-                        'id' => 4,
-                        'creator_id' => 4,
-                        'video_url' => 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-                        'caption' => 'Preparing natural compost manure using cow dung, dry leaves, and jaggery solution. Farm prep in full swing! 🚜🍂 #composting #organicfertilizer',
-                        'music_title' => 'Morning Flute Melody',
-                        'phone_number' => '+919876543213',
-                        'tags' => 'compost,organic,manure,farming',
-                        'views_count' => 15300,
-                        'likes_count' => 1540,
-                        'saves_count' => 410,
-                        'comments_count' => 3
-                    ]
-                ];
-
-                $insReel = $pdo->prepare("INSERT INTO `reels` (`id`, `creator_id`, `video_url`, `caption`, `music_title`, `phone_number`, `tags`, `views_count`, `likes_count`, `saves_count`, `comments_count`, `is_active`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
-                foreach ($seedReels as $r) {
-                    $insReel->execute([
-                        $r['id'], $r['creator_id'], $r['video_url'], $r['caption'], $r['music_title'], $r['phone_number'], $r['tags'], $r['views_count'], $r['likes_count'], $r['saves_count'], $r['comments_count']
-                    ]);
-                }
-
-                // Seed sample comments
-                $insComment = $pdo->prepare("INSERT INTO `reel_comments` (`reel_id`, `farmer_username`, `comment_text`, `phone_number`) VALUES (?, ?, ?, ?)");
-                $sampleComments = [
-                    [1, 'kalyan_farmer', 'Super helpful video! Where did you purchase this harvester?', '9876543210'],
-                    [1, 'venkat_reddy', 'Yield looks amazing sir. What was the fertilizer schedule?', '9876543211'],
-                    [1, 'nagaraju_agri', 'Very clean harvest, zero grain damage 👍', '9876543212'],
-                    [1, 'sita_ram', 'Great work brother 🌾', '9876543213'],
-                    [2, 'anand_kumar', 'What is the cost per acre for this drip setup?', '9876543214'],
-                    [2, 'balaji_raju', 'Does govt subsidy cover this model?', '9876543215'],
-                    [2, 'mahesh_k', 'Works great in summer especially 🍅', '9876543216'],
-                    [3, 'prasad_rao', 'What is the exact ratio of neem oil to water?', '9876543217'],
-                    [3, 'chandra_sekhar', 'Effective against whiteflies too?', '9876543218'],
-                    [3, 'ramu_farmer', 'Used this last week, results are great 🌱', '9876543219'],
-                    [4, 'govind_reddy', 'How many days does it take to fully decompose?', '9876543220'],
-                    [4, 'krishna_murthy', 'Jeevamrutham along with this works wonders.', '9876543221']
-                ];
-
-                foreach ($sampleComments as $sc) {
-                    $insComment->execute([$sc[0], $sc[1], $sc[2], $sc[3]]);
-                }
-            }
+            // Schema tables ensured without dummy seed data
         } catch (Throwable $e) {}
     }
 } catch (Throwable $e) {
@@ -4423,7 +4210,7 @@ function getReels($pdo) {
                 c.phone_number AS creator_phone_number,
                 c.bio AS creator_bio
                 FROM reels r
-                JOIN creators c ON r.creator_id = c.id
+                LEFT JOIN creators c ON r.creator_id = c.id
                 WHERE r.is_active = 1
                 ORDER BY r.id DESC
                 LIMIT :limit OFFSET :offset";
@@ -4465,17 +4252,21 @@ function getReels($pdo) {
                 $hasSaved = $checkSaved->fetch() !== false;
             }
 
+            $creatorUsername = !empty($reel['creator_username']) ? $reel['creator_username'] : 'farmer_' . substr($reel['phone_number'] ?? '123456', -4);
+            $creatorDisplayName = !empty($reel['creator_display_name']) ? $reel['creator_display_name'] : (!empty($reel['phone_number']) ? 'Farmer (' . substr($reel['phone_number'], -4) . ')' : 'Agri Creator');
+            $creatorProfileImage = !empty($reel['creator_profile_image_url']) ? $reel['creator_profile_image_url'] : 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80';
+
             $response[] = [
                 'id' => $reelId,
                 'videoUrl' => $reel['video_url'],
                 'creator' => [
                     'id' => intval($reel['creator_id']),
-                    'username' => $reel['creator_username'],
-                    'displayName' => $reel['creator_display_name'],
-                    'profileImageUrl' => $reel['creator_profile_image_url'],
-                    'isVerified' => boolval($reel['creator_is_verified']),
+                    'username' => $creatorUsername,
+                    'displayName' => $creatorDisplayName,
+                    'profileImageUrl' => $creatorProfileImage,
+                    'isVerified' => boolval($reel['creator_is_verified'] ?? 0),
                     'phoneNumber' => $reel['creator_phone_number'] ?: $reel['phone_number'],
-                    'bio' => $reel['creator_bio']
+                    'bio' => $reel['creator_bio'] ?? 'Agri Creator'
                 ],
                 'caption' => $reel['caption'],
                 'musicTitle' => $reel['music_title'] ?? 'Original Audio',
@@ -4808,13 +4599,48 @@ function resolveOrCreateCreator($pdo, $phoneNumber = '', $name = '') {
 function uploadReel($pdo) {
     try {
         $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
-        $videoUrl = trim($input['video_url'] ?? $input['videoUrl'] ?? '');
-        $caption = trim($input['caption'] ?? '');
-        $musicTitle = trim($input['music_title'] ?? $input['musicTitle'] ?? 'Original Audio');
-        $phoneNumber = trim($input['phone_number'] ?? $input['phoneNumber'] ?? '');
-        $creatorName = trim($input['creator_name'] ?? $input['displayName'] ?? '');
-        $creatorId = intval($input['creator_id'] ?? 0);
-        $tags = trim($input['tags'] ?? '');
+        $videoUrl = trim($input['video_url'] ?? $input['videoUrl'] ?? $_POST['video_url'] ?? $_POST['videoUrl'] ?? '');
+        $caption = trim($input['caption'] ?? $_POST['caption'] ?? '');
+        $musicTitle = trim($input['music_title'] ?? $input['musicTitle'] ?? $_POST['music_title'] ?? $_POST['musicTitle'] ?? 'Original Audio');
+        $phoneNumber = trim($input['phone_number'] ?? $input['phoneNumber'] ?? $_POST['phone_number'] ?? $_POST['phoneNumber'] ?? '');
+        $creatorName = trim($input['creator_name'] ?? $input['displayName'] ?? $_POST['creator_name'] ?? $_POST['displayName'] ?? '');
+        $creatorId = intval($input['creator_id'] ?? $_POST['creator_id'] ?? 0);
+        $tags = trim($input['tags'] ?? $_POST['tags'] ?? '');
+
+        // Handle direct multipart video file upload to /Reels/ folder
+        $uploadDir = dirname(__DIR__) . '/Reels/';
+        if (!is_dir($uploadDir)) {
+            @mkdir($uploadDir, 0777, true);
+        }
+
+        $fileUploaded = false;
+        if (isset($_FILES['video_file']) && $_FILES['video_file']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['video_file']['name'], PATHINFO_EXTENSION));
+            if (empty($ext)) $ext = 'mp4';
+            $safeName = 'reel_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            if (move_uploaded_file($_FILES['video_file']['tmp_name'], $uploadDir . $safeName)) {
+                $videoUrl = 'http://kiosk.cropsync.in/Reels/' . $safeName;
+                $fileUploaded = true;
+            }
+        } elseif (isset($_FILES['video']) && $_FILES['video']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['video']['name'], PATHINFO_EXTENSION));
+            if (empty($ext)) $ext = 'mp4';
+            $safeName = 'reel_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            if (move_uploaded_file($_FILES['video']['tmp_name'], $uploadDir . $safeName)) {
+                $videoUrl = 'http://kiosk.cropsync.in/Reels/' . $safeName;
+                $fileUploaded = true;
+            }
+        }
+
+        // Ensure video URL is strictly in http://kiosk.cropsync.in/Reels/ format
+        if (!empty($videoUrl) && !$fileUploaded) {
+            if (strpos($videoUrl, 'commondatastorage.googleapis.com') !== false) {
+                $bName = basename($videoUrl);
+                $videoUrl = 'http://kiosk.cropsync.in/Reels/' . $bName;
+            } elseif (strpos($videoUrl, 'http://') !== 0 && strpos($videoUrl, 'https://') !== 0) {
+                $videoUrl = 'http://kiosk.cropsync.in/Reels/' . ltrim($videoUrl, '/');
+            }
+        }
 
         if (empty($videoUrl) || empty($caption)) {
             echo json_encode(['success' => false, 'error' => 'Video URL and caption are required']);
@@ -4979,16 +4805,47 @@ function toggleReelStatus($pdo) {
 function createNewsArticle($pdo) {
     try {
         $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
-        $title = trim($input['title'] ?? '');
-        $summary = trim($input['summary'] ?? '');
-        $content = trim($input['content'] ?? '');
-        $category = trim($input['category'] ?? 'Farming Tips');
-        $imageUrl = trim($input['image_url'] ?? $input['imageUrl'] ?? '');
-        $author = trim($input['author'] ?? 'CropSync Agri Desk');
-        $sourceName = trim($input['source_name'] ?? $input['sourceName'] ?? 'CropSync');
-        $isFeatured = !empty($input['is_featured']) ? 1 : 0;
-        $status = trim($input['status'] ?? 'published');
-        $phoneNumber = trim($input['phone_number'] ?? '');
+        $title = trim($input['title'] ?? $_POST['title'] ?? '');
+        $summary = trim($input['summary'] ?? $_POST['summary'] ?? '');
+        $content = trim($input['content'] ?? $_POST['content'] ?? '');
+        $category = trim($input['category'] ?? $_POST['category'] ?? 'Farming Tips');
+        $imageUrl = trim($input['image_url'] ?? $input['imageUrl'] ?? $_POST['image_url'] ?? $_POST['imageUrl'] ?? '');
+        $author = trim($input['author'] ?? $_POST['author'] ?? 'CropSync Agri Desk');
+        $sourceName = trim($input['source_name'] ?? $input['sourceName'] ?? $_POST['source_name'] ?? $_POST['sourceName'] ?? 'CropSync');
+        $isFeatured = !empty($input['is_featured']) || !empty($_POST['is_featured']) ? 1 : 0;
+        $status = trim($input['status'] ?? $_POST['status'] ?? 'published');
+        $phoneNumber = trim($input['phone_number'] ?? $_POST['phone_number'] ?? '');
+
+        // Handle multipart image upload to /News_articles/ directory
+        $uploadDir = dirname(__DIR__) . '/News_articles/';
+        if (!is_dir($uploadDir)) {
+            @mkdir($uploadDir, 0777, true);
+        }
+
+        $imageUploaded = false;
+        if (isset($_FILES['image_file']) && $_FILES['image_file']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['image_file']['name'], PATHINFO_EXTENSION));
+            if (empty($ext)) $ext = 'jpg';
+            $safeName = 'news_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            if (move_uploaded_file($_FILES['image_file']['tmp_name'], $uploadDir . $safeName)) {
+                $imageUrl = 'http://kiosk.cropsync.in/News_articles/' . $safeName;
+                $imageUploaded = true;
+            }
+        } elseif (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+            if (empty($ext)) $ext = 'jpg';
+            $safeName = 'news_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadDir . $safeName)) {
+                $imageUrl = 'http://kiosk.cropsync.in/News_articles/' . $safeName;
+                $imageUploaded = true;
+            }
+        }
+
+        if (!empty($imageUrl) && !$imageUploaded) {
+            if (strpos($imageUrl, 'http://') !== 0 && strpos($imageUrl, 'https://') !== 0) {
+                $imageUrl = 'http://kiosk.cropsync.in/News_articles/' . ltrim($imageUrl, '/');
+            }
+        }
 
         if (empty($title) || empty($content)) {
             echo json_encode(['success' => false, 'error' => 'Title and content are required']);
@@ -4996,7 +4853,7 @@ function createNewsArticle($pdo) {
         }
 
         if (empty($imageUrl)) {
-            $imageUrl = 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=800&q=80';
+            $imageUrl = 'http://kiosk.cropsync.in/News_articles/default_news.jpg';
         }
 
         try {

@@ -1,10 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cropsync/models/creator_studio_model.dart';
 import 'package:cropsync/models/reel_model.dart';
-import 'package:cropsync/models/news_article.dart';
+
 import 'package:cropsync/services/api_service.dart';
 
 class CreatorActionResult {
@@ -103,6 +104,7 @@ class CreatorService {
   static Future<CreatorActionResult> uploadReelDetailed({
     required String videoUrl,
     required String caption,
+    File? videoFile,
     String musicTitle = 'Original Audio',
     String? phoneNumber,
     String? tags,
@@ -123,6 +125,48 @@ class CreatorService {
       if (creatorId != null && creatorId > 0) 'creator_id': creatorId,
     };
 
+    // If local videoFile is provided and exists, perform multipart upload
+    if (videoFile != null && videoFile.existsSync()) {
+      try {
+        final uri = Uri.parse('$_apiEndpoint?action=upload_reel');
+        final request = http.MultipartRequest('POST', uri);
+        request.fields['action'] = 'upload_reel';
+        request.fields['video_url'] = videoUrl;
+        request.fields['caption'] = caption;
+        request.fields['music_title'] = musicTitle;
+        request.fields['phone_number'] = phone;
+        request.fields['creator_name'] = creatorName;
+        request.fields['tags'] = tags ?? '';
+        if (creatorId != null && creatorId > 0) {
+          request.fields['creator_id'] = creatorId.toString();
+        }
+
+        final fileName = videoFile.path.split(Platform.pathSeparator).last;
+        request.files.add(await http.MultipartFile.fromPath(
+          'video_file',
+          videoFile.path,
+          filename: fileName,
+        ));
+
+        final streamedResponse = await request.send().timeout(const Duration(seconds: 40));
+        final response = await http.Response.fromStream(streamedResponse);
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+          if (decoded is Map<String, dynamic> && decoded['success'] == true) {
+            await _clearReelsCache();
+            return CreatorActionResult(
+              success: true,
+              message: decoded['message']?.toString() ?? 'Reel published successfully',
+              data: decoded,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('CreatorService: multipart upload failed ($e), attempting JSON fallback');
+      }
+    }
+
     // 1. Primary endpoint: api.php?action=upload_reel
     try {
       final primaryUrl = Uri.parse('$_apiEndpoint?action=upload_reel');
@@ -138,6 +182,7 @@ class CreatorService {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         if (decoded is Map<String, dynamic>) {
           if (decoded['success'] == true) {
+            await _clearReelsCache();
             return CreatorActionResult(
               success: true,
               message: decoded['message']?.toString() ?? 'Reel published successfully',
@@ -173,6 +218,7 @@ class CreatorService {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         if (decoded is Map<String, dynamic>) {
           if (decoded['success'] == true) {
+            await _clearReelsCache();
             return CreatorActionResult(
               success: true,
               message: decoded['message']?.toString() ?? 'Reel published successfully',
@@ -196,10 +242,19 @@ class CreatorService {
     );
   }
 
+  static Future<void> _clearReelsCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_studioCacheKey);
+      await prefs.remove('cropsync_cached_reels_v1');
+    } catch (_) {}
+  }
+
   /// Upload and publish a new Reel (backward-compatible bool signature)
   static Future<bool> uploadReel({
     required String videoUrl,
     required String caption,
+    File? videoFile,
     String musicTitle = 'Original Audio',
     String? phoneNumber,
     String? tags,
@@ -207,6 +262,7 @@ class CreatorService {
   }) async {
     final result = await uploadReelDetailed(
       videoUrl: videoUrl,
+      videoFile: videoFile,
       caption: caption,
       musicTitle: musicTitle,
       phoneNumber: phoneNumber,
@@ -269,6 +325,7 @@ class CreatorService {
     required String content,
     required String category,
     String? imageUrl,
+    File? imageFile,
     String? author,
     String? sourceName,
     bool isFeatured = false,
@@ -276,6 +333,58 @@ class CreatorService {
   }) async {
     final user = await _getUserDetails();
     final authorName = (author != null && author.isNotEmpty) ? author : (user['name'] ?? 'CropSync Agri Desk');
+    final sName = (sourceName != null && sourceName.isNotEmpty) ? sourceName : 'CropSync Desk';
+    final phone = user['phone'] ?? '';
+
+    // If local image file provided, upload via MultipartRequest
+    if (imageFile != null && await imageFile.exists()) {
+      try {
+        final uri = Uri.parse('$_apiEndpoint?action=create_news_article');
+        final request = http.MultipartRequest('POST', uri);
+
+        request.fields['action'] = 'create_news_article';
+        request.fields['title'] = title;
+        request.fields['summary'] = summary;
+        request.fields['content'] = content;
+        request.fields['category'] = category;
+        request.fields['author'] = authorName;
+        request.fields['source_name'] = sName;
+        request.fields['is_featured'] = isFeatured ? '1' : '0';
+        request.fields['status'] = status;
+        request.fields['phone_number'] = phone;
+        if (imageUrl != null && imageUrl.isNotEmpty) {
+          request.fields['image_url'] = imageUrl;
+        }
+
+        final fileName = 'news_${DateTime.now().millisecondsSinceEpoch}_${imageFile.path.split(Platform.pathSeparator).last}';
+        request.files.add(await http.MultipartFile.fromPath(
+          'image_file',
+          imageFile.path,
+          filename: fileName,
+        ));
+
+        final streamedResponse = await request.send().timeout(const Duration(seconds: 45));
+        final response = await http.Response.fromStream(streamedResponse);
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+          if (decoded is Map<String, dynamic> && decoded['success'] == true) {
+            return CreatorActionResult(
+              success: true,
+              message: decoded['message']?.toString() ?? 'Article published successfully',
+              data: decoded,
+            );
+          } else if (decoded is Map && decoded['error'] != null) {
+            return CreatorActionResult(
+              success: false,
+              error: decoded['error'].toString(),
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('CreatorService: multipart createNewsArticle failed: $e');
+      }
+    }
 
     final payload = {
       'action': 'create_news_article',
@@ -285,10 +394,10 @@ class CreatorService {
       'category': category,
       'image_url': imageUrl ?? '',
       'author': authorName,
-      'source_name': (sourceName != null && sourceName.isNotEmpty) ? sourceName : 'CropSync Desk',
+      'source_name': sName,
       'is_featured': isFeatured ? 1 : 0,
       'status': status,
-      'phone_number': user['phone'] ?? '',
+      'phone_number': phone,
     };
 
     try {
@@ -335,6 +444,7 @@ class CreatorService {
     required String content,
     required String category,
     String? imageUrl,
+    File? imageFile,
     String? author,
     String? sourceName,
     bool isFeatured = false,
@@ -346,6 +456,7 @@ class CreatorService {
       content: content,
       category: category,
       imageUrl: imageUrl,
+      imageFile: imageFile,
       author: author,
       sourceName: sourceName,
       isFeatured: isFeatured,
@@ -427,76 +538,26 @@ class CreatorService {
         id: 1,
         username: name.toLowerCase().replaceAll(' ', '_'),
         displayName: name,
-        profileImageUrl:
-            'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80',
-        isVerified: true,
+        profileImageUrl: '',
+        isVerified: false,
         phoneNumber: phone,
-        bio: 'Progressive Farmer & Agri Creator on CropSync',
+        bio: 'Agri Creator on CropSync',
       ),
       stats: const CreatorStats(
-        totalViews: 12500,
-        totalLikes: 840,
-        totalComments: 126,
-        totalSaves: 310,
-        totalCalls: 45,
-        totalShares: 92,
-        engagementRate: 11.2,
-        avgWatchDurationSeconds: 19.4,
-        totalReels: 3,
-        totalArticles: 2,
+        totalViews: 0,
+        totalLikes: 0,
+        totalComments: 0,
+        totalSaves: 0,
+        totalCalls: 0,
+        totalShares: 0,
+        engagementRate: 0.0,
+        avgWatchDurationSeconds: 0.0,
+        totalReels: 0,
+        totalArticles: 0,
       ),
-      reels: [
-        ReelModel(
-          id: 101,
-          videoUrl:
-              'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-          caption: 'Drone Spraying technique for Paddy blast prevention #DroneAgri #CropCare',
-          musicTitle: 'Original Sound - CropSync Agri',
-          phoneNumber: phone.isNotEmpty ? phone : '9876543210',
-          tags: '#DroneAgri, #PaddyBlast',
-          likes: '540',
-          likesRaw: 540,
-          saves: '180',
-          savesRaw: 180,
-          commentsCount: 88,
-          viewsCount: 7800,
-          isActive: true,
-          createdAt: DateTime.now(),
-          creator: ReelCreator(
-            id: 1,
-            username: name.toLowerCase().replaceAll(' ', '_'),
-            displayName: name,
-            profileImageUrl:
-                'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80',
-          ),
-        ),
-      ],
-      articles: [
-        NewsArticle(
-          id: 201,
-          title: 'Direct Seeded Rice (DSR) Guide: Save 35% Water and Reduce Labor Cost',
-          summary: 'A step-by-step practical guide on adopting DSR technology in Telangana & AP.',
-          content: 'Direct Seeded Rice (DSR) is revolutionizing rice cultivation by eliminating nursery preparation...',
-          category: 'Farming Tips',
-          imageUrl:
-              'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=800&q=80',
-          author: name,
-          sourceName: 'CropSync Insights',
-          viewsCount: 4700,
-          likesCount: 300,
-          commentsCount: 38,
-          isFeatured: true,
-        ),
-      ],
-      dailyTrends: const [
-        DailyTrendItem(day: 'Mon', views: 1200, likes: 80),
-        DailyTrendItem(day: 'Tue', views: 1800, likes: 120),
-        DailyTrendItem(day: 'Wed', views: 1500, likes: 95),
-        DailyTrendItem(day: 'Thu', views: 2400, likes: 160),
-        DailyTrendItem(day: 'Fri', views: 2100, likes: 140),
-        DailyTrendItem(day: 'Sat', views: 2800, likes: 190),
-        DailyTrendItem(day: 'Sun', views: 1700, likes: 105),
-      ],
+      reels: [],
+      articles: [],
+      dailyTrends: [],
     );
   }
 }

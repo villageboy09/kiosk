@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/news_article.dart';
 import 'package:cropsync/screens/news/news_detail_screen.dart';
 import 'package:cropsync/screens/creator/creator_home_screen.dart';
@@ -1042,3 +1042,5 @@ class _TabletNewsCard extends StatelessWidget {
     );
   }
 }
+
+

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:cropsync/theme/app_theme.dart';
 
 class AuthAlertBanner extends StatelessWidget {
@@ -67,4 +67,6 @@ class AuthAlertBanner extends StatelessWidget {
     );
   }
 }
+
+
 

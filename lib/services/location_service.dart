@@ -144,6 +144,30 @@ class LocationService {
     }
   }
 
+  /// Get both district and state to avoid double reverse geocoding
+  static Future<Map<String, String>> getDistrictAndState() async {
+    try {
+      final position = await getCurrentPosition();
+      if (position == null) return {'district': 'Hyderabad', 'state': 'Telangana'};
+
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        final place = placemarks.first;
+        return {
+          'district': place.subAdministrativeArea ?? place.locality ?? 'Hyderabad',
+          'state': place.administrativeArea ?? 'Telangana',
+        };
+      }
+      return {'district': 'Hyderabad', 'state': 'Telangana'};
+    } catch (e) {
+      return {'district': 'Hyderabad', 'state': 'Telangana'};
+    }
+  }
+
   /// Get just the state name
   static Future<String> getState() async {
     try {

@@ -98,9 +98,15 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
       return;
     }
 
-    final imageUrl = _pickedImage!.path.startsWith('http')
+    final isHttp = _pickedImage!.path.startsWith('http');
+    final rawFileName = _pickedImage!.name.isNotEmpty
+        ? _pickedImage!.name
+        : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final sanitizedFileName = rawFileName.replaceAll(RegExp(r'[^a-zA-Z0-9_.]'), '_');
+    final imageUrl = isHttp
         ? _pickedImage!.path
-        : 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=800&q=80';
+        : 'http://kiosk.cropsync.in/News_articles/news_${DateTime.now().millisecondsSinceEpoch}_$sanitizedFileName';
+    final localFile = isHttp ? null : File(_pickedImage!.path);
 
     setState(() => _isPublishing = true);
 
@@ -110,6 +116,7 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
       content: _contentController.text.trim(),
       category: _selectedCategory,
       imageUrl: imageUrl,
+      imageFile: localFile,
       author: _authorController.text.trim(),
       sourceName: _sourceController.text.trim(),
       isFeatured: _isFeatured,
@@ -597,3 +604,5 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
     );
   }
 }
+
+

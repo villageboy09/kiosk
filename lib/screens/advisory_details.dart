@@ -514,14 +514,18 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                         ),
                       );
                     },
-                    child: CachedNetworkImage(
-                      imageUrl: images[index]!,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) =>
-                          Container(color: const Color(0xFFF3F4F6)),
-                      errorWidget: (context, url, error) => const Icon(
-                          Icons.broken_image_rounded,
-                          color: AppTheme.textHint),
+                    child: InteractiveViewer(
+                      minScale: 1.0,
+                      maxScale: 4.0,
+                      child: CachedNetworkImage(
+                        imageUrl: images[index]!,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) =>
+                            Container(color: const Color(0xFFF3F4F6)),
+                        errorWidget: (context, url, error) => const Icon(
+                            Icons.broken_image_rounded,
+                            color: AppTheme.textHint),
+                      ),
                     ),
                   ),
                   DecoratedBox(
@@ -541,6 +545,50 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
               ),
             );
           },
+        ),
+
+        // Visual indicator that image can be tapped to zoom
+        Positioned(
+          top: 60,
+          right: 16,
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => FullScreenImageViewer(
+                    imageUrls: images.whereType<String>().toList(),
+                    initialIndex: _currentPage,
+                    tagPrefix: 'problem_image_${widget.problem.id}',
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
+                  SizedBox(width: 4),
+                  Text(
+                    'Zoom',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
 
         if (images.length > 1)
@@ -977,6 +1025,8 @@ class FullScreenImageViewer extends StatefulWidget {
 class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
   late PageController _pageController;
   late int _currentIndex;
+  final Map<int, TransformationController> _transformControllers = {};
+  bool _isZoomed = false;
 
   @override
   void initState() {
@@ -985,8 +1035,58 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
     _pageController = PageController(initialPage: widget.initialIndex);
   }
 
+  TransformationController _getController(int index) {
+    if (!_transformControllers.containsKey(index)) {
+      final controller = TransformationController();
+      controller.addListener(() {
+        final scale = controller.value.getMaxScaleOnAxis();
+        final zoomed = scale > 1.05;
+        if (zoomed != _isZoomed) {
+          if (mounted) setState(() => _isZoomed = zoomed);
+        }
+      });
+      _transformControllers[index] = controller;
+    }
+    return _transformControllers[index]!;
+  }
+
+  void _zoomIn() {
+    final controller = _getController(_currentIndex);
+    final currentScale = controller.value.getMaxScaleOnAxis();
+    final newScale = (currentScale + 0.75).clamp(1.0, 5.0);
+    controller.value = Matrix4.diagonal3Values(newScale, newScale, 1.0);
+  }
+
+  void _zoomOut() {
+    final controller = _getController(_currentIndex);
+    final currentScale = controller.value.getMaxScaleOnAxis();
+    final newScale = (currentScale - 0.75).clamp(1.0, 5.0);
+    controller.value = Matrix4.diagonal3Values(newScale, newScale, 1.0);
+  }
+
+  void _resetZoom() {
+    final controller = _getController(_currentIndex);
+    controller.value = Matrix4.identity();
+  }
+
+  void _handleDoubleTap(TapDownDetails details) {
+    final controller = _getController(_currentIndex);
+    final currentScale = controller.value.getMaxScaleOnAxis();
+    if (currentScale > 1.2) {
+      controller.value = Matrix4.identity();
+    } else {
+      final position = details.localPosition;
+      final translation = Matrix4.translationValues(-position.dx * 1.5, -position.dy * 1.5, 0.0);
+      final scale = Matrix4.diagonal3Values(2.5, 2.5, 1.0);
+      controller.value = translation * scale;
+    }
+  }
+
   @override
   void dispose() {
+    for (final c in _transformControllers.values) {
+      c.dispose();
+    }
     _pageController.dispose();
     super.dispose();
   }
@@ -999,31 +1099,40 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
         children: [
           PageView.builder(
             controller: _pageController,
-            physics: const BouncingScrollPhysics(),
+            physics: _isZoomed
+                ? const NeverScrollableScrollPhysics()
+                : const BouncingScrollPhysics(),
             itemCount: widget.imageUrls.length,
             onPageChanged: (index) {
               setState(() {
                 _currentIndex = index;
+                _isZoomed = false;
               });
             },
             itemBuilder: (context, index) {
-              return Center(
-                child: Hero(
-                  tag: '${widget.tagPrefix}_$index',
-                  child: InteractiveViewer(
-                    minScale: 1.0,
-                    maxScale: 4.0,
-                    clipBehavior: Clip.none,
-                    child: CachedNetworkImage(
-                      imageUrl: widget.imageUrls[index],
-                      fit: BoxFit.contain,
-                      placeholder: (_, __) => const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      ),
-                      errorWidget: (_, __, ___) => const Icon(
-                        Icons.broken_image_rounded,
-                        color: Colors.white54,
-                        size: 64,
+              final controller = _getController(index);
+              return GestureDetector(
+                onDoubleTapDown: _handleDoubleTap,
+                onDoubleTap: () {},
+                child: Center(
+                  child: Hero(
+                    tag: '${widget.tagPrefix}_$index',
+                    child: InteractiveViewer(
+                      transformationController: controller,
+                      minScale: 1.0,
+                      maxScale: 5.0,
+                      clipBehavior: Clip.none,
+                      child: CachedNetworkImage(
+                        imageUrl: widget.imageUrls[index],
+                        fit: BoxFit.contain,
+                        placeholder: (_, __) => const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
+                        errorWidget: (_, __, ___) => const Icon(
+                          Icons.broken_image_rounded,
+                          color: Colors.white54,
+                          size: 64,
+                        ),
                       ),
                     ),
                   ),
@@ -1048,33 +1157,76 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
             ),
           ),
 
-          // Page index counter
-          if (widget.imageUrls.length > 1)
-            Positioned(
-              bottom: MediaQuery.of(context).padding.bottom + 24,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Text(
-                    '${_currentIndex + 1} / ${widget.imageUrls.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+          // Zoom toolbar and page counter at bottom
+          Positioned(
+            bottom: MediaQuery.of(context).padding.bottom + 20,
+            left: 16,
+            right: 16,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Page counter
+                if (widget.imageUrls.length > 1)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                     ),
+                    child: Text(
+                      '${_currentIndex + 1} / ${widget.imageUrls.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(width: 40),
+
+                // Interactive Zoom Controls
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_rounded, color: Colors.white, size: 20),
+                        tooltip: 'Zoom Out',
+                        onPressed: _zoomOut,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      if (_isZoomed)
+                        IconButton(
+                          icon: const Icon(Icons.restart_alt_rounded, color: AppTheme.accentGreen, size: 20),
+                          tooltip: 'Reset Zoom',
+                          onPressed: _resetZoom,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                        tooltip: 'Zoom In',
+                        onPressed: _zoomIn,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
                   ),
                 ),
-              ),
+              ],
             ),
+          ),
         ],
       ),
     );
   }
 }
+
+

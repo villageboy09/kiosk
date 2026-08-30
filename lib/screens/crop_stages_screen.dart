@@ -1,4 +1,4 @@
-import 'package:cropsync/models/farmer_crop.dart';
+﻿import 'package:cropsync/models/farmer_crop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -482,3 +482,5 @@ class _StageGridCardState extends State<_StageGridCard> {
     );
   }
 }
+
+

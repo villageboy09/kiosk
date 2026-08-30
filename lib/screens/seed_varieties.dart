@@ -1,4 +1,4 @@
-// lib/screens/seed_varieties.dart
+﻿// lib/screens/seed_varieties.dart
 
 // ignore_for_file: use_build_context_synchronously
 
@@ -1093,3 +1093,5 @@ class _SeedShimmer extends StatelessWidget {
     );
   }
 }
+
+

@@ -181,9 +181,10 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
                 subtitle: 'Record or upload a short farming reel for farmers',
                 onTap: () async {
                   Navigator.of(ctx).pop();
-                  await Navigator.of(context).push(
+                  final created = await Navigator.of(context).push<bool>(
                     MaterialPageRoute(builder: (_) => const UploadReelScreen()),
                   );
+                  if (created == true) _fetchCreatorDetails();
                 },
               ),
               const SizedBox(height: 12),
@@ -195,9 +196,10 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
                 subtitle: 'Write an agricultural update, scheme info, or guide',
                 onTap: () async {
                   Navigator.of(ctx).pop();
-                  await Navigator.of(context).push(
+                  final created = await Navigator.of(context).push<bool>(
                     MaterialPageRoute(builder: (_) => const UploadNewsScreen()),
                   );
+                  if (created == true) _fetchCreatorDetails();
                 },
               ),
               const SizedBox(height: 12),
@@ -684,3 +686,5 @@ class _AnimatedCreateActionTab extends StatelessWidget {
     );
   }
 }
+
+

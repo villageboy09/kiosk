@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -793,7 +793,10 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
                 : BarChart(
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
-                      maxY: trends.map((e) => e.views.toDouble()).reduce((a, b) => a > b ? a : b) * 1.2,
+                      maxY: (() {
+                        final maxVal = trends.map((e) => e.views.toDouble()).reduce((a, b) => a > b ? a : b);
+                        return maxVal == 0 ? 10.0 : maxVal * 1.2;
+                      })(),
                       barTouchData: const BarTouchData(enabled: true),
                       titlesData: FlTitlesData(
                         show: true,
@@ -976,3 +979,5 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
     );
   }
 }
+
+

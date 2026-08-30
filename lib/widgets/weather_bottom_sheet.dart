@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -526,3 +526,5 @@ class _HourlyData {
 
   _HourlyData({required this.time, required this.temp, required this.icon});
 }
+
+

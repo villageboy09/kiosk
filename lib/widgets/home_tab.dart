@@ -1,4 +1,4 @@
-// ignore_for_file: prefer_const_constructors
+﻿// ignore_for_file: prefer_const_constructors
 
 import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/screens/chc_booking_screen.dart';
@@ -491,3 +491,5 @@ class _ServiceCardState extends State<_ServiceCard>
     );
   }
 }
+
+

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:cropsync/models/crop_problem.dart';
@@ -1137,3 +1137,5 @@ class _LaserScannerOverlayState extends State<LaserScannerOverlay>
     );
   }
 }
+
+

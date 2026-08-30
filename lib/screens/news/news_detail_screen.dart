@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/news_article.dart';
 import 'package:cropsync/services/news_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
@@ -891,3 +891,5 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     );
   }
 }
+
+

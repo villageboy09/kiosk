@@ -61,16 +61,14 @@ class ReelsService {
           listData = decoded['data'] as List;
         }
 
-        if (listData.isNotEmpty) {
-          final reels = listData
-              .map((item) => item is Map<String, dynamic> ? Reel.fromJson(item) : null)
-              .whereType<Reel>()
-              .toList();
+        final reels = listData
+            .map((item) => item is Map<String, dynamic> ? Reel.fromJson(item) : null)
+            .whereType<Reel>()
+            .toList();
 
-          // Save to local cache
-          _cacheReels(jsonEncode(listData));
-          return reels;
-        }
+        // Save to local cache
+        _cacheReels(jsonEncode(listData));
+        return reels;
       }
     } catch (e) {
       if (kDebugMode) {
@@ -86,26 +84,17 @@ class ReelsService {
           if (decoded is List) listData = decoded;
           if (decoded is Map && decoded['reels'] is List) listData = decoded['reels'] as List;
 
-          if (listData.isNotEmpty) {
-            final reels = listData
-                .map((item) => item is Map<String, dynamic> ? Reel.fromJson(item) : null)
-                .whereType<Reel>()
-                .toList();
-            _cacheReels(jsonEncode(listData));
-            return reels;
-          }
+          final reels = listData
+              .map((item) => item is Map<String, dynamic> ? Reel.fromJson(item) : null)
+              .whereType<Reel>()
+              .toList();
+          _cacheReels(jsonEncode(listData));
+          return reels;
         }
       } catch (_) {}
     }
 
-    // Try reading cached reels
-    final cached = await _getCachedReels();
-    if (cached.isNotEmpty) {
-      return cached;
-    }
-
-    // Final fallback to curated default agricultural reels
-    return _getDefaultReels();
+    return [];
   }
 
   /// Toggle Like/Unlike for a reel
@@ -326,210 +315,5 @@ class ReelsService {
     } catch (_) {}
   }
 
-  static Future<List<Reel>> _getCachedReels() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final data = prefs.getString(_reelsCacheKey);
-      if (data != null && data.isNotEmpty) {
-        final decoded = jsonDecode(data);
-        if (decoded is List) {
-          return decoded
-              .map((item) => item is Map<String, dynamic> ? Reel.fromJson(item) : null)
-              .whereType<Reel>()
-              .toList();
-        }
-      }
-    } catch (_) {}
-    return [];
-  }
 
-  /// Default production fallback agricultural reels
-  static List<Reel> _getDefaultReels() {
-    return [
-      Reel(
-        id: 1,
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-        creator: const ReelCreator(
-          id: 1,
-          username: 'ramesh_kalyan',
-          displayName: 'Dr. Ramesh Kalyan',
-          profileImageUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80',
-          phoneNumber: '+919876543210',
-          bio: 'Senior Agronomist & Organic Paddy Cultivation Specialist',
-        ),
-        caption: 'Harvesting organic rice using modern combined harvester machinery. Crop yield is exceptional this season! 🌾 #organicfarming #riceharvest #agritech',
-        musicTitle: 'Original Audio - Dr. Ramesh Kalyan',
-        phoneNumber: '+919876543210',
-        tags: 'organic,rice,harvest,machinery',
-        likes: '1.2K',
-        likesRaw: 1250,
-        saves: '320',
-        savesRaw: 320,
-        commentsCount: 4,
-        viewsCount: 12400,
-        createdAt: DateTime.now().subtract(const Duration(hours: 4)),
-        comments: [
-          ReelComment(
-            id: 1,
-            reelId: 1,
-            farmerUsername: 'kalyan_farmer',
-            commentText: 'Super helpful video! Where did you purchase this harvester?',
-            createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-          ),
-          ReelComment(
-            id: 2,
-            reelId: 1,
-            farmerUsername: 'venkat_reddy',
-            commentText: 'Yield looks amazing sir. What was the fertilizer schedule?',
-            createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-          ),
-          ReelComment(
-            id: 3,
-            reelId: 1,
-            farmerUsername: 'nagaraju_agri',
-            commentText: 'Very clean harvest, zero grain damage 👍',
-            createdAt: DateTime.now().subtract(const Duration(hours: 1)),
-          ),
-          ReelComment(
-            id: 4,
-            reelId: 1,
-            farmerUsername: 'sita_ram',
-            commentText: 'Great work brother 🌾',
-            createdAt: DateTime.now().subtract(const Duration(minutes: 30)),
-          ),
-        ],
-      ),
-      Reel(
-        id: 2,
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-        creator: const ReelCreator(
-          id: 2,
-          username: 'agri_tech_india',
-          displayName: 'AgriTech India',
-          profileImageUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-          phoneNumber: '+919876543211',
-          bio: 'Precision Agriculture, Smart Drip Irrigation & IoT Sensors',
-        ),
-        caption: 'Drip irrigation system setup in my tomato field. Highly water-efficient and boosts flowering! 🍅💧 #savewater #irrigation #tomatofarming',
-        musicTitle: 'Nature Sounds - Water Flow',
-        phoneNumber: '+919876543211',
-        tags: 'drip,irrigation,tomato,water',
-        likes: '890',
-        likesRaw: 890,
-        saves: '210',
-        savesRaw: 210,
-        commentsCount: 3,
-        viewsCount: 8900,
-        createdAt: DateTime.now().subtract(const Duration(hours: 12)),
-        comments: [
-          ReelComment(
-            id: 5,
-            reelId: 2,
-            farmerUsername: 'anand_kumar',
-            commentText: 'What is the cost per acre for this drip setup?',
-            createdAt: DateTime.now().subtract(const Duration(hours: 10)),
-          ),
-          ReelComment(
-            id: 6,
-            reelId: 2,
-            farmerUsername: 'balaji_raju',
-            commentText: 'Does govt subsidy cover this model?',
-            createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-          ),
-          ReelComment(
-            id: 7,
-            reelId: 2,
-            farmerUsername: 'mahesh_k',
-            commentText: 'Works great in summer especially 🍅',
-            createdAt: DateTime.now().subtract(const Duration(hours: 4)),
-          ),
-        ],
-      ),
-      Reel(
-        id: 3,
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-        creator: const ReelCreator(
-          id: 3,
-          username: 'suresh_village_boy',
-          displayName: 'Suresh Kumar',
-          profileImageUrl: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=200&q=80',
-          phoneNumber: '+919876543212',
-          bio: 'Natural Farming Practitioner & Bio-Pesticide Educator',
-        ),
-        caption: 'Best organic pest control spray demo using neem oil & soap solution. Safe and chemical-free! 🌱🐛 #organicpestcontrol #sustainableagri',
-        musicTitle: 'Original Audio - Suresh Kumar',
-        phoneNumber: '+919876543212',
-        tags: 'neem,pestcontrol,organic,safe',
-        likes: '2.1K',
-        likesRaw: 2100,
-        saves: '580',
-        savesRaw: 580,
-        commentsCount: 3,
-        viewsCount: 21500,
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-        comments: [
-          ReelComment(
-            id: 8,
-            reelId: 3,
-            farmerUsername: 'prasad_rao',
-            commentText: 'What is the exact ratio of neem oil to water?',
-            createdAt: DateTime.now().subtract(const Duration(hours: 18)),
-          ),
-          ReelComment(
-            id: 9,
-            reelId: 3,
-            farmerUsername: 'chandra_sekhar',
-            commentText: 'Effective against whiteflies too?',
-            createdAt: DateTime.now().subtract(const Duration(hours: 14)),
-          ),
-          ReelComment(
-            id: 10,
-            reelId: 3,
-            farmerUsername: 'ramu_farmer',
-            commentText: 'Used this last week, results are great 🌱',
-            createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-          ),
-        ],
-      ),
-      Reel(
-        id: 4,
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-        creator: const ReelCreator(
-          id: 4,
-          username: 'organic_ananya',
-          displayName: 'Ananya Rao',
-          profileImageUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-          phoneNumber: '+919876543213',
-          bio: 'Vermicompost, Jeevamrutham & Soil Microbe Regeneration',
-        ),
-        caption: 'Preparing natural compost manure using cow dung, dry leaves, and jaggery solution. Farm prep in full swing! 🚜🍂 #composting #organicfertilizer',
-        musicTitle: 'Morning Flute Melody',
-        phoneNumber: '+919876543213',
-        tags: 'compost,organic,manure,farming',
-        likes: '1.5K',
-        likesRaw: 1540,
-        saves: '410',
-        savesRaw: 410,
-        commentsCount: 2,
-        viewsCount: 15300,
-        createdAt: DateTime.now().subtract(const Duration(days: 2)),
-        comments: [
-          ReelComment(
-            id: 11,
-            reelId: 4,
-            farmerUsername: 'govind_reddy',
-            commentText: 'How many days does it take to fully decompose?',
-            createdAt: DateTime.now().subtract(const Duration(days: 1)),
-          ),
-          ReelComment(
-            id: 12,
-            reelId: 4,
-            farmerUsername: 'krishna_murthy',
-            commentText: 'Jeevamrutham along with this works wonders.',
-            createdAt: DateTime.now().subtract(const Duration(hours: 20)),
-          ),
-        ],
-      ),
-    ];
-  }
 }

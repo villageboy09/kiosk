@@ -47,11 +47,10 @@ class NewsService {
         }
       }
     } catch (e) {
-      debugPrint('NewsService.getArticles network error: $e. Falling back to local catalog.');
+      debugPrint('NewsService.getArticles network error: $e. Returning empty list.');
     }
 
-    // Fallback static articles in case of offline / initial setup
-    return _getFallbackArticles(category: category, searchQuery: searchQuery);
+    return [];
   }
 
   /// Fetch a single article by ID

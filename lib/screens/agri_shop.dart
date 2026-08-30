@@ -7,7 +7,6 @@ import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/farmer_analytics_service.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/widgets/safe_network_image.dart';
 import 'product_details_screen.dart';
@@ -232,49 +231,71 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
       child: Row(
         children: [
           Expanded(
-            child: TextField(
-              controller: _searchController,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: context.tr('search_products'),
-                hintStyle: const TextStyle(color: AppTheme.textHint, fontWeight: FontWeight.w500),
-                prefixIcon:
-                    const Icon(Icons.search_rounded, color: AppTheme.textPrimary, size: 22),
-                filled: true,
-                fillColor: const Color(0xFFF3F4F6),
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(100),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(100),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(100),
-                  borderSide: BorderSide.none,
-                ),
+            child: Container(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 15,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              onChanged: (value) {
-                if (value.length > 2 || value.isEmpty) {
-                  _searchQuery = value;
-                  _loadProducts();
-                }
-              },
+              child: TextField(
+                controller: _searchController,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: context.tr('search_products'),
+                  hintStyle: const TextStyle(color: AppTheme.textHint, fontWeight: FontWeight.w500),
+                  prefixIcon:
+                      const Icon(Icons.search_rounded, color: AppTheme.textPrimary, size: 22),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(100),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(100),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(100),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (value) {
+                  if (value.length > 2 || value.isEmpty) {
+                    _searchQuery = value;
+                    _loadProducts();
+                  }
+                },
+              ),
             ),
           ),
           const SizedBox(width: 12),
-          IconButton(
-            style: IconButton.styleFrom(
-              backgroundColor: AppTheme.textPrimary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(100),
-              ),
-              fixedSize: const Size(50, 50),
+          Container(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.textPrimary.withValues(alpha: 0.2),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            icon: const Icon(Icons.tune_rounded, color: Colors.white),
-            onPressed: _showFilterBottomSheet,
+            child: IconButton(
+              style: IconButton.styleFrom(
+                backgroundColor: AppTheme.textPrimary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                fixedSize: const Size(50, 50),
+              ),
+              icon: const Icon(Icons.tune_rounded, color: Colors.white),
+              onPressed: _showFilterBottomSheet,
+            ),
           ),
         ],
       ),
@@ -312,18 +333,22 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                 child: ChoiceChip(
                   label: Text(context.tr(category)),
                   labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : AppTheme.textPrimary,
+                    color: isSelected ? Colors.white : AppTheme.textSecondary,
                     fontWeight:
-                        isSelected ? FontWeight.w900 : FontWeight.w700,
-                    fontSize: 12,
+                        isSelected ? FontWeight.w900 : FontWeight.w600,
+                    fontSize: 13,
                     letterSpacing: 0.2,
                   ),
                   selected: isSelected,
                   selectedColor: AppTheme.textPrimary,
-                  backgroundColor: Colors.white,
+                  backgroundColor: AppTheme.primary.withValues(alpha: 0.05),
+                  elevation: isSelected ? 4 : 0,
+                  shadowColor: AppTheme.textPrimary.withValues(alpha: 0.3),
+                  showCheckmark: false,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(100),
-                    side: BorderSide(color: isSelected ? AppTheme.textPrimary : const Color(0xFFE5E7EB)),
+                    side: BorderSide.none,
                   ),
                   onSelected: (selected) {
                     if (selected) {
@@ -352,119 +377,23 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
         }
         final products = snapshot.data!;
         if (products.isEmpty) return _buildEmptyState();
-        return AnimationLimiter(
-          child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 280,
-              childAspectRatio: 0.7,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-            ),
-            itemCount: products.length,
-            itemBuilder: (context, index) =>
-                AnimationConfiguration.staggeredGrid(
-              position: index,
-              duration: const Duration(milliseconds: 375),
-              columnCount: 2,
-              child: ScaleAnimation(
-                child: FadeInAnimation(
-                  child: _buildProductCard(products[index]),
-                ),
-              ),
-            ),
+        return GridView.builder(
+          physics: const BouncingScrollPhysics(),
+          cacheExtent: 800,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 280,
+            childAspectRatio: 0.65,
+            crossAxisSpacing: 14,
+            mainAxisSpacing: 14,
+          ),
+          itemCount: products.length,
+          itemBuilder: (context, index) => _ProductCardWidget(
+            key: ValueKey(products[index].id),
+            product: products[index],
           ),
         );
       },
-    );
-  }
-
-  Widget _buildProductCard(Product product) {
-    return GestureDetector(
-      onTap: () {
-        FarmerAnalyticsService.logShopItemView(
-          productId: product.id,
-          productName: product.name,
-          category: product.category,
-          price: product.price,
-          advertiserName: product.advertiserName,
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => ProductDetailsScreen(product: product)),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Hero(
-                tag: 'product_image_${product.id}',
-                child: ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: SafeNetworkImage(
-                    imageUrl: product.imageUrl1,
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                    placeholder: Container(
-                      color: Colors.grey.shade100,
-                      child: Icon(
-                        Icons.eco_outlined,
-                        color: Colors.grey.shade300,
-                        size: 40,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: AppTheme.textPrimary,
-                      height: 1.1,
-                      letterSpacing: -0.3,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    context.tr('per_unit', namedArgs: {'unit': product.unit}),
-                    style: const TextStyle(
-                        fontSize: 12, color: AppTheme.textSecondary, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '₹${product.price}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: AppTheme.textPrimary,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -476,9 +405,9 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
         padding: const EdgeInsets.all(16),
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: 280,
-          childAspectRatio: 0.7,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
+          childAspectRatio: 0.65,
+          crossAxisSpacing: 14,
+          mainAxisSpacing: 14,
         ),
         itemCount: 6,
         itemBuilder: (context, index) => Container(
@@ -589,3 +518,211 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     );
   }
 }
+
+class _ProductCardWidget extends StatefulWidget {
+  final Product product;
+  const _ProductCardWidget({super.key, required this.product});
+
+  @override
+  State<_ProductCardWidget> createState() => _ProductCardWidgetState();
+}
+
+class _ProductCardWidgetState extends State<_ProductCardWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) {
+        _controller.reverse();
+        FarmerAnalyticsService.logShopItemView(
+          productId: widget.product.id,
+          productName: widget.product.name,
+          category: widget.product.category,
+          price: widget.product.price,
+          advertiserName: widget.product.advertiserName,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => ProductDetailsScreen(product: widget.product)),
+        );
+      },
+      onTapCancel: () => _controller.reverse(),
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) => Transform.scale(
+          scale: _scaleAnimation.value,
+          child: child,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Product Image (Occupies 3:4 of card height, full width edge-to-edge fill)
+              Expanded(
+                flex: 3,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF1F5F9),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(15)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius:
+                            const BorderRadius.vertical(top: Radius.circular(15)),
+                        child: Hero(
+                          tag: 'product_image_${widget.product.id}',
+                          child: SafeNetworkImage(
+                            imageUrl: widget.product.imageUrl1,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            placeholder: Container(
+                              color: const Color(0xFFF1F5F9),
+                              alignment: Alignment.center,
+                              child: Icon(
+                                Icons.eco_outlined,
+                                color: Colors.grey.shade300,
+                                size: 36,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (widget.product.isPopular)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+                            ),
+                            borderRadius: BorderRadius.circular(100),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFEF4444)
+                                    .withValues(alpha: 0.3),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Text(
+                            'HOT',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              // Text & Price Details (Compact, crisp, no empty gap)
+              Expanded(
+                flex: 1,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        widget.product.name,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.textPrimary,
+                          height: 1.15,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            '₹${widget.product.price}',
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w900,
+                              color: AppTheme.textPrimary,
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+                          Text(
+                            context.tr('per_unit',
+                                namedArgs: {'unit': widget.product.unit}),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppTheme.textSecondary.withValues(alpha: 0.85),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
