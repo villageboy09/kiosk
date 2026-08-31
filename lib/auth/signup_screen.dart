@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -142,13 +142,7 @@ class _SignupScreenState extends State<SignupScreen>
   }
 
   /// Strict phone number validation:
-  /// - Exact 10 digits
-  /// - Must start with 6, 7, 8, or 9
-  /// - Rejects numbers with fewer than 4 unique digits (e.g. 9999999998, 9898989898, 9998887777)
-  /// - Rejects runs of 4+ consecutive identical digits (e.g. 9999, 0000, 8888)
-  /// - Rejects any single digit appearing 5 or more times throughout the 10 digits
-  /// - Rejects sequential runs of 4+ digits (e.g. 1234, 9876, 5432)
-  /// - Rejects repeated multi-digit patterns and dummy numbers
+  /// Validates standard 10-digit Indian mobile numbers
   static String? validatePhoneNumber(String rawPhone) {
     final clean = rawPhone.trim().replaceAll(RegExp(r'\D'), '');
     if (clean.isEmpty) {
@@ -160,75 +154,6 @@ class _SignupScreenState extends State<SignupScreen>
     if (!RegExp(r'^[6-9]').hasMatch(clean)) {
       return 'Mobile number must start with 6, 7, 8, or 9';
     }
-
-    // 1. Check distinct unique digits (real numbers have at least 4 unique digits)
-    final uniqueDigits = clean.split('').toSet();
-    if (uniqueDigits.length < 4) {
-      return 'Invalid mobile number: too few distinct digits';
-    }
-
-    // 2. Check consecutive identical digits (e.g., 9999, 8888, 0000)
-    if (RegExp(r'(\d)\1{3,}').hasMatch(clean)) {
-      return 'Invalid mobile number: consecutive repeating digits';
-    }
-
-    // 3. Check max frequency of any single digit (no digit should appear 5+ times)
-    final digitCounts = <String, int>{};
-    for (var i = 0; i < clean.length; i++) {
-      final char = clean[i];
-      digitCounts[char] = (digitCounts[char] ?? 0) + 1;
-      if (digitCounts[char]! >= 5) {
-        return 'Invalid mobile number: digit "$char" repeated too many times';
-      }
-    }
-
-    // 4. Check sequential 6+ digit ascending/descending patterns or full sequences
-    const sequentialPatterns = [
-      '0123456789',
-      '1234567890',
-      '9876543210',
-      '8765432109',
-      '9123456789',
-      '123456',
-      '234567',
-      '345678',
-      '456789',
-      '567890',
-      '987654',
-      '876543',
-      '765432',
-      '654321',
-      '543210',
-    ];
-    for (final seq in sequentialPatterns) {
-      if (clean.contains(seq)) {
-        return 'Invalid mobile number: sequential pattern detected';
-      }
-    }
-
-    // 5. Check repeated 2-digit, 3-digit, or 5-digit chunks
-    if (RegExp(r'^(\d{2})\1{3,}$').hasMatch(clean)) {
-      return 'Invalid mobile number: repetitive pattern';
-    }
-    if (RegExp(r'^(\d{3})\1{2}').hasMatch(clean)) {
-      return 'Invalid mobile number: repetitive pattern';
-    }
-    if (RegExp(r'^(\d{5})\1$').hasMatch(clean)) {
-      return 'Invalid mobile number: repetitive pattern';
-    }
-
-    // 6. Dummy numbers filter
-    const dummyNumbers = {
-      '9876543210',
-      '9876543211',
-      '9800000000',
-      '9000000000',
-      '9123456780',
-    };
-    if (dummyNumbers.contains(clean)) {
-      return 'Invalid mobile number: please enter a real contact number';
-    }
-
     return null;
   }
 
@@ -756,39 +681,73 @@ class _SignupScreenState extends State<SignupScreen>
     );
   }
 
+  /// Modern Role Selector Dropdown Pill
   Widget _buildRoleToggle({bool compact = false}) {
     return GestureDetector(
       onTap: _showRolePicker,
       child: Container(
         height: compact ? 54 : 60,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
-            color: AppTheme.border.withValues(alpha: 0.5),
+            color: const Color(0xFFE5E7EB),
             width: 1.5,
           ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Row(
           children: [
-            const Icon(
-              Icons.person_pin_rounded,
-              size: 22,
-              color: AppTheme.textSecondary,
-            ),
+            Icon(_getRoleIcon(), size: 20, color: AppTheme.textPrimary),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                _getRoleLabel(_selectedRole),
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'SIGNING UP AS',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  Text(
+                    _getRoleLabel(_selectedRole),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Change',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: AppTheme.textPrimary),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -1300,10 +1259,32 @@ class _SignupScreenState extends State<SignupScreen>
     }
   }
 
+  IconData _getRoleIcon() {
+    switch (_selectedRole) {
+      case 'retailer':
+        return Icons.storefront_rounded;
+      case 'officer':
+        return Icons.verified_user_rounded;
+      case 'chc_operator':
+        return Icons.agriculture_rounded;
+      case 'content_creator':
+        return Icons.video_camera_front_rounded;
+      case 'farmer':
+      default:
+        return Icons.eco_rounded;
+    }
+  }
+
   void _showRolePicker() {
     HapticFeedback.selectionClick();
     
-    final roles = ['farmer', 'chc_operator', 'retailer', 'officer', 'content_creator'];
+    final roles = [
+      {'key': 'farmer', 'title': 'role_farmer_title'.tr(), 'desc': 'Access crop advisories & services', 'icon': Icons.eco_rounded},
+      {'key': 'chc_operator', 'title': 'role_chc_operator_title'.tr(), 'desc': 'Custom Hiring Center & equipment', 'icon': Icons.agriculture_rounded},
+      {'key': 'retailer', 'title': 'role_retailer_title'.tr(), 'desc': 'Fertilizers & seeds retail partner', 'icon': Icons.storefront_rounded},
+      {'key': 'officer', 'title': 'role_officer_title'.tr(), 'desc': 'Agricultural Extension Officer', 'icon': Icons.verified_user_rounded},
+      {'key': 'content_creator', 'title': 'role_content_creator_title'.tr(), 'desc': 'Farming videos & reels creator', 'icon': Icons.video_camera_front_rounded},
+    ];
     
     showModalBottomSheet(
       context: context,
@@ -1383,49 +1364,91 @@ class _SignupScreenState extends State<SignupScreen>
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
-                  padding: const EdgeInsets.only(bottom: 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   itemCount: roles.length,
                   itemBuilder: (context, index) {
                     final role = roles[index];
-                    final isSelected = role == _selectedRole;
-                    return InkWell(
+                    final isSelected = _selectedRole == role['key'];
+
+                    return GestureDetector(
                       onTap: () {
                         HapticFeedback.selectionClick();
                         setState(() {
-                          _selectedRole = role;
+                          _selectedRole = role['key'] as String;
                         });
                         Navigator.pop(context);
                       },
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
                         decoration: BoxDecoration(
-                          color: isSelected ? AppTheme.textPrimary : const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(100),
+                          color: isSelected
+                              ? AppTheme.textPrimary
+                              : const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: isSelected ? AppTheme.textPrimary : const Color(0xFFE5E7EB),
+                            color: isSelected
+                                ? AppTheme.textPrimary
+                                : const Color(0xFFE5E7EB),
                             width: 1.5,
                           ),
                         ),
                         child: Row(
                           children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Colors.white.withValues(alpha: 0.15)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                role['icon'] as IconData,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppTheme.textPrimary,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
                             Expanded(
-                              child: Text(
-                                _getRoleLabel(role),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : AppTheme.textSecondary,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    role['title'] as String,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    role['desc'] as String,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: isSelected
+                                          ? Colors.white70
+                                          : AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             Icon(
-                              isSelected ? Icons.check_circle_rounded : Icons.radio_button_off_rounded,
-                              color: isSelected ? Colors.white : AppTheme.textHint,
+                              isSelected
+                                  ? Icons.check_circle_rounded
+                                  : Icons.radio_button_off_rounded,
+                              color: isSelected
+                                  ? Colors.white
+                                  : const Color(0xFFD1D5DB),
                               size: 20,
                             ),
                           ],
@@ -1435,6 +1458,7 @@ class _SignupScreenState extends State<SignupScreen>
                   },
                 ),
               ),
+              const SizedBox(height: 16),
             ],
           ),
         );
@@ -1444,10 +1468,8 @@ class _SignupScreenState extends State<SignupScreen>
 
   Widget _buildSubmitButton({bool compact = false}) {
     final phone = _phoneController.text.trim();
-    final bool isPhoneValid = validatePhoneNumber(phone) == null;
-    final bool canProceed = isPhoneValid;
-
-    final bool isButtonDisabled = _isLoading || !canProceed;
+    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    final bool isButtonDisabled = _isLoading || cleanPhone.length < 10;
 
     return ElevatedButton(
       onPressed: isButtonDisabled

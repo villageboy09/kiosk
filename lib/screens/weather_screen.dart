@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +9,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:shimmer/shimmer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:lottie/lottie.dart';
+import 'package:cropsync/services/location_service.dart';
 
 class WeatherScreen extends StatefulWidget {
   const WeatherScreen({super.key});
@@ -19,8 +21,6 @@ class WeatherScreen extends StatefulWidget {
 
 class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProviderStateMixin {
   late Future<_WeatherSummary> _weatherFuture;
-  late TabController _tabController;
-  
   // AI Integration state
   Map<String, dynamic>? _aiAdvisory;
   bool _isLoadingAI = false;
@@ -31,14 +31,8 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _weatherFuture = _fetchWeather();
-    _tabController = TabController(length: 4, vsync: this);
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   Future<_WeatherSummary> _fetchWeather() async {
     final prefs = await SharedPreferences.getInstance();
@@ -106,7 +100,7 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
     }
 
     // Get location
-    final position = await _getPosition();
+    final position = await LocationService.getCurrentPosition() ?? await _getPosition();
     final lat = position.latitude;
     final lon = position.longitude;
 
@@ -116,15 +110,22 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
       final placemarks = await placemarkFromCoordinates(lat, lon);
       if (placemarks.isNotEmpty) {
         final place = placemarks[0];
-        final city = place.locality ?? "";
-        final area =
-            place.subAdministrativeArea ?? place.administrativeArea ?? "";
-        if (city.isNotEmpty && area.isNotEmpty) {
-          locationName = "$city, $area";
-        } else if (city.isNotEmpty) {
-          locationName = city;
-        } else if (area.isNotEmpty) {
-          locationName = area;
+        final subLocality = place.subLocality ?? "";
+        final locality = place.locality ?? "";
+        final district = place.subAdministrativeArea ?? "";
+        
+        List<String> parts = [];
+        if (subLocality.isNotEmpty) {
+          parts.add(subLocality);
+        }
+        if (locality.isNotEmpty) {
+          parts.add(locality);
+        } else if (district.isNotEmpty) {
+          parts.add(district);
+        }
+        
+        if (parts.isNotEmpty) {
+          locationName = parts.join(", ");
         }
       }
     } catch (_) {}
@@ -403,17 +404,43 @@ Format:
         surfaceTintColor: Colors.transparent,
         systemOverlayStyle: SystemUiOverlayStyle.dark,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppTheme.primary),
-            onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.remove('cached_weather_raw_api_data');
-              await prefs.remove('cached_weather_resolved_location');
-              await prefs.remove('cached_weather_timestamp');
-              setState(() {
-                _weatherFuture = _fetchWeather();
-              });
-            },
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: Center(
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.hardEdge,
+                  child: InkWell(
+                    onTap: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.remove('cached_weather_raw_api_data');
+                      await prefs.remove('cached_weather_resolved_location');
+                      await prefs.remove('cached_weather_timestamp');
+                      setState(() {
+                        _weatherFuture = _fetchWeather();
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(50),
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppTheme.appBarText.withValues(alpha: 0.1),
+                      ),
+                      child: const Icon(
+                        Icons.sync_rounded,
+                        size: 20,
+                        color: AppTheme.appBarText,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -473,137 +500,204 @@ Format:
     );
   }
 
+  void _showBottomSheet(BuildContext context, String title, Widget content) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => SafeArea(
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                ),
+              ),
+              Flexible(child: content),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: color.withValues(alpha: 0.3), width: 1.5),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: _AnimatedIcon(
+                  child: Icon(icon, color: color, size: 28),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildContent(_WeatherSummary weather) {
     final currentMonth = DateTime.now().month;
     final seasonInfo = _getSeasonInfo(currentMonth);
     final insights = _analyzeWeatherPatterns(weather);
 
-    return Column(
-      children: [
-        // Tab Bar Section
-        Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            labelColor: AppTheme.primary,
-            unselectedLabelColor: const Color(0xFF64748B),
-            indicatorColor: AppTheme.primary,
-            indicatorWeight: 3,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 14),
-            tabs: const [
-              Tab(text: 'Today & Forecast'),
-              Tab(text: 'Seasonal Advisory'),
-              Tab(text: 'Crops to Grow'),
-              Tab(text: 'Weather Patterns'),
-            ],
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              _buildTodayTab(weather),
-              _buildSeasonalTab(weather, seasonInfo),
-              _buildCropsTab(weather, seasonInfo),
-              _buildPatternsTab(insights),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTodayTab(_WeatherSummary weather) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Location Header
-          Row(
-            children: [
-              const Icon(Icons.location_on_rounded, size: 20, color: AppTheme.primary),
-              const SizedBox(width: 8),
-              Text(
-                weather.location,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Main Temperature Card
+          // Daily Summary Card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            child: Column(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                // Left Column
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(_getIcon(weather.icon), size: 64, color: const Color(0xFFFBBF24)),
-                    const SizedBox(width: 20),
+                    const Text(
+                      'Today\'s Weather',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '${weather.temp.round()}°',
+                          style: const TextStyle(
+                            fontSize: 48,
+                            fontWeight: FontWeight.w200,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          weather.conditions,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Text(
-                      '${weather.temp.round()}°',
+                      'H: ${weather.tempMax.round()}°  L: ${weather.tempMin.round()}°',
                       style: const TextStyle(
-                        fontSize: 68,
-                        fontWeight: FontWeight.w200,
-                        color: Colors.white,
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  weather.conditions,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                // Right Column
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      'H: ${weather.tempMax.round()}°',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withValues(alpha: 0.7),
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.location_on_rounded, size: 14, color: AppTheme.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          weather.location,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 16),
-                    Text(
-                      'L: ${weather.tempMin.round()}°',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withValues(alpha: 0.7),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: 72,
+                      height: 72,
+                      child: RepaintBoundary(
+                        child: Lottie.network(
+                          _getLottieUrl(weather.icon),
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(_getIcon(weather.icon), size: 64, color: const Color(0xFFFBBF24));
+                          },
+                        ),
                       ),
                     ),
                   ],
@@ -644,132 +738,147 @@ Format:
               ),
             ],
           ),
-          const SizedBox(height: 24),
-
-          // Hourly Forecast
-          const Text(
-            'Hourly Forecast',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 110,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: weather.hourly.length,
-              itemBuilder: (_, i) =>
-                  _buildHourlyCard(weather.hourly[i], i == 0),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // 7-Day Forecast list
-          const Text(
-            '7-Day Forecast',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ListView.builder(
+          const SizedBox(height: 16),
+          GridView.count(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
             shrinkWrap: true,
+            childAspectRatio: 0.95,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: weather.daily.length,
-            itemBuilder: (context, index) {
-              final day = weather.daily[index];
-              return _buildDailyRow(day, index == 0);
-            },
+            children: [
+              _buildSummaryCard(
+                title: 'Weekly Forecast',
+                subtitle: '7-day weather outlook',
+                icon: Icons.calendar_month_rounded,
+                color: const Color(0xFF3B82F6),
+                onTap: () {
+                  _showBottomSheet(
+                    context,
+                    '7-Day Forecast',
+                    SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF), // soft blue
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFDBEAFE)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.info_outline_rounded, color: Color(0xFF3B82F6), size: 20),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Latest update: ${DateFormat('MMM d, yyyy - h:mm a').format(DateTime.now())}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF1D4ED8),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  _generateWeeklySummaryText(weather.daily),
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: Color(0xFF1E3A8A),
+                                    height: 1.6,
+                                  ),
+                                  textAlign: TextAlign.justify,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              _buildSummaryCard(
+                title: 'Seasonal Advisory',
+                subtitle: 'Current season: ${seasonInfo.name}',
+                icon: Icons.eco_rounded,
+                color: const Color(0xFF10B981),
+                onTap: () {
+                  _showBottomSheet(context, 'Seasonal Advisory', _buildSeasonalTab(weather, seasonInfo));
+                },
+              ),
+              _buildSummaryCard(
+                title: 'Crops to Grow',
+                subtitle: 'Recommended crops for this season',
+                icon: Icons.agriculture_rounded,
+                color: const Color(0xFFF59E0B),
+                onTap: () {
+                  _showBottomSheet(context, 'Crops to Grow', _buildCropsTab(weather, seasonInfo));
+                },
+              ),
+              _buildSummaryCard(
+                title: 'Weather Insights',
+                subtitle: 'Patterns & AI analysis',
+                icon: Icons.insights_rounded,
+                color: const Color(0xFF8B5CF6),
+                onTap: () {
+                  _showBottomSheet(context, 'Weather Insights', _buildPatternsTab(insights));
+                },
+              ),
+            ],
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  Widget _buildDailyRow(_DailyData day, bool isToday) {
-    DateTime parsedDate = DateTime.tryParse(day.date) ?? DateTime.now();
-    String weekdayName = isToday ? 'Today' : DateFormat('EEEE').format(parsedDate);
-    String dateStr = DateFormat('d MMM').format(parsedDate);
+  String _generateWeeklySummaryText(List<_DailyData> daily) {
+    if (daily.isEmpty) return 'No weekly forecast available.';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  weekdayName,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: isToday ? FontWeight.bold : FontWeight.w600,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                Text(
-                  dateStr,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                Icon(_getIcon(day.icon), size: 24, color: const Color(0xFF64748B)),
-                const SizedBox(width: 8),
-                Text(
-                  '${day.precipProb.round()}%',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF4F46E5), fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text(
-                  '${day.tempMax.round()}°',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '${day.tempMin.round()}°',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    double avgMax = 0;
+    double avgMin = 0;
+    Map<String, int> conditionsCount = {};
+    double avgPrecip = 0;
+
+    for (var day in daily) {
+      avgMax += day.tempMax;
+      avgMin += day.tempMin;
+      avgPrecip += day.precipProb;
+      conditionsCount[day.conditions] = (conditionsCount[day.conditions] ?? 0) + 1;
+    }
+
+    avgMax /= daily.length;
+    avgMin /= daily.length;
+    avgPrecip /= daily.length;
+
+    String mostCommonCondition = '';
+    int maxCount = 0;
+    conditionsCount.forEach((condition, count) {
+      if (count > maxCount) {
+        maxCount = count;
+        mostCommonCondition = condition;
+      }
+    });
+
+    String precipText = '';
+    if (avgPrecip > 50) {
+      precipText = ' Expect significant rainfall, so plan agricultural activities carefully.';
+    } else if (avgPrecip > 20) {
+      precipText = ' There is a moderate chance of rain.';
+    } else {
+      precipText = ' The week looks mostly dry.';
+    }
+
+    return 'The upcoming week is expected to be mostly ${mostCommonCondition.toLowerCase()} with average highs around ${avgMax.round()}°C and lows near ${avgMin.round()}°C.$precipText';
   }
 
   Widget _buildAISettingsCard(_WeatherSummary weather) {
@@ -836,122 +945,88 @@ Format:
   }
 
   Widget _buildSeasonalTab(_WeatherSummary weather, _SeasonInfo season) {
-    // Determine dynamic list of advisories (AI or local fallback)
     List<String> activeAdvisories = season.advisories;
     if (_aiAdvisory != null && _aiAdvisory!['advisories'] != null) {
       activeAdvisories = List<String>.from(_aiAdvisory!['advisories']);
     }
 
+    String advisorySummary = activeAdvisories.isNotEmpty 
+        ? activeAdvisories.join(' ') 
+        : 'No specific advisories at this time.';
+
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Nvidia AI Cache manager header card
           _buildAISettingsCard(weather),
-
-          // Season Header Card
+          const SizedBox(height: 12),
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0D9488), Color(0xFF0F766E)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
+              color: const Color(0xFFF0FDF4), // soft green
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFDCFCE7)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: const Text(
-                    'Current Active Season',
-                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  season.name,
-                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  season.duration,
-                  style: const TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  season.description,
-                  style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.4),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Seasonal Advisories
-          Text(
-            _aiAdvisory != null ? 'AI Agricultural Advisory' : 'Agricultural Advisory',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: activeAdvisories.length,
-            itemBuilder: (context, index) {
-              final advisory = activeAdvisories[index];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFF1F5F9)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    Container(
-                      margin: const EdgeInsets.only(top: 2),
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFF0FDFA),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.wb_incandescent_rounded, color: Color(0xFF0D9488), size: 16),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        advisory,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: AppTheme.textPrimary,
-                          height: 1.4,
-                        ),
+                    const Icon(Icons.eco_rounded, color: Color(0xFF10B981), size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Latest update: ${DateFormat('MMM d, yyyy - h:mm a').format(DateTime.now())}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF047857),
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
-              );
-            },
+                const SizedBox(height: 12),
+                Text(
+                  'Season: ${season.name} (${season.duration})\n\n${season.description}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: Color(0xFF065F46),
+                    fontWeight: FontWeight.w600,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.justify,
+                ),
+                const SizedBox(height: 12),
+                const Divider(color: Color(0xFFA7F3D0)),
+                const SizedBox(height: 12),
+                Text(
+                  'Advisory:\n$advisorySummary',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF065F46),
+                    height: 1.6,
+                  ),
+                  textAlign: TextAlign.justify,
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+
+  String _getSowingDate(String seasonName) {
+    final lower = seasonName.toLowerCase();
+    if (lower.contains('kharif') || lower.contains('ఖరీఫ్') || lower.contains('खरीफ')) {
+      return 'June - July';
+    } else if (lower.contains('rabi') || lower.contains('రబీ') || lower.contains('रबी')) {
+      return 'October - November';
+    } else {
+      return 'March - April';
+    }
   }
 
   Widget _buildCropsTab(_WeatherSummary weather, _SeasonInfo season) {
@@ -971,35 +1046,23 @@ Format:
       } catch (_) {}
     }
 
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(20),
-      itemCount: activeCrops.length + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildAISettingsCard(weather),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16, top: 8),
-                child: Text(
-                  _aiAdvisory != null ? 'AI Recommended Crops' : 'Recommended Crops',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-              ),
-            ],
-          );
-        }
+    final sowingDate = _getSowingDate(season.name);
 
-        final crop = activeCrops[index - 1];
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 1.0,
+      ),
+      itemCount: activeCrops.length,
+      itemBuilder: (context, index) {
+        final crop = activeCrops[index];
         return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
@@ -1007,73 +1070,48 @@ Format:
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      crop.icon,
-                      style: const TextStyle(fontSize: 22),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          crop.name,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                        Text(
-                          'Duration: ${crop.duration}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  crop.icon,
+                  style: const TextStyle(fontSize: 18),
+                ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(color: Color(0xFFF1F5F9)),
-              ),
+              const SizedBox(height: 8),
               Text(
-                crop.description,
-                style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.4),
+                crop.name,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildCropSpec('Soil Type', crop.soilType, Icons.landscape_rounded),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildCropSpec('Water Req.', crop.waterReq, Icons.water_drop_outlined),
-                  ),
-                ],
+              const SizedBox(height: 4),
+              Text(
+                'Sowing:\n$sowingDate',
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primary,
+                ),
+                textAlign: TextAlign.center,
               ),
             ],
           ),
@@ -1082,38 +1120,7 @@ Format:
     );
   }
 
-  Widget _buildCropSpec(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: const Color(0xFF475569)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(fontSize: 11, color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildPatternsTab(List<_WeatherInsight> insights) {
     return SingleChildScrollView(
@@ -1237,7 +1244,9 @@ Format:
       ),
       child: Column(
         children: [
-          Icon(icon, size: 24, color: color),
+          _AnimatedIcon(
+            child: Icon(icon, size: 24, color: color),
+          ),
           const SizedBox(height: 10),
           Text(
             value,
@@ -1257,46 +1266,7 @@ Format:
     );
   }
 
-  Widget _buildHourlyCard(_HourlyData hour, bool isNow) {
-    return Container(
-      width: 72,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: isNow ? AppTheme.primary : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isNow ? AppTheme.primary : const Color(0xFFE2E8F0),
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          Text(
-            isNow ? 'Now' : hour.time,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: isNow ? Colors.white70 : AppTheme.textSecondary,
-            ),
-          ),
-          Icon(
-            _getIcon(hour.icon),
-            size: 24,
-            color: isNow ? Colors.white : const Color(0xFF64748B),
-          ),
-          Text(
-            '${hour.temp.round()}°',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: isNow ? Colors.white : AppTheme.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   _SeasonInfo _getSeasonInfo(int month) {
     final locale = context.locale.languageCode;
@@ -1991,5 +1961,79 @@ class _WeatherInsight {
     required this.severity,
   });
 }
+
+class _AnimatedIcon extends StatefulWidget {
+  final Widget child;
+  const _AnimatedIcon({required this.child});
+
+  @override
+  State<_AnimatedIcon> createState() => _AnimatedIconState();
+}
+
+class _AnimatedIconState extends State<_AnimatedIcon> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: ScaleTransition(
+        scale: _animation,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+String _getLottieUrl(String iconCode) {
+  switch (iconCode) {
+    case 'clear-day':
+      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/clear-day.json';
+    case 'clear-night':
+      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/clear-night.json';
+    case 'partly-cloudy-day':
+      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/partly-cloudy-day.json';
+    case 'partly-cloudy-night':
+      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/partly-cloudy-night.json';
+    case 'cloudy':
+      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/cloudy.json';
+    case 'rain':
+    case 'showers-day':
+    case 'showers-night':
+      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/rain.json';
+    case 'thunder-rain':
+    case 'thunder-showers-day':
+    case 'thunder-showers-night':
+      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/thunderstorms-day.json';
+    case 'snow':
+    case 'snow-showers-day':
+    case 'snow-showers-night':
+      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/snow.json';
+    case 'fog':
+    case 'mist':
+      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/mist.json';
+    default:
+      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/clear-day.json';
+  }
+}
+
 
 

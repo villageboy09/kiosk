@@ -38,6 +38,15 @@ try {
                 }
             } catch (Throwable $e) {}
         }
+
+        // Auto-migrate creators columns if missing
+        try {
+            $cPhoneChk = $pdo->query("SHOW COLUMNS FROM `creators` LIKE 'phone_number'");
+            if (!$cPhoneChk || !$cPhoneChk->fetch()) {
+                $pdo->exec("ALTER TABLE `creators` ADD COLUMN `phone_number` VARCHAR(20) DEFAULT NULL");
+                $pdo->exec("ALTER TABLE `creators` ADD INDEX `idx_creator_phone` (`phone_number`)");
+            }
+        } catch (Throwable $e) {}
     }
 } catch (Throwable $e) {}
 
@@ -133,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
             $creatorPhone = trim($creator['phone_number'] ?? $phoneNumber);
 
-            $rStmt = $pdo->prepare("SELECT r.*, c.username AS creator_username, c.display_name AS creator_display_name, c.profile_image_url AS creator_profile_image_url, c.is_verified AS creator_is_verified, c.phone_number AS creator_phone_number FROM reels r LEFT JOIN creators c ON r.creator_id = c.id WHERE r.creator_id = ? OR (r.phone_number = ? AND r.phone_number != '') ORDER BY r.id DESC");
+            $rStmt = $pdo->prepare("SELECT r.*, c.username AS creator_username, c.display_name AS creator_display_name, c.profile_image_url AS creator_profile_image_url, c.is_verified AS creator_is_verified FROM reels r LEFT JOIN creators c ON r.creator_id = c.id WHERE r.creator_id = ? OR (r.phone_number = ? AND r.phone_number != '') ORDER BY r.id DESC");
             $rStmt->execute([$creatorId, $creatorPhone]);
             $rawReels = $rStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -257,8 +266,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             c.display_name AS creator_display_name, 
             c.profile_image_url AS creator_profile_image_url,
             c.is_verified AS creator_is_verified,
-            c.phone_number AS creator_phone_number,
-            c.bio AS creator_bio
+              c.bio AS creator_bio
             FROM reels r
             LEFT JOIN creators c ON r.creator_id = c.id
             WHERE r.is_active = 1
@@ -730,3 +738,5 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
+
+

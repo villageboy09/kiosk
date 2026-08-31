@@ -1,4 +1,4 @@
-﻿import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -13,6 +13,11 @@ import 'package:cropsync/theme/app_theme.dart';
 class ReelsScreen extends StatefulWidget {
   const ReelsScreen({super.key});
 
+  /// Static notifier so parent screens (HomeScreen, CreatorHomeScreen)
+  /// can tell the ReelsScreen whether its tab is currently visible.
+  /// Set to true when Reels tab is selected, false otherwise.
+  static final ValueNotifier<bool> isTabActive = ValueNotifier<bool>(false);
+
   @override
   State<ReelsScreen> createState() => _ReelsScreenState();
 }
@@ -25,8 +30,9 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
   bool _hasError = false;
   bool _isCreator = false;
   bool _isMuted = false;
+  bool _isVisible = false; // tracks whether this tab is on-screen
 
-  // Video controller pool: caches active index, index+1, and index-1 for instant 0ms playback
+  // Video controller pool: only current ± 1 are kept alive
   final Map<int, VideoPlayerController> _controllers = {};
   final Set<int> _initializingIndices = {};
 
@@ -37,15 +43,37 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
     _pageController = PageController();
     _checkCreatorStatus();
     _loadReels();
+
+    // Listen to tab visibility changes from parent
+    ReelsScreen.isTabActive.addListener(_onTabVisibilityChanged);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      _pauseCurrentVideo();
-    } else if (state == AppLifecycleState.resumed) {
+      _pauseAllVideos();
+    } else if (state == AppLifecycleState.resumed && _isVisible) {
       _playCurrentVideo();
     }
+  }
+
+  void _onTabVisibilityChanged() {
+    final nowVisible = ReelsScreen.isTabActive.value;
+    if (_isVisible == nowVisible) return;
+    _isVisible = nowVisible;
+
+    if (nowVisible) {
+      _playCurrentVideo();
+    } else {
+      _pauseAllVideos();
+    }
+  }
+
+  /// Called when widget is removed from the tree temporarily (e.g. Navigator push)
+  @override
+  void deactivate() {
+    _pauseAllVideos();
+    super.deactivate();
   }
 
   Future<void> _checkCreatorStatus() async {
@@ -71,7 +99,7 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
           _isLoading = false;
         });
 
-        if (_reels.isNotEmpty) {
+        if (_reels.isNotEmpty && _isVisible) {
           _preloadSurrounding(0);
         }
       }
@@ -89,25 +117,25 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
     if (_reels.isEmpty) return;
 
     // Indices to keep warm: previous, current, next
-    final targetIndices = [
+    final targetIndices = <int>[
       centerIndex,
       if (centerIndex + 1 < _reels.length) centerIndex + 1,
       if (centerIndex - 1 >= 0) centerIndex - 1,
     ];
 
-    // 1. Initialize needed controllers
+    // 1. Initialize needed controllers (don't setState here — _initControllerForIndex handles it)
     for (final index in targetIndices) {
       if (!_controllers.containsKey(index) && !_initializingIndices.contains(index)) {
         _initControllerForIndex(index);
       }
     }
 
-    // 2. Play active video & pause surrounding preloaded videos
+    // 2. Play/pause controllers appropriately
     for (final entry in _controllers.entries) {
       final idx = entry.key;
       final controller = entry.value;
 
-      if (idx == centerIndex) {
+      if (idx == centerIndex && _isVisible) {
         controller.setVolume(_isMuted ? 0.0 : 1.0);
         controller.setLooping(true);
         controller.play();
@@ -117,22 +145,21 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
       }
     }
 
-    // 3. Gracefully dispose distant controllers in background to prevent memory buildup
+    // 3. Dispose distant controllers to save memory
     final toRemove = _controllers.keys
         .where((key) => (key - centerIndex).abs() > 1)
         .toList();
 
     for (final key in toRemove) {
       final controller = _controllers.remove(key);
-      Future.microtask(() {
-        controller?.pause();
-        controller?.dispose();
-      });
+      controller?.pause();
+      controller?.dispose();
     }
   }
 
   Future<void> _initControllerForIndex(int index) async {
     if (index < 0 || index >= _reels.length) return;
+    if (_initializingIndices.contains(index)) return;
     _initializingIndices.add(index);
 
     final reel = _reels[index];
@@ -146,36 +173,32 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
       controller.setLooping(true);
 
       if (mounted) {
-        setState(() {
-          _controllers[index] = controller;
-          _initializingIndices.remove(index);
+        _controllers[index] = controller;
+        _initializingIndices.remove(index);
 
-          // If this is the active index, start playing immediately
-          if (index == _focusedIndex) {
-            controller.setVolume(_isMuted ? 0.0 : 1.0);
-            controller.play();
-          } else {
-            controller.pause();
-            controller.setVolume(0.0);
-          }
-        });
+        // Only play if this is the active index AND tab is visible
+        if (index == _focusedIndex && _isVisible) {
+          controller.setVolume(_isMuted ? 0.0 : 1.0);
+          controller.play();
+        } else {
+          controller.pause();
+          controller.setVolume(0.0);
+        }
+        setState(() {}); // single minimal rebuild
       } else {
         controller.dispose();
       }
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _initializingIndices.remove(index);
-        });
-      }
+      _initializingIndices.remove(index);
       controller.dispose();
     }
   }
 
-  void _pauseCurrentVideo() {
-    final controller = _controllers[_focusedIndex];
-    if (controller != null && controller.value.isInitialized) {
-      controller.pause();
+  void _pauseAllVideos() {
+    for (final controller in _controllers.values) {
+      if (controller.value.isInitialized && controller.value.isPlaying) {
+        controller.pause();
+      }
     }
   }
 
@@ -190,7 +213,6 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
   void _onPageChanged(int index) {
     if (_focusedIndex == index) return;
 
-    // Immediately update index and preload surrounding videos
     setState(() {
       _focusedIndex = index;
     });
@@ -218,9 +240,11 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    ReelsScreen.isTabActive.removeListener(_onTabVisibilityChanged);
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     for (final controller in _controllers.values) {
+      controller.pause();
       controller.dispose();
     }
     _controllers.clear();
@@ -318,15 +342,11 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
           ),
           child: Stack(
             children: [
-              // Snappy, silky-smooth PageView with preloaded buffer items
+              // Smooth PageView — ClampingScrollPhysics for snappy Android-native feel
               PageView.builder(
                 controller: _pageController,
                 scrollDirection: Axis.vertical,
-                physics: const PageScrollPhysics(
-                  parent: BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics(),
-                  ),
-                ),
+                physics: const ClampingScrollPhysics(),
                 allowImplicitScrolling: true,
                 padEnds: false,
                 itemCount: _reels.length,

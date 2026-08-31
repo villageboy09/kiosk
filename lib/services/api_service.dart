@@ -12,8 +12,11 @@ class ApiService {
   static const String baseUrl = 'https://kiosk.cropsync.in/api';
 
   /// Login with user ID (6-digit PIN)
+  /// Login with user ID / Phone number
   /// Returns a User object on success, throws an exception on failure
   static Future<User> loginWithUserId(String userId, {String? role}) async {
+    final cleanPhone = userId.trim().replaceAll(RegExp(r'\D'), '');
+    final phone = cleanPhone.length > 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
     final url = Uri.parse('$baseUrl/api.php?action=login');
 
     try {
@@ -21,10 +24,11 @@ class ApiService {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'user_id': userId,
+          'user_id': phone,
+          'phone_number': phone,
           if (role != null) 'role': role,
         }),
-      );
+      ).timeout(const Duration(seconds: 15));
 
       final data =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -34,7 +38,7 @@ class ApiService {
         return User.fromJson(userData);
       } else {
         throw Exception(
-            data['message'] ?? 'Login failed. Please checks your details.');
+            data['message'] ?? 'Login failed. Please check your details.');
       }
     } catch (e) {
       if (e is Exception) {
@@ -139,12 +143,15 @@ class ApiService {
         String? username,
         String? email,
       }) async {
+    final cleanPhone = phoneNumber.trim().replaceAll(RegExp(r'\D'), '');
+    final phone = cleanPhone.length > 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
     final url = Uri.parse('$baseUrl/api.php?action=register_user');
 
     try {
       final body = {
         'name': name,
-        'phone_number': phoneNumber,
+        'user_id': phone,
+        'phone_number': phone,
         'client_code': clientCode,
       };
       if (role != null) {
@@ -170,7 +177,7 @@ class ApiService {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),
-      );
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         return jsonDecode(utf8.decode(response.bodyBytes));
@@ -188,11 +195,13 @@ class ApiService {
   /// Returns user data if found, null otherwise.
   static Future<Map<String, dynamic>?> checkUser(String phoneNumber, {String? role}) async {
     try {
-      String url = '$baseUrl/api.php?action=check_user&phone_number=$phoneNumber';
+      final cleanPhone = phoneNumber.trim().replaceAll(RegExp(r'\D'), '');
+      final phone = cleanPhone.length > 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
+      String url = '$baseUrl/api.php?action=check_user&phone_number=$phone';
       if (role != null) {
         url += '&role=$role';
       }
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));

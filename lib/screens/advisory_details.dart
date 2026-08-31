@@ -269,12 +269,21 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                     // Management/Remedies section
                     if (advisory.recommendations.isNotEmpty) ...[
                       Padding(
-                        padding:
-                            const EdgeInsets.only(top: 28.0, bottom: 16.0),
+                        padding: const EdgeInsets.only(top: 24.0, bottom: 16.0),
                         child: Row(
                           children: [
-                            const Icon(Icons.medical_services_rounded,
-                                color: AppTheme.textPrimary, size: 28),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF1F5F9),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.settings_suggest_rounded,
+                                color: AppTheme.primary,
+                                size: 24,
+                              ),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -291,6 +300,36 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
                           ],
                         ),
                       ),
+
+                      // Warning note for chemical usage
+                      if (chemicalRecs.isNotEmpty || biologicalRecs.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16.0),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2), // soft red
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFFEE2E2)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    context.tr('advisory_single_chemical_note'),
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF991B1B),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
 
                       // Chemical treatments section
                       if (chemicalRecs.isNotEmpty) ...[
@@ -629,13 +668,6 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          )
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -688,19 +720,12 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          )
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
@@ -1069,18 +1094,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
     controller.value = Matrix4.identity();
   }
 
-  void _handleDoubleTap(TapDownDetails details) {
-    final controller = _getController(_currentIndex);
-    final currentScale = controller.value.getMaxScaleOnAxis();
-    if (currentScale > 1.2) {
-      controller.value = Matrix4.identity();
-    } else {
-      final position = details.localPosition;
-      final translation = Matrix4.translationValues(-position.dx * 1.5, -position.dy * 1.5, 0.0);
-      final scale = Matrix4.diagonal3Values(2.5, 2.5, 1.0);
-      controller.value = translation * scale;
-    }
-  }
+
 
   @override
   void dispose() {
@@ -1111,28 +1125,24 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
             },
             itemBuilder: (context, index) {
               final controller = _getController(index);
-              return GestureDetector(
-                onDoubleTapDown: _handleDoubleTap,
-                onDoubleTap: () {},
-                child: Center(
-                  child: Hero(
-                    tag: '${widget.tagPrefix}_$index',
-                    child: InteractiveViewer(
-                      transformationController: controller,
-                      minScale: 1.0,
-                      maxScale: 5.0,
-                      clipBehavior: Clip.none,
-                      child: CachedNetworkImage(
-                        imageUrl: widget.imageUrls[index],
-                        fit: BoxFit.contain,
-                        placeholder: (_, __) => const Center(
-                          child: CircularProgressIndicator(color: Colors.white),
-                        ),
-                        errorWidget: (_, __, ___) => const Icon(
-                          Icons.broken_image_rounded,
-                          color: Colors.white54,
-                          size: 64,
-                        ),
+              return Center(
+                child: Hero(
+                  tag: '${widget.tagPrefix}_$index',
+                  child: InteractiveViewer(
+                    transformationController: controller,
+                    minScale: 1.0,
+                    maxScale: 5.0,
+                    clipBehavior: Clip.none,
+                    child: CachedNetworkImage(
+                      imageUrl: widget.imageUrls[index],
+                      fit: BoxFit.contain,
+                      placeholder: (_, __) => const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                      errorWidget: (_, __, ___) => const Icon(
+                        Icons.broken_image_rounded,
+                        color: Colors.white54,
+                        size: 64,
                       ),
                     ),
                   ),

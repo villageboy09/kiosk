@@ -274,6 +274,14 @@ try {
                 }
             } catch (Throwable $e) {}
 
+            try {
+                $stmtCPhone = $pdo->query("SHOW COLUMNS FROM creators LIKE 'phone_number'");
+                if (!$stmtCPhone->fetch()) {
+                    $pdo->exec("ALTER TABLE `creators` ADD COLUMN `phone_number` VARCHAR(20) NULL");
+                    $pdo->exec("ALTER TABLE `creators` ADD INDEX `idx_creator_phone` (`phone_number`)");
+                }
+            } catch (Throwable $e) {}
+
             // Reels table
             $pdo->exec("CREATE TABLE IF NOT EXISTS `reels` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -1238,13 +1246,15 @@ function checkUser($pdo) {
 function loginWithRoleChecking($pdo, $userId, $role = null) {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    $cleanPhone = preg_replace('/[^0-9]/', '', $userId);
+    $cleanPhone = preg_replace('/[^0-9]/', '', (string)$userId);
     $last10 = strlen($cleanPhone) > 10 ? substr($cleanPhone, -10) : $cleanPhone;
+    $phone91 = '91' . $last10;
+    $phonePlus91 = '+91' . $last10;
 
     // 1. If role is explicitly specified, target that role's logic directly
     if ($role === 'retailer') {
-        $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
-        $stmtRet->execute([$userId, $last10, '91' . $last10]);
+        $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? OR contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
+        $stmtRet->execute([$userId, $last10, $phone91, $phonePlus91]);
         $retailer = $stmtRet->fetch(PDO::FETCH_ASSOC);
         if ($retailer) {
             return [
@@ -1266,8 +1276,8 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
             ];
         }
     } elseif ($role === 'officer') {
-        $stmtOff = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
-        $stmtOff->execute([$userId, $last10, '91' . $last10]);
+        $stmtOff = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? OR contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
+        $stmtOff->execute([$userId, $last10, $phone91, $phonePlus91]);
         $officer = $stmtOff->fetch(PDO::FETCH_ASSOC);
         if ($officer) {
             return [
@@ -1288,8 +1298,8 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
             ];
         }
     } elseif ($role === 'content_creator' || $role === 'creator') {
-        $stmtCreator = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? OR phone_number = ? OR user_id = ? OR username = ? LIMIT 1");
-        $stmtCreator->execute([$userId, $last10, $last10, $userId]);
+        $stmtCreator = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? OR phone_number = ? OR phone_number = ? OR user_id = ? OR username = ? LIMIT 1");
+        $stmtCreator->execute([$userId, $last10, $phone91, $last10, $userId]);
         $creator = $stmtCreator->fetch(PDO::FETCH_ASSOC);
         if ($creator) {
             return [
@@ -1306,8 +1316,8 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                 ]
             ];
         }
-        $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
-        $stmtFarmer->execute([$userId, $userId, $last10]);
+        $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR user_id = ? OR phone_number = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+        $stmtFarmer->execute([$userId, $last10, $userId, $last10, $phone91]);
         $user = $stmtFarmer->fetch(PDO::FETCH_ASSOC);
         if ($user) {
             $user['role'] = 'content_creator';
@@ -1319,8 +1329,8 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
             ];
         }
     } elseif ($role === 'farmer') {
-        $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
-        $stmtFarmer->execute([$userId, $userId, $last10]);
+        $stmtFarmer = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR user_id = ? OR phone_number = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+        $stmtFarmer->execute([$userId, $last10, $userId, $last10, $phone91]);
         $user = $stmtFarmer->fetch(PDO::FETCH_ASSOC);
         if ($user) {
             $user['role'] = 'farmer';
@@ -1335,8 +1345,8 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
 
     // 2. Fallback: Role was not passed or not matched yet.
     // Check users table first for stored role:
-    $stmtU = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
-    $stmtU->execute([$userId, $userId, $last10]);
+    $stmtU = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR user_id = ? OR phone_number = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+    $stmtU->execute([$userId, $last10, $userId, $last10, $phone91]);
     $userRow = $stmtU->fetch(PDO::FETCH_ASSOC);
 
     if ($userRow && !empty($userRow['role'])) {
@@ -1357,8 +1367,8 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                 ])
             ];
         } elseif ($storedRole === 'retailer') {
-            $rStmt = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? OR contact_number = ? LIMIT 1");
-            $rStmt->execute([$userId, $last10]);
+            $rStmt = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
+            $rStmt->execute([$userId, $last10, $phone91]);
             $rRow = $rStmt->fetch(PDO::FETCH_ASSOC);
             return [
                 'success' => true,
@@ -1370,8 +1380,8 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                 ])
             ];
         } elseif ($storedRole === 'officer') {
-            $oStmt = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? OR contact_number = ? LIMIT 1");
-            $oStmt->execute([$userId, $last10]);
+            $oStmt = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
+            $oStmt->execute([$userId, $last10, $phone91]);
             $oRow = $oStmt->fetch(PDO::FETCH_ASSOC);
             return [
                 'success' => true,
@@ -1404,8 +1414,8 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
     }
 
     // 3. Fallback: Lookup in specialized tables if users table didn't have role
-    $stmtC = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? OR user_id = ? LIMIT 1");
-    $stmtC->execute([$last10, $last10]);
+    $stmtC = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? OR phone_number = ? OR user_id = ? LIMIT 1");
+    $stmtC->execute([$last10, $userId, $last10]);
     $creator = $stmtC->fetch(PDO::FETCH_ASSOC);
     if ($creator) {
         return [
@@ -1423,8 +1433,8 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
         ];
     }
 
-    $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? OR contact_number = ? LIMIT 1");
-    $stmtRet->execute([$userId, $last10]);
+    $stmtRet = $pdo->prepare("SELECT * FROM retailer_partners WHERE contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
+    $stmtRet->execute([$userId, $last10, $phone91]);
     $retailer = $stmtRet->fetch(PDO::FETCH_ASSOC);
     if ($retailer) {
         return [
@@ -1446,8 +1456,8 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
         ];
     }
 
-    $stmtOff = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? OR contact_number = ? LIMIT 1");
-    $stmtOff->execute([$userId, $last10]);
+    $stmtOff = $pdo->prepare("SELECT * FROM extension_officers WHERE contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
+    $stmtOff->execute([$userId, $last10, $phone91]);
     $officer = $stmtOff->fetch(PDO::FETCH_ASSOC);
     if ($officer) {
         return [
@@ -1485,16 +1495,16 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
     ];
 }
 
-function loginUser($pdo) {
-    $input = json_decode(file_get_contents('php://input'), true);
-    $userId = $input['user_id'] ?? '';
-    $role = $input['role'] ?? null;
-
+function handleLogin($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $userId = trim($input['user_id'] ?? $input['phone_number'] ?? $_GET['user_id'] ?? $_GET['phone_number'] ?? $_POST['user_id'] ?? $_POST['phone_number'] ?? '');
+    $role = $input['role'] ?? $_GET['role'] ?? $_POST['role'] ?? null;
+    
     if (empty($userId)) {
-        echo json_encode(['success' => false, 'message' => 'User ID is required']);
+        echo json_encode(['success' => false, 'message' => 'User ID or Phone number is required']);
         return;
     }
-
+    
     try {
         $res = loginWithRoleChecking($pdo, $userId, $role);
         echo json_encode($res);
@@ -1503,10 +1513,14 @@ function loginUser($pdo) {
     }
 }
 
+function loginUser($pdo) {
+    handleLogin($pdo);
+}
+
 function getUserProfile($pdo) {
-    $input = json_decode(file_get_contents('php://input'), true);
-    $userId = $input['user_id'] ?? '';
-    $role = $input['role'] ?? null;
+    $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $userId = trim($input['user_id'] ?? $input['phone_number'] ?? $_GET['user_id'] ?? $_GET['phone_number'] ?? $_POST['user_id'] ?? $_POST['phone_number'] ?? '');
+    $role = $input['role'] ?? $_GET['role'] ?? $_POST['role'] ?? null;
 
     if (empty($userId)) {
         echo json_encode(['success' => false, 'message' => 'User ID is required']);
@@ -1520,24 +1534,6 @@ function getUserProfile($pdo) {
         } else {
             echo json_encode(['success' => false, 'message' => 'User not found']);
         }
-    } catch (PDOException $e) {
-        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
-    }
-}
-
-function handleLogin($pdo) {
-    $input = json_decode(file_get_contents('php://input'), true);
-    $userId = $input['user_id'] ?? '';
-    $role = $input['role'] ?? null;
-    
-    if (empty($userId)) {
-        echo json_encode(['success' => false, 'message' => 'User ID is required']);
-        return;
-    }
-    
-    try {
-        $res = loginWithRoleChecking($pdo, $userId, $role);
-        echo json_encode($res);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
     }
@@ -4207,8 +4203,7 @@ function getReels($pdo) {
                 c.display_name AS creator_display_name, 
                 c.profile_image_url AS creator_profile_image_url,
                 c.is_verified AS creator_is_verified,
-                c.phone_number AS creator_phone_number,
-                c.bio AS creator_bio
+                  c.bio AS creator_bio
                 FROM reels r
                 LEFT JOIN creators c ON r.creator_id = c.id
                 WHERE r.is_active = 1
@@ -4987,9 +4982,8 @@ function getCreatorStudioData($pdo) {
             c.username AS creator_username,
             c.display_name AS creator_display_name,
             c.profile_image_url AS creator_profile_image_url,
-            c.is_verified AS creator_is_verified,
-            c.phone_number AS creator_phone_number
-            FROM reels r
+            c.is_verified AS creator_is_verified
+              FROM reels r
             LEFT JOIN creators c ON r.creator_id = c.id
             WHERE r.creator_id = ? OR (r.phone_number = ? AND r.phone_number != '')
             ORDER BY r.id DESC
@@ -5183,3 +5177,5 @@ function getCreatorStudioData($pdo) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
 }
+
+

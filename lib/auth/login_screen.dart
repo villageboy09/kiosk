@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -107,14 +107,7 @@ class _LoginScreenState extends State<LoginScreen>
     });
   }
 
-  /// Strict phone number validation:
-  /// - Exact 10 digits
-  /// - Must start with 6, 7, 8, or 9
-  /// - Rejects numbers with fewer than 4 unique digits (e.g. 9999999998, 9898989898)
-  /// - Rejects runs of 4+ consecutive identical digits (e.g. 9999, 8888, 0000)
-  /// - Rejects any single digit appearing 5 or more times
-  /// - Rejects 6+ sequential digits (e.g. 123456, 987654)
-  /// - Rejects repeated multi-digit patterns and dummy numbers
+  /// Validates standard 10-digit Indian mobile numbers
   static String? validatePhoneNumber(String rawPhone) {
     final clean = rawPhone.trim().replaceAll(RegExp(r'\D'), '');
     if (clean.isEmpty) {
@@ -126,75 +119,6 @@ class _LoginScreenState extends State<LoginScreen>
     if (!RegExp(r'^[6-9]').hasMatch(clean)) {
       return 'Mobile number must start with 6, 7, 8, or 9';
     }
-
-    // 1. Check distinct unique digits (real numbers have at least 4 unique digits)
-    final uniqueDigits = clean.split('').toSet();
-    if (uniqueDigits.length < 4) {
-      return 'Invalid mobile number: too few distinct digits';
-    }
-
-    // 2. Check consecutive identical digits (e.g., 9999, 8888, 0000)
-    if (RegExp(r'(\d)\1{3,}').hasMatch(clean)) {
-      return 'Invalid mobile number: consecutive repeating digits';
-    }
-
-    // 3. Check max frequency of any single digit (no digit should appear 5+ times)
-    final digitCounts = <String, int>{};
-    for (var i = 0; i < clean.length; i++) {
-      final char = clean[i];
-      digitCounts[char] = (digitCounts[char] ?? 0) + 1;
-      if (digitCounts[char]! >= 5) {
-        return 'Invalid mobile number: digit "$char" repeated too many times';
-      }
-    }
-
-    // 4. Check sequential 6+ digit ascending/descending patterns or full sequences
-    const sequentialPatterns = [
-      '0123456789',
-      '1234567890',
-      '9876543210',
-      '8765432109',
-      '9123456789',
-      '123456',
-      '234567',
-      '345678',
-      '456789',
-      '567890',
-      '987654',
-      '876543',
-      '765432',
-      '654321',
-      '543210',
-    ];
-    for (final seq in sequentialPatterns) {
-      if (clean.contains(seq)) {
-        return 'Invalid mobile number: sequential pattern detected';
-      }
-    }
-
-    // 5. Check repeated 2-digit, 3-digit, or 5-digit chunks
-    if (RegExp(r'^(\d{2})\1{3,}$').hasMatch(clean)) {
-      return 'Invalid mobile number: repetitive pattern';
-    }
-    if (RegExp(r'^(\d{3})\1{2}').hasMatch(clean)) {
-      return 'Invalid mobile number: repetitive pattern';
-    }
-    if (RegExp(r'^(\d{5})\1$').hasMatch(clean)) {
-      return 'Invalid mobile number: repetitive pattern';
-    }
-
-    // 6. Dummy numbers filter
-    const dummyNumbers = {
-      '9876543210',
-      '9876543211',
-      '9800000000',
-      '9000000000',
-      '9123456780',
-    };
-    if (dummyNumbers.contains(clean)) {
-      return 'Invalid mobile number: please enter a real contact number';
-    }
-
     return null;
   }
 
@@ -1239,12 +1163,11 @@ class _LoginScreenState extends State<LoginScreen>
 
   /// Sign In Action Button
   Widget _buildSubmitButton({required bool isCompact}) {
-    final phone = _phoneController.text.trim();
-    final isPhoneValid = validatePhoneNumber(phone) == null;
-    final bool canProceed = isPhoneValid &&
+    final String phone = _phoneController.text.trim();
+    final String cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    final bool canProceed = cleanPhone.length == 10 &&
         (_selectedRole != 'chc_operator' ||
             _passwordController.text.trim().isNotEmpty);
-
     final bool isButtonDisabled = _isLoading || !canProceed;
 
     return ElevatedButton(

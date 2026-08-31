@@ -48,7 +48,7 @@ class ReelsService {
     final url = Uri.parse(_apiEndpoint).replace(queryParameters: queryParams);
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         List<dynamic> listData = [];
@@ -72,7 +72,7 @@ class ReelsService {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Reels API error (falling back to cache/reels.php): $e');
+        print('Reels API error (falling back to reels.php): $e');
       }
       // Fallback try reels.php directly
       try {

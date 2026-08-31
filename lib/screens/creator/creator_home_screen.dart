@@ -105,6 +105,8 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
       HapticFeedback.selectionClick();
       setState(() => _selectedIndex = index);
     }
+    // Notify ReelsScreen about tab visibility (reels is tab index 1 in creator layout)
+    ReelsScreen.isTabActive.value = (index == 1);
   }
 
   void _showLanguageSheet() {
@@ -533,6 +535,7 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_selectedIndex != 0) {
+          ReelsScreen.isTabActive.value = false;
           setState(() => _selectedIndex = 0);
         }
       },

@@ -46,7 +46,6 @@ class SafeNetworkImage extends StatelessWidget {
       width: width,
       height: height,
       fit: fit,
-      memCacheWidth: 600,
       fadeInDuration: const Duration(milliseconds: 120),
       placeholder: (_, __) => SizedBox(
         width: width,

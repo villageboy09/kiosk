@@ -1,4 +1,4 @@
-﻿// lib/screens/seed_varieties.dart
+// lib/screens/seed_varieties.dart
 
 // ignore_for_file: use_build_context_synchronously
 
@@ -220,6 +220,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) => _SeedCard(
+                      key: ValueKey(_filteredVarieties[index].id),
                       variety: _filteredVarieties[index],
                       onTap: () => _showDetails(_filteredVarieties[index]),
                     ),
@@ -312,7 +313,7 @@ class _SeedCard extends StatelessWidget {
   final SeedVariety variety;
   final VoidCallback onTap;
 
-  const _SeedCard({required this.variety, required this.onTap});
+  const _SeedCard({super.key, required this.variety, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -343,8 +344,6 @@ class _SeedCard extends StatelessWidget {
                         imageUrl: variety.imageUrl ?? '',
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        memCacheWidth: 400,
-                        memCacheHeight: 400,
                         placeholder: (context, url) => Container(
                           color: Colors.grey[100],
                           child: const Center(

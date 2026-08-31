@@ -1,4 +1,4 @@
-﻿import 'package:cropsync/screens/crop_advisory_grid_screen.dart';
+import 'package:cropsync/screens/crop_advisory_grid_screen.dart';
 import 'package:cropsync/screens/profile_screen.dart';
 import 'package:cropsync/screens/news/news_feed_screen.dart';
 import 'package:cropsync/screens/reels_screen.dart';
@@ -251,6 +251,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (_selectedIndex != index) {
       HapticFeedback.selectionClick();
       setState(() => _selectedIndex = index);
+      // Notify ReelsScreen about tab visibility (reels is tab index 3)
+      ReelsScreen.isTabActive.value = (index == 3);
     }
   }
 
@@ -295,6 +297,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_selectedIndex != 0) {
+          ReelsScreen.isTabActive.value = false;
           setState(() {
             _selectedIndex = 0;
           });

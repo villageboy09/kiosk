@@ -1,4 +1,4 @@
-﻿// ignore_for_file: prefer_const_constructors
+// ignore_for_file: prefer_const_constructors
 
 import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/screens/chc_booking_screen.dart';
@@ -273,8 +273,8 @@ class _ServicesGrid extends StatelessWidget {
           subtitle: firstCrop != null
               ? firstCrop!.cropName
               : 'home_feature_advisory_subtitle'.tr(),
-          imageUrl: firstCrop?.cropImageUrl,
-          imagePath: firstCrop?.cropImageUrl == null ? 'assets/images/seed_varieties.jpg' : null,
+          imageUrl: 'https://kiosk.cropsync.in/Dashboard_images/cropadvisory.png',
+          imagePath: null,
           color: AppTheme.primary,
           onTap: () => onTabSelected(1),
         ),
@@ -310,8 +310,8 @@ class _ServicesGrid extends StatelessWidget {
           _ServiceCard(
             title: 'home_feature_news_title'.tr(),
             subtitle: 'home_feature_news_subtitle'.tr(),
-            imagePath: 'assets/images/custom_hiring_center.jpg',
-            imageUrl: 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?auto=format&fit=crop&w=600&q=80',
+            imageUrl: 'https://kiosk.cropsync.in/Dashboard_images/news.png',
+            imagePath: null,
             color: AppTheme.accentTeal,
             onTap: () => onTabSelected(2),
           )

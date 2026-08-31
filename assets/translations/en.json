@@ -1,5 +1,6 @@
 {
   "welcome_title": "Welcome to CropSync",
+  "advisory_single_chemical_note": "Note: Use only one chemical recommendation at a time, not all.",
   "choose_language": "Choose Your Language",
   "change_later_settings": "You can change this later in Settings.",
   "choose_role": "Choose Your Role",
