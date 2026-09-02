@@ -26,6 +26,7 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
   bool _isLoadingAI = false;
   String _lastRefreshedStr = "Never";
   DateTime? _lastRefreshTime;
+  Locale? _lastLocale;
 
   @override
   void initState() {
@@ -33,6 +34,19 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
     _weatherFuture = _fetchWeather();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final currentLocale = context.locale;
+    if (_lastLocale != currentLocale) {
+      _lastLocale = currentLocale;
+      _weatherFuture.then((summary) {
+        if (mounted) {
+          _loadOrFetchAIAdvisory(summary);
+        }
+      }).catchError((_) {});
+    }
+  }
 
   Future<_WeatherSummary> _fetchWeather() async {
     final prefs = await SharedPreferences.getInstance();
@@ -195,8 +209,9 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
   // Strategic AI Caching & Loader
   Future<void> _loadOrFetchAIAdvisory(_WeatherSummary weather, {bool forceRefresh = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final cacheKey = "ai_advisory_${weather.latitude}_${weather.longitude}";
-    final timeKey = "ai_advisory_time_${weather.latitude}_${weather.longitude}";
+    final locale = mounted ? context.locale.languageCode : 'en';
+    final cacheKey = "ai_advisory_${weather.latitude}_${weather.longitude}_$locale";
+    final timeKey = "ai_advisory_time_${weather.latitude}_${weather.longitude}_$locale";
 
     final cachedData = prefs.getString(cacheKey);
     final cachedTimeStr = prefs.getString(timeKey);
@@ -233,7 +248,7 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
       setState(() {
         _aiAdvisory = aiResult;
         _lastRefreshTime = DateTime.now();
-        _lastRefreshedStr = "Just now";
+        _lastRefreshedStr = 'weather_just_now'.tr();
         _isLoadingAI = false;
       });
     } else {
@@ -242,7 +257,7 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to update AI Advisory. Using offline data.")),
+          SnackBar(content: Text('weather_ai_update_failed'.tr())),
         );
       }
     }
@@ -250,9 +265,37 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
 
   String _formatDurationSince(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return "Just now";
-    if (diff.inMinutes < 60) return "${diff.inMinutes} mins ago";
-    return "${diff.inHours} hours ago";
+    if (diff.inMinutes < 1) return 'weather_just_now'.tr();
+    if (diff.inMinutes < 60) return 'weather_mins_ago'.tr(args: [diff.inMinutes.toString()]);
+    return 'weather_hours_ago'.tr(args: [diff.inHours.toString()]);
+  }
+
+  String _localizeCondition(String condition, String locale) {
+    final lower = condition.toLowerCase();
+    if (locale == 'te') {
+      if (lower.contains('thunder')) return 'ఉరుములతో కూడిన వర్షం';
+      if (lower.contains('rain') || lower.contains('shower')) return 'వర్షం';
+      if (lower.contains('partly cloudy') || lower.contains('partially cloudy')) return 'పాక్షికంగా మేఘావృతం';
+      if (lower.contains('overcast')) return 'దట్టమైన మేఘాలు';
+      if (lower.contains('cloud')) return 'మేఘావృతం';
+      if (lower.contains('clear')) return 'నిర్మలమైన ఆకాశం';
+      if (lower.contains('fog') || lower.contains('mist')) return 'పొగమంచు';
+      if (lower.contains('snow')) return 'మంచు కురవడం';
+      if (lower.contains('wind')) return 'గాలులతో కూడిన వాతావరణం';
+      return condition;
+    } else if (locale == 'hi') {
+      if (lower.contains('thunder')) return 'गरज के साथ बारिश';
+      if (lower.contains('rain') || lower.contains('shower')) return 'बारिश';
+      if (lower.contains('partly cloudy') || lower.contains('partially cloudy')) return 'आंशिक रूप से बादल';
+      if (lower.contains('overcast')) return 'घने बादल';
+      if (lower.contains('cloud')) return 'बादल छाए रहेंगे';
+      if (lower.contains('clear')) return 'साफ मौसम';
+      if (lower.contains('fog') || lower.contains('mist')) return 'कोहरा';
+      if (lower.contains('snow')) return 'बर्फबारी';
+      if (lower.contains('wind')) return 'तेज हवाएं';
+      return condition;
+    }
+    return condition;
   }
 
   Future<Map<String, dynamic>?> _fetchAIAdvisoryFromNvidia(_WeatherSummary weather) async {
@@ -472,7 +515,7 @@ Format:
             Icon(Icons.cloud_off_rounded, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              'Unable to load weather',
+              'weather_load_error'.tr(),
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -492,7 +535,7 @@ Format:
                   _weatherFuture = _fetchWeather();
                 });
               },
-              child: const Text('Retry'),
+              child: Text('weather_retry'.tr()),
             ),
           ],
         ),
@@ -598,9 +641,11 @@ Format:
   }
 
   Widget _buildContent(_WeatherSummary weather) {
+    final locale = context.locale.languageCode;
     final currentMonth = DateTime.now().month;
     final seasonInfo = _getSeasonInfo(currentMonth);
     final insights = _analyzeWeatherPatterns(weather);
+    final localizedCondition = _localizeCondition(weather.conditions, locale);
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -625,9 +670,9 @@ Format:
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Today\'s Weather',
-                      style: TextStyle(
+                    Text(
+                      'weather_today'.tr(),
+                      style: const TextStyle(
                         fontSize: 14,
                         color: AppTheme.textSecondary,
                         fontWeight: FontWeight.w600,
@@ -648,7 +693,7 @@ Format:
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          weather.conditions,
+                          localizedCondition,
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -659,7 +704,7 @@ Format:
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'H: ${weather.tempMax.round()}°  L: ${weather.tempMin.round()}°',
+                      '${'weather_high_short'.tr()}: ${weather.tempMax.round()}°  ${'weather_low_short'.tr()}: ${weather.tempMin.round()}°',
                       style: const TextStyle(
                         fontSize: 13,
                         color: AppTheme.textSecondary,
@@ -748,14 +793,14 @@ Format:
             physics: const NeverScrollableScrollPhysics(),
             children: [
               _buildSummaryCard(
-                title: 'Weekly Forecast',
-                subtitle: '7-day weather outlook',
+                title: 'weather_weekly_forecast'.tr(),
+                subtitle: 'weather_weekly_subtitle'.tr(),
                 icon: Icons.calendar_month_rounded,
                 color: const Color(0xFF3B82F6),
                 onTap: () {
                   _showBottomSheet(
                     context,
-                    '7-Day Forecast',
+                    'weather_7day_forecast'.tr(),
                     SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.all(20.0),
@@ -778,7 +823,7 @@ Format:
                                     const Icon(Icons.info_outline_rounded, color: Color(0xFF3B82F6), size: 20),
                                     const SizedBox(width: 8),
                                     Text(
-                                      'Latest update: ${DateFormat('MMM d, yyyy - h:mm a').format(DateTime.now())}',
+                                      'weather_latest_update'.tr(args: [DateFormat('MMM d, yyyy - h:mm a', locale).format(DateTime.now())]),
                                       style: const TextStyle(
                                         fontSize: 12,
                                         color: Color(0xFF1D4ED8),
@@ -789,7 +834,7 @@ Format:
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
-                                  _generateWeeklySummaryText(weather.daily),
+                                  _generateWeeklySummaryText(weather.daily, locale),
                                   style: const TextStyle(
                                     fontSize: 15,
                                     color: Color(0xFF1E3A8A),
@@ -807,30 +852,30 @@ Format:
                 },
               ),
               _buildSummaryCard(
-                title: 'Seasonal Advisory',
-                subtitle: 'Current season: ${seasonInfo.name}',
+                title: 'weather_seasonal_advisory'.tr(),
+                subtitle: 'weather_current_season'.tr(args: [seasonInfo.name]),
                 icon: Icons.eco_rounded,
                 color: const Color(0xFF10B981),
                 onTap: () {
-                  _showBottomSheet(context, 'Seasonal Advisory', _buildSeasonalTab(weather, seasonInfo));
+                  _showBottomSheet(context, 'weather_seasonal_advisory'.tr(), _buildSeasonalTab(weather, seasonInfo, locale));
                 },
               ),
               _buildSummaryCard(
-                title: 'Crops to Grow',
-                subtitle: 'Recommended crops for this season',
+                title: 'weather_crops_to_grow'.tr(),
+                subtitle: 'weather_recommended_crops_subtitle'.tr(),
                 icon: Icons.agriculture_rounded,
                 color: const Color(0xFFF59E0B),
                 onTap: () {
-                  _showBottomSheet(context, 'Crops to Grow', _buildCropsTab(weather, seasonInfo));
+                  _showBottomSheet(context, 'weather_crops_to_grow'.tr(), _buildCropsTab(weather, seasonInfo, locale));
                 },
               ),
               _buildSummaryCard(
-                title: 'Weather Insights',
-                subtitle: 'Patterns & AI analysis',
+                title: 'weather_insights'.tr(),
+                subtitle: 'weather_insights_subtitle'.tr(),
                 icon: Icons.insights_rounded,
                 color: const Color(0xFF8B5CF6),
                 onTap: () {
-                  _showBottomSheet(context, 'Weather Insights', _buildPatternsTab(insights));
+                  _showBottomSheet(context, 'weather_insights'.tr(), _buildPatternsTab(insights));
                 },
               ),
             ],
@@ -841,8 +886,8 @@ Format:
     );
   }
 
-  String _generateWeeklySummaryText(List<_DailyData> daily) {
-    if (daily.isEmpty) return 'No weekly forecast available.';
+  String _generateWeeklySummaryText(List<_DailyData> daily, String locale) {
+    if (daily.isEmpty) return 'no_data_message'.tr();
 
     double avgMax = 0;
     double avgMin = 0;
@@ -868,6 +913,30 @@ Format:
         mostCommonCondition = condition;
       }
     });
+
+    if (locale == 'te') {
+      String precipText = '';
+      if (avgPrecip > 50) {
+        precipText = ' భారీ వర్షాలు పడే అవకాశం ఉంది, కాబట్టి వ్యవసాయ పనులను జాగ్రత్తగా ప్లాన్ చేసుకోండి.';
+      } else if (avgPrecip > 20) {
+        precipText = ' మోస్తరు వర్షం పడే అవకాశం ఉంది.';
+      } else {
+        precipText = ' ఈ వారం వాతావరణం చాలావరకు పొడిగా ఉంటుంది.';
+      }
+      final locCondition = _localizeCondition(mostCommonCondition, 'te');
+      return 'రాబోయే వారం ప్రధానంగా $locConditionగా ఉండే అవకాశం ఉంది. సగటు గరిష్ట ఉష్ణోగ్రత ${avgMax.round()}°C మరియు కనిష్ట ఉష్ణోగ్రత ${avgMin.round()}°C గా నమోదవుతుంది.$precipText';
+    } else if (locale == 'hi') {
+      String precipText = '';
+      if (avgPrecip > 50) {
+        precipText = ' भारी बारिश की संभावना है, इसलिए कृषि कार्यों की योजना सावधानी से बनाएं।';
+      } else if (avgPrecip > 20) {
+        precipText = ' मध्यम बारिश की संभावना है।';
+      } else {
+        precipText = ' इस सप्ताह मौसम अधिकांशतः शुष्क रहेगा।';
+      }
+      final locCondition = _localizeCondition(mostCommonCondition, 'hi');
+      return 'आगामी सप्ताह में मुख्य रूप से $locCondition रहने की संभावना है। औसत अधिकतम तापमान ${avgMax.round()}°C और न्यूनतम तापमान ${avgMin.round()}°C रहेगा।$precipText';
+    }
 
     String precipText = '';
     if (avgPrecip > 50) {
@@ -908,12 +977,12 @@ Format:
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "NVIDIA AI Advisor Active",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF14532D)),
+                Text(
+                  "weather_ai_advisor_active".tr(),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF14532D)),
                 ),
                 Text(
-                  "Refreshed: $_lastRefreshedStr",
+                  "weather_refreshed_label".tr(args: [_lastRefreshedStr]),
                   style: const TextStyle(fontSize: 12, color: Color(0xFF166534)),
                 ),
               ],
@@ -932,7 +1001,7 @@ Format:
                     if (_lastRefreshTime != null && 
                         DateTime.now().difference(_lastRefreshTime!).inSeconds < 15) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Please wait a moment before refreshing again.")),
+                        SnackBar(content: Text("weather_refresh_wait".tr())),
                       );
                       return;
                     }
@@ -944,7 +1013,7 @@ Format:
     );
   }
 
-  Widget _buildSeasonalTab(_WeatherSummary weather, _SeasonInfo season) {
+  Widget _buildSeasonalTab(_WeatherSummary weather, _SeasonInfo season, String locale) {
     List<String> activeAdvisories = season.advisories;
     if (_aiAdvisory != null && _aiAdvisory!['advisories'] != null) {
       activeAdvisories = List<String>.from(_aiAdvisory!['advisories']);
@@ -952,7 +1021,7 @@ Format:
 
     String advisorySummary = activeAdvisories.isNotEmpty 
         ? activeAdvisories.join(' ') 
-        : 'No specific advisories at this time.';
+        : 'weather_no_advisories'.tr();
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -978,7 +1047,7 @@ Format:
                     const Icon(Icons.eco_rounded, color: Color(0xFF10B981), size: 20),
                     const SizedBox(width: 8),
                     Text(
-                      'Latest update: ${DateFormat('MMM d, yyyy - h:mm a').format(DateTime.now())}',
+                      'weather_latest_update'.tr(args: [DateFormat('MMM d, yyyy - h:mm a', locale).format(DateTime.now())]),
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFF047857),
@@ -989,7 +1058,7 @@ Format:
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Season: ${season.name} (${season.duration})\n\n${season.description}',
+                  '${'weather_season_label'.tr(args: [season.name, season.duration])}\n\n${season.description}',
                   style: const TextStyle(
                     fontSize: 15,
                     color: Color(0xFF065F46),
@@ -1002,7 +1071,7 @@ Format:
                 const Divider(color: Color(0xFFA7F3D0)),
                 const SizedBox(height: 12),
                 Text(
-                  'Advisory:\n$advisorySummary',
+                  '${'weather_advisory_label'.tr()}\n$advisorySummary',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF065F46),
@@ -1018,18 +1087,24 @@ Format:
     );
   }
 
-  String _getSowingDate(String seasonName) {
+  String _getSowingDate(String seasonName, String locale) {
     final lower = seasonName.toLowerCase();
     if (lower.contains('kharif') || lower.contains('ఖరీఫ్') || lower.contains('खरीफ')) {
+      if (locale == 'te') return 'జూన్ - జూలై';
+      if (locale == 'hi') return 'जून - जुलाई';
       return 'June - July';
     } else if (lower.contains('rabi') || lower.contains('రబీ') || lower.contains('रबी')) {
+      if (locale == 'te') return 'అక్టోబర్ - నవంబర్';
+      if (locale == 'hi') return 'अक्टूबर - नवंबर';
       return 'October - November';
     } else {
+      if (locale == 'te') return 'మార్చి - ఏప్రిల్';
+      if (locale == 'hi') return 'मार्च - अप्रैल';
       return 'March - April';
     }
   }
 
-  Widget _buildCropsTab(_WeatherSummary weather, _SeasonInfo season) {
+  Widget _buildCropsTab(_WeatherSummary weather, _SeasonInfo season, String locale) {
     // Dynamic crop recommendations (AI or local fallback)
     List<_CropRecommendation> activeCrops = season.recommendedCrops;
     if (_aiAdvisory != null && _aiAdvisory!['crops'] != null) {
@@ -1046,7 +1121,7 @@ Format:
       } catch (_) {}
     }
 
-    final sowingDate = _getSowingDate(season.name);
+    final sowingDate = _getSowingDate(season.name, locale);
 
     return GridView.builder(
       shrinkWrap: true,
@@ -1105,7 +1180,7 @@ Format:
               ),
               const SizedBox(height: 4),
               Text(
-                'Sowing:\n$sowingDate',
+                '${'weather_sowing_label'.tr()}\n$sowingDate',
                 style: const TextStyle(
                   fontSize: 9,
                   fontWeight: FontWeight.w600,
@@ -1120,8 +1195,6 @@ Format:
     );
   }
 
-
-
   Widget _buildPatternsTab(List<_WeatherInsight> insights) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -1129,18 +1202,18 @@ Format:
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Smart Weather Pattern Insights',
-            style: TextStyle(
+          Text(
+            'weather_pattern_insights_title'.tr(),
+            style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimary,
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Dynamic agricultural suggestions parsed from forecast models.',
-            style: TextStyle(
+          Text(
+            'weather_pattern_insights_subtitle'.tr(),
+            style: const TextStyle(
               fontSize: 13,
               color: AppTheme.textSecondary,
             ),
@@ -1699,6 +1772,7 @@ Format:
 
   List<_WeatherInsight> _analyzeWeatherPatterns(_WeatherSummary weather) {
     List<_WeatherInsight> insights = [];
+    final locale = mounted ? context.locale.languageCode : 'en';
 
     // 1. Rain Analysis
     double maxRainProb = 0.0;
@@ -1709,28 +1783,58 @@ Format:
     }
 
     if (maxRainProb > 70.0) {
+      String title = 'High Precipitation Risk';
+      String desc = 'Heavy rainfall is expected in the coming days (highest probability: ${maxRainProb.round()}%). Hold off on pesticide sprays or fertilizer application as they may wash away.';
+      String sev = 'weather_severity_high'.tr();
+      if (locale == 'te') {
+        title = 'అధిక వర్షపాతం హెచ్చరిక';
+        desc = 'రాబోయే రోజుల్లో భారీ వర్షాలు కురిసే అవకాశం ఉంది (గరిష్ట సంభావ్యత: ${maxRainProb.round()}%). పురుగుమందులు పిచికారీ చేయడం లేదా ఎరువులు వేయడం వాయిదా వేయండి.';
+      } else if (locale == 'hi') {
+        title = 'भारी बारिश का जोखिम';
+        desc = 'आने वाले दिनों में भारी बारिश की संभावना है (अधिकतम संभावना: ${maxRainProb.round()}%). कीटनाशक छिड़काव या उर्वरक प्रयोग स्थगित करें।';
+      }
       insights.add(_WeatherInsight(
-        title: 'High Precipitation Risk',
-        description: 'Heavy rainfall is expected in the coming days (highest probability: ${maxRainProb.round()}%). Hold off on pesticide sprays or fertilizer application as they may wash away.',
+        title: title,
+        description: desc,
         icon: Icons.umbrella_rounded,
         color: const Color(0xFFEF4444),
-        severity: 'High',
+        severity: sev,
       ));
     } else if (maxRainProb > 30.0) {
+      String title = 'Scattered Showers Ahead';
+      String desc = 'Light or scattered rain is likely. Keep an eye on local forecasts before scheduling field operations.';
+      String sev = 'weather_severity_medium'.tr();
+      if (locale == 'te') {
+        title = 'తేలికపాటి వర్ష సూచన';
+        desc = 'చెదురుమదురుగా తేలికపాటి వర్షం పడే అవకాశం ఉంది. వ్యవసాయ పనులను చేపట్టే ముందు స్థానిక వాతావరణాన్ని గమనించండి.';
+      } else if (locale == 'hi') {
+        title = 'हल्की बारिश की संभावना';
+        desc = 'हल्की या छिटपुट बारिश होने की संभावना है। खेत के काम शुरू करने से पहले स्थानीय मौसम पर नजर रखें।';
+      }
       insights.add(_WeatherInsight(
-        title: 'Scattered Showers Ahead',
-        description: 'Light or scattered rain is likely. Keep an eye on local forecasts before scheduling field operations.',
+        title: title,
+        description: desc,
         icon: Icons.umbrella_rounded,
         color: const Color(0xFFF59E0B),
-        severity: 'Medium',
+        severity: sev,
       ));
     } else {
+      String title = 'Dry Spell Expected';
+      String desc = 'Very low chance of rain over the next 7 days. Ensure regular irrigation according to crop water needs.';
+      String sev = 'weather_severity_info'.tr();
+      if (locale == 'te') {
+        title = 'పొడి వాతావరణం';
+        desc = 'తదుపరి 7 రోజులలో వర్షం కురిసే అవకాశం చాలా తక్కువ. పంట నీటి అవసరాలకు అనుగుణంగా క్రమం తప్పకుండా నీటి తడులు ఇవ్వండి.';
+      } else if (locale == 'hi') {
+        title = 'शुष्क मौसम का अनुमान';
+        desc = 'अगले 7 दिनों में बारिश की संभावना बहुत कम है। फसल की आवश्यकतानुसार नियमित सिंचाई सुनिश्चित करें।';
+      }
       insights.add(_WeatherInsight(
-        title: 'Dry Spell Expected',
-        description: 'Very low chance of rain over the next 7 days. Ensure regular irrigation according to crop water needs.',
+        title: title,
+        description: desc,
         icon: Icons.wb_sunny_rounded,
         color: const Color(0xFF10B981),
-        severity: 'Info',
+        severity: sev,
       ));
     }
 
@@ -1746,20 +1850,40 @@ Format:
     avgHumidity /= weather.daily.length;
 
     if (avgHumidity > 80.0 && maxTemp > 28.0) {
+      String title = 'High Pest & Fungal Risk';
+      String desc = 'High humidity (avg ${avgHumidity.round()}%) combined with warm temperatures (up to ${maxTemp.round()}°C) creates perfect conditions for fungal diseases (like blast or blight) and sucking pests. Inspect your crops daily.';
+      String sev = 'weather_severity_high'.tr();
+      if (locale == 'te') {
+        title = 'పురుగులు & శిలీంధ్రాల ముప్పు హెచ్చరిక';
+        desc = 'అధిక తేమ (సగటు ${avgHumidity.round()}%) మరియు వెచ్చని ఉష్ణోగ్రత (${maxTemp.round()}°C వరకు) వల్ల తెగుళ్లు (బ్లాస్ట్ లేదా బ్లైట్ వంటివి), రసం పీల్చే పురుగులు వ్యాపించే అవకాశం ఉంది. మీ పంటలను రోజూ పరిశీలించండి.';
+      } else if (locale == 'hi') {
+        title = 'कीट और कवक का उच्च जोखिम';
+        desc = 'उच्च आर्द्रता (औसत ${avgHumidity.round()}%) और गर्म तापमान (${maxTemp.round()}°C तक) कवक रोगों और रस चूसक कीटों के लिए अनुकूल है। अपनी फसलों का रोजाना निरीक्षण करें।';
+      }
       insights.add(_WeatherInsight(
-        title: 'High Pest & Fungal Risk',
-        description: 'High humidity (avg ${avgHumidity.round()}%) combined with warm temperatures (up to ${maxTemp.round()}°C) creates perfect conditions for fungal diseases (like blast or blight) and sucking pests. Inspect your crops daily.',
+        title: title,
+        description: desc,
         icon: Icons.bug_report_rounded,
         color: const Color(0xFFEF4444),
-        severity: 'High',
+        severity: sev,
       ));
     } else if (avgHumidity > 65.0) {
+      String title = 'Moderate Disease Window';
+      String desc = 'Elevated humidity levels detected. Ensure proper spacing between crops to allow air circulation and minimize moisture retention.';
+      String sev = 'weather_severity_medium'.tr();
+      if (locale == 'te') {
+        title = 'మధ్యస్థ తెగుళ్ల కాలం';
+        desc = 'గాలిలో తేమ శాతం ఎక్కువగా ఉంది. గాలి ప్రసరణకు మరియు తేమ నిల్వ ఉండకుండా పంటల మధ్య సరైన దూరం ఉండేలా చూడండి.';
+      } else if (locale == 'hi') {
+        title = 'मध्यम रोग की आशंका';
+        desc = 'हवा में नमी का स्तर अधिक है। वायु संचार बनाए रखने के लिए फसलों के बीच उचित दूरी सुनिश्चित करें।';
+      }
       insights.add(_WeatherInsight(
-        title: 'Moderate Disease Window',
-        description: 'Elevated humidity levels detected. Ensure proper spacing between crops to allow air circulation and minimize moisture retention.',
+        title: title,
+        description: desc,
         icon: Icons.healing_rounded,
         color: const Color(0xFFF59E0B),
-        severity: 'Medium',
+        severity: sev,
       ));
     }
 
@@ -1771,31 +1895,61 @@ Format:
       }
     }
     if (maxWind > 25.0) {
+      String title = 'Strong Winds Alert';
+      String desc = 'Wind speeds may reach up to ${maxWind.round()} km/h. Avoid foliar spraying and secure tall crops or young saplings with supports to prevent lodging.';
+      String sev = 'weather_severity_medium'.tr();
+      if (locale == 'te') {
+        title = 'ఈదురు గాలుల హెచ్చరిక';
+        desc = 'గాలి వేగం గంటకు ${maxWind.round()} కి.మీ వరకు చేరే అవకాశం ఉంది. ఆకులపై స్ప్రే చేయడాన్ని నివారించండి మరియు ఎత్తైన పంటలు, లేత మొక్కలు పడిపోకుండా ఆధారాలు ఇవ్వండి.';
+      } else if (locale == 'hi') {
+        title = 'तेज हवाओं की चेतावनी';
+        desc = 'हवा की गति ${maxWind.round()} किमी/घंटा तक पहुंच सकती है। पत्तियों पर छिड़काव से बचें और लंबी फसलों को गिरने से बचाने के लिए सहारा दें।';
+      }
       insights.add(_WeatherInsight(
-        title: 'Strong Winds Alert',
-        description: 'Wind speeds may reach up to ${maxWind.round()} km/h. Avoid foliar spraying and secure tall crops or young saplings with supports to prevent lodging.',
+        title: title,
+        description: desc,
         icon: Icons.air_rounded,
         color: const Color(0xFFF59E0B),
-        severity: 'Medium',
+        severity: sev,
       ));
     }
 
     // 4. Irrigation Guidance
     if (maxRainProb > 60.0) {
+      String title = 'Postpone Manual Irrigation';
+      String desc = 'Significant rain is forecasted. You can save water and avoid root rot by postponing scheduled manual irrigations.';
+      String sev = 'weather_severity_info'.tr();
+      if (locale == 'te') {
+        title = 'నీటిపారుదల వాయిదా వేయండి';
+        desc = 'భారీ వర్షం సూచన ఉంది. నీటిని ఆదా చేయడానికి మరియు వేరు కుళ్ళును నివారించడానికి సాధారణ నీటి తడులను వాయిదా వేయవచ్చు.';
+      } else if (locale == 'hi') {
+        title = 'सिंचाई स्थगित करें';
+        desc = 'महत्वपूर्ण बारिश का अनुमान है। पानी बचाने और जड़ सड़न से बचने के लिए नियमित सिंचाई स्थगित कर सकते हैं।';
+      }
       insights.add(_WeatherInsight(
-        title: 'Postpone Manual Irrigation',
-        description: 'Significant rain is forecasted. You can save water and avoid root rot by postponing scheduled manual irrigations.',
+        title: title,
+        description: desc,
         icon: Icons.water_drop_rounded,
         color: const Color(0xFF3B82F6),
-        severity: 'Info',
+        severity: sev,
       ));
     } else {
+      String title = 'Normal Irrigation Schedule';
+      String desc = 'No heavy rain expected. Maintain your regular irrigation cycles, focusing on the root zones during cooler morning/evening hours.';
+      String sev = 'weather_severity_info'.tr();
+      if (locale == 'te') {
+        title = 'సాధారణ నీటిపారుదల షెడ్యూల్';
+        desc = 'భారీ వర్షాలు లేవు. ఉదయం లేదా సాయంత్రం వేళల్లో పంట వేరు మండలం వద్ద క్రమం తప్పకుండా నీరు అందించండి.';
+      } else if (locale == 'hi') {
+        title = 'सामान्य सिंचाई कार्यक्रम';
+        desc = 'भारी बारिश का अनुमान नहीं है। सुबह या शाम के ठंडे समय में नियमित सिंचाई चक्र बनाए रखें।';
+      }
       insights.add(_WeatherInsight(
-        title: 'Normal Irrigation Schedule',
-        description: 'No heavy rain expected. Maintain your regular irrigation cycles, focusing on the root zones during cooler morning/evening hours.',
+        title: title,
+        description: desc,
         icon: Icons.opacity_rounded,
         color: const Color(0xFF10B981),
-        severity: 'Info',
+        severity: sev,
       ));
     }
 

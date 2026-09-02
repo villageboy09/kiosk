@@ -8,6 +8,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:cropsync/utils/commodity_translator.dart';
 
 class MarketPrice {
   final String state;
@@ -370,11 +371,12 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       return _buildEmptyState();
     }
 
+    final locale = context.locale.languageCode;
     final hasLocal = displayList.any(
         (p) => p.district.toLowerCase() == _currentDistrict.toLowerCase());
     final headerTitle = hasLocal
-        ? 'Commodities in $_currentDistrict'
-        : 'Market Prices in $_currentState';
+        ? context.tr('commodities_in_district', namedArgs: {'district': _currentDistrict})
+        : context.tr('market_prices_in_state', namedArgs: {'state': _currentState});
 
     return CustomScrollView(
       slivers: [
@@ -384,12 +386,14 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  headerTitle,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
+                Expanded(
+                  child: Text(
+                    headerTitle,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                 ),
                 Text(
@@ -418,6 +422,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                 final price = displayList[index];
                 final isLocalPrice = price.district.toLowerCase() ==
                     _currentDistrict.toLowerCase();
+                final localizedName =
+                    CommodityTranslator.getLocalizedName(price.commodity, locale);
 
                 return GestureDetector(
                   onTap: () => _openCommodityDetails(price.commodity),
@@ -439,15 +445,18 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                         const SizedBox(height: 16),
                         _buildCommodityAvatar(price.commodity),
                         const SizedBox(height: 12),
-                        Text(
-                          price.commodity,
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.textPrimary,
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Text(
+                            localizedName,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.textPrimary,
+                            ),
                           ),
                         ),
                         Padding(
@@ -488,9 +497,9 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                                   color: AppTheme.primary,
                                 ),
                               ),
-                              const Text(
-                                '/ quintal',
-                                style: TextStyle(
+                              Text(
+                                context.tr('market_per_quintal'),
+                                style: const TextStyle(
                                   fontSize: 9,
                                   color: AppTheme.textSecondary,
                                   fontWeight: FontWeight.w600,
@@ -719,10 +728,14 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = context.locale.languageCode;
+    final localizedCommodity =
+        CommodityTranslator.getLocalizedName(widget.commodity, locale);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
-        title: Text(widget.commodity, style: AppTheme.appBarTitle),
+        title: Text(localizedCommodity, style: AppTheme.appBarTitle),
         leading: AppTheme.backButton(context, color: AppTheme.appBarText),
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -776,8 +789,9 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                               ),
                             ),
                             Text(
-                              widget.prices.first
-                                  .district, // Showing trend for first district
+                              widget.prices.isNotEmpty
+                                  ? widget.prices.first.district
+                                  : widget.currentDistrict,
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -885,13 +899,12 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
             ),
           ),
 
-          // List of Prices across districts
-          // List of Prices in the district
+          // List of Prices in the district & markets
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
               child: Text(
-                'Markets for ${widget.commodity}',
+                context.tr('markets_for_commodity', args: [localizedCommodity]),
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -967,7 +980,8 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  "Variety: ${price.variety}",
+                                  context.tr('variety_label_with_val',
+                                      args: [price.variety]),
                                   style: const TextStyle(
                                     fontSize: 11,
                                     color: AppTheme.textHint,
@@ -987,9 +1001,9 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                   color: AppTheme.primary,
                                 ),
                               ),
-                              const Text(
-                                '/ quintal',
-                                style: TextStyle(
+                              Text(
+                                context.tr('market_per_quintal'),
+                                style: const TextStyle(
                                   fontSize: 10,
                                   color: AppTheme.textHint,
                                 ),

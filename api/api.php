@@ -681,20 +681,25 @@ function getFarmerInteractionLogs($pdo) {
     $phoneNumber = $_GET['phone_number'] ?? null;
     $actionType = $_GET['action_type'] ?? null;
     $itemType = $_GET['item_type'] ?? null;
+    $hasCrop = isset($_GET['has_crop']) && $_GET['has_crop'] == '1';
     $limit = isset($_GET['limit']) ? min((int)$_GET['limit'], 100) : 50;
 
     try {
         $sql = "SELECT * FROM `farmer_interaction_logs` WHERE 1=1";
         $params = [];
 
-        if ($userId) {
+        if ($userId && $phoneNumber) {
+            $sql .= " AND (user_id = ? OR phone_number = ?)";
+            $params[] = $userId;
+            $params[] = $phoneNumber;
+        } elseif ($userId) {
             $sql .= " AND user_id = ?";
             $params[] = $userId;
-        }
-        if ($phoneNumber) {
+        } elseif ($phoneNumber) {
             $sql .= " AND phone_number = ?";
             $params[] = $phoneNumber;
         }
+
         if ($actionType) {
             $sql .= " AND action_type = ?";
             $params[] = $actionType;
@@ -702,6 +707,9 @@ function getFarmerInteractionLogs($pdo) {
         if ($itemType) {
             $sql .= " AND item_type = ?";
             $params[] = $itemType;
+        }
+        if ($hasCrop) {
+            $sql .= " AND (crop_name IS NOT NULL AND crop_name != '')";
         }
 
         $sql .= " ORDER BY created_at DESC LIMIT " . (int)$limit;

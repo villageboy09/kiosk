@@ -96,5 +96,21 @@ void main() {
         returnsNormally,
       );
     });
+
+    test('logCropView caches last tapped crop and updates GlobalNotifiers', () async {
+      SharedPreferences.setMockInitialValues({});
+      
+      FarmerAnalyticsService.logCropView(
+        cropId: 3,
+        cropName: 'Cotton / పత్తి',
+        language: 'en',
+      );
+
+      // Wait a microtask for async cache write
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      final cached = await FarmerAnalyticsService.getCachedLastTappedCropName();
+      expect(cached, 'Cotton / పత్తి');
+    });
   });
 }

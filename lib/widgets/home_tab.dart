@@ -1,5 +1,3 @@
-// ignore_for_file: prefer_const_constructors
-
 import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/screens/chc_booking_screen.dart';
 import 'package:cropsync/screens/market_prices.dart';
@@ -10,9 +8,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
-import 'package:cropsync/models/farmer_crop.dart';
+import 'package:cropsync/services/farmer_analytics_service.dart';
 import 'package:cropsync/services/global_notifiers.dart';
 
 /// Home tab content - Zepto-inspired clean UI
@@ -37,9 +34,8 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
-  FarmerCrop? _firstCrop;
+  String? _lastTappedCrop;
   bool _isLoadingCrop = true;
-  String? _stageImageUrl;
   String? _clientCode;
   Locale? _lastLocale;
 
@@ -47,10 +43,7 @@ class _HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     _clientCode = widget.clientCode ?? AuthService.currentUser?.clientCode;
-    GlobalNotifiers.selectionAdded.addListener(_onSelectionChanged);
-    GlobalNotifiers.selectionDeleted.addListener(_onSelectionChanged);
-    GlobalNotifiers.selectionUpdated.addListener(_onSelectionChanged);
-    _loadFirstCrop();
+    GlobalNotifiers.lastTappedCrop.addListener(_onLastTappedCropChanged);
   }
 
   @override
@@ -69,21 +62,24 @@ class _HomeTabState extends State<HomeTab> {
     final currentLocale = context.locale;
     if (_lastLocale != currentLocale) {
       _lastLocale = currentLocale;
-      _loadFirstCrop();
+      _loadCachedCrop();
+      _loadLastTappedCrop();
     }
   }
 
   @override
   void dispose() {
-    GlobalNotifiers.selectionAdded.removeListener(_onSelectionChanged);
-    GlobalNotifiers.selectionDeleted.removeListener(_onSelectionChanged);
-    GlobalNotifiers.selectionUpdated.removeListener(_onSelectionChanged);
+    GlobalNotifiers.lastTappedCrop.removeListener(_onLastTappedCropChanged);
     super.dispose();
   }
 
-  void _onSelectionChanged() {
-    if (mounted) {
-      _loadFirstCrop();
+  void _onLastTappedCropChanged() {
+    final tapped = GlobalNotifiers.lastTappedCrop.value;
+    if (tapped != null && mounted) {
+      setState(() {
+        _lastTappedCrop = tapped;
+        _isLoadingCrop = false;
+      });
     }
   }
 
@@ -97,107 +93,35 @@ class _HomeTabState extends State<HomeTab> {
             : 'en';
   }
 
-  Future<void> _loadFirstCrop() async {
-    if (!mounted) return;
-    setState(() {
-      _isLoadingCrop = true;
-      _firstCrop = null;
-      _stageImageUrl = null;
-    });
+  Future<void> _loadCachedCrop() async {
+    final cached = await FarmerAnalyticsService.getCachedLastTappedCropName(lang: _getLocale());
+    if (cached != null && mounted && _lastTappedCrop == null) {
+      setState(() {
+        _lastTappedCrop = cached;
+        _isLoadingCrop = false;
+      });
+    }
+  }
 
+  Future<void> _loadLastTappedCrop() async {
+    if (!mounted) return;
     try {
       final currentUser = await AuthService.getCurrentUser();
-      if (currentUser == null) {
-        if (mounted) setState(() => _isLoadingCrop = false);
-        return;
-      }
-      if (mounted) {
+      if (currentUser != null && mounted) {
         setState(() {
-          _clientCode = currentUser.clientCode ?? _clientCode;
+          _clientCode = widget.clientCode ?? currentUser.clientCode ?? _clientCode;
         });
       }
 
       final locale = _getLocale();
-      final selectionsData = await ApiService.getUserSelections(
-        currentUser.userId,
-        lang: locale,
-      ).timeout(const Duration(seconds: 8));
-
-      if (selectionsData.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _firstCrop = null;
-            _isLoadingCrop = false;
-          });
-        }
-        return;
-      }
-
-      // Find the selection for Field 1 ('Field 1' or 'పొలం 1'), otherwise fallback to the first available selection
-      dynamic s;
-      for (var item in selectionsData) {
-        final fName = item['field_name']?.toString();
-        if (fName == 'Field 1' || fName == 'పొలం 1') {
-          s = item;
-          break;
-        }
-      }
-      s ??= selectionsData.first;
-
-      final cropId = int.tryParse(s['crop_id'].toString()) ?? 1;
-      final varietyId = int.tryParse(s['variety_id'].toString()) ?? 1;
-      final sowingDate = DateTime.tryParse(s['sowing_date'].toString()) ?? DateTime.now();
-      final daysSinceSowing = DateTime.now().difference(sowingDate).inDays;
-
-      int? currentStageId;
-      String? currentStageName;
-      String? stageImageUrl;
-
-      try {
-        final durations = await ApiService.getStageDuration(
-          cropId,
-          varietyId: varietyId,
-        ).timeout(const Duration(seconds: 5));
-        for (var d in durations) {
-          final start = d['start_day_from_sowing'] as int? ?? 0;
-          final end = d['end_day_from_sowing'] as int? ?? 999;
-          if (daysSinceSowing >= start && daysSinceSowing <= end) {
-            currentStageId = d['stage_id'] as int?;
-            break;
-          }
-        }
-
-        if (currentStageId != null) {
-          final stages = await ApiService.getCropStages(
-            cropId,
-            lang: locale,
-          ).timeout(const Duration(seconds: 5));
-          for (var stage in stages) {
-            if (stage['id'] == currentStageId) {
-              currentStageName = stage['name'] as String?;
-              stageImageUrl = stage['image_url'] as String?;
-              break;
-            }
-          }
-        }
-      } catch (_) {
-        // ignore stage duration or stages fetching errors
-      }
+      final cropName = await FarmerAnalyticsService.getLastTappedCropName(lang: locale)
+          .timeout(const Duration(seconds: 5));
 
       if (mounted) {
         setState(() {
-          _firstCrop = FarmerCrop(
-            id: int.tryParse(s['selection_id'].toString()) ?? 0,
-            fieldName: s['field_name']?.toString() ?? 'Field',
-            cropName: s['crop_name']?.toString() ?? 'Crop',
-            cropImageUrl: s['crop_image_url']?.toString(),
-            cropId: cropId,
-            varietyId: varietyId,
-            sowingDate: sowingDate,
-            currentStageId: currentStageId,
-            currentStageName: currentStageName,
-          );
-          _stageImageUrl = stageImageUrl;
+          if (cropName != null && cropName.isNotEmpty) {
+            _lastTappedCrop = cropName;
+          }
           _isLoadingCrop = false;
         });
       }
@@ -221,9 +145,8 @@ class _HomeTabState extends State<HomeTab> {
               constraints: const BoxConstraints(maxWidth: 600),
               child: _ServicesGrid(
                 onTabSelected: widget.onTabSelected,
-                firstCrop: _firstCrop,
+                lastTappedCrop: _lastTappedCrop,
                 isLoadingCrop: _isLoadingCrop,
-                stageImageUrl: _stageImageUrl,
                 clientCode: _clientCode ?? widget.clientCode,
               ),
             ),
@@ -237,16 +160,14 @@ class _HomeTabState extends State<HomeTab> {
 /// Services grid using GridView for centered layout
 class _ServicesGrid extends StatelessWidget {
   final void Function(int) onTabSelected;
-  final FarmerCrop? firstCrop;
+  final String? lastTappedCrop;
   final bool isLoadingCrop;
-  final String? stageImageUrl;
   final String? clientCode;
 
   const _ServicesGrid({
     required this.onTabSelected,
-    required this.firstCrop,
-    required this.isLoadingCrop,
-    this.stageImageUrl,
+    this.lastTappedCrop,
+    this.isLoadingCrop = false,
     this.clientCode,
   });
 
@@ -270,8 +191,8 @@ class _ServicesGrid extends StatelessWidget {
       children: [
         _ServiceCard(
           title: 'home_feature_advisory_title'.tr(),
-          subtitle: firstCrop != null
-              ? firstCrop!.cropName
+          subtitle: (lastTappedCrop != null && lastTappedCrop!.isNotEmpty)
+              ? lastTappedCrop!
               : 'home_feature_advisory_subtitle'.tr(),
           imageUrl: 'https://kiosk.cropsync.in/Dashboard_images/cropadvisory.png',
           imagePath: null,

@@ -11,4 +11,7 @@ class GlobalNotifiers {
   static final ValueNotifier<int?> selectionDeleted = ValueNotifier(null);
   static final ValueNotifier<Map<String, dynamic>?> selectionUpdated =
       ValueNotifier(null);
+
+  // Notifies listeners when a crop is tapped / viewed by the farmer
+  static final ValueNotifier<String?> lastTappedCrop = ValueNotifier(null);
 }

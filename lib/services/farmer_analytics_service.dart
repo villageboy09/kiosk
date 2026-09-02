@@ -5,10 +5,13 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
+import 'global_notifiers.dart';
 
 /// Service for tracking farmer interactions across Crop Advisory, Agri Shop, and Seed Varieties
 class FarmerAnalyticsService {
   static const String _offlineQueueKey = 'farmer_offline_interaction_logs';
+  static const String _lastTappedCropNameKey = 'last_tapped_crop_name';
+  static const String _lastTappedCropIdKey = 'last_tapped_crop_id';
   static bool _isFlushing = false;
 
   /// Log a general interaction event asynchronously without blocking UI
@@ -36,6 +39,10 @@ class FarmerAnalyticsService {
     required String cropName,
     String? language,
   }) {
+    // Immediately notify and cache for instant reactive UI updates
+    GlobalNotifiers.lastTappedCrop.value = cropName;
+    unawaited(_cacheLastTappedCrop(cropId, cropName));
+
     logInteraction(
       actionType: 'crop_view',
       itemType: 'crop',
@@ -452,5 +459,104 @@ class FarmerAnalyticsService {
   /// Public method to trigger flush on app start
   static void initAndFlush() {
     unawaited(_flushOfflineQueue());
+  }
+
+  /// Fetch the latest tapped crop from farmer_interaction_logs table on the server
+  static Future<String?> getLastTappedCropName({String? lang}) async {
+    final user = AuthService.currentUser;
+    final queryParams = <String, String>{
+      'action': 'get_farmer_interaction_logs',
+      'action_type': 'crop_view',
+      'item_type': 'crop',
+      'limit': '1',
+    };
+
+    final uid = user?.userId;
+    if (uid != null && uid.isNotEmpty) {
+      queryParams['user_id'] = uid;
+    }
+    final phone = user?.phoneNumber;
+    if (phone != null && phone.isNotEmpty) {
+      queryParams['phone_number'] = phone;
+    }
+
+    try {
+      final uri = Uri.parse('${ApiService.baseUrl}/api.php').replace(queryParameters: queryParams);
+      final response = await http.get(uri).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data['success'] == true && data['logs'] is List && (data['logs'] as List).isNotEmpty) {
+          final log = (data['logs'] as List).first as Map<String, dynamic>;
+          final cropId = int.tryParse(log['item_id']?.toString() ?? '');
+          String cropName = (log['crop_name']?.toString() ?? log['item_name']?.toString() ?? '').trim();
+
+          // If language is provided and cropId is valid, localize the crop name
+          if (lang != null && cropId != null) {
+            try {
+              final crops = await ApiService.getCrops(lang: lang);
+              final matched = crops.firstWhere(
+                (c) => (int.tryParse(c['id']?.toString() ?? '') == cropId),
+                orElse: () => <String, dynamic>{},
+              );
+              if (matched.isNotEmpty && matched['name'] != null) {
+                cropName = matched['name'].toString();
+              }
+            } catch (_) {}
+          }
+
+          if (cropName.isNotEmpty) {
+            await _cacheLastTappedCrop(cropId, cropName);
+            GlobalNotifiers.lastTappedCrop.value = cropName;
+            return cropName;
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching last tapped crop from server: $e');
+      }
+    }
+
+    // Fallback to local cached value if offline or no server logs found
+    return getCachedLastTappedCropName(lang: lang);
+  }
+
+  /// Get cached last tapped crop from SharedPreferences for instant UI rendering
+  static Future<String?> getCachedLastTappedCropName({String? lang}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedName = prefs.getString(_lastTappedCropNameKey);
+      final cachedId = prefs.getInt(_lastTappedCropIdKey);
+
+      if (lang != null && cachedId != null) {
+        try {
+          final crops = await ApiService.getCrops(lang: lang);
+          final matched = crops.firstWhere(
+            (c) => (int.tryParse(c['id']?.toString() ?? '') == cachedId),
+            orElse: () => <String, dynamic>{},
+          );
+          if (matched.isNotEmpty && matched['name'] != null) {
+            return matched['name'].toString();
+          }
+        } catch (_) {}
+      }
+
+      return cachedName;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Save last tapped crop to local storage
+  static Future<void> _cacheLastTappedCrop(int? cropId, String? cropName) async {
+    if (cropName == null || cropName.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_lastTappedCropNameKey, cropName);
+      if (cropId != null) {
+        await prefs.setInt(_lastTappedCropIdKey, cropId);
+      }
+    } catch (_) {}
   }
 }
