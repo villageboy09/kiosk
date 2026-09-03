@@ -504,7 +504,7 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
                   child: _CreatorNavItem(
                     icon: Icons.person_outline_rounded,
                     activeIcon: Icons.person_rounded,
-                    label: 'profile_title'.tr(),
+                    label: 'operator_nav_profile'.tr(),
                     isActive: _selectedIndex == 3,
                     onTap: () => _onNavTap(3),
                     activeColor: const Color(0xFF059669),
@@ -527,8 +527,8 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
       const ProfileScreen(key: ValueKey('creator_profile_tab')),
     ];
 
-    // Hide app bar on full screen Reels tab
-    final bool hideAppBar = _selectedIndex == 1;
+    // Hide app bar on full screen Reels tab (1) and Profile tab (3)
+    final bool hideAppBar = _selectedIndex == 1 || _selectedIndex == 3;
 
     return PopScope(
       canPop: _selectedIndex == 0,

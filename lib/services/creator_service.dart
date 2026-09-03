@@ -7,6 +7,7 @@ import 'package:cropsync/models/creator_studio_model.dart';
 import 'package:cropsync/models/reel_model.dart';
 
 import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/services/auth_service.dart';
 
 class CreatorActionResult {
   final bool success;
@@ -29,6 +30,14 @@ class CreatorService {
 
   static Future<Map<String, String>> _getUserDetails() async {
     try {
+      final user = await AuthService.getCurrentUser();
+      if (user != null) {
+        final phone = (user.phoneNumber != null && user.phoneNumber!.isNotEmpty)
+            ? user.phoneNumber!
+            : user.userId;
+        final name = user.name.isNotEmpty ? user.name : 'Agri Creator';
+        return {'phone': phone, 'name': name, 'userId': user.userId};
+      }
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('user_phone') ??
           prefs.getString('phone_number') ??
@@ -55,6 +64,7 @@ class CreatorService {
       'action': 'get_creator_studio_data',
       if (user['phone']!.isNotEmpty) 'phone_number': user['phone']!,
       if (user['name']!.isNotEmpty) 'user_name': user['name']!,
+      if (user['name']!.isNotEmpty) 'username': user['name']!,
       if (user['userId']!.isNotEmpty) 'user_id': user['userId']!,
     };
 
@@ -80,6 +90,8 @@ class CreatorService {
         'action': 'studio',
         if (user['phone']!.isNotEmpty) 'phone_number': user['phone']!,
         if (user['name']!.isNotEmpty) 'user_name': user['name']!,
+        if (user['name']!.isNotEmpty) 'username': user['name']!,
+        if (user['userId']!.isNotEmpty) 'user_id': user['userId']!,
       });
       final response = await http.get(secondaryUrl).timeout(const Duration(seconds: 6));
       if (response.statusCode == 200) {
@@ -281,14 +293,31 @@ class CreatorService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'action': 'delete_reel', 'reel_id': reelId}),
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded['success'] == true) return true;
+      }
+    } catch (e) {
+      debugPrint('CreatorService: deleteReel api.php failed: $e');
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_reelsEndpoint?action=delete_reel'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'action': 'delete_reel', 'reel_id': reelId}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         return decoded['success'] == true;
       }
     } catch (e) {
-      debugPrint('CreatorService: deleteReel failed: $e');
+      debugPrint('CreatorService: deleteReel reels.php fallback failed: $e');
     }
     return false;
   }
@@ -474,17 +503,36 @@ class CreatorService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'action': 'delete_news_article', 'article_id': articleId}),
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded['success'] == true) return true;
+      }
+    } catch (e) {
+      debugPrint('CreatorService: deleteNewsArticle api.php failed: $e');
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_reelsEndpoint?action=delete_news_article'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'action': 'delete_news_article', 'article_id': articleId}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         return decoded['success'] == true;
       }
     } catch (e) {
-      debugPrint('CreatorService: deleteNewsArticle failed: $e');
+      debugPrint('CreatorService: deleteNewsArticle reels.php fallback failed: $e');
     }
     return false;
   }
+
+  static Future<bool> deleteArticle(int articleId) => deleteNewsArticle(articleId);
 
   /// Toggle News Article Status
   static Future<bool> toggleNewsStatus(int articleId, String status) async {

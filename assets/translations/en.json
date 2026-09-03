@@ -796,5 +796,9 @@
   "category_other": "Other",
   "category_advisory": "Advisory",
   "tap_to_zoom": "Tap to Zoom",
-  "pinch_to_zoom_hint": "Pinch or double tap to zoom image"
+  "pinch_to_zoom_hint": "Pinch or double tap to zoom image",
+  "reels_loading": "Loading Agri Reels...",
+  "reels_empty_title": "No Reels Available",
+  "reels_empty_desc": "Check back soon for new agricultural videos",
+  "reels_tab": "Reels"
 }

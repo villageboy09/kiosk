@@ -1,13 +1,15 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/news_article.dart';
 import 'package:cropsync/services/news_service.dart';
-import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/creator_service.dart';
 
-/// Detailed view for a Krishi News article with live views, likes, and comments
+/// Clean, Editorial, Minimalist News Article Detail View
 class NewsDetailScreen extends StatefulWidget {
   final NewsArticle article;
 
@@ -30,16 +32,15 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   late NewsArticle _article;
   List<NewsComment> _comments = [];
   bool _isLoadingComments = true;
-  bool _isPostingComment = false;
-  final TextEditingController _commentController = TextEditingController();
-  final FocusNode _commentFocusNode = FocusNode();
-  final ScrollController _scrollController = ScrollController();
 
-  // Interactive like state (optimistic update)
   late bool _isLiked;
   late int _likesCount;
-  late int _viewsCount;
   late int _commentsCount;
+
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _commentsSectionKey = GlobalKey();
+
+  bool _isAuthor = false;
 
   @override
   void initState() {
@@ -47,27 +48,74 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     _article = widget.article;
     _isLiked = widget.article.hasLiked;
     _likesCount = widget.article.likesCount;
-    _viewsCount = widget.article.viewsCount + 1; // optimistic view increment
     _commentsCount = widget.article.commentsCount;
 
-    _loadArticleDetailsAndComments();
+    _checkAuthor();
+    _loadArticleData();
+  }
+
+  Future<void> _checkAuthor() async {
+    try {
+      final user = await AuthService.getCurrentUser();
+      if (user != null && mounted) {
+        final authorLower = _article.author.toLowerCase().trim();
+        final userNameLower = user.name.toLowerCase().trim();
+        if (authorLower == userNameLower || authorLower.contains(userNameLower) || user.isCreator) {
+          setState(() => _isAuthor = true);
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _deleteArticleConfirm() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Article?'),
+        content: const Text('Are you sure you want to delete this article? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final success = await CreatorService.deleteArticle(_article.id);
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Article deleted successfully')),
+          );
+          Navigator.pop(context, true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not delete article. Please try again.')),
+          );
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
-    _commentController.dispose();
-    _commentFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadArticleDetailsAndComments() async {
-    // 1. Fetch fresh article state & comments
+  Future<void> _loadArticleData() async {
     final updatedArticleFuture = NewsService.getArticleDetail(_article.id, incrementView: true);
     final commentsFuture = NewsService.getComments(_article.id);
 
     final results = await Future.wait([updatedArticleFuture, commentsFuture]);
-
     if (!mounted) return;
 
     final updatedArticle = results[0] as NewsArticle?;
@@ -78,7 +126,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         _article = updatedArticle;
         _isLiked = updatedArticle.hasLiked;
         _likesCount = updatedArticle.likesCount;
-        _viewsCount = updatedArticle.viewsCount;
         _commentsCount = updatedArticle.commentsCount;
       }
       if (comments != null) {
@@ -90,11 +137,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   Future<void> _toggleLike() async {
     HapticFeedback.lightImpact();
-
     final prevLiked = _isLiked;
     final prevCount = _likesCount;
 
-    // Optimistic UI update
     setState(() {
       _isLiked = !_isLiked;
       _likesCount = _isLiked ? _likesCount + 1 : (_likesCount > 0 ? _likesCount - 1 : 0);
@@ -107,14 +152,12 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     );
 
     if (!mounted) return;
-
     if (res['success'] == true) {
       setState(() {
         _isLiked = res['is_liked'] == true;
-        _likesCount = res['likes_count'] ?? _likesCount;
+        _likesCount = res['likes_count'] as int? ?? _likesCount;
       });
     } else {
-      // Rollback on failure
       setState(() {
         _isLiked = prevLiked;
         _likesCount = prevCount;
@@ -122,774 +165,751 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     }
   }
 
-  Future<void> _submitComment() async {
-    final text = _commentController.text.trim();
-    if (text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('news_comment_empty_error'.tr()),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
+  Future<void> _shareOnWhatsApp() async {
     HapticFeedback.selectionClick();
-    setState(() => _isPostingComment = true);
+    final text = '🌾 *${_article.title}*\n\n'
+        '${_article.summary.isNotEmpty ? _article.summary : _article.content}\n\n'
+        '📲 *Read full story on CropSync:*\n'
+        'https://cropsync.in/news/${_article.id}';
 
-    final newComment = await NewsService.addComment(
-      articleId: _article.id,
-      commentText: text,
-      articleTitle: _article.title,
-      category: _article.category,
-    );
-
-    if (!mounted) return;
-
-    _commentController.clear();
-    _commentFocusNode.unfocus();
-
-    if (newComment != null) {
-      setState(() {
-        _comments.insert(0, newComment);
-        _commentsCount++;
-        _isPostingComment = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('news_comment_success'.tr()),
-          backgroundColor: AppTheme.primary,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    } else {
-      setState(() => _isPostingComment = false);
+    final uri = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(text)}');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        final webUri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
+        if (await canLaunchUrl(webUri)) {
+          await launchUrl(webUri, mode: LaunchMode.externalApplication);
+        } else {
+          await SharePlus.instance.share(ShareParams(text: text));
+        }
+      }
+    } catch (_) {
+      await SharePlus.instance.share(ShareParams(text: text));
     }
   }
 
-  void _shareArticle() {
+  void _shareGeneral() {
     HapticFeedback.lightImpact();
-    final shareText = '${_article.title}\n\n${_article.summary}\n\n'
-        '📲 Read more on CropSync app: https://cropsync.in/news/${_article.id}';
-    SharePlus.instance.share(
-      ShareParams(
-        text: shareText,
-        subject: _article.title,
+    final text = '🌾 ${_article.title}\n\n'
+        '${_article.summary.isNotEmpty ? _article.summary : _article.content}\n\n'
+        'Read more on CropSync App: https://cropsync.in/news/${_article.id}';
+    SharePlus.instance.share(ShareParams(text: text, subject: _article.title));
+  }
+
+  void _openCommentBottomSheet() {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet<NewsComment>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ArticleCommentModal(
+        article: _article,
+        onCommentAdded: (newComment) {
+          setState(() {
+            _comments.insert(0, newComment);
+            _commentsCount++;
+          });
+        },
       ),
     );
   }
 
+  void _scrollToComments() {
+    final context = _commentsSectionKey.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  String _formatDate(DateTime? dt) {
+    if (dt == null) return '';
+    return DateFormat('MMMM d, yyyy').format(dt);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 600;
+    final hasImage = _article.imageUrl != null && _article.imageUrl!.trim().isNotEmpty;
+    final formattedDate = _formatDate(_article.publishedAt ?? _article.createdAt);
 
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        shadowColor: Colors.black12,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Color(0xFF1E293B)),
+          onPressed: () => Navigator.pop(context),
+          splashRadius: 20,
+        ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text(
+                _article.category.toUpperCase(),
+                style: const TextStyle(
+                  color: Color(0xFF059669),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ),
+          ],
+        ),
+        centerTitle: true,
+        actions: [
+          if (_isAuthor)
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
+              onPressed: _deleteArticleConfirm,
+              splashRadius: 20,
+              tooltip: 'Delete Article',
+            ),
+          IconButton(
+            icon: const Icon(Icons.share_outlined, color: Color(0xFF475569), size: 21),
+            onPressed: _shareGeneral,
+            splashRadius: 20,
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: SafeArea(
         top: false,
         child: Column(
           children: [
+            // Scrollable Story Content
             Expanded(
-              child: CustomScrollView(
+              child: SingleChildScrollView(
                 controller: _scrollController,
                 physics: const BouncingScrollPhysics(),
-                slivers: [
-                  // App Bar with Hero Image
-                  _buildSliverAppBar(isTablet),
-
-                  // Article Content
-                  SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: isTablet ? 780 : double.infinity,
-                        ),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isTablet ? 32 : 20,
-                            vertical: 20,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isTablet ? 720 : double.infinity),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isTablet ? 36 : 20,
+                        vertical: 16,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 1. Title (Clean, bold editorial headline)
+                          Text(
+                            _article.title,
+                            style: TextStyle(
+                              fontSize: isTablet ? 26 : 22,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF0F172A),
+                              height: 1.34,
+                              letterSpacing: -0.4,
+                            ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+
+                          const SizedBox(height: 14),
+
+                          // 2. Byline & Timestamp
+                          Row(
                             children: [
-                              // Category & Read Time
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.primary.withValues(alpha: 0.10),
-                                      borderRadius: BorderRadius.circular(100),
-                                      border: Border.all(
-                                        color: AppTheme.primary.withValues(alpha: 0.3),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      _article.category,
-                                      style: const TextStyle(
-                                        color: AppTheme.primary,
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                child: Text(
+                                  _article.author.isNotEmpty ? _article.author[0].toUpperCase() : 'C',
+                                  style: const TextStyle(
+                                    color: Color(0xFF059669),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
                                   ),
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    Icons.access_time_rounded,
-                                    size: 13,
-                                    color: Colors.grey[500],
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      '${_article.estimatedReadTimeMinutes} ${'news_min_read'.tr()}',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        color: Colors.grey[600],
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    _article.formattedPublishedDate,
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      color: Colors.grey[500],
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-
-                              // Headline
-                              Text(
-                                _article.title,
-                                style: TextStyle(
-                                  fontSize: isTablet ? 26 : 21,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF111827),
-                                  height: 1.3,
-                                  letterSpacing: -0.3,
                                 ),
                               ),
-                              const SizedBox(height: 14),
-
-                              // Author & Source Row
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF9FAFB),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: const Color(0xFFE5E7EB),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: AppTheme.primary.withValues(alpha: 0.15),
-                                      child: const Icon(
-                                        Icons.verified_user_rounded,
-                                        size: 20,
-                                        color: AppTheme.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            _article.author,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF1F2937),
-                                            ),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          _article.author,
+                                          style: const TextStyle(
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF1E293B),
                                           ),
-                                          Text(
-                                            _article.sourceName,
-                                            style: TextStyle(
-                                              fontSize: 11.5,
-                                              color: Colors.grey[600],
-                                              fontWeight: FontWeight.w500,
+                                        ),
+                                        if (_article.sourceName.isNotEmpty) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF1F5F9),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              _article.sourceName,
+                                              style: const TextStyle(
+                                                fontSize: 10.5,
+                                                color: Color(0xFF64748B),
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
                                           ),
                                         ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      [
+                                        if (formattedDate.isNotEmpty) formattedDate,
+                                        '${_article.estimatedReadTimeMinutes} min read',
+                                      ].join(' • '),
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF64748B),
+                                        fontWeight: FontWeight.w400,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: 20),
+                            ],
+                          ),
 
-                              // Summary / Lead Paragraph
-                              if (_article.summary.isNotEmpty) ...[
-                                Container(
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF3F4F6),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: const Border(
-                                      left: BorderSide(
-                                        color: Color(0xFF059669),
-                                        width: 4,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _article.summary,
-                                    style: const TextStyle(
-                                      fontSize: 14.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF374151),
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                              ],
+                          const SizedBox(height: 20),
 
-                              // Full Content Body
-                              Text(
-                                _article.content,
-                                style: TextStyle(
-                                  fontSize: isTablet ? 16 : 15,
-                                  color: const Color(0xFF1F2937),
-                                  height: 1.75,
-                                  fontWeight: FontWeight.w400,
-                                  letterSpacing: 0.1,
-                                ),
-                              ),
-                              const SizedBox(height: 28),
-
-                              // Action Metrics Row (Views, Likes, Comments, Share)
-                              _buildActionMetricsBar(),
-
-                              const SizedBox(height: 32),
-                              const Divider(color: Color(0xFFE5E7EB), height: 1),
-                              const SizedBox(height: 24),
-
-                              // Comments Section Header
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.forum_rounded,
-                                    color: Color(0xFF111827),
-                                    size: 22,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'news_comments_header'.tr(),
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF111827),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF3F4F6),
-                                      borderRadius: BorderRadius.circular(100),
-                                    ),
-                                    child: Text(
-                                      '$_commentsCount',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.grey[700],
-                                      ),
-                                    ),
+                          // 3. Hero Image (Proportional with subtle border & shadow)
+                          if (hasImage) ...[
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 16),
-
-                              // Comments List
-                              if (_isLoadingComments)
-                                const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(24),
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                )
-                              else if (_comments.isEmpty)
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(24),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF9FAFB),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: const Color(0xFFE5E7EB),
-                                      width: 1,
+                              clipBehavior: Clip.antiAlias,
+                              child: CachedNetworkImage(
+                                imageUrl: _article.imageUrl!,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => Container(
+                                  height: 200,
+                                  color: const Color(0xFFF1F5F9),
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Color(0xFF10B981),
                                     ),
                                   ),
+                                ),
+                                errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                          ],
+
+                          // 4. Lead Summary (if present)
+                          if (_article.summary.isNotEmpty && _article.summary != _article.content) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(10),
+                                border: const Border(
+                                  left: BorderSide(color: Color(0xFF10B981), width: 3.5),
+                                ),
+                              ),
+                              child: Text(
+                                _article.summary,
+                                style: TextStyle(
+                                  fontSize: isTablet ? 16 : 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF334155),
+                                  height: 1.55,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
+
+                          // 5. Full Story Body
+                          Text(
+                            _article.content.isNotEmpty ? _article.content : _article.summary,
+                            style: TextStyle(
+                              fontSize: isTablet ? 16 : 15,
+                              fontWeight: FontWeight.w400,
+                              color: const Color(0xFF1E293B),
+                              height: 1.75,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
+
+                          const SizedBox(height: 32),
+
+                          // 6. Share Section Banner
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Expanded(
                                   child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Icon(
-                                        Icons.chat_bubble_outline_rounded,
-                                        size: 40,
-                                        color: Colors.grey[400],
-                                      ),
-                                      const SizedBox(height: 10),
                                       Text(
-                                        'news_no_comments'.tr(),
-                                        textAlign: TextAlign.center,
+                                        'Share this update',
                                         style: TextStyle(
-                                          fontSize: 13.5,
-                                          color: Colors.grey[600],
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Help fellow farmers stay informed with daily news',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: Color(0xFF64748B),
                                         ),
                                       ),
                                     ],
                                   ),
-                                )
-                              else
-                                ListView.separated(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: _comments.length,
-                                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                                  itemBuilder: (context, index) {
-                                    final comment = _comments[index];
-                                    return _buildCommentCard(comment);
-                                  },
                                 ),
-
-                              const SizedBox(height: 40),
-                            ],
+                                const SizedBox(width: 10),
+                                ElevatedButton.icon(
+                                  onPressed: _shareOnWhatsApp,
+                                  icon: const Icon(Icons.share_rounded, size: 15, color: Colors.white),
+                                  label: const Text('WhatsApp'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF25D366),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+
+                          const SizedBox(height: 36),
+
+                          // 7. Comments Header
+                          Container(
+                            key: _commentsSectionKey,
+                            child: Row(
+                              children: [
+                                const Icon(Icons.chat_bubble_outline_rounded, size: 20, color: Color(0xFF0F172A)),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Comments (${_comments.length})',
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                                const Spacer(),
+                                TextButton.icon(
+                                  onPressed: _openCommentBottomSheet,
+                                  icon: const Icon(Icons.add_comment_rounded, size: 16, color: Color(0xFF10B981)),
+                                  label: const Text(
+                                    'Write Comment',
+                                    style: TextStyle(
+                                      color: Color(0xFF10B981),
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // 8. Comments List
+                          if (_isLoadingComments)
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(24),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF10B981)),
+                              ),
+                            )
+                          else if (_comments.isEmpty)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(Icons.chat_bubble_outline_rounded, size: 36, color: Colors.grey.shade400),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'No comments yet.',
+                                    style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Be the first to share your thoughts on this story!',
+                                    style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: _comments.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final c = _comments[index];
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 13,
+                                            backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                            child: Text(
+                                              c.userName.isNotEmpty ? c.userName[0].toUpperCase() : 'F',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF059669),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            c.userName,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13,
+                                              color: Color(0xFF0F172A),
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            c.formattedDate,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Color(0xFF94A3B8),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 34),
+                                        child: Text(
+                                          c.commentText,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: Color(0xFF334155),
+                                            height: 1.45,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+
+                          const SizedBox(height: 80), // Extra space for fixed action bar
+                        ],
                       ),
                     ),
+                  ),
+                ),
+              ),
+            ),
+
+            // 9. Clean Docked Action Bar at bottom
+            Container(
+              height: 58,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 8,
+                    offset: Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Like Button
+                  InkWell(
+                    onTap: _toggleLike,
+                    borderRadius: BorderRadius.circular(100),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                            size: 21,
+                            color: _isLiked ? const Color(0xFFEF4444) : const Color(0xFF475569),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            '$_likesCount',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: _isLiked ? const Color(0xFFEF4444) : const Color(0xFF475569),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  // Comment Button
+                  InkWell(
+                    onTap: _scrollToComments,
+                    borderRadius: BorderRadius.circular(100),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 20,
+                            color: Color(0xFF475569),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            '$_commentsCount',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const Spacer(),
+
+                  // Add Comment Button
+                  OutlinedButton.icon(
+                    onPressed: _openCommentBottomSheet,
+                    icon: const Icon(Icons.edit_outlined, size: 14, color: Color(0xFF10B981)),
+                    label: const Text('Comment'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF10B981),
+                      side: const BorderSide(color: Color(0xFF10B981)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  // WhatsApp Share
+                  IconButton(
+                    onPressed: _shareOnWhatsApp,
+                    icon: const Icon(Icons.share_rounded, color: Color(0xFF25D366), size: 21),
+                    tooltip: 'Share on WhatsApp',
+                    splashRadius: 20,
                   ),
                 ],
               ),
             ),
-
-            // Sticky Bottom Comment Input Bar
-            _buildBottomCommentBar(isTablet),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSliverAppBar(bool isTablet) {
-    return SliverAppBar(
-      expandedHeight: isTablet ? 340 : 250,
-      pinned: true,
-      elevation: 0,
-      backgroundColor: Colors.black,
-      leading: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: CircleAvatar(
-          backgroundColor: Colors.black.withValues(alpha: 0.5),
-          child: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ),
-      ),
-      actions: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: CircleAvatar(
-            backgroundColor: Colors.black.withValues(alpha: 0.5),
-            child: IconButton(
-              icon: const Icon(Icons.share_rounded, color: Colors.white, size: 18),
-              onPressed: _shareArticle,
-            ),
-          ),
-        ),
-      ],
-      flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (_article.imageUrl != null && _article.imageUrl!.isNotEmpty)
-              CachedNetworkImage(
-                imageUrl: _article.imageUrl!,
-                fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => Container(
-                  color: const Color(0xFF1E293B),
-                  child: const Center(
-                    child: Icon(Icons.newspaper_rounded, size: 64, color: Colors.white24),
-                  ),
-                ),
-              )
-            else
-              Container(
-                color: const Color(0xFF1E293B),
-                child: const Center(
-                  child: Icon(Icons.newspaper_rounded, size: 64, color: Colors.white24),
-                ),
-              ),
-            // Gradient overlay
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.5),
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.7),
-                  ],
-                  stops: const [0.0, 0.4, 1.0],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionMetricsBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-          width: 1.2,
-        ),
-      ),
-      child: Row(
-        children: [
-          // Views Count
-          Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.visibility_rounded, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    '$_viewsCount',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Container(width: 1, height: 18, color: const Color(0xFFE5E7EB)),
-
-          // Like Button (Interactive)
-          Expanded(
-            child: InkWell(
-              onTap: _toggleLike,
-              borderRadius: BorderRadius.circular(100),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AnimatedScale(
-                      scale: _isLiked ? 1.2 : 1.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        size: 18,
-                        color: _isLiked ? const Color(0xFFEF4444) : Colors.grey[600],
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        '$_likesCount',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: _isLiked ? const Color(0xFFEF4444) : Colors.grey[800],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          Container(width: 1, height: 18, color: const Color(0xFFE5E7EB)),
-
-          // Comments Count (Tapping focuses comment input)
-          Expanded(
-            child: InkWell(
-              onTap: () {
-                _commentFocusNode.requestFocus();
-              },
-              borderRadius: BorderRadius.circular(100),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.mode_comment_outlined, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        '$_commentsCount',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          Container(width: 1, height: 18, color: const Color(0xFFE5E7EB)),
-
-          // Share Button
-          Expanded(
-            child: InkWell(
-              onTap: _shareArticle,
-              borderRadius: BorderRadius.circular(100),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.share_rounded, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        'Share',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommentCard(NewsComment comment) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 14,
-                backgroundColor: AppTheme.primary.withValues(alpha: 0.15),
-                child: Text(
-                  comment.userName.isNotEmpty ? comment.userName[0].toUpperCase() : 'F',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        comment.userName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1F2937),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'Farmer',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF166534),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                comment.formattedDate,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey[500],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.only(left: 36),
-            child: Text(
-              comment.commentText,
-              style: const TextStyle(
-                fontSize: 13.5,
-                color: Color(0xFF374151),
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomCommentBar(bool isTablet) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isTablet ? 32 : 16,
-        vertical: 10,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(
-          top: BorderSide(color: Color(0xFFE5E7EB), width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -3),
-          ),
-        ],
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: isTablet ? 780 : double.infinity,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Center(
-                    child: TextField(
-                      controller: _commentController,
-                      focusNode: _commentFocusNode,
-                      textAlignVertical: TextAlignVertical.center,
-                      style: const TextStyle(fontSize: 13.5, color: Color(0xFF111827)),
-                      decoration: InputDecoration(
-                        hintText: 'news_comment_hint'.tr(),
-                        hintStyle: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                        isDense: true,
-                        filled: false,
-                        fillColor: Colors.transparent,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                      ),
-                      onSubmitted: (_) => _submitComment(),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                height: 44,
-                width: 44,
-                decoration: const BoxDecoration(
-                  color: AppTheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: _isPostingComment ? null : _submitComment,
-                    child: _isPostingComment
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 19,
-                          ),
-                  ),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
 }
 
+/// Comment Bottom Sheet Modal for clean commenting without keyboard layout distortion
+class _ArticleCommentModal extends StatefulWidget {
+  final NewsArticle article;
+  final ValueChanged<NewsComment> onCommentAdded;
 
+  const _ArticleCommentModal({
+    required this.article,
+    required this.onCommentAdded,
+  });
+
+  @override
+  State<_ArticleCommentModal> createState() => _ArticleCommentModalState();
+}
+
+class _ArticleCommentModalState extends State<_ArticleCommentModal> {
+  final TextEditingController _commentController = TextEditingController();
+  bool _isPosting = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty || _isPosting) return;
+
+    HapticFeedback.selectionClick();
+    setState(() => _isPosting = true);
+
+    final comment = await NewsService.addComment(
+      articleId: widget.article.id,
+      commentText: text,
+      articleTitle: widget.article.title,
+      category: widget.article.category,
+    );
+
+    if (!mounted) return;
+    setState(() => _isPosting = false);
+
+    if (comment != null) {
+      widget.onCommentAdded(comment);
+      Navigator.pop(context, comment);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(18, 12, 18, MediaQuery.of(context).viewInsets.bottom + 16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFCBD5E1),
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Write a Comment',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _commentController,
+            autofocus: true,
+            maxLines: 4,
+            minLines: 2,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'Share your perspective or ask a question...',
+              hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF10B981)),
+              ),
+              contentPadding: const EdgeInsets.all(14),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _isPosting ? null : _submit,
+                icon: _isPosting
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.send_rounded, size: 14, color: Colors.white),
+                label: const Text('Post Comment'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

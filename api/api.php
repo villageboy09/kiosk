@@ -503,6 +503,10 @@ switch ($action) {
     case 'get_user_profile':
         getUserProfile($pdo);
         break;
+    case 'update_user_profile':
+    case 'update_profile':
+        updateUserProfile($pdo);
+        break;
     // NEW ENDPOINT FOR TROLLEY PRICING
     case 'calculate_trolley_price':
         calculateTrolleyPrice($pdo);
@@ -575,9 +579,13 @@ switch ($action) {
         toggleReelSave($pdo);
         break;
     case 'get_reel_comments':
+    case 'get_comments':
+    case 'comments':
         getReelComments($pdo);
         break;
     case 'add_reel_comment':
+    case 'add_comment':
+    case 'comment':
         addReelComment($pdo);
         break;
     case 'log_reel_action':
@@ -4195,6 +4203,7 @@ function formatCountShorthand($count) {
     return strval($count);
 }
 
+
 /**
  * Fetch list of active reels with creator info, comments, like/save status
  */
@@ -4206,19 +4215,33 @@ function getReels($pdo) {
         $limit = min(50, max(1, intval($_GET['limit'] ?? 20)));
         $offset = ($page - 1) * $limit;
 
+        $hasUserFilter = (!empty($phoneNumber) || !empty($farmerUsername));
+
         $sql = "SELECT r.*, 
                 c.username AS creator_username, 
                 c.display_name AS creator_display_name, 
                 c.profile_image_url AS creator_profile_image_url,
                 c.is_verified AS creator_is_verified,
-                  c.bio AS creator_bio
-                FROM reels r
+                c.bio AS creator_bio";
+
+        if ($hasUserFilter) {
+            $sql .= ", (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND (rl.phone_number = :phone OR (rl.farmer_username = :user AND rl.farmer_username != '')) LIMIT 1) AS user_liked,
+                       (SELECT 1 FROM reel_actions ra WHERE ra.reel_id = r.id AND ra.action_type = 'save' AND (ra.phone_number = :phone OR (ra.farmer_username = :user AND ra.farmer_username != '')) LIMIT 1) AS user_saved";
+        } else {
+            $sql .= ", 0 AS user_liked, 0 AS user_saved";
+        }
+
+        $sql .= " FROM reels r
                 LEFT JOIN creators c ON r.creator_id = c.id
                 WHERE r.is_active = 1
                 ORDER BY r.id DESC
                 LIMIT :limit OFFSET :offset";
 
         $stmt = $pdo->prepare($sql);
+        if ($hasUserFilter) {
+            $stmt->bindValue(':phone', $phoneNumber, PDO::PARAM_STR);
+            $stmt->bindValue(':user', $farmerUsername, PDO::PARAM_STR);
+        }
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
@@ -4227,33 +4250,11 @@ function getReels($pdo) {
         $response = [];
         foreach ($reels as $reel) {
             $reelId = intval($reel['id']);
-
-            // Fetch comments for this reel
-            $commentStmt = $pdo->prepare("SELECT id, reel_id, farmer_username, comment_text, phone_number, created_at FROM reel_comments WHERE reel_id = ? ORDER BY id ASC LIMIT 50");
-            $commentStmt->execute([$reelId]);
-            $comments = $commentStmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // Likes count
-            $likesCount = intval($reel['likes_count']);
-
-            // Check if current user has liked
-            $hasLiked = false;
-            if (!empty($phoneNumber) || !empty($farmerUsername)) {
-                $checkLiked = $pdo->prepare("SELECT id FROM reel_likes WHERE reel_id = ? AND (phone_number = ? OR (farmer_username = ? AND farmer_username != ''))");
-                $checkLiked->execute([$reelId, $phoneNumber, $farmerUsername]);
-                $hasLiked = $checkLiked->fetch() !== false;
-            }
-
-            // Saves count
-            $savesCount = intval($reel['saves_count']);
-
-            // Check if current user has saved
-            $hasSaved = false;
-            if (!empty($phoneNumber) || !empty($farmerUsername)) {
-                $checkSaved = $pdo->prepare("SELECT id FROM reel_actions WHERE reel_id = ? AND action_type = 'save' AND (phone_number = ? OR (farmer_username = ? AND farmer_username != ''))");
-                $checkSaved->execute([$reelId, $phoneNumber, $farmerUsername]);
-                $hasSaved = $checkSaved->fetch() !== false;
-            }
+            $likesCount = intval($reel['likes_count'] ?? 0);
+            $savesCount = intval($reel['saves_count'] ?? 0);
+            $commentsCount = intval($reel['comments_count'] ?? 0);
+            $hasLiked = !empty($reel['user_liked']);
+            $hasSaved = !empty($reel['user_saved']);
 
             $creatorUsername = !empty($reel['creator_username']) ? $reel['creator_username'] : 'farmer_' . substr($reel['phone_number'] ?? '123456', -4);
             $creatorDisplayName = !empty($reel['creator_display_name']) ? $reel['creator_display_name'] : (!empty($reel['phone_number']) ? 'Farmer (' . substr($reel['phone_number'], -4) . ')' : 'Agri Creator');
@@ -4263,17 +4264,17 @@ function getReels($pdo) {
                 'id' => $reelId,
                 'videoUrl' => $reel['video_url'],
                 'creator' => [
-                    'id' => intval($reel['creator_id']),
+                    'id' => intval($reel['creator_id'] ?? 0),
                     'username' => $creatorUsername,
                     'displayName' => $creatorDisplayName,
                     'profileImageUrl' => $creatorProfileImage,
                     'isVerified' => boolval($reel['creator_is_verified'] ?? 0),
-                    'phoneNumber' => $reel['creator_phone_number'] ?: $reel['phone_number'],
+                    'phoneNumber' => !empty($reel['creator_phone_number']) ? $reel['creator_phone_number'] : ($reel['phone_number'] ?? ''),
                     'bio' => $reel['creator_bio'] ?? 'Agri Creator'
                 ],
-                'caption' => $reel['caption'],
-                'musicTitle' => $reel['music_title'] ?? 'Original Audio',
-                'phoneNumber' => $reel['phone_number'] ?: $reel['creator_phone_number'],
+                'caption' => $reel['caption'] ?? '',
+                'musicTitle' => !empty($reel['music_title']) ? $reel['music_title'] : 'Original Audio',
+                'phoneNumber' => !empty($reel['phone_number']) ? $reel['phone_number'] : ($reel['creator_phone_number'] ?? ''),
                 'tags' => $reel['tags'] ?? '',
                 'likes' => formatCountShorthand($likesCount),
                 'likesRaw' => $likesCount,
@@ -4281,10 +4282,10 @@ function getReels($pdo) {
                 'saves' => formatCountShorthand($savesCount),
                 'savesRaw' => $savesCount,
                 'hasSaved' => $hasSaved,
-                'commentsCount' => intval($reel['comments_count']) > 0 ? intval($reel['comments_count']) : count($comments),
-                'comments' => $comments,
-                'viewsCount' => intval($reel['views_count']),
-                'createdAt' => $reel['created_at']
+                'commentsCount' => $commentsCount,
+                'comments' => [],
+                'viewsCount' => intval($reel['views_count'] ?? 0),
+                'createdAt' => $reel['created_at'] ?? date('Y-m-d H:i:s')
             ];
         }
 
@@ -4561,6 +4562,12 @@ function resolveOrCreateCreator($pdo, $phoneNumber = '', $name = '') {
         $stmt->execute([$name, strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', str_replace(' ', '_', $name)))]);
         $creator = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($creator) {
+            if (empty($creator['phone_number']) && !empty($phoneNumber)) {
+                try {
+                    $pdo->prepare("UPDATE creators SET phone_number = ? WHERE id = ?")->execute([$phoneNumber, $creator['id']]);
+                    $creator['phone_number'] = $phoneNumber;
+                } catch (Throwable $e) {}
+            }
             return $creator;
         }
     }
@@ -4971,6 +4978,95 @@ function toggleNewsStatus($pdo) {
     }
 }
 
+
+/**
+ * Update User Profile (Name, Phone, Profile Image, District, Region)
+ */
+function updateUserProfile($pdo) {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+        $userId = trim($input['user_id'] ?? $_POST['user_id'] ?? '');
+        $name = trim($input['name'] ?? $_POST['name'] ?? '');
+        $phoneNumber = trim($input['phone_number'] ?? $_POST['phone_number'] ?? '');
+        $district = trim($input['district'] ?? $_POST['district'] ?? '');
+        $region = trim($input['region'] ?? $_POST['region'] ?? '');
+        $profileImageUrl = trim($input['profile_image_url'] ?? $_POST['profile_image_url'] ?? '');
+
+        // Handle profile image file upload if provided
+        $uploadDir = dirname(__DIR__) . '/uploads/profiles/';
+        if (!is_dir($uploadDir)) {
+            @mkdir($uploadDir, 0777, true);
+        }
+
+        if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['profile_image']['name'], PATHINFO_EXTENSION));
+            if (empty($ext)) $ext = 'jpg';
+            $safeName = 'profile_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $uploadDir . $safeName)) {
+                $profileImageUrl = 'http://kiosk.cropsync.in/uploads/profiles/' . $safeName;
+            }
+        } elseif (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+            if (empty($ext)) $ext = 'jpg';
+            $safeName = 'profile_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadDir . $safeName)) {
+                $profileImageUrl = 'http://kiosk.cropsync.in/uploads/profiles/' . $safeName;
+            }
+        }
+
+        if (empty($userId)) {
+            echo json_encode(['success' => false, 'error' => 'User ID is required']);
+            return;
+        }
+
+        // Update in users table
+        $updates = [];
+        $params = [];
+        if (!empty($name)) { $updates[] = "name = ?"; $params[] = $name; }
+        if (!empty($phoneNumber)) { $updates[] = "phone_number = ?"; $params[] = $phoneNumber; }
+        if (!empty($district)) { $updates[] = "district = ?"; $params[] = $district; }
+        if (!empty($region)) { $updates[] = "region = ?"; $params[] = $region; }
+        if (!empty($profileImageUrl)) { $updates[] = "profile_image_url = ?"; $params[] = $profileImageUrl; }
+
+        if (!empty($updates)) {
+            $params[] = $userId;
+            $params[] = $userId;
+            $sql = "UPDATE users SET " . implode(", ", $updates) . " WHERE user_id = ? OR phone_number = ?";
+            $pdo->prepare($sql)->execute($params);
+        }
+
+        // Also sync to creators table if this user is a creator
+        if (!empty($phoneNumber) || !empty($name)) {
+            $cUpdates = [];
+            $cParams = [];
+            if (!empty($name)) { $cUpdates[] = "display_name = ?"; $cParams[] = $name; }
+            if (!empty($profileImageUrl)) { $cUpdates[] = "profile_image_url = ?"; $cParams[] = $profileImageUrl; }
+            if (!empty($phoneNumber)) { $cUpdates[] = "phone_number = ?"; $cParams[] = $phoneNumber; }
+            if (!empty($cUpdates)) {
+                $cSql = "UPDATE creators SET " . implode(", ", $cUpdates) . " WHERE phone_number = ? OR username = ? OR display_name = ?";
+                $cParams[] = $phoneNumber;
+                $cParams[] = $name;
+                $cParams[] = $name;
+                try { $pdo->prepare($cSql)->execute($cParams); } catch (Throwable $e) {}
+            }
+        }
+
+        // Fetch refreshed user
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
+        $stmt->execute([$userId, $userId]);
+        $updatedUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Profile updated successfully',
+            'user' => $updatedUser,
+            'profile_image_url' => $profileImageUrl
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
 /**
  * Get Creator Studio Data (Profile, KPI Stats, Reels list, Articles list, and Trend Analytics)
  */
@@ -4984,7 +5080,8 @@ function getCreatorStudioData($pdo) {
         $creatorId = intval($creator['id']);
         $creatorPhone = trim($creator['phone_number'] ?? $phoneNumber);
 
-        // 1. Fetch Creator's Reels (Live stats)
+        $cName = $creator['display_name'];
+        $cUName = $creator['username'];
         $reelsStmt = $pdo->prepare("
             SELECT r.*,
             c.username AS creator_username,
@@ -4993,10 +5090,13 @@ function getCreatorStudioData($pdo) {
             c.is_verified AS creator_is_verified
               FROM reels r
             LEFT JOIN creators c ON r.creator_id = c.id
-            WHERE r.creator_id = ? OR (r.phone_number = ? AND r.phone_number != '')
+            WHERE r.creator_id = ? 
+               OR (r.phone_number = ? AND r.phone_number != '') 
+               OR (? != '' AND r.phone_number = ?)
+               OR r.creator_id IN (SELECT id FROM creators WHERE username = ? OR display_name = ?)
             ORDER BY r.id DESC
         ");
-        $reelsStmt->execute([$creatorId, $creatorPhone]);
+        $reelsStmt->execute([$creatorId, $creatorPhone, $phoneNumber, $phoneNumber, $cUName, $cName]);
         $rawReels = $reelsStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $reels = [];
@@ -5072,10 +5172,10 @@ function getCreatorStudioData($pdo) {
         // 2. Fetch Creator's Articles
         $artStmt = $pdo->prepare("
             SELECT * FROM news_articles 
-            WHERE author = ? OR author = ? OR source_name = ?
+            WHERE author = ? OR author = ? OR source_name = ? OR author = ? OR (? != '' AND author LIKE ?)
             ORDER BY id DESC
         ");
-        $artStmt->execute([$creator['display_name'], $creator['username'], $creator['display_name']]);
+        $artStmt->execute([$creator['display_name'], $creator['username'], $creator['display_name'], $userName, $userName, '%' . $userName . '%']);
         $rawArticles = $artStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $articles = [];

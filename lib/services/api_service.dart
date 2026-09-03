@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/models/chc_operator.dart';
@@ -10,6 +11,66 @@ import 'package:cropsync/services/cache_service.dart';
 /// API Service class for handling all HTTP requests to the MySQL backend
 class ApiService {
   static const String baseUrl = 'https://kiosk.cropsync.in/api';
+
+  /// Update user profile details and profile picture
+  static Future<User> updateUserProfile({
+    required String userId,
+    String? name,
+    String? phoneNumber,
+    String? district,
+    String? region,
+    File? profileImageFile,
+    String? profileImageUrl,
+  }) async {
+    final url = Uri.parse('$baseUrl/api.php?action=update_user_profile');
+
+    if (profileImageFile != null) {
+      final request = http.MultipartRequest('POST', url);
+      request.fields['action'] = 'update_user_profile';
+      request.fields['user_id'] = userId;
+      if (name != null) request.fields['name'] = name;
+      if (phoneNumber != null) request.fields['phone_number'] = phoneNumber;
+      if (district != null) request.fields['district'] = district;
+      if (region != null) request.fields['region'] = region;
+
+      request.files.add(
+        await http.MultipartFile.fromPath('profile_image', profileImageFile.path),
+      );
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        final userData = data['user'] as Map<String, dynamic>;
+        return User.fromJson(userData);
+      } else {
+        throw Exception(data['message'] ?? data['error'] ?? 'Failed to update profile');
+      }
+    } else {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'action': 'update_user_profile',
+          'user_id': userId,
+          if (name != null) 'name': name,
+          if (phoneNumber != null) 'phone_number': phoneNumber,
+          if (district != null) 'district': district,
+          if (region != null) 'region': region,
+          if (profileImageUrl != null) 'profile_image_url': profileImageUrl,
+        }),
+      );
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['success'] == true) {
+        final userData = data['user'] as Map<String, dynamic>;
+        return User.fromJson(userData);
+      } else {
+        throw Exception(data['message'] ?? data['error'] ?? 'Failed to update profile');
+      }
+    }
+  }
 
   /// Login with user ID (6-digit PIN)
   /// Login with user ID / Phone number

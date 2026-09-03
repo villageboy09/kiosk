@@ -88,7 +88,7 @@ $farmerUsername = isset($_GET['username']) ? trim($_GET['username']) : (isset($_
 // --- API Router ---
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    if ($action === 'get_comments' || $action === 'comments') {
+    if ($action === 'get_comments' || $action === 'comments' || $action === 'get_reel_comments') {
         $reelId = intval($_GET['reel_id'] ?? 0);
         if ($reelId <= 0) {
             http_response_code(400);
@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             exit();
         }
         try {
-            $stmt = $pdo->prepare("SELECT id, reel_id, farmer_username, phone_number, comment_text, created_at FROM reel_comments WHERE reel_id = ? ORDER BY created_at ASC LIMIT 100");
+            $stmt = $pdo->prepare("SELECT id, reel_id, farmer_username, phone_number, user_id, comment_text, created_at FROM reel_comments WHERE reel_id = ? ORDER BY created_at ASC LIMIT 100");
             $stmt->execute([$reelId]);
             $comments = $stmt->fetchAll(PDO::FETCH_ASSOC);
             foreach ($comments as &$c) {
@@ -141,9 +141,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $creatorId = intval($creator['id']);
 
             $creatorPhone = trim($creator['phone_number'] ?? $phoneNumber);
+            $cName = $creator['display_name'];
+            $cUName = $creator['username'];
 
-            $rStmt = $pdo->prepare("SELECT r.*, c.username AS creator_username, c.display_name AS creator_display_name, c.profile_image_url AS creator_profile_image_url, c.is_verified AS creator_is_verified FROM reels r LEFT JOIN creators c ON r.creator_id = c.id WHERE r.creator_id = ? OR (r.phone_number = ? AND r.phone_number != '') ORDER BY r.id DESC");
-            $rStmt->execute([$creatorId, $creatorPhone]);
+            $rStmt = $pdo->prepare("
+                SELECT r.*, c.username AS creator_username, c.display_name AS creator_display_name, c.profile_image_url AS creator_profile_image_url, c.is_verified AS creator_is_verified 
+                FROM reels r 
+                LEFT JOIN creators c ON r.creator_id = c.id 
+                WHERE r.creator_id = ? 
+                   OR (r.phone_number = ? AND r.phone_number != '') 
+                   OR (? != '' AND r.phone_number = ?)
+                   OR r.creator_id IN (SELECT id FROM creators WHERE username = ? OR display_name = ?)
+                ORDER BY r.id DESC
+            ");
+            $rStmt->execute([$creatorId, $creatorPhone, $phoneNumber, $phoneNumber, $cUName, $cName]);
             $rawReels = $rStmt->fetchAll(PDO::FETCH_ASSOC);
 
             $reels = [];
@@ -226,8 +237,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             // News articles count & stats
             $articles = [];
             try {
-                $artStmt = $pdo->prepare("SELECT * FROM news_articles WHERE author = ? OR author = ? ORDER BY id DESC");
-                $artStmt->execute([$creator['display_name'], $creator['username']]);
+                $artStmt = $pdo->prepare("SELECT * FROM news_articles WHERE author = ? OR author = ? OR source_name = ? OR author = ? OR (? != '' AND author LIKE ?) ORDER BY id DESC");
+                $artStmt->execute([$creator['display_name'], $creator['username'], $creator['display_name'], $userName, $userName, '%' . $userName . '%']);
                 $articles = $artStmt->fetchAll(PDO::FETCH_ASSOC);
                 foreach ($articles as $a) {
                     $totalViews += intval($a['views_count']);
@@ -726,6 +737,101 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare("UPDATE reels SET is_active = ? WHERE id = ?")->execute([$isActive, $reelId]);
             http_response_code(200);
             echo json_encode(["success" => true, "message" => "Status updated", "is_active" => $isActive]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(["error" => $e->getMessage()]);
+        }
+    }
+
+    // 9. Action: Delete News Article
+    elseif ($action === 'delete_news_article' || $action === 'delete_article') {
+        $articleId = intval($data['article_id'] ?? $_GET['article_id'] ?? 0);
+        if ($articleId <= 0) {
+            http_response_code(400);
+            echo json_encode(["error" => "Invalid article ID"]);
+            exit();
+        }
+        try {
+            try { $pdo->prepare("DELETE FROM news_comments WHERE article_id = ?")->execute([$articleId]); } catch (Throwable $e) {}
+            try { $pdo->prepare("DELETE FROM news_likes WHERE article_id = ?")->execute([$articleId]); } catch (Throwable $e) {}
+            $pdo->prepare("DELETE FROM news_articles WHERE id = ?")->execute([$articleId]);
+
+            http_response_code(200);
+            echo json_encode(["success" => true, "message" => "Article deleted successfully"]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(["error" => $e->getMessage()]);
+        }
+    }
+
+    // 10. Action: Update User Profile
+    elseif ($action === 'update_user_profile' || $action === 'update_profile') {
+        $userId = trim($data['user_id'] ?? $_POST['user_id'] ?? '');
+        $name = trim($data['name'] ?? $_POST['name'] ?? '');
+        $phoneNumber = trim($data['phone_number'] ?? $_POST['phone_number'] ?? '');
+        $profileImageUrl = trim($data['profile_image_url'] ?? $_POST['profile_image_url'] ?? '');
+
+        // Upload profile image file if present
+        $uploadDir = dirname(__DIR__) . '/uploads/profiles/';
+        if (!is_dir($uploadDir)) {
+            @mkdir($uploadDir, 0777, true);
+        }
+
+        if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['profile_image']['name'], PATHINFO_EXTENSION));
+            if (empty($ext)) $ext = 'jpg';
+            $safeName = 'profile_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $uploadDir . $safeName)) {
+                $profileImageUrl = 'http://kiosk.cropsync.in/uploads/profiles/' . $safeName;
+            }
+        } elseif (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+            if (empty($ext)) $ext = 'jpg';
+            $safeName = 'profile_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadDir . $safeName)) {
+                $profileImageUrl = 'http://kiosk.cropsync.in/uploads/profiles/' . $safeName;
+            }
+        }
+
+        if (empty($userId)) {
+            http_response_code(400);
+            echo json_encode(["error" => "User ID required"]);
+            exit();
+        }
+
+        try {
+            $updates = [];
+            $params = [];
+            if (!empty($name)) { $updates[] = "name = ?"; $params[] = $name; }
+            if (!empty($phoneNumber)) { $updates[] = "phone_number = ?"; $params[] = $phoneNumber; }
+            if (!empty($profileImageUrl)) { $updates[] = "profile_image_url = ?"; $params[] = $profileImageUrl; }
+
+            if (!empty($updates)) {
+                $params[] = $userId;
+                $params[] = $userId;
+                $pdo->prepare("UPDATE users SET " . implode(", ", $updates) . " WHERE user_id = ? OR phone_number = ?")->execute($params);
+            }
+
+            if (!empty($phoneNumber) || !empty($name)) {
+                $cUpdates = [];
+                $cParams = [];
+                if (!empty($name)) { $cUpdates[] = "display_name = ?"; $cParams[] = $name; }
+                if (!empty($profileImageUrl)) { $cUpdates[] = "profile_image_url = ?"; $cParams[] = $profileImageUrl; }
+                if (!empty($phoneNumber)) { $cUpdates[] = "phone_number = ?"; $cParams[] = $phoneNumber; }
+                if (!empty($cUpdates)) {
+                    $cParams[] = $phoneNumber;
+                    $cParams[] = $name;
+                    $cParams[] = $name;
+                    try { $pdo->prepare("UPDATE creators SET " . implode(", ", $cUpdates) . " WHERE phone_number = ? OR username = ? OR display_name = ?")->execute($cParams); } catch (Throwable $e) {}
+                }
+            }
+
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
+            $stmt->execute([$userId, $userId]);
+            $updatedUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            http_response_code(200);
+            echo json_encode(["success" => true, "user" => $updatedUser, "profile_image_url" => $profileImageUrl]);
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(["error" => $e->getMessage()]);

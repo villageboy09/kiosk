@@ -795,5 +795,9 @@
   "category_other": "अन्य",
   "category_advisory": "सलाह",
   "tap_to_zoom": "ज़ूम करने के लिए टैप करें",
-  "pinch_to_zoom_hint": "ज़ूम करने के लिए पिंच करें या डबल टैप करें"
+  "pinch_to_zoom_hint": "ज़ूम करने के लिए पिंच करें या डबल टैप करें",
+  "reels_loading": "कृषि रील्स लोड हो रहे हैं...",
+  "reels_empty_title": "कोई रील उपलब्ध नहीं है",
+  "reels_empty_desc": "नए कृषि वीडियो के लिए जल्द ही दोबारा देखें",
+  "reels_tab": "रील्स"
 }

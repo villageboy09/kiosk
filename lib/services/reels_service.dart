@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cropsync/models/reel_model.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/farmer_analytics_service.dart';
+import 'package:cropsync/services/auth_service.dart';
 
 class ReelsService {
   static const String _reelsCacheKey = 'cropsync_cached_reels_v1';
@@ -12,12 +13,21 @@ class ReelsService {
   static const String _userSavesPrefix = 'reel_saved_';
 
   /// Primary endpoint via ApiService baseUrl
-  static String get _apiEndpoint => '${ApiService.baseUrl}/api.php';
-  static String get _reelsPhpEndpoint => '${ApiService.baseUrl}/reels.php';
+  /// Primary endpoint via ApiService baseUrl
+  static String get _apiEndpoint => '${ApiService.baseUrl}/reels.php';
+  static String get _reelsPhpEndpoint => '${ApiService.baseUrl}/api.php';
 
   /// Retrieve active farmer phone number and username
   static Future<Map<String, String>> _getUserDetails() async {
     try {
+      final user = await AuthService.getCurrentUser();
+      if (user != null) {
+        final phone = (user.phoneNumber != null && user.phoneNumber!.isNotEmpty)
+            ? user.phoneNumber!
+            : user.userId;
+        final username = user.name.isNotEmpty ? user.name : 'farmer';
+        return {'phone': phone, 'username': username, 'userId': user.userId};
+      }
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('user_phone') ??
           prefs.getString('phone_number') ??
@@ -36,6 +46,28 @@ class ReelsService {
     }
   }
 
+  /// Get cached reels instantly (0ms) for immediate display
+  static Future<List<Reel>> getCachedReels() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(_reelsCacheKey);
+      if (cached != null && cached.isNotEmpty) {
+        final decoded = jsonDecode(cached);
+        List<dynamic> listData = [];
+        if (decoded is List) {
+          listData = decoded;
+        } else if (decoded is Map && decoded['reels'] is List) {
+          listData = decoded['reels'] as List;
+        }
+        return listData
+            .map((item) => item is Map<String, dynamic> ? Reel.fromJson(item) : null)
+            .whereType<Reel>()
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   /// Fetch all active reels from backend API with offline fallback
   static Future<List<Reel>> getReels({bool forceRefresh = false}) async {
     final user = await _getUserDetails();
@@ -45,56 +77,46 @@ class ReelsService {
       if (user['username']!.isNotEmpty) 'username': user['username']!,
     };
 
-    final url = Uri.parse(_apiEndpoint).replace(queryParameters: queryParams);
+    final endpoints = [
+      Uri.parse(_apiEndpoint).replace(queryParameters: queryParams),
+      Uri.parse(_reelsPhpEndpoint).replace(queryParameters: queryParams),
+    ];
 
-    try {
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        List<dynamic> listData = [];
-
-        if (decoded is List) {
-          listData = decoded;
-        } else if (decoded is Map && decoded['reels'] is List) {
-          listData = decoded['reels'] as List;
-        } else if (decoded is Map && decoded['data'] is List) {
-          listData = decoded['data'] as List;
-        }
-
-        final reels = listData
-            .map((item) => item is Map<String, dynamic> ? Reel.fromJson(item) : null)
-            .whereType<Reel>()
-            .toList();
-
-        // Save to local cache
-        _cacheReels(jsonEncode(listData));
-        return reels;
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Reels API error (falling back to reels.php): $e');
-      }
-      // Fallback try reels.php directly
+    for (final url in endpoints) {
       try {
-        final fallbackUrl = Uri.parse(_reelsPhpEndpoint).replace(queryParameters: queryParams);
-        final fallbackRes = await http.get(fallbackUrl).timeout(const Duration(seconds: 8));
-        if (fallbackRes.statusCode == 200) {
-          final decoded = jsonDecode(utf8.decode(fallbackRes.bodyBytes));
+        final response = await http.get(url).timeout(const Duration(seconds: 8));
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(utf8.decode(response.bodyBytes));
           List<dynamic> listData = [];
-          if (decoded is List) listData = decoded;
-          if (decoded is Map && decoded['reels'] is List) listData = decoded['reels'] as List;
+
+          if (decoded is List) {
+            listData = decoded;
+          } else if (decoded is Map && decoded['reels'] is List) {
+            listData = decoded['reels'] as List;
+          } else if (decoded is Map && decoded['data'] is List) {
+            listData = decoded['data'] as List;
+          }
 
           final reels = listData
               .map((item) => item is Map<String, dynamic> ? Reel.fromJson(item) : null)
               .whereType<Reel>()
               .toList();
-          _cacheReels(jsonEncode(listData));
-          return reels;
+
+          // Save to local cache
+          if (reels.isNotEmpty) {
+            _cacheReels(jsonEncode(listData));
+            return reels;
+          }
         }
-      } catch (_) {}
+      } catch (e) {
+        if (kDebugMode) {
+          print('Reels fetch error on $url: $e');
+        }
+      }
     }
 
-    return [];
+    // Fallback to local cache if network completely fails
+    return await getCachedReels();
   }
 
   /// Toggle Like/Unlike for a reel
@@ -195,20 +217,28 @@ class ReelsService {
 
   /// Fetch comments for a reel
   static Future<List<ReelComment>> getComments(int reelId) async {
-    final url = Uri.parse('$_apiEndpoint?action=get_reel_comments&reel_id=$reelId');
+    // Try reels.php first, then fallback to api.php
+    final endpoints = [
+      '$_apiEndpoint?action=get_reel_comments&reel_id=$reelId',
+      '$_reelsPhpEndpoint?action=get_reel_comments&reel_id=$reelId',
+    ];
 
-    try {
-      final response = await http.get(url).timeout(const Duration(seconds: 8));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        if (decoded is Map && decoded['comments'] is List) {
-          return (decoded['comments'] as List)
-              .map((c) => c is Map<String, dynamic> ? ReelComment.fromJson(c) : null)
-              .whereType<ReelComment>()
-              .toList();
+    for (final urlStr in endpoints) {
+      try {
+        final response = await http.get(Uri.parse(urlStr)).timeout(const Duration(seconds: 8));
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+          if (decoded is Map && decoded['comments'] is List) {
+            return (decoded['comments'] as List)
+                .map((c) => c is Map<String, dynamic> ? ReelComment.fromJson(c) : null)
+                .whereType<ReelComment>()
+                .toList();
+          }
         }
+      } catch (e) {
+        debugPrint('ReelsService.getComments error on $urlStr: $e');
       }
-    } catch (_) {}
+    }
 
     return [];
   }
@@ -224,26 +254,35 @@ class ReelsService {
       commentLength: commentText.length,
     );
 
-    try {
-      final response = await http.post(
-        Uri.parse('$_apiEndpoint?action=add_reel_comment'),
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: jsonEncode({
-          'reel_id': reelId,
-          'farmer_username': user['username'],
-          'phone_number': user['phone'],
-          'user_id': user['userId'],
-          'comment_text': commentText.trim(),
-        }),
-      ).timeout(const Duration(seconds: 10));
+    final endpoints = [
+      '$_apiEndpoint?action=add_reel_comment',
+      '$_reelsPhpEndpoint?action=add_reel_comment',
+    ];
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        if (data is Map && data['comment'] is Map<String, dynamic>) {
-          return ReelComment.fromJson(data['comment'] as Map<String, dynamic>);
+    for (final urlStr in endpoints) {
+      try {
+        final response = await http.post(
+          Uri.parse(urlStr),
+          headers: {'Content-Type': 'application/json; charset=utf-8'},
+          body: jsonEncode({
+            'reel_id': reelId,
+            'farmer_username': user['username'],
+            'phone_number': user['phone'],
+            'user_id': user['userId'],
+            'comment_text': commentText.trim(),
+          }),
+        ).timeout(const Duration(seconds: 10));
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
+          if (data is Map && data['comment'] is Map<String, dynamic>) {
+            return ReelComment.fromJson(data['comment'] as Map<String, dynamic>);
+          }
         }
+      } catch (e) {
+        debugPrint('ReelsService.addComment error on $urlStr: $e');
       }
-    } catch (_) {}
+    }
 
     // Offline optimistic comment
     return ReelComment(
@@ -316,4 +355,33 @@ class ReelsService {
   }
 
 
+  /// Delete a reel (for author)
+  static Future<bool> deleteReel(int reelId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_apiEndpoint?action=delete_reel'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'action': 'delete_reel', 'reel_id': reelId}),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded['success'] == true) return true;
+      }
+    } catch (_) {}
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_reelsPhpEndpoint?action=delete_reel'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'action': 'delete_reel', 'reel_id': reelId}),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        return decoded['success'] == true;
+      }
+    } catch (_) {}
+    return false;
+  }
 }

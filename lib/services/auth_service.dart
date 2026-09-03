@@ -43,6 +43,12 @@ class AuthService {
     await prefs.setBool(_isLoggedInKey, true);
   }
 
+  /// Save updated user session externally
+  static Future<void> saveUserSession(User user) async {
+    await _saveUserSession(user);
+    currentUser = user;
+  }
+
   /// Load user session from SharedPreferences
   static Future<User?> loadUserSession() async {
     final prefs = await SharedPreferences.getInstance();

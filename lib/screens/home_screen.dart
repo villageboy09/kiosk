@@ -253,6 +253,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       setState(() => _selectedIndex = index);
       // Notify ReelsScreen about tab visibility (reels is tab index 3)
       ReelsScreen.isTabActive.value = (index == 3);
+
+      // Adapt status bar icons for transparent edge-to-edge
+      if (index == 3) {
+        SystemChrome.setSystemUIOverlayStyle(
+          const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            statusBarBrightness: Brightness.dark,
+          ),
+        );
+      } else {
+        SystemChrome.setSystemUIOverlayStyle(
+          const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
+          ),
+        );
+      }
     }
   }
 
@@ -301,10 +320,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           setState(() {
             _selectedIndex = 0;
           });
+          SystemChrome.setSystemUIOverlayStyle(
+            const SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.dark,
+              statusBarBrightness: Brightness.light,
+            ),
+          );
         }
       },
       child: Scaffold(
-        backgroundColor: AppTheme.background,
+        backgroundColor: _selectedIndex == 3 ? Colors.black : AppTheme.background,
+        extendBodyBehindAppBar: _selectedIndex == 3,
         appBar: (_selectedIndex == 1 || _selectedIndex == 2 || _selectedIndex == 3) ? null : _buildCurvedAppBar(),
         body: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
