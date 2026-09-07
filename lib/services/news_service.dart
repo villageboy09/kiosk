@@ -15,6 +15,7 @@ class NewsService {
   static Future<List<NewsArticle>> getArticles({
     String? category,
     String? searchQuery,
+    String? language,
     int page = 1,
     int limit = 20,
   }) async {
@@ -29,6 +30,8 @@ class NewsService {
         'category': category,
       if (searchQuery != null && searchQuery.trim().isNotEmpty)
         'search': searchQuery.trim(),
+      if (language != null && language.isNotEmpty)
+        'language': language,
       if (phone.isNotEmpty) 'phone_number': phone,
     };
 

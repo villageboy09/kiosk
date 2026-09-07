@@ -16,6 +16,14 @@ class NewsArticle {
   final DateTime? publishedAt;
   final DateTime? createdAt;
 
+  final String? titleTe;
+  final String? summaryTe;
+  final String? contentTe;
+  final String? titleHi;
+  final String? summaryHi;
+  final String? contentHi;
+  final String language;
+
   const NewsArticle({
     required this.id,
     required this.title,
@@ -32,7 +40,47 @@ class NewsArticle {
     this.hasLiked = false,
     this.publishedAt,
     this.createdAt,
+    this.titleTe,
+    this.summaryTe,
+    this.contentTe,
+    this.titleHi,
+    this.summaryHi,
+    this.contentHi,
+    this.language = 'all',
   });
+
+  /// Get localized title according to active language code ('te', 'hi', 'en')
+  String localizedTitle(String langCode) {
+    if (langCode == 'te' && titleTe != null && titleTe!.trim().isNotEmpty) {
+      return titleTe!;
+    }
+    if (langCode == 'hi' && titleHi != null && titleHi!.trim().isNotEmpty) {
+      return titleHi!;
+    }
+    return title;
+  }
+
+  /// Get localized summary according to active language code ('te', 'hi', 'en')
+  String localizedSummary(String langCode) {
+    if (langCode == 'te' && summaryTe != null && summaryTe!.trim().isNotEmpty) {
+      return summaryTe!;
+    }
+    if (langCode == 'hi' && summaryHi != null && summaryHi!.trim().isNotEmpty) {
+      return summaryHi!;
+    }
+    return summary;
+  }
+
+  /// Get localized content according to active language code ('te', 'hi', 'en')
+  String localizedContent(String langCode) {
+    if (langCode == 'te' && contentTe != null && contentTe!.trim().isNotEmpty) {
+      return contentTe!;
+    }
+    if (langCode == 'hi' && contentHi != null && contentHi!.trim().isNotEmpty) {
+      return contentHi!;
+    }
+    return content;
+  }
 
   factory NewsArticle.fromJson(Map<String, dynamic> json) {
     DateTime? parseDate(dynamic value) {
@@ -64,6 +112,13 @@ class NewsArticle {
           json['has_liked'] == '1',
       publishedAt: parseDate(json['published_at']),
       createdAt: parseDate(json['created_at']),
+      titleTe: json['title_te']?.toString(),
+      summaryTe: json['summary_te']?.toString(),
+      contentTe: json['content_te']?.toString(),
+      titleHi: json['title_hi']?.toString(),
+      summaryHi: json['summary_hi']?.toString(),
+      contentHi: json['content_hi']?.toString(),
+      language: json['language']?.toString() ?? 'all',
     );
   }
 
@@ -84,6 +139,13 @@ class NewsArticle {
       'has_liked': hasLiked ? 1 : 0,
       'published_at': publishedAt?.toIso8601String(),
       'created_at': createdAt?.toIso8601String(),
+      'title_te': titleTe,
+      'summary_te': summaryTe,
+      'content_te': contentTe,
+      'title_hi': titleHi,
+      'summary_hi': summaryHi,
+      'content_hi': contentHi,
+      'language': language,
     };
   }
 
@@ -103,6 +165,13 @@ class NewsArticle {
     bool? hasLiked,
     DateTime? publishedAt,
     DateTime? createdAt,
+    String? titleTe,
+    String? summaryTe,
+    String? contentTe,
+    String? titleHi,
+    String? summaryHi,
+    String? contentHi,
+    String? language,
   }) {
     return NewsArticle(
       id: id ?? this.id,
@@ -120,6 +189,13 @@ class NewsArticle {
       hasLiked: hasLiked ?? this.hasLiked,
       publishedAt: publishedAt ?? this.publishedAt,
       createdAt: createdAt ?? this.createdAt,
+      titleTe: titleTe ?? this.titleTe,
+      summaryTe: summaryTe ?? this.summaryTe,
+      contentTe: contentTe ?? this.contentTe,
+      titleHi: titleHi ?? this.titleHi,
+      summaryHi: summaryHi ?? this.summaryHi,
+      contentHi: contentHi ?? this.contentHi,
+      language: language ?? this.language,
     );
   }
 

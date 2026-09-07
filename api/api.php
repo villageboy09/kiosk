@@ -202,6 +202,13 @@ try {
                 `title` VARCHAR(255) NOT NULL,
                 `summary` TEXT NOT NULL,
                 `content` LONGTEXT NOT NULL,
+                `title_te` VARCHAR(255) NULL,
+                `summary_te` TEXT NULL,
+                `content_te` LONGTEXT NULL,
+                `title_hi` VARCHAR(255) NULL,
+                `summary_hi` TEXT NULL,
+                `content_hi` LONGTEXT NULL,
+                `language` VARCHAR(20) DEFAULT 'all',
                 `category` VARCHAR(50) NOT NULL DEFAULT 'Govt Schemes',
                 `image_url` VARCHAR(500) NULL,
                 `author` VARCHAR(100) DEFAULT 'CropSync Desk',
@@ -216,8 +223,28 @@ try {
                 `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 INDEX `idx_news_cat` (`category`),
                 INDEX `idx_news_published` (`published_at`),
-                INDEX `idx_news_featured` (`is_featured`)
+                INDEX `idx_news_featured` (`is_featured`),
+                INDEX `idx_news_lang` (`language`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Migrate missing columns in news_articles if existing table
+            $newsColumnsCheck = [
+                'title_te' => "ALTER TABLE `news_articles` ADD COLUMN `title_te` VARCHAR(255) DEFAULT NULL",
+                'summary_te' => "ALTER TABLE `news_articles` ADD COLUMN `summary_te` TEXT DEFAULT NULL",
+                'content_te' => "ALTER TABLE `news_articles` ADD COLUMN `content_te` LONGTEXT DEFAULT NULL",
+                'title_hi' => "ALTER TABLE `news_articles` ADD COLUMN `title_hi` VARCHAR(255) DEFAULT NULL",
+                'summary_hi' => "ALTER TABLE `news_articles` ADD COLUMN `summary_hi` TEXT DEFAULT NULL",
+                'content_hi' => "ALTER TABLE `news_articles` ADD COLUMN `content_hi` LONGTEXT DEFAULT NULL",
+                'language' => "ALTER TABLE `news_articles` ADD COLUMN `language` VARCHAR(20) DEFAULT 'all'"
+            ];
+            foreach ($newsColumnsCheck as $nCol => $alterSql) {
+                try {
+                    $chk = $pdo->query("SHOW COLUMNS FROM `news_articles` LIKE '$nCol'");
+                    if (!$chk->fetch()) {
+                        $pdo->exec($alterSql);
+                    }
+                } catch (Throwable $e) {}
+            }
 
             $pdo->exec("CREATE TABLE IF NOT EXISTS `news_article_likes` (
                 `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -3953,6 +3980,7 @@ function getNewsArticles($pdo) {
         $category = $_GET['category'] ?? 'all';
         $search = trim($_GET['search'] ?? '');
         $phoneNumber = trim($_GET['phone_number'] ?? '');
+        $language = trim($_GET['language'] ?? 'all');
         $page = max(1, intval($_GET['page'] ?? 1));
         $limit = min(50, max(1, intval($_GET['limit'] ?? 20)));
         $offset = ($page - 1) * $limit;
@@ -3969,8 +3997,13 @@ function getNewsArticles($pdo) {
             $params[':cat'] = $category;
         }
 
+        if ($language !== 'all' && !empty($language)) {
+            $sql .= " AND (n.language = :lang OR n.language = 'all' OR n.language IS NULL)";
+            $params[':lang'] = $language;
+        }
+
         if (!empty($search)) {
-            $sql .= " AND (n.title LIKE :search OR n.summary LIKE :search OR n.content LIKE :search)";
+            $sql .= " AND (n.title LIKE :search OR n.summary LIKE :search OR n.content LIKE :search OR n.title_te LIKE :search OR n.title_hi LIKE :search)";
             $params[':search'] = "%$search%";
         }
 

@@ -75,9 +75,11 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
     });
 
     try {
+      final langCode = context.locale.languageCode;
       final items = await NewsService.getArticles(
         category: _selectedCategory,
         searchQuery: _searchQuery,
+        language: langCode,
       );
 
       if (!mounted) return;
@@ -653,9 +655,12 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
 
   Future<void> _shareOnWhatsApp() async {
     HapticFeedback.selectionClick();
-    final text = '🌾 *${widget.article.title}*\n\n'
-        '${widget.article.summary}\n\n'
-        '📲 *Read full story on CropSync:*\n'
+    final langCode = context.locale.languageCode;
+    final articleTitle = widget.article.localizedTitle(langCode);
+    final articleSummary = widget.article.localizedSummary(langCode);
+    final text = '🌾 *$articleTitle*\n\n'
+        '$articleSummary\n\n'
+        '📲 *${'news_read_full_story'.tr()} on CropSync:*\n'
         'https://cropsync.in/news/${widget.article.id}';
 
     final uri = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(text)}');
@@ -678,9 +683,12 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
 
   Future<void> _shareGeneral() async {
     HapticFeedback.selectionClick();
-    final text = '🌾 ${widget.article.title}\n\n'
-        '${widget.article.summary}\n\n'
-        'Read more on CropSync App: https://cropsync.in/news/${widget.article.id}';
+    final langCode = context.locale.languageCode;
+    final articleTitle = widget.article.localizedTitle(langCode);
+    final articleSummary = widget.article.localizedSummary(langCode);
+    final text = '🌾 $articleTitle\n\n'
+        '$articleSummary\n\n'
+        '${'news_read_full_story'.tr()} on CropSync: https://cropsync.in/news/${widget.article.id}';
     await SharePlus.instance.share(ShareParams(text: text));
   }
 
@@ -720,18 +728,26 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
   Widget build(BuildContext context) {
     final hasImage = widget.article.imageUrl != null && widget.article.imageUrl!.trim().isNotEmpty;
     final timeAgo = _formatTimeAgo(widget.article.publishedAt ?? widget.article.createdAt);
-    final isTelugu = context.locale.languageCode == 'te';
+    final langCode = context.locale.languageCode;
+    final isTelugu = langCode == 'te';
+    final isHindi = langCode == 'hi';
+
+    // Localized content for current farmer language
+    final currentTitle = widget.article.localizedTitle(langCode);
+    final currentSummary = widget.article.localizedSummary(langCode);
+    final currentContent = widget.article.localizedContent(langCode);
+    final displayBody = currentSummary.isNotEmpty ? currentSummary : currentContent;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+      margin: const EdgeInsets.fromLTRB(10, 4, 10, 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 14,
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
@@ -740,9 +756,9 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. TOP HERO MEDIA FRAME (Fixed height so wide banners look natural)
+          // 1. TOP HERO MEDIA FRAME (Increased occupancy: 275px fills empty void beautifully)
           SizedBox(
-            height: 220,
+            height: 275,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -764,16 +780,18 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
                 else
                   _buildImageFallback(),
 
-                // Subtle top gradient for chip readability
+                // Dual subtle gradient overlays for badge and source readability
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
-                      end: Alignment.center,
+                      end: Alignment.bottomCenter,
                       colors: [
                         Colors.black.withValues(alpha: 0.55),
                         Colors.transparent,
+                        Colors.black.withValues(alpha: 0.45),
                       ],
+                      stops: const [0.0, 0.45, 1.0],
                     ),
                   ),
                 ),
@@ -787,10 +805,11 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
                     children: [
                       // Category Chip
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.65),
                           borderRadius: BorderRadius.circular(100),
+                          border: Border.all(color: Colors.white12, width: 0.8),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -820,10 +839,11 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
 
                       // Time Ago Chip & Page Counter
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.65),
                           borderRadius: BorderRadius.circular(100),
+                          border: Border.all(color: Colors.white12, width: 0.8),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -859,10 +879,11 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
                   bottom: 8,
                   left: 10,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.60),
+                      color: Colors.black.withValues(alpha: 0.65),
                       borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.white10, width: 0.5),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -888,76 +909,128 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
           // 2. STORY SECTION
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Headline (Bold, high impact)
                   Text(
-                    widget.article.title,
+                    currentTitle,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: isTelugu ? 17.5 : 18,
+                      fontSize: (isTelugu || isHindi) ? 18 : 18.5,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF0F172A),
-                      height: 1.32,
+                      height: 1.34,
                       letterSpacing: -0.3,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
 
-                  // Concise Story Body (Scrollable if long, no empty void if short)
+                  // Concise Story Body (Scrollable if long, clean reading pace)
                   Expanded(
                     child: SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
                       child: Text(
-                        widget.article.summary.isNotEmpty
-                            ? widget.article.summary
-                            : widget.article.content,
+                        displayBody,
                         style: TextStyle(
-                          fontSize: isTelugu ? 14 : 14.5,
+                          fontSize: (isTelugu || isHindi) ? 14.5 : 15,
                           fontWeight: FontWeight.w400,
                           color: const Color(0xFF334155),
-                          height: 1.55,
+                          height: 1.58,
                         ),
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
 
-                  // Reporter attribution line & tap for details
-                  InkWell(
-                    onTap: widget.onTapReadMore,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(
-                        children: [
-                          Text(
-                            'Short by ${widget.article.author}',
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              color: Color(0xFF64748B),
-                              fontWeight: FontWeight.w500,
+                  // 3. PROMINENT, ACCESSIBLE "READ FULL STORY" BUTTON (Way2News High-Clickability Design)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: widget.onTapReadMore,
+                      borderRadius: BorderRadius.circular(10),
+                      splashColor: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFA7F3D0), width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF10B981),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.menu_book_rounded,
+                                size: 14,
+                                color: Colors.white,
+                              ),
                             ),
-                          ),
-                          const Spacer(),
-                          const Text(
-                            'Read full story',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF059669),
-                              fontWeight: FontWeight.w700,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'news_read_full_story'.tr(),
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF065F46),
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  Text(
+                                    'news_short_by'.tr(args: [widget.article.author]),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF059669),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 2),
-                          const Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            size: 11,
-                            color: Color(0xFF059669),
-                          ),
-                        ],
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'MORE',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white,
+                                      letterSpacing: 0.4,
+                                    ),
+                                  ),
+                                  SizedBox(width: 2),
+                                  Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    size: 9,
+                                    color: Colors.white,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -969,9 +1042,9 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
           // Divider
           const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
 
-          // 3. BOTTOM ACTION BAR (Clean Way2News Style)
+          // 4. BOTTOM ACTION BAR (Clean Way2News Style)
           Container(
-            height: 52,
+            height: 50,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             color: const Color(0xFFFAFAFA),
             child: Row(

@@ -799,6 +799,8 @@
   "pinch_to_zoom_hint": "Pinch or double tap to zoom image",
   "reels_loading": "Loading Agri Reels...",
   "reels_empty_title": "No Reels Available",
-  "reels_empty_desc": "Check back soon for new agricultural videos",
-  "reels_tab": "Reels"
+  "reels_tab": "Reels",
+  "news_read_full_story": "Read Full Story",
+  "news_read_complete_article": "Tap to read full article & guide",
+  "news_short_by": "Short by {}"
 }

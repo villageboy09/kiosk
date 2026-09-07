@@ -237,6 +237,10 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     final isTablet = screenWidth >= 600;
     final hasImage = _article.imageUrl != null && _article.imageUrl!.trim().isNotEmpty;
     final formattedDate = _formatDate(_article.publishedAt ?? _article.createdAt);
+    final langCode = context.locale.languageCode;
+    final articleTitle = _article.localizedTitle(langCode);
+    final articleSummary = _article.localizedSummary(langCode);
+    final articleContent = _article.localizedContent(langCode);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -310,7 +314,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                         children: [
                           // 1. Title (Clean, bold editorial headline)
                           Text(
-                            _article.title,
+                            articleTitle,
                             style: TextStyle(
                               fontSize: isTablet ? 26 : 22,
                               fontWeight: FontWeight.w800,
@@ -428,7 +432,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                           ],
 
                           // 4. Lead Summary (if present)
-                          if (_article.summary.isNotEmpty && _article.summary != _article.content) ...[
+                          if (articleSummary.isNotEmpty && articleSummary != articleContent) ...[
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               decoration: BoxDecoration(
@@ -439,7 +443,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                                 ),
                               ),
                               child: Text(
-                                _article.summary,
+                                articleSummary,
                                 style: TextStyle(
                                   fontSize: isTablet ? 16 : 15,
                                   fontWeight: FontWeight.w600,
@@ -453,7 +457,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
                           // 5. Full Story Body
                           Text(
-                            _article.content.isNotEmpty ? _article.content : _article.summary,
+                            articleContent.isNotEmpty ? articleContent : articleSummary,
                             style: TextStyle(
                               fontSize: isTablet ? 16 : 15,
                               fontWeight: FontWeight.w400,
