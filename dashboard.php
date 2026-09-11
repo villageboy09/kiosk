@@ -1356,6 +1356,11 @@ $availableCategories = [
                 <i class="ph-bold ph-storefront"></i> Seeds & Shop Catalog
             </a>
 
+            <!-- Fake Farmers (Hyderabad) Link -->
+            <a href="fake_farmers_dashboard.php" class="btn btn-secondary" title="Manage Fake Farmers (Hyderabad)" style="text-decoration: none;">
+                <i class="ph-bold ph-users-three"></i> Fake Farmers (Hyd)
+            </a>
+
             <?php if ($activeTab === 'news'): ?>
                 <button class="btn btn-primary" onclick="openNewsModal()">
                     <i class="ph ph-plus"></i> New Article
@@ -1374,6 +1379,9 @@ $availableCategories = [
                 <div class="dropdown-panel right-align" x-show="open" x-cloak x-transition>
                     <a href="shop_seeds_dashboard.php" class="dropdown-option" style="text-decoration:none;">
                         <span><i class="ph ph-storefront"></i> Seeds & Shop Catalog</span>
+                    </a>
+                    <a href="fake_farmers_dashboard.php" class="dropdown-option" style="text-decoration:none;">
+                        <span><i class="ph ph-users-three"></i> Fake Farmers (Hyderabad)</span>
                     </a>
                     <a href="user.php" class="dropdown-option" style="text-decoration:none;">
                         <span><i class="ph ph-arrow-left"></i> Kiosk Core Admin</span>

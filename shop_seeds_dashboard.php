@@ -2508,6 +2508,12 @@ if (isset($pdo) && $pdo instanceof PDO) {
                 News & Reels Studio
             </a>
 
+            <!-- Fake Farmers (Hyderabad) Dashboard Link -->
+            <a href="fake_farmers_dashboard.php" class="btn-header" title="Manage Fake Farmers (Hyderabad)">
+                <i class="ph-bold ph-users-three"></i>
+                Fake Farmers (Hyd)
+            </a>
+
             <!-- Quick Refresh -->
             <a href="javascript:location.reload()" class="btn-header" title="Refresh Data">
                 <i class="ph ph-arrows-clockwise"></i>

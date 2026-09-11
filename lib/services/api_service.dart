@@ -1316,11 +1316,15 @@ class ApiService {
         : ['Hyderabad', 'Warangal', 'Khammam', 'Karimnagar', 'Nizamabad', 'Suryapet', 'Mahabubnagar'];
 
     final commodities = [
+      {'name': 'Apple', 'variety': 'Royal Delicious', 'min': '9800', 'max': '11200', 'modal': '10666.67'},
+      {'name': 'Avocado', 'variety': 'Hass', 'min': '45', 'max': '75', 'modal': '60.00'},
+      {'name': 'Banana', 'variety': 'Robusta', 'min': '22', 'max': '35', 'modal': '28.00'},
+      {'name': 'Beetroot', 'variety': 'Detroit Dark Red', 'min': '14', 'max': '24', 'modal': '18.00'},
+      {'name': 'Tomato', 'variety': 'Hybrid', 'min': '1800', 'max': '2800', 'modal': '2300'},
       {'name': 'Paddy(Dhan)(Common)', 'variety': 'Common', 'min': '2250', 'max': '2360', 'modal': '2300'},
       {'name': 'Cotton', 'variety': 'Medium Staple', 'min': '6900', 'max': '7450', 'modal': '7150'},
       {'name': 'Maize', 'variety': 'Yellow', 'min': '2100', 'max': '2400', 'modal': '2280'},
       {'name': 'Chilli Red', 'variety': 'Teja / Guntur', 'min': '14500', 'max': '18500', 'modal': '16500'},
-      {'name': 'Tomato', 'variety': 'Hybrid', 'min': '1800', 'max': '2800', 'modal': '2300'},
       {'name': 'Red Gram (Arhar/Tur)', 'variety': 'Red', 'min': '7200', 'max': '7900', 'modal': '7550'},
       {'name': 'Groundnut', 'variety': 'Pods with Shell', 'min': '5800', 'max': '6700', 'modal': '6350'},
       {'name': 'Soyabean', 'variety': 'Yellow', 'min': '4300', 'max': '4850', 'modal': '4600'},
@@ -1329,7 +1333,7 @@ class ApiService {
       {'name': 'Bengal Gram(Gram)(Whole)', 'variety': 'Desi', 'min': '5400', 'max': '6100', 'modal': '5800'},
       {'name': 'Green Gram (Moong)', 'variety': 'Medium', 'min': '7600', 'max': '8400', 'modal': '8100'},
       {'name': 'Potato', 'variety': 'Jyoti', 'min': '1600', 'max': '2100', 'modal': '1900'},
-      {'name': 'Banana', 'variety': 'Robusta', 'min': '1200', 'max': '1800', 'modal': '1500'},
+      {'name': 'Mango', 'variety': 'Banganapalli', 'min': '4500', 'max': '6500', 'modal': '5500'},
     ];
 
     final records = <Map<String, dynamic>>[];
