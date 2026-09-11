@@ -801,5 +801,20 @@
   "reels_tab": "रील्स",
   "news_read_full_story": "पूरी खबर पढ़ें",
   "news_read_complete_article": "पूरा लेख और दिशा-निर्देश पढ़ने के लिए टैप करें",
-  "news_short_by": "लेखक: {}"
+  "news_short_by": "लेखक: {}",
+  "unlimited_advisory_title": "फसल सलाह: 100% निःशुल्क और असीमित",
+  "unlimited_advisory_badge": "असीमित निःशुल्क",
+  "unlimited_advisory_desc": "CropSync हर किसान को हमेशा के लिए निःशुल्क कृषि सलाह प्रदान करता है।",
+  "unlimited_advisory_feature1": "50+ फसलें और 500+ रोग उपचार",
+  "unlimited_advisory_feature2": "निःशुल्क मौसम स्प्रे सलाह",
+  "unlimited_advisory_feature3": "मंडी भाव और कृषि समाचार",
+  "unlimited_advisory_footer": "कोई सदस्यता शुल्क नहीं • फसल सलाह पर कोई सीमा नहीं",
+  "ai_doctor_scanner_title": "AI प्लांट डॉक्टर स्कैनर",
+  "ai_doctor_scanner_badge": "AI निदान",
+  "ai_doctor_daily_free": "दैनिक निःशुल्क सीमा",
+  "ai_doctor_reset_midnight": "हर रात 00:00 बजे रीसेट होता है",
+  "ai_doctor_purchased": "खरीदे गए क्रेडिट",
+  "ai_doctor_never_expires": "कभी समाप्त नहीं होते • आजीवन मान्य",
+  "ai_doctor_add_credits": "10 क्रेडिट जोड़ें (₹1)",
+  "ai_doctor_open_scanner": "प्लांट डॉक्टर खोलें"
 }

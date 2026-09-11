@@ -1,14 +1,17 @@
-﻿import 'dart:async';
-import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'package:cropsync/models/crop_problem.dart';
 import 'package:cropsync/screens/advisory_details.dart';
+import 'package:cropsync/services/ai_credit_service.dart';
 import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/services/deepseek_plant_doctor_service.dart';
+import 'package:cropsync/services/location_service.dart';
+import 'package:cropsync/services/razorpay_payment_service.dart';
+import 'package:cropsync/services/text_to_speech_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -48,10 +51,19 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
     context.tr('diag_loading_5'),
   ];
 
+  // Credit & Razorpay State
+  CreditStatus? _creditStatus;
+  late final RazorpayPaymentService _razorpayService;
+  late final TextToSpeechService _ttsService;
+  bool _isPaymentProcessing = false;
+
   @override
   void initState() {
     super.initState();
     _activeImagePath = widget.imagePath;
+    _razorpayService = RazorpayPaymentService();
+    _ttsService = TextToSpeechService();
+    _loadCreditStatus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.initialSource != null) {
         _startPrepareTimer(widget.initialSource!);
@@ -63,10 +75,13 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
   void dispose() {
     _prepareTimer?.cancel();
     _loadingTimer?.cancel();
+    _razorpayService.dispose();
+    _ttsService.stop();
     super.dispose();
   }
 
   void _startPrepareTimer(ImageSource source) {
+    _ttsService.stop();
     _prepareTimer?.cancel();
     setState(() {
       _isPreparingPicker = true;
@@ -102,6 +117,7 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
   }
 
   void _cancelPrepare() {
+    _ttsService.stop();
     _prepareTimer?.cancel();
     setState(() {
       _isPreparingPicker = false;
@@ -112,37 +128,75 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
     }
   }
 
-  Future<int> _getAvailableRequests() async {
-    final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now();
-    final times = prefs.getStringList('nvidia_request_timestamps') ?? [];
-
-    final validTimes = times.where((t) {
-      final dt = DateTime.tryParse(t);
-      if (dt == null) return false;
-      return now.difference(dt).inSeconds < 60;
-    }).toList();
-
-    return (40 - validTimes.length).clamp(0, 40).toInt();
+  Future<void> _loadCreditStatus() async {
+    final status = await AiCreditService.getCreditStatus();
+    if (mounted) {
+      setState(() {
+        _creditStatus = status;
+      });
+    }
   }
 
-  Future<void> _recordRequest() async {
-    final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now();
-    final times = prefs.getStringList('nvidia_request_timestamps') ?? [];
+  Widget _buildCreditQuotaWidget() {
+    final status = _creditStatus;
+    final remaining = status?.totalAvailable ?? 10;
+    final hasCredits = remaining > 0;
+    final isUsingPurchased = status?.isUsingPurchasedCredits ?? false;
 
-    final validTimes = times.where((t) {
-      final dt = DateTime.tryParse(t);
-      if (dt == null) return false;
-      return now.difference(dt).inSeconds < 60;
-    }).toList();
-
-    validTimes.add(now.toIso8601String());
-    await prefs.setStringList('nvidia_request_timestamps', validTimes);
+    return InkWell(
+      onTap: () => _showPurchaseCreditsModal(),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasCredits ? Icons.eco_rounded : Icons.bolt_rounded,
+              size: 16,
+              color: hasCredits ? const Color(0xFF2E7D32) : const Color(0xFFDC2626),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              hasCredits
+                  ? (isUsingPurchased
+                      ? "$remaining scans available (${status!.purchasedCredits} purchased)"
+                      : "${status?.dailyRemaining ?? 10}/10 free scans left today")
+                  : "Daily limit reached (0/10) • Add 10 scans for ₹1",
+              style: TextStyle(
+                fontSize: 13,
+                color: hasCredits ? const Color(0xFF2E7D32) : const Color(0xFFDC2626),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (!hasCredits) ...[
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 11,
+                color: Color(0xFFDC2626),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _analyzeImage() async {
     if (_activeImagePath == null) return;
+    _ttsService.stop();
+    final locale = context.locale.languageCode;
+
+    // Verify user has remaining credits
+    final canScan = await AiCreditService.canPerformAnalysis();
+    if (!canScan) {
+      if (mounted) {
+        _showPurchaseCreditsModal(onSuccess: () => _analyzeImage());
+      }
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMsg = null;
@@ -161,23 +215,17 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
       }
     });
 
-    final nvidiaKey = dotenv.env['NVIDIA_API_KEY'];
-    if (nvidiaKey == null || nvidiaKey.isEmpty) {
+    final deepseekKey = dotenv.env['DEEPSEEK_API_KEY'];
+    if (deepseekKey == null || deepseekKey.trim().isEmpty) {
       setState(() {
         _isLoading = false;
-        _errorMsg =
-            "NVIDIA API Key is missing. Please add it to your .env file.";
+        _errorMsg = "DeepSeek API Key is missing. Please add DEEPSEEK_API_KEY to your .env file.";
       });
+      _loadingTimer?.cancel();
       return;
     }
 
     try {
-      final locale = context.locale.languageCode;
-      final langName = locale == 'te'
-          ? 'Telugu'
-          : locale == 'hi'
-              ? 'Hindi'
-              : 'English';
 
       final cropsList = await ApiService.getCrops(lang: locale);
       final formattedCrops = cropsList
@@ -205,165 +253,111 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
           _isLoading = false;
           _errorMsg = "Captured image file not found.";
         });
+        _loadingTimer?.cancel();
         return;
       }
-      final bytes = await file.readAsBytes();
-      final base64Image = base64Encode(bytes);
 
-      final prompt = """
-You are a highly capable AI Plant Pathologist and Agronomist.
-Your task is to perform an advanced plant health diagnosis and visual analysis on the uploaded image.
+      // Fetch user GPS position to allow hyper-local weather tool execution
+      final position = await LocationService.getCurrentPosition();
 
-Follow these strict rules:
-1. First, verify if the image shows a plant, crop, leaf, stem, fruit, or root. If the image is of something else (like a person, a room, a household object, or text), you must set "is_plant" to false and explain why in the "reason" field.
-2. If it is a plant:
-   - Identify the crop shown in the image from the database list of crops: ${jsonEncode(formattedCrops)}. Set "detected_crop_id" to its exact integer ID and "detected_crop_name" to its name. If the crop in the image is not in this database list, set "detected_crop_id" to null and "detected_crop_name" to the name of the crop you identify.
-   - Identify if the plant is completely **healthy**. If so, set "health_status" to "healthy" and "matched_problem_name" to "Healthy Plant".
-   - Check for **physical damages** (e.g. stem breakage, lodging, wilting, torn leaves, animal damage). If detected, set "health_status" to "physical_damage".
-   - Check for **nutrient deficiencies** (e.g. chlorosis/yellowing, necrosis, purpling leaves, stunted growth). If detected, set "health_status" to "deficiency".
-   - Check for **diseases or insect pest infestations**. If detected, set "health_status" to "diseased" or "pest_infestation".
-3. List the visual symptoms and damages observed in the image (e.g., "broken main stem at lower branch", "wilting leaves due to moisture stress", "interveinal chlorosis") inside "observed_symptoms".
-4. Suggest a list of actionable recovery actions (e.g., physical staking, fertilizer application adjustments, watering schedule change) in "recovery_recommendations".
-5. Compare your diagnosis with our database of known problems to find matches. Here is the database list:
-${jsonEncode(formattedProblems)}
+      // Call DeepSeek Plant Doctor with automatic prompt caching and weather tool execution
+      final parsed = await DeepSeekPlantDoctorService.diagnoseCrop(
+        imageFile: file,
+        latitude: position?.latitude,
+        longitude: position?.longitude,
+        language: locale,
+        knownCrops: formattedCrops,
+        knownProblems: formattedProblems,
+      );
 
-Crucially, make sure that the matched problem's "crop_id" matches the "detected_crop_id" of the crop you identified in step 2. For example, if you detect Rice/Paddy Blast, match it with the Blast problem that is associated with the Paddy/Rice crop (detected_crop_id matching its crop_id), NOT wheat, maize, or other crops. If it matches one of these database items, set "matched_problem_id" to its exact integer ID, and "matched_problem_name" to its name.
-6. Provide general fallback AI control measures in "ai_control_measures".
+      // Deduct 1 credit for successful analysis
+      await AiCreditService.consumeCredit();
+      await _loadCreditStatus();
 
-You MUST output the JSON values (specifically "matched_problem_name", "detected_crop_name", "health_status", "observed_symptoms", "ai_analysis", "recovery_recommendations", "reason", and "ai_control_measures") in the $langName language. Ensure that the JSON keys remain exactly as defined (in English) but the string values are translated/written in $langName.
+      final matchedId = parsed['matched_problem_id'] as int?;
+      bool hasVerifiedAdvisory = false;
+      if (matchedId != null) {
+        try {
+          final advisory = await ApiService.getAdvisories(matchedId, lang: locale)
+              .timeout(const Duration(seconds: 5));
+          if (advisory != null) {
+            hasVerifiedAdvisory = true;
+          }
+        } catch (_) {}
+      }
 
-Output RAW JSON ONLY. Do not wrap in markdown or any conversational text.
-Format:
-{
-  "is_plant": true,
-  "reason": "",
-  "detected_crop_id": null or number,
-  "detected_crop_name": "Paddy" or similar,
-  "matched_problem_id": null or number,
-  "matched_problem_name": "identified problem name or 'Healthy Plant'",
-  "health_status": "healthy" or "diseased" or "deficiency" or "physical_damage" or "pest_infestation",
-  "confidence": 0.95,
-  "observed_symptoms": ["symptom 1", "symptom 2"],
-  "ai_analysis": "Provide a descriptive analysis of the plant's health and damage localization details.",
-  "recovery_recommendations": ["recommendation 1", "recommendation 2"],
-  "ai_control_measures": {
-    "chemical": ["Apply chemical control step 1"],
-    "biological": ["Apply biological control/organic step 1"],
-    "preventative": ["Apply preventative step 1"]
-  }
-}
-""";
-
-      final response = await http
-          .post(
-            Uri.parse('https://integrate.api.nvidia.com/v1/chat/completions'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $nvidiaKey',
-            },
-            body: jsonEncode({
-              'model': 'google/diffusiongemma-26b-a4b-it',
-              'messages': [
-                {
-                  'role': 'user',
-                  'content': [
-                    {
-                      'type': 'text',
-                      'text': prompt,
-                    },
-                    {
-                      'type': 'image_url',
-                      'image_url': {
-                        'url': 'data:image/jpeg;base64,$base64Image',
-                      },
-                    }
-                  ],
-                }
-              ],
-              'temperature': 0.1,
-              'max_tokens': 1500,
-            }),
-          )
-          .timeout(const Duration(seconds: 45));
-
-      if (response.statusCode == 200) {
-        await _recordRequest();
-
-        final resData = jsonDecode(utf8.decode(response.bodyBytes));
-        final content = resData['choices'][0]['message']['content'] as String;
-
-        String cleaned = content;
-        if (cleaned.contains('```json')) {
-          cleaned = cleaned.split('```json').last;
-        }
-        if (cleaned.contains('```')) {
-          cleaned = cleaned.split('```').first;
-        }
-
-        final parsed = jsonDecode(cleaned.trim()) as Map<String, dynamic>;
-        final matchedId = parsed['matched_problem_id'] as int?;
-        bool hasVerifiedAdvisory = false;
-        if (matchedId != null) {
-          try {
-            final advisory =
-                await ApiService.getAdvisories(matchedId, lang: locale)
-                    .timeout(const Duration(seconds: 5));
-            if (advisory != null) {
-              hasVerifiedAdvisory = true;
-            }
-          } catch (_) {}
-        }
-
+      if (mounted) {
         setState(() {
           _analysisResult = parsed;
           _hasVerifiedAdvisory = hasVerifiedAdvisory;
           _isLoading = false;
         });
-        _loadingTimer?.cancel();
-      } else {
+      }
+      _loadingTimer?.cancel();
+    } on DeepSeekException catch (e) {
+      if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMsg = response.statusCode == 503
-              ? "The AI model is currently busy or starting up. Please try again in a few moments."
-              : response.statusCode == 429
-                  ? "Too many requests. Please wait a moment before trying again."
-                  : "API Error: ${response.statusCode}. Please try again.";
+          _errorMsg = e.message;
         });
-        _loadingTimer?.cancel();
       }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMsg = "Connection error. Please check your internet connection.";
-      });
       _loadingTimer?.cancel();
-      debugPrint("Vision API error: $e");
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMsg = "Diagnosis failed: $e";
+        });
+      }
+      _loadingTimer?.cancel();
+      debugPrint("DeepSeek Vision API error: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text('diag_title'.tr(), style: AppTheme.appBarTitle),
-        backgroundColor: Colors.white,
-        leading: AppTheme.backButton(context, color: AppTheme.appBarText),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          _ttsService.stop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          title: Text('diag_title'.tr(), style: AppTheme.appBarTitle),
+          backgroundColor: Colors.white,
+          leading: AppTheme.backButton(context, color: AppTheme.appBarText),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          actions: [
+            _buildCreditBadge(),
+          ],
+        ),
+        body: _buildDiagnosisTab(),
       ),
-      body: _buildDiagnosisTab(),
     );
   }
 
   Future<void> _localPickImage(ImageSource source) async {
+    _ttsService.stop();
+    // Check credit status before picking photo
+    final canScan = await AiCreditService.canPerformAnalysis();
+    if (!canScan) {
+      if (mounted) {
+        _showPurchaseCreditsModal(onSuccess: () => _localPickImage(source));
+      }
+      return;
+    }
+
     try {
       final XFile? photo = await _picker.pickImage(
         source: source,
-        maxWidth: 1080,
-        maxHeight: 1080,
-        imageQuality: 85,
+        maxWidth: 384,
+        maxHeight: 384,
+        imageQuality: 65,
+        requestFullMetadata: false,
       );
       if (photo != null && mounted) {
         setState(() {
@@ -585,21 +579,8 @@ Format:
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                FutureBuilder<int>(
-                  future: _getAvailableRequests(),
-                  builder: (context, snapshot) {
-                    final reqs = snapshot.data ?? 40;
-                    return Text(
-                      'diag_rate_limit'.tr(args: [reqs.toString()]),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: reqs < 5 ? Colors.red : Colors.grey[600],
-                        fontWeight: FontWeight.w600,
-                      ),
-                    );
-                  },
-                ),
+                const SizedBox(height: 20),
+                _buildCreditQuotaWidget(),
               ],
             ),
           ),
@@ -675,20 +656,7 @@ Format:
                   ),
                 ),
                 const SizedBox(height: 12),
-                FutureBuilder<int>(
-                  future: _getAvailableRequests(),
-                  builder: (context, snapshot) {
-                    final reqs = snapshot.data ?? 40;
-                    return Text(
-                      'diag_rate_limit'.tr(args: [reqs.toString()]),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: reqs < 5 ? Colors.red : Colors.grey[600],
-                        fontWeight: FontWeight.w600,
-                      ),
-                    );
-                  },
-                ),
+                _buildCreditQuotaWidget(),
                 const SizedBox(height: 24),
               ],
             ),
@@ -746,6 +714,60 @@ Format:
     );
   }
 
+  /// Reusable Speech Button for Diagnosis Sections
+  /// Reads out text in user's active app language (Telugu, Hindi, or English)
+  Widget _buildSpeechButton({
+    required String sectionKey,
+    required String text,
+    Color? color,
+  }) {
+    final langCode = context.locale.languageCode;
+    final effectiveColor = color ?? AppTheme.primary;
+
+    return ValueListenableBuilder<String?>(
+      valueListenable: _ttsService.currentSpeakingKey,
+      builder: (context, currentKey, _) {
+        final isSpeaking = currentKey == sectionKey;
+        return Tooltip(
+          message: isSpeaking ? 'Stop reading' : 'Read aloud',
+          child: InkWell(
+            onTap: () {
+              _ttsService.toggleSpeakSection(
+                sectionKey: sectionKey,
+                text: text,
+                languageCode: langCode,
+              );
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: isSpeaking
+                    ? effectiveColor.withValues(alpha: 0.18)
+                    : effectiveColor.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSpeaking
+                      ? effectiveColor
+                      : effectiveColor.withValues(alpha: 0.25),
+                  width: isSpeaking ? 1.5 : 1.0,
+                ),
+              ),
+              child: Icon(
+                isSpeaking ? Icons.stop_rounded : Icons.volume_up_rounded,
+                size: 18,
+                color: isSpeaking
+                    ? effectiveColor
+                    : effectiveColor.withValues(alpha: 0.85),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildResultSection() {
     final result = _analysisResult!;
     final isPlant = result['is_plant'] as bool? ?? false;
@@ -763,15 +785,26 @@ Format:
         ),
         child: Column(
           children: [
-            const Icon(Icons.warning_amber_rounded,
-                size: 44, color: Color(0xFFD97706)),
-            const SizedBox(height: 12),
-            Text(
-              'diag_not_plant'.tr(),
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Color(0xFF92400E)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.warning_amber_rounded,
+                    size: 32, color: Color(0xFFD97706)),
+                const SizedBox(width: 8),
+                Text(
+                  'diag_not_plant'.tr(),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(0xFF92400E)),
+                ),
+                const SizedBox(width: 8),
+                _buildSpeechButton(
+                  sectionKey: 'not_plant',
+                  text: "${'diag_not_plant'.tr()}. $reason",
+                  color: const Color(0xFFD97706),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Text(
@@ -786,8 +819,15 @@ Format:
 
     final matchedId = result['matched_problem_id'] as int?;
     final problemName = result['matched_problem_name']?.toString() ?? "Unknown";
-    final confidence = ((result['confidence'] as num? ?? 0.0) * 100).round();
-    final analysis = result['ai_analysis']?.toString() ?? "";
+    final confidence = ((result['confidence'] as num? ?? 0.88) * 100).round();
+    final rawAnalysis = result['ai_analysis']?.toString() ?? "";
+    String analysis = rawAnalysis;
+    if (analysis.trim().startsWith('{') ||
+        analysis.contains('"is_plant"') ||
+        analysis.contains('"detected_crop_name"')) {
+      analysis = "${result['detected_crop_name'] ?? 'Crop'} exhibits symptoms of $problemName. "
+          "Follow the weather spray advisory and control measures below.";
+    }
     final controls = result['ai_control_measures'] as Map<String, dynamic>?;
 
     final healthStatus =
@@ -862,15 +902,30 @@ Format:
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Icon(statusIcon, color: statusColor, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      statusTextKey.tr(),
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: statusColor,
-                          fontSize: 14),
+                    Row(
+                      children: [
+                        Icon(statusIcon, color: statusColor, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          statusTextKey.tr(),
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: statusColor,
+                              fontSize: 14),
+                        ),
+                      ],
+                    ),
+                    _buildSpeechButton(
+                      sectionKey: 'diagnosis_overview',
+                      text: [
+                        if (detectedCropName != null && detectedCropName.isNotEmpty) detectedCropName,
+                        problemName,
+                        statusTextKey.tr(),
+                        analysis,
+                      ].join('. '),
+                      color: statusColor,
                     ),
                   ],
                 ),
@@ -929,18 +984,113 @@ Format:
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          if (result['weather_impact'] != null &&
+              result['weather_impact'].toString().trim().isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F9FF),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFBAE6FD)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.cloud_sync_rounded,
+                          color: Color(0xFF0284C7), size: 20),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          "Agro-Weather Correlation & Spray Advice",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: Color(0xFF0369A1),
+                          ),
+                        ),
+                      ),
+                      _buildSpeechButton(
+                        sectionKey: 'weather_advice',
+                        text: "Agro-Weather Correlation & Spray Advice. ${result['weather_impact']}",
+                        color: const Color(0xFF0284C7),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    result['weather_impact'].toString(),
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      color: Color(0xFF0C4A6E),
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (observedSymptoms.isNotEmpty)
-            _buildControlList('diag_observed_symptoms'.tr(), observedSymptoms,
-                const Color(0xFF475569), Icons.search_rounded),
+            _buildControlList(
+              'diag_observed_symptoms'.tr(),
+              observedSymptoms,
+              const Color(0xFF475569),
+              Icons.search_rounded,
+              speechSectionKey: 'symptoms',
+            ),
           if (recoveryTips.isNotEmpty)
-            _buildControlList('diag_recovery_tips'.tr(), recoveryTips,
-                const Color(0xFF0D9488), Icons.tips_and_updates_rounded),
+            _buildControlList(
+              'diag_recovery_tips'.tr(),
+              recoveryTips,
+              const Color(0xFF0D9488),
+              Icons.tips_and_updates_rounded,
+              speechSectionKey: 'recovery',
+            ),
+          if (controls != null && healthStatus != 'healthy') ...[
+            Text(
+              'diag_ai_controls'.tr(),
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary),
+            ),
+            const SizedBox(height: 12),
+            _buildControlList(
+              'diag_chemical'.tr(),
+              controls['chemical'],
+              const Color(0xFFDC2626),
+              Icons.science_rounded,
+              subtitle: "Per Acre • Water Mix",
+              speechSectionKey: 'chemical',
+            ),
+            const SizedBox(height: 12),
+            _buildControlList(
+              'diag_biological'.tr(),
+              controls['biological'],
+              const Color(0xFF16A34A),
+              Icons.eco_rounded,
+              subtitle: "Per Acre • Water Mix",
+              speechSectionKey: 'biological',
+            ),
+            const SizedBox(height: 12),
+            _buildControlList(
+              'diag_preventative'.tr(),
+              controls['preventative'],
+              const Color(0xFF0F766E),
+              Icons.verified_user_rounded,
+              speechSectionKey: 'preventative',
+            ),
+            const SizedBox(height: 20),
+          ],
           if (matchedId != null && _hasVerifiedAdvisory) ...[
             SizedBox(
               width: double.infinity,
               height: 54,
-              child: ElevatedButton(
+              child: ElevatedButton.icon(
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -961,12 +1111,13 @@ Format:
                     ),
                   );
                 },
+                icon: const Icon(Icons.verified_rounded, color: Colors.white),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF16A34A),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                 ),
-                child: Text(
+                label: Text(
                   'diag_view_verified'.tr(),
                   style: const TextStyle(
                       fontWeight: FontWeight.bold,
@@ -977,37 +1128,14 @@ Format:
             ),
             const SizedBox(height: 24),
           ],
-          if ((matchedId == null || !_hasVerifiedAdvisory) &&
-              controls != null &&
-              healthStatus != 'healthy') ...[
-            Text(
-              'diag_ai_controls'.tr(),
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary),
-            ),
-            const SizedBox(height: 12),
-            _buildControlList(
-                'diag_preventative'.tr(),
-                controls['preventative'],
-                const Color(0xFF0F766E),
-                Icons.verified_user_rounded),
-            const SizedBox(height: 12),
-            _buildControlList('diag_biological'.tr(), controls['biological'],
-                const Color(0xFF16A34A), Icons.eco_rounded),
-            const SizedBox(height: 12),
-            _buildControlList('diag_chemical'.tr(), controls['chemical'],
-                const Color(0xFFDC2626), Icons.science_rounded),
-            const SizedBox(height: 24),
-          ],
         ],
       ),
     );
   }
 
   Widget _buildControlList(
-      String title, dynamic items, Color color, IconData icon) {
+      String title, dynamic items, Color color, IconData icon,
+      {String? subtitle, String? speechSectionKey}) {
     final list = items is List ? List<String>.from(items) : <String>[];
     if (list.isEmpty) return const SizedBox.shrink();
 
@@ -1027,9 +1155,43 @@ Format:
             children: [
               Icon(icon, color: color, size: 20),
               const SizedBox(width: 8),
-              Text(title,
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 15, color: color)),
+              Expanded(
+                child: Text(title,
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 15, color: color)),
+              ),
+              if (subtitle != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: color.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.water_drop_rounded, size: 11, color: color),
+                      const SizedBox(width: 3),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              if (speechSectionKey != null)
+                _buildSpeechButton(
+                  sectionKey: speechSectionKey,
+                  text: "$title. ${list.join('. ')}",
+                  color: color,
+                ),
             ],
           ),
           const SizedBox(height: 10),
@@ -1058,6 +1220,357 @@ Format:
               )),
         ],
       ),
+    );
+  }
+
+  Widget _buildCreditBadge() {
+    if (_creditStatus == null) return const SizedBox.shrink();
+    final remaining = _creditStatus!.totalAvailable;
+    final isLow = remaining <= 2;
+    return Padding(
+      padding: const EdgeInsets.only(right: 12, top: 10, bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showPurchaseCreditsModal(),
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: isLow ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isLow ? const Color(0xFFFCA5A5) : const Color(0xFF86EFAC),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isLow ? Icons.bolt_rounded : Icons.eco_rounded,
+                  size: 14,
+                  color: isLow ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _creditStatus!.isUsingPurchasedCredits
+                      ? "$remaining Credits"
+                      : "${_creditStatus!.dailyRemaining}/10 Free",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isLow ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Icon(
+                  Icons.add_circle_outline_rounded,
+                  size: 13,
+                  color: isLow ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPurchaseCreditsModal({VoidCallback? onSuccess}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 20,
+                    offset: Offset(0, -4),
+                  )
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2E7D32).withValues(alpha: 0.18),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.stars_rounded,
+                      size: 36,
+                      color: Color(0xFF2E7D32),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    "AI Crop Doctor Credits",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _creditStatus != null && _creditStatus!.dailyRemaining == 0
+                        ? "You've completed your 10 free daily scans. Top up 10 extra scans to continue instant diagnosis."
+                        : "Add 10 extra scans to your CropSync account. Credits never expire!",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: Colors.grey.shade700,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFF86EFAC), width: 1.5),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.bolt_rounded, color: Color(0xFF2E7D32), size: 22),
+                                SizedBox(width: 6),
+                                Text(
+                                  "10 Scans Pack",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2E7D32),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                "₹1 ONLY",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _buildFeatureItem(Icons.check_circle_rounded, "10 High-Precision Plant Doctor Diagnoses"),
+                        const SizedBox(height: 6),
+                        _buildFeatureItem(Icons.check_circle_rounded, "Real-time & 7-Day Weather Risk Analytics"),
+                        const SizedBox(height: 6),
+                        _buildFeatureItem(Icons.check_circle_rounded, "CIBRC Chemical & Biological IPM Prescriptions"),
+                        const SizedBox(height: 6),
+                        _buildFeatureItem(Icons.check_circle_rounded, "Never expires • Rolls over automatically"),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _isPaymentProcessing
+                          ? null
+                          : () {
+                              _triggerRazorpayPurchase(
+                                onSuccess: onSuccess,
+                                setModalState: setModalState,
+                              );
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2E7D32),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: _isPaymentProcessing
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.payment_rounded, size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  "Pay ₹1 via Razorpay",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.lock_outline_rounded, size: 13, color: Colors.grey.shade500),
+                      const SizedBox(width: 4),
+                      Text(
+                        "100% Secure via Razorpay (UPI, GPay, PhonePe, Cards)",
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _triggerRazorpayPurchase({
+    VoidCallback? onSuccess,
+    void Function(void Function())? setModalState,
+  }) async {
+    final phone = await RazorpayPaymentService.resolveUserPhoneNumber();
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id') ??
+        prefs.getString('userId') ??
+        (phone.isNotEmpty ? phone : 'guest_farmer');
+    final email = prefs.getString('email') ?? '';
+
+    setState(() => _isPaymentProcessing = true);
+    setModalState?.call(() => _isPaymentProcessing = true);
+
+    await _razorpayService.purchaseCredits(
+      amountInr: AiCreditService.costPerPurchaseInr,
+      userId: userId,
+      userPhone: phone,
+      userEmail: email,
+      description: "10 AI Crop Doctor Scans",
+      onResult: (result) async {
+        if (!mounted) return;
+        setState(() => _isPaymentProcessing = false);
+        setModalState?.call(() => _isPaymentProcessing = false);
+
+        if (result.isSuccess) {
+          if (result.totalPurchased != null) {
+            await AiCreditService.syncPurchasedCredits(
+              result.totalPurchased!,
+              userId: userId,
+              paymentId: result.paymentId,
+            );
+          } else {
+            await AiCreditService.addPurchasedCredits(
+              result.creditsAdded ?? AiCreditService.creditsPerPurchase,
+              userId: userId,
+              paymentId: result.paymentId,
+            );
+          }
+          await _loadCreditStatus();
+
+          if (mounted) {
+            Navigator.of(context, rootNavigator: true).maybePop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("🎉 10 Crop Doctor credits verified & added successfully!"),
+                backgroundColor: Color(0xFF2E7D32),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            onSuccess?.call();
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result.errorMessage ?? "Payment cancelled or failed."),
+                backgroundColor: Colors.red.shade700,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
+  static Widget _buildFeatureItem(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: const Color(0xFF16A34A)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: Color(0xFF334155),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

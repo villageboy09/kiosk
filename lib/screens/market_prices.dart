@@ -21,6 +21,7 @@ class MarketPrice {
   final String minPrice;
   final String maxPrice;
   final String modalPrice;
+  final String imageUrl;
 
   MarketPrice({
     required this.state,
@@ -33,6 +34,7 @@ class MarketPrice {
     required this.minPrice,
     required this.maxPrice,
     required this.modalPrice,
+    required this.imageUrl,
   });
 
   factory MarketPrice.fromJson(Map<String, dynamic> json) {
@@ -47,6 +49,8 @@ class MarketPrice {
       minPrice: json['min_price']?.toString() ?? '0',
       maxPrice: json['max_price']?.toString() ?? '0',
       modalPrice: json['modal_price']?.toString() ?? '0',
+      imageUrl:
+          json['image_url']?.toString() ?? json['imageUrl']?.toString() ?? '',
     );
   }
 }
@@ -85,7 +89,9 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     }
   }
 
-  String _getCommodityImagePath(String commodity) {
+  /// Fallback image URL builder — only used when the server didn't send
+  /// an `image_url`. Prefer `price.imageUrl` whenever it's available.
+  String _getFallbackCommodityImagePath(String commodity) {
     if (commodity.isEmpty) return '';
     final words = commodity.trim().split(' ');
     final capitalized = words.map((w) {
@@ -95,12 +101,17 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     return 'https://kiosk.cropsync.in/api/commodity/$capitalized.png';
   }
 
+  String _resolveImageUrl(MarketPrice price) {
+    if (price.imageUrl.isNotEmpty) return price.imageUrl;
+    return _getFallbackCommodityImagePath(price.commodity);
+  }
+
   Future<void> _fetchPrices({bool force = false}) async {
     if (_currentState.isEmpty) return;
 
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'cached_market_prices_$_currentState';
-    
+
     if (force) {
       await prefs.remove(cacheKey);
     }
@@ -265,7 +276,9 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     _fetchPrices();
   }
 
-  void _openCommodityDetails(String commodity) {
+  void _openCommodityDetails(MarketPrice selectedPrice) {
+    final commodity = selectedPrice.commodity;
+
     // 1. Filter prices for this commodity across all markets
     final matching = _allPrices
         .where((p) => p.commodity.toLowerCase() == commodity.toLowerCase())
@@ -273,18 +286,22 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
 
     // 2. Separate local district prices and other state mandis
     final localPrices = matching
-        .where((p) =>
-            p.district.toLowerCase() == _currentDistrict.toLowerCase())
+        .where(
+            (p) => p.district.toLowerCase() == _currentDistrict.toLowerCase())
         .toList();
     final otherPrices = matching
-        .where((p) =>
-            p.district.toLowerCase() != _currentDistrict.toLowerCase())
+        .where(
+            (p) => p.district.toLowerCase() != _currentDistrict.toLowerCase())
         .toList();
 
     localPrices.sort((a, b) => a.market.compareTo(b.market));
     otherPrices.sort((a, b) => a.district.compareTo(b.district));
 
     final combinedPrices = [...localPrices, ...otherPrices];
+
+    // Prefer the server-provided URL; fall back to local builder only if
+    // the server didn't send one.
+    final imageUrl = _resolveImageUrl(selectedPrice);
 
     Navigator.push(
       context,
@@ -293,7 +310,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
           commodity: commodity,
           prices: combinedPrices.isNotEmpty ? combinedPrices : matching,
           currentDistrict: _currentDistrict,
-          imagePath: _getCommodityImagePath(commodity),
+          imagePath: imageUrl,
         ),
       ),
     );
@@ -327,7 +344,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
             onPressed: () => _fetchPrices(force: true),
           ),
           IconButton(
-            icon: const Icon(Icons.my_location_rounded, color: AppTheme.appBarText),
+            icon: const Icon(Icons.my_location_rounded,
+                color: AppTheme.appBarText),
             onPressed: _getCurrentLocation,
           ),
         ],
@@ -351,7 +369,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   }
 
   Widget _buildCommodityGrid() {
-    // 1. Populate commodities: prioritize local district quotes, then include state-wide quotes
+    // 1. Populate commodities: prioritize local district quotes, then
+    //    include state-wide quotes
     Map<String, MarketPrice> uniqueCommodities = {};
     for (var p in _allPrices) {
       if (p.district.toLowerCase() == _currentDistrict.toLowerCase()) {
@@ -366,17 +385,19 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
 
     List<MarketPrice> displayList = uniqueCommodities.values.toList();
     displayList.sort((a, b) => a.commodity.compareTo(b.commodity));
-    
+
     if (displayList.isEmpty) {
       return _buildEmptyState();
     }
 
     final locale = context.locale.languageCode;
-    final hasLocal = displayList.any(
-        (p) => p.district.toLowerCase() == _currentDistrict.toLowerCase());
+    final hasLocal = displayList
+        .any((p) => p.district.toLowerCase() == _currentDistrict.toLowerCase());
     final headerTitle = hasLocal
-        ? context.tr('commodities_in_district', namedArgs: {'district': _currentDistrict})
-        : context.tr('market_prices_in_state', namedArgs: {'state': _currentState});
+        ? context.tr('commodities_in_district',
+            namedArgs: {'district': _currentDistrict})
+        : context
+            .tr('market_prices_in_state', namedArgs: {'state': _currentState});
 
     return CustomScrollView(
       slivers: [
@@ -422,11 +443,11 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                 final price = displayList[index];
                 final isLocalPrice = price.district.toLowerCase() ==
                     _currentDistrict.toLowerCase();
-                final localizedName =
-                    CommodityTranslator.getLocalizedName(price.commodity, locale);
+                final localizedName = CommodityTranslator.getLocalizedName(
+                    price.commodity, locale);
 
                 return GestureDetector(
-                  onTap: () => _openCommodityDetails(price.commodity),
+                  onTap: () => _openCommodityDetails(price),
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -443,7 +464,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         const SizedBox(height: 16),
-                        _buildCommodityAvatar(price.commodity),
+                        _buildCommodityAvatar(_resolveImageUrl(price)),
                         const SizedBox(height: 12),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -522,7 +543,10 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     );
   }
 
-  Widget _buildCommodityAvatar(String commodity) {
+  /// Renders the commodity avatar from a fully-resolved image URL.
+  /// The URL from the server is already encoded exactly once, so we must
+  /// NOT re-encode it here.
+  Widget _buildCommodityAvatar(String imageUrl) {
     return Container(
       width: 64,
       height: 64,
@@ -540,7 +564,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       ),
       child: ClipOval(
         child: Image.network(
-          _getCommodityImagePath(commodity),
+          imageUrl,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
             return Image.asset(
@@ -683,10 +707,13 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
 
             for (int i = 0; i < trends.length; i++) {
               final t = trends[i];
-              final priceVal = double.tryParse(t['avg_price']?.toString() ?? '0') ?? 0;
+              final priceVal =
+                  double.tryParse(t['avg_price']?.toString() ?? '0') ?? 0;
               spots.add(FlSpot(i.toDouble(), priceVal));
               final rawDate = t['arrival_date']?.toString() ?? '';
-              dates.add(rawDate.length >= 5 ? rawDate.substring(rawDate.length - 5) : rawDate);
+              dates.add(rawDate.length >= 5
+                  ? rawDate.substring(rawDate.length - 5)
+                  : rawDate);
             }
 
             setState(() {
@@ -1025,5 +1052,3 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
     );
   }
 }
-
-

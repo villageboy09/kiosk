@@ -802,5 +802,20 @@
   "reels_tab": "Reels",
   "news_read_full_story": "Read Full Story",
   "news_read_complete_article": "Tap to read full article & guide",
-  "news_short_by": "Short by {}"
+  "news_short_by": "Short by {}",
+  "unlimited_advisory_title": "Crop Advisory: 100% Free & Unlimited",
+  "unlimited_advisory_badge": "UNLIMITED FREE",
+  "unlimited_advisory_desc": "CropSync provides unrestricted, forever-free agricultural advisory to every farmer.",
+  "unlimited_advisory_feature1": "50+ Crops & 500+ Disease Remedies",
+  "unlimited_advisory_feature2": "Free Agro-Weather Spray Advice",
+  "unlimited_advisory_feature3": "Mandi Market Prices & Agri News",
+  "unlimited_advisory_footer": "Zero subscription fees • No usage limits on crop guidance",
+  "ai_doctor_scanner_title": "AI Plant Doctor Scanner",
+  "ai_doctor_scanner_badge": "AI DIAGNOSIS",
+  "ai_doctor_daily_free": "Daily Free Limit",
+  "ai_doctor_reset_midnight": "Resets every midnight (00:00)",
+  "ai_doctor_purchased": "Purchased Credits",
+  "ai_doctor_never_expires": "Never expire • Valid forever",
+  "ai_doctor_add_credits": "Add 10 Credits (₹1)",
+  "ai_doctor_open_scanner": "Open Plant Doctor"
 }

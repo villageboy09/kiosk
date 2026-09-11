@@ -19,6 +19,9 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:cropsync/services/api_service.dart';
+import 'package:cropsync/screens/plant_analysis_screen.dart';
+import 'package:cropsync/services/ai_credit_service.dart';
+import 'package:cropsync/services/razorpay_payment_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -41,6 +44,11 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<User?> _userFuture;
   final _formKey = GlobalKey<FormState>();
+
+  // AI Plant Doctor Credit & Razorpay State
+  CreditStatus? _creditStatus;
+  late final RazorpayPaymentService _razorpayService;
+  bool _isPurchasingCredits = false;
 
   // Controllers for editable fields
   final _nameController = TextEditingController();
@@ -354,6 +362,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _userFuture = _fetchAndSetUserProfile();
     _scrollController = ScrollController();
     _scrollController.addListener(_scrollListener);
+    _razorpayService = RazorpayPaymentService();
+    _loadCreditStatus();
   }
 
   void _scrollListener() {
@@ -371,7 +381,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _phoneController.dispose();
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
+    _razorpayService.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCreditStatus() async {
+    final status = await AiCreditService.getCreditStatus();
+    if (mounted) {
+      setState(() {
+        _creditStatus = status;
+      });
+    }
+  }
+
+  Future<void> _buyCredits(User user) async {
+    final phone = await RazorpayPaymentService.resolveUserPhoneNumber(
+      fallbackPhone: user.phoneNumber ?? user.userId,
+    );
+    final userId = user.userId.trim().isNotEmpty
+        ? user.userId.trim()
+        : (phone.isNotEmpty ? phone : 'guest_farmer');
+
+    setState(() => _isPurchasingCredits = true);
+
+    await _razorpayService.purchaseCredits(
+      amountInr: AiCreditService.costPerPurchaseInr,
+      userId: userId,
+      userPhone: phone,
+      description: "10 AI Crop Doctor Scans",
+      onResult: (result) async {
+        if (!mounted) return;
+        setState(() => _isPurchasingCredits = false);
+
+        if (result.isSuccess) {
+          if (result.totalPurchased != null) {
+            await AiCreditService.syncPurchasedCredits(
+              result.totalPurchased!,
+              userId: userId,
+              paymentId: result.paymentId,
+            );
+          } else {
+            await AiCreditService.addPurchasedCredits(
+              result.creditsAdded ?? AiCreditService.creditsPerPurchase,
+              userId: userId,
+              paymentId: result.paymentId,
+            );
+          }
+          await _loadCreditStatus();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("🎉 10 Crop Doctor credits verified & added successfully!"),
+                backgroundColor: Color(0xFF16A34A),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        } else if (result.errorMessage != null && !result.errorMessage!.contains('cancelled')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.errorMessage!),
+              backgroundColor: const Color(0xFFDC2626),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+    );
   }
 
   Future<User?> _fetchAndSetUserProfile() async {
@@ -844,7 +921,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     key: _formKey,
                     child: Column(
                       children: [
-                        _buildPremiumCard(),
+                        _buildCropAdvisoryFreeBanner(),
+                        const SizedBox(height: 16),
+                        _buildAiDoctorCreditsCard(user),
                         const SizedBox(height: 24),
                         _buildUserDetailsList(user),
                         const SizedBox(height: 16),
@@ -1100,68 +1179,391 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildPremiumCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text('CROPSYNC',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: AppTheme.textPrimary,
-                      letterSpacing: -0.5,
-                    )),
-                const Text(' PLUS',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFFFFD700), // Premium Gold
-                      letterSpacing: -0.5,
-                    )),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.textPrimary,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text('FREE',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900)),
-                ),
-                const Spacer(),
-                const Icon(Icons.stars_rounded,
-                    color: Color(0xFFFFD700), size: 32)
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              context.tr('expert_advisory_anytime'),
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              context.tr('unlimited_crop_support'),
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+  Widget _buildCropAdvisoryFreeBanner() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF0FDF4), Colors.white],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF16A34A).withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF86EFAC)),
+                ),
+                child: const Icon(Icons.verified_rounded, color: Color(0xFF16A34A), size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'unlimited_advisory_title'.tr(),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF14532D),
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16A34A),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'unlimited_advisory_badge'.tr(),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'unlimited_advisory_desc'.tr(),
+            style: const TextStyle(
+              fontSize: 13.5,
+              color: Color(0xFF166534),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Divider(color: Color(0xFFDCFCE7), height: 1),
+          const SizedBox(height: 12),
+          _buildAdvisoryFeatureItem(Icons.eco_rounded, 'unlimited_advisory_feature1'.tr()),
+          const SizedBox(height: 8),
+          _buildAdvisoryFeatureItem(Icons.cloud_sync_rounded, 'unlimited_advisory_feature2'.tr()),
+          const SizedBox(height: 8),
+          _buildAdvisoryFeatureItem(Icons.storefront_rounded, 'unlimited_advisory_feature3'.tr()),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF16A34A)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'unlimited_advisory_footer'.tr(),
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF15803D),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _buildAdvisoryFeatureItem(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: const Color(0xFF16A34A)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF14532D),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAiDoctorCreditsCard(User user) {
+    final status = _creditStatus;
+    final dailyRemaining = status?.dailyRemaining ?? AiCreditService.defaultDailyLimit;
+    final dailyLimit = status?.dailyLimit ?? AiCreditService.defaultDailyLimit;
+    final purchasedCredits = status?.purchasedCredits ?? 0;
+    final totalAvailable = status?.totalAvailable ?? dailyRemaining;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: const Icon(Icons.psychology_rounded, color: Color(0xFF2563EB), size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ai_doctor_scanner_title'.tr(),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "$totalAvailable Available Scans",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFDBEAFE)),
+                ),
+                child: Text(
+                  'ai_doctor_scanner_badge'.tr(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1D4ED8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Metric Cards Row
+          Row(
+            children: [
+              // Free Daily Limit Tile
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFF64748B)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'ai_doctor_daily_free'.tr(),
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF64748B),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "$dailyRemaining / $dailyLimit",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: dailyRemaining > 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'ai_doctor_reset_midnight'.tr(),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Purchased Credits Tile
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.bolt_rounded, size: 16, color: Color(0xFFD97706)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'ai_doctor_purchased'.tr(),
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFB45309),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "$purchasedCredits",
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFD97706),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'ai_doctor_never_expires'.tr(),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Action Buttons
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: SizedBox(
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    onPressed: _isPurchasingCredits ? null : () => _buyCredits(user),
+                    icon: _isPurchasingCredits
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.add_shopping_cart_rounded, size: 18, color: Colors.white),
+                    label: Text(
+                      _isPurchasingCredits ? "Processing..." : 'ai_doctor_add_credits'.tr(),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A34A),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: SizedBox(
+                  height: 46,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const PlantAnalysisScreen()),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Text(
+                      'ai_doctor_open_scanner'.tr(),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

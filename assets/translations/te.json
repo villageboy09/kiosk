@@ -802,5 +802,20 @@
   "reels_tab": "రీల్స్",
   "news_read_full_story": "పూర్తి వివరాలు చదవండి",
   "news_read_complete_article": "పూర్తి కథనం & మార్గదర్శక వివరాలు చదవడానికి తాకండి",
-  "news_short_by": "రచయిత: {}"
+  "news_short_by": "రచయిత: {}",
+  "unlimited_advisory_title": "పంట సలహాలు: 100% ఉచితం & అపరిమితం",
+  "unlimited_advisory_badge": "అపరిమిత ఉచితం",
+  "unlimited_advisory_desc": "CropSync ప్రతి రైతుకు శాశ్వతంగా ఉచితమైన వ్యవసాయ సలహాలను అందిస్తుంది.",
+  "unlimited_advisory_feature1": "50+ పంటలు & 500+ తెగులు నివారణలు",
+  "unlimited_advisory_feature2": "ఉచిత వాతావరణ స్ప్రే సలహా",
+  "unlimited_advisory_feature3": "మార్కెట్ ధరలు & వ్యవసాయ వార్తలు",
+  "unlimited_advisory_footer": "సబ్‌స్క్రిప్షన్ రుసుము లేదు • పంట సలహాలపై ఎటువంటి పరిమితి లేదు",
+  "ai_doctor_scanner_title": "AI ప్లాంట్ డాక్టర్ స్కానర్",
+  "ai_doctor_scanner_badge": "AI నిర్ధారణ",
+  "ai_doctor_daily_free": "రోజువారీ ఉచిత పరిమితి",
+  "ai_doctor_reset_midnight": "ప్రతి అర్ధరాత్రి (00:00) పునరుద్ధరించబడుతుంది",
+  "ai_doctor_purchased": "కొనుగోలు చేసిన క్రెడిట్లు",
+  "ai_doctor_never_expires": "ఎప్పటికీ ముగియవు • శాశ్వత చెల్లుబాటు",
+  "ai_doctor_add_credits": "10 క్రెడిట్లు జోడించండి (₹1)",
+  "ai_doctor_open_scanner": "ప్లాంట్ డాక్టర్ తెరవండి"
 }

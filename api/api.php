@@ -15,7 +15,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-require_once '../config.php';
+if (file_exists(__DIR__ . '/config.php')) {
+    require_once __DIR__ . '/config.php';
+} elseif (file_exists(__DIR__ . '/../config.php')) {
+    require_once __DIR__ . '/../config.php';
+} elseif (file_exists('../config.php')) {
+    require_once '../config.php';
+}
+
+if (file_exists(__DIR__ . '/razorpay_config.php')) {
+    require_once __DIR__ . '/razorpay_config.php';
+}
+
 require_once 'market_prices_api.php';
 
 // Keep app/API string parameters consistent with utf8mb4.
@@ -81,6 +92,46 @@ try {
             if (!$stmtVer->fetch()) {
                 $pdo->exec("ALTER TABLE `users` ADD COLUMN `is_verified` TINYINT(1) DEFAULT 1");
             }
+        } catch (Throwable $e) {}
+
+        // Auto-migrate AI Plant Doctor credits and Razorpay transactions
+        try {
+            $stmtAiCred = $pdo->query("SHOW COLUMNS FROM users LIKE 'ai_purchased_credits'");
+            if (!$stmtAiCred->fetch()) {
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `ai_purchased_credits` INT NOT NULL DEFAULT 0");
+            }
+        } catch (Throwable $e) {}
+
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `ai_credit_orders` (
+                `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+                `user_id` VARCHAR(50) NOT NULL,
+                `order_id` VARCHAR(100) NOT NULL UNIQUE,
+                `amount_paise` INT NOT NULL DEFAULT 100,
+                `currency` VARCHAR(10) NOT NULL DEFAULT 'INR',
+                `status` VARCHAR(30) NOT NULL DEFAULT 'created',
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_ai_orders_user` (`user_id`),
+                INDEX `idx_ai_orders_order` (`order_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+        } catch (Throwable $e) {}
+
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `ai_credit_transactions` (
+                `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+                `user_id` VARCHAR(50) NOT NULL,
+                `order_id` VARCHAR(100) NOT NULL,
+                `payment_id` VARCHAR(100) NOT NULL UNIQUE,
+                `signature` VARCHAR(255) NOT NULL,
+                `amount_paise` INT NOT NULL DEFAULT 100,
+                `currency` VARCHAR(10) NOT NULL DEFAULT 'INR',
+                `credits_added` INT NOT NULL DEFAULT 10,
+                `status` VARCHAR(30) NOT NULL DEFAULT 'success',
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_ai_tx_user` (`user_id`),
+                INDEX `idx_ai_tx_order` (`order_id`),
+                INDEX `idx_ai_tx_payment` (`payment_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
         } catch (Throwable $e) {}
 
         // Auto-migrate all required creators table columns
@@ -642,6 +693,16 @@ switch ($action) {
         break;
     case 'get_creator_studio_data':
         getCreatorStudioData($pdo);
+        break;
+    // AI PLANT DOCTOR & RAZORPAY PAYMENT ENDPOINTS
+    case 'create_razorpay_order':
+        createRazorpayOrderHandler($pdo);
+        break;
+    case 'verify_razorpay_payment':
+        verifyRazorpayPaymentHandler($pdo);
+        break;
+    case 'get_ai_credit_balance':
+        getAiCreditBalanceHandler($pdo);
         break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
@@ -2120,24 +2181,48 @@ function getProducts($pdo) {
         $nameField = ($lang === 'en') ? 'product_name_en' : (($lang === 'hi') ? 'product_name_hi' : 'product_name');
         $descField = ($lang === 'en') ? 'product_description_en' : (($lang === 'hi') ? 'product_description_hi' : 'product_description');
         
+        // Select category in the requested language
+        if ($lang === 'en') {
+            $catExpr = "COALESCE(NULLIF(p.category_en, ''), NULLIF(pc.category_name_en, ''), p.category)";
+        } elseif ($lang === 'hi') {
+            $catExpr = "COALESCE(NULLIF(p.category_hi, ''), NULLIF(pc.category_name_hi, ''), NULLIF(p.category_en, ''), p.category)";
+        } else {
+            $catExpr = "COALESCE(NULLIF(p.category, ''), NULLIF(pc.category_name_te, ''), p.category_en)";
+        }
+
         $sql = "
-            SELECT p.product_id, p.product_code, p.category, p.$nameField as product_name, 
-                   p.price, p.$descField as product_description, p.product_video_url,
+            SELECT p.product_id, p.product_code, 
+                   $catExpr as category,
+                   p.category as category_te, 
+                   COALESCE(NULLIF(p.category_en, ''), NULLIF(pc.category_name_en, '')) as category_en,
+                   COALESCE(NULLIF(p.category_hi, ''), NULLIF(pc.category_name_hi, '')) as category_hi,
+                   COALESCE(NULLIF(p.$nameField, ''), p.product_name, p.product_name_en) as product_name, 
+                   p.price, p.mrp, p.in_stock,
+                   COALESCE(NULLIF(p.$descField, ''), p.product_description, p.product_description_en) as product_description, 
+                   p.product_video_url,
                    p.image_url_1, p.image_url_2, p.image_url_3,
                    a.advertiser_id, a.advertiser_name
             FROM products p
+            LEFT JOIN product_categories pc ON (p.category = pc.category_name_te OR p.category = pc.category_name_en OR p.category_en = pc.category_name_en)
             LEFT JOIN advertisers a ON p.advertiser_id = a.advertiser_id
             WHERE 1=1
         ";
         $params = [];
         
         if ($category) {
-            $sql .= " AND p.category = ?";
+            $sql .= " AND (p.category = ? OR p.category_en = ? OR p.category_hi = ? OR pc.category_name_en = ? OR pc.category_name_te = ? OR pc.category_name_hi = ?)";
+            $params[] = $category;
+            $params[] = $category;
+            $params[] = $category;
+            $params[] = $category;
+            $params[] = $category;
             $params[] = $category;
         }
         
         if ($search) {
-            $sql .= " AND (p.product_name LIKE ? OR p.product_description LIKE ?)";
+            $sql .= " AND (p.product_name LIKE ? OR p.product_name_en LIKE ? OR p.product_description LIKE ? OR p.product_description_en LIKE ?)";
+            $params[] = "%$search%";
+            $params[] = "%$search%";
             $params[] = "%$search%";
             $params[] = "%$search%";
         }
@@ -2181,8 +2266,31 @@ function getProducts($pdo) {
 }
 
 function getProductCategories($pdo) {
-    $stmt = $pdo->query("SELECT DISTINCT category FROM products WHERE category IS NOT NULL ORDER BY category");
+    $lang = $_GET['lang'] ?? 'te';
+    try {
+        $col = ($lang === 'en') ? 'category_name_en' : (($lang === 'hi') ? 'category_name_hi' : 'category_name_te');
+        $stmt = $pdo->query("SELECT DISTINCT $col FROM product_categories WHERE $col IS NOT NULL AND TRIM($col) != '' ORDER BY $col");
+        $categories = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $categories = array_values(array_filter(array_map('trim', $categories)));
+        if (!empty($categories)) {
+            echo json_encode(['success' => true, 'categories' => $categories]);
+            return;
+        }
+
+        // Fallback to products table multilingual columns if product_categories had no rows for this language
+        $prodCol = ($lang === 'en') ? 'category_en' : (($lang === 'hi') ? 'category_hi' : 'category');
+        $stmt2 = $pdo->query("SELECT DISTINCT $prodCol FROM products WHERE $prodCol IS NOT NULL AND TRIM($prodCol) != '' ORDER BY $prodCol");
+        $categories = $stmt2->fetchAll(PDO::FETCH_COLUMN);
+        $categories = array_values(array_filter(array_map('trim', $categories)));
+        if (!empty($categories)) {
+            echo json_encode(['success' => true, 'categories' => $categories]);
+            return;
+        }
+    } catch (Throwable $e) {}
+    
+    $stmt = $pdo->query("SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND TRIM(category) != '' ORDER BY category");
     $categories = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $categories = array_values(array_filter(array_map('trim', $categories)));
     
     echo json_encode(['success' => true, 'categories' => $categories]);
 }
@@ -2222,15 +2330,38 @@ function getSeedVarieties($pdo) {
     $varietyField = ($lang === 'en') ? 'variety_name_en' : (($lang === 'hi') ? 'variety_name_hi' : 'variety_name_te');
     $detailsField = ($lang === 'en') ? 'details_en' : (($lang === 'hi') ? 'details_hi' : 'details_te');
     
+    if ($lang === 'en') {
+        $regionExpr = "COALESCE(NULLIF(sv.region_en, ''), sv.region)";
+        $sowingExpr = "COALESCE(NULLIF(sv.sowing_period_en, ''), sv.sowing_period)";
+    } elseif ($lang === 'hi') {
+        $regionExpr = "COALESCE(NULLIF(sv.region_hi, ''), NULLIF(sv.region_en, ''), sv.region)";
+        $sowingExpr = "COALESCE(NULLIF(sv.sowing_period_hi, ''), NULLIF(sv.sowing_period_en, ''), sv.sowing_period)";
+    } else { // 'te'
+        $regionExpr = "COALESCE(NULLIF(sv.region_te, ''), sv.region)";
+        $sowingExpr = "COALESCE(NULLIF(sv.sowing_period_te, ''), sv.sowing_period)";
+    }
+
     $sql = "
         SELECT DISTINCT 
             sv.id, 
             sv.crop_name, 
-            sv.$varietyField as variety_name, 
+            COALESCE(NULLIF(sv.$varietyField, ''), sv.variety_name_te, sv.variety_name_en) as variety_name, 
+            sv.variety_name_en,
+            sv.variety_name_te,
+            sv.variety_name_hi,
             sv.image_url, 
-            sv.$detailsField as details, 
-            sv.region, 
-            sv.sowing_period, 
+            COALESCE(NULLIF(sv.$detailsField, ''), sv.details_te, sv.details_en) as details, 
+            sv.details_en,
+            sv.details_te,
+            sv.details_hi,
+            $regionExpr as region, 
+            sv.region_en,
+            sv.region_te,
+            sv.region_hi,
+            $sowingExpr as sowing_period, 
+            sv.sowing_period_en,
+            sv.sowing_period_te,
+            sv.sowing_period_hi,
             sv.testimonial_video_url, 
             vl.base_price as price, 
             vl.packet_size as price_unit, 
@@ -2259,10 +2390,13 @@ function getSeedVarieties($pdo) {
             $sql .= " AND (
                 (vl.base_price IS NOT NULL AND vl.is_all_regions = 1) 
                 OR 
-                (sv.region LIKE ?)
+                (sv.region LIKE ? OR sv.region_en LIKE ? OR sv.region_te LIKE ? OR sv.region_hi LIKE ?)
                 OR
                 (sv.region IS NULL OR sv.region = '')
             )";
+            $params[] = "%$userRegion%";
+            $params[] = "%$userRegion%";
+            $params[] = "%$userRegion%";
             $params[] = "%$userRegion%";
         }
     }
@@ -5318,5 +5452,291 @@ function getCreatorStudioData($pdo) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
 }
+
+// =========================================================================
+// AI PLANT DOCTOR & RAZORPAY SERVER-SIDE INTEGRATION
+// =========================================================================
+
+/**
+ * Retrieve Razorpay configuration from server config.php, environment variables, or .env file.
+ * The RAZORPAY_KEY_SECRET is kept strictly on the server and is never sent to the client.
+ */
+function getRazorpayConfig() {
+    if (file_exists(__DIR__ . '/razorpay_config.php')) {
+        require_once __DIR__ . '/razorpay_config.php';
+    }
+
+    $keyId = defined('RAZORPAY_KEY_ID') ? RAZORPAY_KEY_ID : null;
+    $keySecret = defined('RAZORPAY_KEY_SECRET') ? RAZORPAY_KEY_SECRET : null;
+
+    if (empty($keyId)) {
+        $keyId = getenv('RAZORPAY_KEY_ID') ?: ($_SERVER['RAZORPAY_KEY_ID'] ?? ($_ENV['RAZORPAY_KEY_ID'] ?? null));
+    }
+    if (empty($keySecret)) {
+        $keySecret = getenv('RAZORPAY_KEY_SECRET') ?: ($_SERVER['RAZORPAY_KEY_SECRET'] ?? ($_ENV['RAZORPAY_KEY_SECRET'] ?? null));
+    }
+
+    // Optional fallback: read from .env if present on server
+    if (empty($keyId) || empty($keySecret)) {
+        $envFiles = [__DIR__ . '/../.env', __DIR__ . '/.env'];
+        foreach ($envFiles as $envFile) {
+            if (file_exists($envFile)) {
+                $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if (strpos($line, '#') === 0) continue;
+                    if (strpos($line, '=') !== false) {
+                        list($k, $v) = explode('=', $line, 2);
+                        $k = trim($k);
+                        $v = trim($v, " \t\n\r\0\x0B\"'");
+                        if ($k === 'RAZORPAY_KEY_ID' && empty($keyId)) $keyId = $v;
+                        if ($k === 'RAZORPAY_KEY_SECRET' && empty($keySecret)) $keySecret = $v;
+                    }
+                }
+            }
+        }
+    }
+
+    return [
+        'key_id' => $keyId ?? '',
+        'key_secret' => $keySecret ?? '',
+    ];
+}
+
+/**
+ * Create Razorpay Order server-side (100 paise = ₹1) using HTTP Basic Auth
+ * POST /api/api.php?action=create_razorpay_order
+ */
+function createRazorpayOrderHandler($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $rawUser = $input['user_id'] ?? $input['phone_number'] ?? $_GET['user_id'] ?? '';
+    $cleanPhone = preg_replace('/[^0-9]/', '', (string)$rawUser);
+    $userId = (strlen($cleanPhone) > 10) ? substr($cleanPhone, -10) : ($cleanPhone ?: trim((string)$rawUser));
+
+    if (empty($userId)) {
+        echo json_encode(['success' => false, 'error' => 'user_id is required']);
+        return;
+    }
+
+    $amountPaise = isset($input['amount_paise']) ? (int)$input['amount_paise'] : (isset($input['amount_inr']) ? (int)$input['amount_inr'] * 100 : 100);
+    if ($amountPaise <= 0) $amountPaise = 100;
+    $currency = 'INR';
+    $credits = isset($input['credits']) ? (int)$input['credits'] : 10;
+
+    $rzpConfig = getRazorpayConfig();
+    $keyId = $rzpConfig['key_id'];
+    $keySecret = $rzpConfig['key_secret'];
+
+    if (empty($keyId) || empty($keySecret) || strpos($keyId, 'your_key_id') !== false || strpos($keySecret, 'your_live') !== false) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'Razorpay keys are not configured on the server. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in config.php or server environment.'
+        ]);
+        return;
+    }
+
+    $receipt = 'rcpt_ai_' . time() . '_' . substr(md5(uniqid(rand(), true)), 0, 6);
+
+    $postData = json_encode([
+        'amount' => $amountPaise,
+        'currency' => $currency,
+        'receipt' => $receipt,
+        'notes' => [
+            'user_id' => $userId,
+            'credits' => (string)$credits,
+            'purpose' => 'CropSync AI Plant Doctor Credits'
+        ]
+    ]);
+
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => 'https://api.razorpay.com/v1/orders',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 25,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $postData,
+        CURLOPT_USERPWD => $keyId . ':' . $keySecret,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json'
+        ]
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlError) {
+        echo json_encode(['success' => false, 'error' => 'cURL error contacting Razorpay: ' . $curlError]);
+        return;
+    }
+
+    $rzpData = json_decode($response, true);
+    if ($httpCode >= 200 && $httpCode < 300 && !empty($rzpData['id'])) {
+        $orderId = $rzpData['id'];
+
+        // Record order in db
+        try {
+            $stmt = $pdo->prepare("INSERT INTO `ai_credit_orders` (user_id, order_id, amount_paise, currency, status) VALUES (?, ?, ?, ?, 'created')");
+            $stmt->execute([$userId, $orderId, $amountPaise, $currency]);
+        } catch (Throwable $e) {}
+
+        echo json_encode([
+            'success' => true,
+            'order_id' => $orderId,
+            'amount_paise' => $amountPaise,
+            'amount_inr' => (int)($amountPaise / 100),
+            'currency' => $currency,
+            'receipt' => $receipt,
+            'key_id' => $keyId // Return public Key ID so client checkout works seamlessly
+        ]);
+    } else {
+        $errMsg = $rzpData['error']['description'] ?? ($rzpData['message'] ?? 'Failed to create Razorpay order (HTTP ' . $httpCode . ')');
+        echo json_encode(['success' => false, 'error' => $errMsg, 'raw' => $rzpData]);
+    }
+}
+
+/**
+ * Verify Razorpay payment signature via HMAC SHA256 using server-stored RAZORPAY_KEY_SECRET
+ * If authentic, credits +10 scans in MySQL users table.
+ * POST /api/api.php?action=verify_razorpay_payment
+ */
+function verifyRazorpayPaymentHandler($pdo) {
+    $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $rawUser = $input['user_id'] ?? $input['phone_number'] ?? '';
+    $cleanPhone = preg_replace('/[^0-9]/', '', (string)$rawUser);
+    $userId = (strlen($cleanPhone) > 10) ? substr($cleanPhone, -10) : ($cleanPhone ?: trim((string)$rawUser));
+
+    $orderId = trim($input['razorpay_order_id'] ?? $input['order_id'] ?? '');
+    $paymentId = trim($input['razorpay_payment_id'] ?? $input['payment_id'] ?? '');
+    $signature = trim($input['razorpay_signature'] ?? $input['signature'] ?? '');
+
+    if (empty($userId) || empty($orderId) || empty($paymentId) || empty($signature)) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'Missing required payment verification parameters (user_id, order_id, payment_id, signature)'
+        ]);
+        return;
+    }
+
+    $rzpConfig = getRazorpayConfig();
+    $keySecret = $rzpConfig['key_secret'];
+
+    if (empty($keySecret) || strpos($keySecret, 'your_live') !== false) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'RAZORPAY_KEY_SECRET is not configured on the server.'
+        ]);
+        return;
+    }
+
+    // Cryptographic HMAC SHA256 verification (Razorpay Official Specification: order_id + "|" + payment_id)
+    $expectedSignature = hash_hmac('sha256', $orderId . '|' . $paymentId, $keySecret);
+
+    if (!hash_equals($expectedSignature, $signature)) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'Invalid payment signature. Transaction verification failed on server.'
+        ]);
+        return;
+    }
+
+    // Signature is cryptographically verified!
+    // Prevent double-processing / replay attack
+    try {
+        $stmtCheck = $pdo->prepare("SELECT id, credits_added FROM `ai_credit_transactions` WHERE payment_id = ? LIMIT 1");
+        $stmtCheck->execute([$paymentId]);
+        $existing = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+
+        if ($existing) {
+            // Already credited
+            $stmtUser = $pdo->prepare("SELECT ai_purchased_credits FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
+            $stmtUser->execute([$userId, $userId]);
+            $u = $stmtUser->fetch(PDO::FETCH_ASSOC);
+            $currentCredits = (int)($u['ai_purchased_credits'] ?? 0);
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Payment already verified and credited previously',
+                'credits_added' => (int)$existing['credits_added'],
+                'total_purchased' => $currentCredits,
+                'payment_id' => $paymentId,
+                'order_id' => $orderId
+            ]);
+            return;
+        }
+
+        // Insert transaction record
+        $creditsToAdd = 10;
+        $amountPaise = 100;
+
+        $stmtTx = $pdo->prepare("
+            INSERT INTO `ai_credit_transactions` 
+            (user_id, order_id, payment_id, signature, amount_paise, currency, credits_added, status)
+            VALUES (?, ?, ?, ?, ?, 'INR', ?, 'success')
+        ");
+        $stmtTx->execute([$userId, $orderId, $paymentId, $signature, $amountPaise, $creditsToAdd]);
+
+        // Update order status
+        $stmtOrder = $pdo->prepare("UPDATE `ai_credit_orders` SET status = 'paid' WHERE order_id = ?");
+        $stmtOrder->execute([$orderId]);
+
+        // Add credits to users table
+        $stmtUp = $pdo->prepare("UPDATE users SET ai_purchased_credits = COALESCE(ai_purchased_credits, 0) + ? WHERE user_id = ? OR phone_number = ?");
+        $stmtUp->execute([$creditsToAdd, $userId, $userId]);
+
+        // Fetch updated total
+        $stmtUser = $pdo->prepare("SELECT ai_purchased_credits FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
+        $stmtUser->execute([$userId, $userId]);
+        $u = $stmtUser->fetch(PDO::FETCH_ASSOC);
+        $totalCredits = (int)($u['ai_purchased_credits'] ?? $creditsToAdd);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Payment successfully verified by server! 10 scans credited.',
+            'credits_added' => $creditsToAdd,
+            'total_purchased' => $totalCredits,
+            'payment_id' => $paymentId,
+            'order_id' => $orderId
+        ]);
+    } catch (PDOException $e) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'Database error during credit allocation: ' . $e->getMessage()
+        ]);
+    }
+}
+
+/**
+ * Get AI credit balance for a user from the server
+ * GET /api/api.php?action=get_ai_credit_balance&user_id=1234567890
+ */
+function getAiCreditBalanceHandler($pdo) {
+    $rawUser = $_GET['user_id'] ?? $_POST['user_id'] ?? '';
+    $cleanPhone = preg_replace('/[^0-9]/', '', (string)$rawUser);
+    $userId = (strlen($cleanPhone) > 10) ? substr($cleanPhone, -10) : ($cleanPhone ?: trim((string)$rawUser));
+
+    if (empty($userId)) {
+        echo json_encode(['success' => false, 'error' => 'user_id is required']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT ai_purchased_credits FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
+        $stmt->execute([$userId, $userId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $purchasedCredits = (int)($row['ai_purchased_credits'] ?? 0);
+
+        echo json_encode([
+            'success' => true,
+            'user_id' => $userId,
+            'purchased_credits' => $purchasedCredits
+        ]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
 
 

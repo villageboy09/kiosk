@@ -41,6 +41,10 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_userKey, jsonEncode(user.toJson()));
     await prefs.setBool(_isLoggedInKey, true);
+    await prefs.setString('user_id', user.userId);
+    if (user.phoneNumber != null && user.phoneNumber!.trim().isNotEmpty) {
+      await prefs.setString('phone_number', user.phoneNumber!.trim());
+    }
   }
 
   /// Save updated user session externally

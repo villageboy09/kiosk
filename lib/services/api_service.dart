@@ -1508,5 +1508,95 @@ class ApiService {
       return [];
     }
   }
+
+  // =========================================================================
+  // AI PLANT DOCTOR & RAZORPAY INTEGRATION
+  // =========================================================================
+
+  /// Creates a Razorpay Order server-side (₹1 = 100 paise)
+  /// Keeps the RAZORPAY_KEY_SECRET strictly on the backend.
+  static Future<Map<String, dynamic>> createRazorpayOrder({
+    required String userId,
+    int amountInr = 1,
+    int credits = 10,
+  }) async {
+    final url = Uri.parse('$baseUrl/api.php?action=create_razorpay_order');
+    try {
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'action': 'create_razorpay_order',
+              'user_id': userId,
+              'amount_inr': amountInr,
+              'amount_paise': amountInr * 100,
+              'credits': credits,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      return data;
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Failed to reach CropSync server for payment order: $e',
+      };
+    }
+  }
+
+  /// Cryptographically verifies payment signature on the server via HMAC SHA256
+  /// using the server-side RAZORPAY_KEY_SECRET.
+  /// On success, server adds +10 credits to the user's account.
+  static Future<Map<String, dynamic>> verifyRazorpayPayment({
+    required String userId,
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) async {
+    final url = Uri.parse('$baseUrl/api.php?action=verify_razorpay_payment');
+    try {
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'action': 'verify_razorpay_payment',
+              'user_id': userId,
+              'razorpay_order_id': orderId,
+              'razorpay_payment_id': paymentId,
+              'razorpay_signature': signature,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      return data;
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Failed to reach CropSync server for payment verification: $e',
+      };
+    }
+  }
+
+  /// Fetches the user's purchased AI credit balance from the server database
+  static Future<int?> getAiCreditBalance({required String userId}) async {
+    final url = Uri.parse('$baseUrl/api.php?action=get_ai_credit_balance&user_id=${Uri.encodeComponent(userId)}');
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        if (data['success'] == true) {
+          return (data['purchased_credits'] as num?)?.toInt();
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
 }
+
 
