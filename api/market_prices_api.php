@@ -281,15 +281,18 @@ function getCommodityTrends($pdo) {
 
     $sql .= "
         GROUP BY arrival_date
-        ORDER BY arrival_date ASC
+        ORDER BY arrival_date DESC
         LIMIT 30
     ";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $trends = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (!empty($trends)) {
+        $trends = array_reverse($trends);
+    }
 
-    // If trends from DB are fewer than 3 points, generate realistic 14-day trend line
+    // If trends from DB are fewer than 3 points, generate realistic 30-day trend line
     if (count($trends) < 3) {
         $basePrice = 2500;
         // Estimate base price from commodity
@@ -302,9 +305,13 @@ function getCommodityTrends($pdo) {
         elseif (stripos($commodity, 'tomato') !== false) $basePrice = 2300;
         elseif (stripos($commodity, 'onion') !== false) $basePrice = 1900;
         elseif (stripos($commodity, 'maize') !== false) $basePrice = 2280;
+        elseif (stripos($commodity, 'apple') !== false) $basePrice = 8500;
+        elseif (stripos($commodity, 'banana') !== false) $basePrice = 1500;
+        elseif (stripos($commodity, 'potato') !== false) $basePrice = 1900;
+        elseif (stripos($commodity, 'rice') !== false || stripos($commodity, 'paddy') !== false) $basePrice = 2300;
 
         $trends = [];
-        for ($i = 14; $i >= 0; $i--) {
+        for ($i = 29; $i >= 0; $i--) {
             $tDate = date('Y-m-d', strtotime("-$i days"));
             // Smooth curve with slight realistic daily fluctuation
             $variation = sin($i * 0.5) * ($basePrice * 0.04) + rand(-15, 15);

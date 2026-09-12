@@ -196,7 +196,7 @@
   "market_per_kg": "/కిలో",
   "best_price_near_you": "మీ సమీపంలో అత్యుత్తమ ధర",
   "compare_markets": "మార్కెట్లను పోల్చండి",
-  "cheaper_at_market": "సమీప మార్కెట్లతో పోలిస్తే {market}లో {commodity} {percent}% చౌకగా ఉంది.",
+  "cheaper_at_market": "సమీప మార్కెట్లతో పోలిస్తే {market}లో {commodity}కి {percent}% అధిక ధర లభిస్తుంది.",
   "search_commodities_hint": "పంటలు, కూరగాయలు, పండ్లను వెతకండి...",
   "select_commodity_to_compare": "మార్కెట్లలో పోల్చడానికి పంటను ఎంచుకోండి",
   "compare_across_mandis": "మార్కెట్లలో ధరల పోలిక",

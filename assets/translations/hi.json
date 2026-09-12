@@ -165,7 +165,7 @@
   "market_per_kg": "/किग्रा",
   "best_price_near_you": "आपके पास सबसे अच्छी कीमत",
   "compare_markets": "बाजारों की तुलना करें",
-  "cheaper_at_market": "आस-पास के बाजारों की तुलना में {market} में {commodity} {percent}% सस्ता है।",
+  "cheaper_at_market": "आस-पास के बाजारों की तुलना में {market} में {commodity} पर {percent}% अधिक भाव मिल रहा है।",
   "search_commodities_hint": "फसलें, सब्जियां, फल खोजें...",
   "select_commodity_to_compare": "मंडियों में तुलना करने के लिए फसल चुनें",
   "compare_across_mandis": "मंडियों में कीमतों की तुलना",

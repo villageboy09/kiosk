@@ -56,6 +56,7 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
     _selectedIndex = widget.initialIndex;
     CreatorHomeScreen.tabNotifier.value = _selectedIndex;
     CreatorHomeScreen.tabNotifier.addListener(_onTabNotifierChanged);
+    ReelsScreen.isTabActive.value = (_selectedIndex == 1);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -68,6 +69,7 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
       setState(() {
         _selectedIndex = CreatorHomeScreen.tabNotifier.value;
       });
+      ReelsScreen.isTabActive.value = (_selectedIndex == 1);
     }
   }
 
@@ -75,6 +77,7 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
   void dispose() {
     CreatorHomeScreen.isMounted = false;
     CreatorHomeScreen.tabNotifier.removeListener(_onTabNotifierChanged);
+    ReelsScreen.isTabActive.value = false;
     _pulseController.dispose();
     super.dispose();
   }
@@ -522,7 +525,10 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
   Widget build(BuildContext context) {
     final screens = [
       const CreatorStudioScreen(key: ValueKey('creator_studio_tab')),
-      const ReelsScreen(key: ValueKey('creator_reels_tab')),
+      ReelsScreen(
+        key: const ValueKey('creator_reels_tab'),
+        isTabVisible: _selectedIndex == 1,
+      ),
       const NewsFeedScreen(key: ValueKey('creator_news_tab')),
       const ProfileScreen(key: ValueKey('creator_profile_tab')),
     ];

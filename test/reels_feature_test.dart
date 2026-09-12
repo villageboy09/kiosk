@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,9 +8,74 @@ import 'package:cropsync/services/farmer_analytics_service.dart';
 import 'package:cropsync/screens/reels_screen.dart';
 
 void main() {
+  final sampleReelsJson = jsonEncode([
+    {
+      'id': 1,
+      'video_url': 'https://example.com/sample1.mp4',
+      'caption': 'Natural pest control demonstration',
+      'creator': {
+        'id': 1,
+        'username': 'dr_kalyan',
+        'displayName': 'Dr. Kalyan Rao',
+        'isVerified': true,
+      },
+      'likes': '1.2K',
+      'saves': '340',
+      'has_liked': false,
+      'has_saved': false,
+    },
+    {
+      'id': 2,
+      'video_url': 'https://example.com/sample2.mp4',
+      'caption': 'Drip irrigation setup guide',
+      'creator': {
+        'id': 2,
+        'username': 'ravi_farmer',
+        'displayName': 'Ravi Kumar',
+        'isVerified': false,
+      },
+      'likes': '850',
+      'saves': '120',
+      'has_liked': false,
+      'has_saved': false,
+    },
+    {
+      'id': 3,
+      'video_url': 'https://example.com/sample3.mp4',
+      'caption': 'Soil testing methods before sowing',
+      'creator': {
+        'id': 3,
+        'username': 'green_tech',
+        'displayName': 'Green Tech',
+        'isVerified': true,
+      },
+      'likes': '2.1K',
+      'saves': '510',
+      'has_liked': false,
+      'has_saved': false,
+    },
+    {
+      'id': 4,
+      'video_url': 'https://example.com/sample4.mp4',
+      'caption': 'Organic composting masterclass',
+      'creator': {
+        'id': 4,
+        'username': 'farm_master',
+        'displayName': 'Farm Master',
+        'isVerified': false,
+      },
+      'likes': '990',
+      'saves': '230',
+      'has_liked': false,
+      'has_saved': false,
+    },
+  ]);
+
   setUp(() {
     TestWidgetsFlutterBinding.ensureInitialized();
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'cropsync_cached_reels_v1': sampleReelsJson,
+    });
   });
 
   group('Reels Models Tests', () {
@@ -205,6 +271,86 @@ void main() {
 
       expect(find.byType(ReelsScreen), findsOneWidget);
       expect(find.byType(ConstrainedBox), findsWidgets);
+    });
+
+    testWidgets('ReelsScreen updates visibility and activates when isTabVisible becomes true', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: ReelsScreen(isTabVisible: false),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(ReelsScreen), findsOneWidget);
+
+      // Verify all items are inactive when tab is hidden
+      final inactiveItems = tester.widgetList(find.byWidgetPredicate(
+        (w) => w.runtimeType.toString() == '_AuthenticReelItem',
+      ));
+      expect(inactiveItems, isNotEmpty);
+      for (final item in inactiveItems) {
+        expect((item as dynamic).isActive, isFalse);
+      }
+
+      // Switch tab to visible
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: ReelsScreen(isTabVisible: true),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(ReelsScreen), findsOneWidget);
+
+      // Verify active item is now activated for playback
+      final activeItems = tester.widgetList(find.byWidgetPredicate(
+        (w) => w.runtimeType.toString() == '_AuthenticReelItem' && (w as dynamic).isActive == true,
+      ));
+      expect(activeItems, hasLength(1));
+    });
+
+    testWidgets('ReelsScreen responds to static isTabActive changes', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+
+      ReelsScreen.isTabActive.value = false;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: ReelsScreen(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final inactiveItems = tester.widgetList(find.byWidgetPredicate(
+        (w) => w.runtimeType.toString() == '_AuthenticReelItem',
+      ));
+      expect(inactiveItems, isNotEmpty);
+      for (final item in inactiveItems) {
+        expect((item as dynamic).isActive, isFalse);
+      }
+
+      ReelsScreen.isTabActive.value = true;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final activeItems = tester.widgetList(find.byWidgetPredicate(
+        (w) => w.runtimeType.toString() == '_AuthenticReelItem' && (w as dynamic).isActive == true,
+      ));
+      expect(activeItems, hasLength(1));
+
+      ReelsScreen.isTabActive.value = false;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final deactivatedItems = tester.widgetList(find.byWidgetPredicate(
+        (w) => w.runtimeType.toString() == '_AuthenticReelItem',
+      ));
+      for (final item in deactivatedItems) {
+        expect((item as dynamic).isActive, isFalse);
+      }
     });
   });
 }

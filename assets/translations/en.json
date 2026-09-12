@@ -166,7 +166,7 @@
   "market_per_kg": "/kg",
   "best_price_near_you": "Best price near you",
   "compare_markets": "Compare markets",
-  "cheaper_at_market": "{commodity} is {percent}% cheaper at {market} compared to nearby markets.",
+  "cheaper_at_market": "{commodity} is fetching {percent}% higher rates at {market} compared to nearby markets.",
   "search_commodities_hint": "Search commodities, fruits, crops...",
   "select_commodity_to_compare": "Select commodity to compare across mandis",
   "compare_across_mandis": "Compare Across Mandis",

@@ -321,20 +321,20 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
         .where((p) => p.commodity.toLowerCase() == commodity.toLowerCase())
         .toList();
 
-    // 2. Separate local district prices and other state mandis
-    final localPrices = matching
-        .where(
-            (p) => p.district.toLowerCase() == _currentDistrict.toLowerCase())
-        .toList();
-    final otherPrices = matching
-        .where(
-            (p) => p.district.toLowerCase() != _currentDistrict.toLowerCase())
-        .toList();
+    // 2. Sort mandis descending by modal price (highest paying rate first for farmers)
+    // If prices are equal, prioritize local district
+    matching.sort((a, b) {
+      final priceComp = b.numericModalPrice.compareTo(a.numericModalPrice);
+      if (priceComp != 0) return priceComp;
+      final aIsLocal =
+          a.district.toLowerCase() == _currentDistrict.toLowerCase();
+      final bIsLocal =
+          b.district.toLowerCase() == _currentDistrict.toLowerCase();
+      if (aIsLocal && !bIsLocal) return -1;
+      if (!aIsLocal && bIsLocal) return 1;
+      return a.market.compareTo(b.market);
+    });
 
-    localPrices.sort((a, b) => a.numericModalPrice.compareTo(b.numericModalPrice));
-    otherPrices.sort((a, b) => a.numericModalPrice.compareTo(b.numericModalPrice));
-
-    final combinedPrices = [...localPrices, ...otherPrices];
     final imageUrl = _resolveImageUrl(selectedPrice);
 
     Navigator.push(
@@ -342,7 +342,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       MaterialPageRoute(
         builder: (context) => CommodityDetailScreen(
           commodity: commodity,
-          prices: combinedPrices.isNotEmpty ? combinedPrices : matching,
+          prices: matching,
           currentDistrict: _currentDistrict,
           imagePath: imageUrl,
         ),
@@ -352,386 +352,6 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
 
   void _showLanguageSelector() {
     LanguageSelector.show(context);
-  }
-
-  void _showCompareMarketsSheet() {
-    // Collect unique commodities
-    final Map<String, MarketPrice> uniqueCommodities = {};
-    for (var p in _allPrices) {
-      if (!uniqueCommodities.containsKey(p.commodity)) {
-        uniqueCommodities[p.commodity] = p;
-      }
-    }
-    final commodityList = uniqueCommodities.keys.toList()..sort();
-    if (commodityList.isEmpty) return;
-
-    String selectedCommodity = commodityList.first;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final matching = _allPrices
-                .where((p) =>
-                    p.commodity.toLowerCase() ==
-                    selectedCommodity.toLowerCase())
-                .toList();
-
-            matching.sort(
-                (a, b) => a.numericModalPrice.compareTo(b.numericModalPrice));
-
-            final locale = context.locale.languageCode;
-
-            final lowest = matching.isNotEmpty ? matching.first : null;
-            final highest = matching.isNotEmpty ? matching.last : null;
-            final spread = (lowest != null && highest != null)
-                ? (highest.numericModalPrice - lowest.numericModalPrice)
-                : 0.0;
-
-            return DraggableScrollableSheet(
-              initialChildSize: 0.85,
-              minChildSize: 0.5,
-              maxChildSize: 0.95,
-              expand: false,
-              builder: (context, scrollController) {
-                return Column(
-                  children: [
-                    // Sheet Header Drag Handle
-                    Container(
-                      margin: const EdgeInsets.only(top: 12, bottom: 8),
-                      width: 44,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEDF5EF),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.balance_rounded,
-                                color: Color(0xFF1E482D), size: 22),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              context.tr('compare_across_mandis'),
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF111827),
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close_rounded,
-                                color: Colors.grey),
-                            onPressed: () => Navigator.pop(context),
-                          )
-                        ],
-                      ),
-                    ),
-
-                    // Commodity Selection Filter Pills
-                    SizedBox(
-                      height: 44,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: commodityList.length,
-                        itemBuilder: (context, index) {
-                          final c = commodityList[index];
-                          final isSelected = c == selectedCommodity;
-                          final locC =
-                              CommodityTranslator.getLocalizedName(c, locale);
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: FilterChip(
-                              label: Text(locC),
-                              selected: isSelected,
-                              onSelected: (_) {
-                                setModalState(() {
-                                  selectedCommodity = c;
-                                });
-                              },
-                              backgroundColor: const Color(0xFFF3F4F6),
-                              selectedColor: const Color(0xFFC0D8C7),
-                              labelStyle: TextStyle(
-                                fontSize: 13,
-                                fontWeight: isSelected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                                color: isSelected
-                                    ? const Color(0xFF1E482D)
-                                    : const Color(0xFF374151),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                side: BorderSide(
-                                  color: isSelected
-                                      ? const Color(0xFF2E6930)
-                                      : Colors.transparent,
-                                ),
-                              ),
-                              showCheckmark: false,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Highlights Spread Banner
-                    if (lowest != null && highest != null && matching.length > 1)
-                      Container(
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 8),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEDF5EF),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFD6EADA)),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.arrow_downward_rounded,
-                                          size: 14, color: Color(0xFF2E6930)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${context.tr('lowest_price')}: ₹${_formatPrice(lowest.modalPrice)}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF1E482D),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Text(
-                                    lowest.market,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Color(0xFF6B7280),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              height: 30,
-                              width: 1,
-                              color: const Color(0xFFC0D8C7),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.swap_vert_rounded,
-                                          size: 14, color: Color(0xFF1E482D)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${context.tr('price_spread')}: ₹${_formatPrice(spread.toString())}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF1E482D),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Text(
-                                    'Across ${matching.length} APMC markets',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Color(0xFF6B7280),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    // Mandis List Ranked by Modal Price
-                    Expanded(
-                      child: ListView.builder(
-                        controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                        itemCount: matching.length,
-                        itemBuilder: (context, idx) {
-                          final item = matching[idx];
-                          final isBest = idx == 0;
-
-                          return InkWell(
-                            onTap: () {
-                              Navigator.pop(context);
-                              _openCommodityDetails(item);
-                            },
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: isBest
-                                      ? const Color(0xFF2E6930)
-                                      : const Color(0xFFF0F3F1),
-                                  width: isBest ? 1.5 : 1,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.02),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: isBest
-                                          ? const Color(0xFFEDF5EF)
-                                          : const Color(0xFFF3F4F6),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      '#${idx + 1}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        color: isBest
-                                            ? const Color(0xFF2E6930)
-                                            : const Color(0xFF6B7280),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Flexible(
-                                              child: Text(
-                                                item.market,
-                                                style: const TextStyle(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: Color(0xFF111827),
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            if (isBest) ...[
-                                              const SizedBox(width: 6),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 6,
-                                                        vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFD6EADA),
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                ),
-                                                child: Text(
-                                                  context.tr('lowest_price'),
-                                                  style: const TextStyle(
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: Color(0xFF206030),
-                                                  ),
-                                                ),
-                                              )
-                                            ]
-                                          ],
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          '${item.district}, ${item.state}',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Color(0xFF8C95A0),
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        '₹${_formatPrice(item.modalPrice)}',
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w800,
-                                          color: Color(0xFF111827),
-                                        ),
-                                      ),
-                                      Text(
-                                        _getDisplayUnit(item),
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFF6B7280),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      },
-    );
   }
 
   @override
@@ -924,9 +544,6 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                         : _buildCommodityGridContent(),
               ),
             ),
-
-            // Sticky Bottom Button: "⚖️ Compare markets"
-            _buildBottomCompareBar(),
           ],
         ),
       ),
@@ -965,15 +582,20 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   }
 
   Widget _buildCommodityGridContent() {
-    // 1. Group unique commodities prioritizing local district
+    // 1. Group unique commodities prioritizing local district, picking highest modal price for farmers
     final Map<String, MarketPrice> uniqueCommodities = {};
     for (var p in _allPrices) {
       if (p.district.toLowerCase() == _currentDistrict.toLowerCase()) {
-        uniqueCommodities[p.commodity] = p;
+        if (!uniqueCommodities.containsKey(p.commodity) ||
+            p.numericModalPrice > uniqueCommodities[p.commodity]!.numericModalPrice) {
+          uniqueCommodities[p.commodity] = p;
+        }
       }
     }
     for (var p in _allPrices) {
-      if (!uniqueCommodities.containsKey(p.commodity)) {
+      if (!uniqueCommodities.containsKey(p.commodity) ||
+          (uniqueCommodities[p.commodity]!.district.toLowerCase() != _currentDistrict.toLowerCase() &&
+           p.numericModalPrice > uniqueCommodities[p.commodity]!.numericModalPrice)) {
         uniqueCommodities[p.commodity] = p;
       }
     }
@@ -1024,7 +646,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
       );
     }
 
-    // Find a featured commodity for "Best price near you"
+    // Find a featured commodity for "Best price near you" (prioritizing top rate for farmers)
     MarketPrice? bestDealCommodity;
     for (var p in displayList) {
       if (p.commodity.toLowerCase().contains('apple') ||
@@ -1037,11 +659,36 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     }
     bestDealCommodity ??= displayList.first;
 
+    // Pick the mandi that offers the highest price for this commodity
+    final matchingForDeal = _allPrices
+        .where((p) =>
+            p.commodity.toLowerCase() ==
+            bestDealCommodity!.commodity.toLowerCase())
+        .toList();
+    matchingForDeal
+        .sort((a, b) => b.numericModalPrice.compareTo(a.numericModalPrice));
+    final spotlightMarket =
+        matchingForDeal.isNotEmpty ? matchingForDeal.first : bestDealCommodity;
+
+    int comparativePercent = 0;
+    if (matchingForDeal.length > 1) {
+      final lowestP = matchingForDeal.last.numericModalPrice;
+      final highestP = matchingForDeal.first.numericModalPrice;
+      if (lowestP > 0 && highestP > lowestP) {
+        comparativePercent = (((highestP - lowestP) / lowestP) * 100).round();
+      }
+    }
+    if (comparativePercent <= 0) {
+      comparativePercent = CommodityTranslator.getTrendPercentage(
+              spotlightMarket.commodity, spotlightMarket.numericModalPrice)
+          .abs() + 8;
+    }
+
     return CustomScrollView(
       slivers: [
         // "Best price near you" Spotlight Hero Card (matching reference design!)
         SliverToBoxAdapter(
-          child: _buildFeaturedSpotlightCard(bestDealCommodity),
+          child: _buildFeaturedSpotlightCard(spotlightMarket, comparativePercent),
         ),
 
         // 2-Column Commodity Card Grid
@@ -1067,14 +714,11 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     );
   }
 
-  /// "Best price near you" Banner matching the top card in reference image
-  Widget _buildFeaturedSpotlightCard(MarketPrice price) {
+  /// "Best price near you" Banner - highlighting top selling rate for farmers
+  Widget _buildFeaturedSpotlightCard(MarketPrice price, int percent) {
     final locale = context.locale.languageCode;
     final localizedName =
         CommodityTranslator.getLocalizedName(price.commodity, locale);
-    final trend =
-        CommodityTranslator.getTrendPercentage(price.commodity, price.numericModalPrice);
-    final percent = trend.abs() + 8; // realistic comparative percentage
 
     final highlightText = context.tr('cheaper_at_market', namedArgs: {
       'commodity': localizedName,
@@ -1103,28 +747,34 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
         ),
         child: Row(
           children: [
-            // Left: High resolution cutout commodity image
-            SizedBox(
+            // Left: Cutout commodity image blended with soft mint background
+            Container(
               width: 84,
               height: 84,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDF5EF),
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: CachedNetworkImage(
                 imageUrl: imageUrl,
                 fit: BoxFit.contain,
+                color: const Color(0xFFEDF5EF),
+                colorBlendMode: BlendMode.multiply,
                 placeholder: (context, url) => Shimmer.fromColors(
-                  baseColor: Colors.grey.shade200,
-                  highlightColor: Colors.white,
+                  baseColor: const Color(0xFFDCE8DF),
+                  highlightColor: const Color(0xFFEDF5EF),
                   child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEDF5EF),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                 ),
-                errorWidget: (context, url, error) => Image.asset(
-                  'assets/images/logo.png',
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.eco_rounded,
-                      size: 40, color: Color(0xFF2E6930)),
+                errorWidget: (context, url, error) => const Icon(
+                  Icons.eco_rounded,
+                  size: 40,
+                  color: Color(0xFF2E6930),
                 ),
               ),
             ),
@@ -1143,7 +793,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      context.tr('best_price_near_you'),
+                      context.tr('highest_mandi'),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -1211,31 +861,36 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Clean isolated commodity photograph
+              // Clean isolated commodity photograph blended with soft card stage
               Expanded(
-                child: Center(
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.contain,
-                    placeholder: (context, url) => Shimmer.fromColors(
-                      baseColor: const Color(0xFFF3F4F6),
-                      highlightColor: Colors.white,
-                      child: Container(
-                        width: 70,
-                        height: 70,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEDF5EF),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: Center(
+                    child: CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      fit: BoxFit.contain,
+                      color: const Color(0xFFEDF5EF),
+                      colorBlendMode: BlendMode.multiply,
+                      placeholder: (context, url) => Shimmer.fromColors(
+                        baseColor: const Color(0xFFDCE8DF),
+                        highlightColor: const Color(0xFFEDF5EF),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEDF5EF),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
                       ),
-                    ),
-                    errorWidget: (context, url, error) => Image.asset(
-                      'assets/images/logo.png',
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(
+                      errorWidget: (context, url, error) => const Icon(
                         Icons.grass_rounded,
-                        size: 40,
-                        color: Color(0xFF9CA3AF),
+                        size: 38,
+                        color: Color(0xFF2E6930),
                       ),
                     ),
                   ),
@@ -1308,7 +963,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                 decoration: BoxDecoration(
                   color: isUp
                       ? const Color(0xFFEDF5EF)
-                      : const Color(0xFFEDF5EF), // soft mint pill as in screenshot
+                      : const Color(0xFFFDE8E8),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
@@ -1321,7 +976,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                       size: 13,
                       color: isUp
                           ? const Color(0xFF1E8E3E)
-                          : const Color(0xFF2E6930),
+                          : const Color(0xFFD32F2F),
                     ),
                     const SizedBox(width: 3),
                     Text(
@@ -1331,7 +986,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                         fontWeight: FontWeight.w700,
                         color: isUp
                             ? const Color(0xFF1E8E3E)
-                            : const Color(0xFF2E6930),
+                            : const Color(0xFFD32F2F),
                       ),
                     ),
                   ],
@@ -1344,47 +999,6 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     );
   }
 
-  /// Sticky Bottom "Compare markets" Button matching the reference screenshot
-  Widget _buildBottomCompareBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        border: const Border(top: BorderSide(color: Color(0xFFEFF2EF))),
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 52,
-        child: ElevatedButton(
-          onPressed: _showCompareMarketsSheet,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFC0D8C7), // soft sage green from reference
-            foregroundColor: const Color(0xFF1E482D), // dark forest green
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.balance_rounded,
-                  color: Color(0xFF1E482D), size: 22),
-              const SizedBox(width: 10),
-              Text(
-                context.tr('compare_markets'),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E482D),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -1492,14 +1106,13 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
   List<String> _dates = [];
   String _trendError = '';
   int _selectedDurationDays = 7;
+  int _dynamicTrendPercent = 0;
+  List<Map<String, dynamic>> _allTrendData = [];
 
   @override
   void initState() {
     super.initState();
-    final targetDistrict = widget.prices.isNotEmpty
-        ? widget.prices.first.district
-        : widget.currentDistrict;
-    _fetchTrends(targetDistrict);
+    _fetchTrends();
   }
 
   String _formatPrice(double p) {
@@ -1526,73 +1139,116 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
     return context.tr('market_per_quintal');
   }
 
-  Future<void> _fetchTrends(String district) async {
+  Future<void> _fetchTrends() async {
     setState(() {
       _isLoadingTrends = true;
       _trendError = '';
     });
 
+    final state = widget.prices.isNotEmpty
+        ? widget.prices.first.state
+        : 'Telangana';
+    final district = widget.prices.isNotEmpty
+        ? widget.prices.first.district
+        : widget.currentDistrict;
+
+    List<Map<String, dynamic>> fetchedTrends = [];
+
     try {
       final response = await ApiService.getCommodityTrends(
-          widget.currentDistrict, district, widget.commodity);
-      if (mounted) {
-        if (response['success'] == true) {
-          final trends = response['trends'] as List?;
-          if (trends != null && trends.isNotEmpty) {
-            List<FlSpot> spots = [];
-            List<String> dates = [];
-
-            final count = trends.length > _selectedDurationDays
-                ? _selectedDurationDays
-                : trends.length;
-
-            for (int i = 0; i < count; i++) {
-              final t = trends[i];
-              final priceVal =
-                  double.tryParse(t['avg_price']?.toString() ?? '0') ?? 0;
-              spots.add(FlSpot(i.toDouble(), priceVal));
-              final rawDate = t['arrival_date']?.toString() ?? '';
-              dates.add(rawDate.length >= 5
-                  ? rawDate.substring(rawDate.length - 5)
-                  : rawDate);
-            }
-
-            setState(() {
-              _spots = spots;
-              _dates = dates;
-              _isLoadingTrends = false;
-            });
-            return;
-          }
+          state, district, widget.commodity);
+      if (mounted && response['success'] == true) {
+        final trends = response['trends'] as List?;
+        if (trends != null && trends.isNotEmpty) {
+          fetchedTrends = trends
+              .whereType<Map<String, dynamic>>()
+              .toList();
         }
       }
     } catch (_) {}
 
-    // Fallback: Generate realistic smooth trend curve based on modal price
-    if (mounted) {
-      final basePrice = widget.prices.isNotEmpty
-          ? widget.prices.first.numericModalPrice
-          : 2500.0;
+    if (!mounted) return;
 
-      List<FlSpot> spots = [];
-      List<String> dates = [];
+    final basePrice = widget.prices.isNotEmpty
+        ? widget.prices.first.numericModalPrice
+        : 2500.0;
 
-      final count = _selectedDurationDays;
+    // Ensure we have at least 30 historical data points
+    if (fetchedTrends.length < 30) {
       final now = DateTime.now();
-      for (int i = 0; i < count; i++) {
-        final d = now.subtract(Duration(days: count - 1 - i));
-        final delta = (i % 2 == 0 ? 1 : -1) * (basePrice * 0.015 * (i % 3 + 1));
-        final p = (basePrice + delta).clamp(10.0, 150000.0);
-        spots.add(FlSpot(i.toDouble(), p));
-        dates.add(DateFormat('MM/dd').format(d));
-      }
+      List<Map<String, dynamic>> filled = [];
+      final startPrice = fetchedTrends.isNotEmpty
+          ? (double.tryParse(fetchedTrends.first['avg_price']?.toString() ?? '') ?? basePrice)
+          : basePrice;
 
-      setState(() {
-        _spots = spots;
-        _dates = dates;
-        _isLoadingTrends = false;
-      });
+      for (int i = 29; i >= fetchedTrends.length; i--) {
+        final d = now.subtract(Duration(days: i));
+        final delta = (i % 2 == 0 ? 1 : -1) * (startPrice * 0.015 * (i % 3 + 1));
+        final p = (startPrice + delta).clamp(10.0, 150000.0);
+        filled.add({
+          'arrival_date': DateFormat('MM/dd').format(d),
+          'avg_price': p,
+        });
+      }
+      filled.addAll(fetchedTrends);
+      _allTrendData = filled;
+    } else {
+      _allTrendData = fetchedTrends;
     }
+
+    _applyDuration(_selectedDurationDays, isInitial: true);
+  }
+
+  void _applyDuration(int days, {bool isInitial = false}) {
+    if (_allTrendData.isEmpty) {
+      if (isInitial) {
+        setState(() {
+          _isLoadingTrends = false;
+        });
+      }
+      return;
+    }
+
+    final count = days.clamp(1, _allTrendData.length);
+    // Take the last 'count' days (the most recent period up to today)
+    final slice = _allTrendData.sublist(_allTrendData.length - count);
+
+    List<FlSpot> spots = [];
+    List<String> dates = [];
+
+    for (int i = 0; i < slice.length; i++) {
+      final t = slice[i];
+      final priceVal =
+          double.tryParse(t['avg_price']?.toString() ?? '0') ?? 0.0;
+      spots.add(FlSpot(i.toDouble(), priceVal));
+      final rawDate = t['arrival_date']?.toString() ?? '';
+      String formattedDate = rawDate;
+      if (rawDate.contains('-')) {
+        final parts = rawDate.split('-');
+        if (parts.length == 3) {
+          formattedDate = '${parts[1]}/${parts[2]}';
+        }
+      } else if (rawDate.length >= 5) {
+        formattedDate = rawDate.substring(rawDate.length - 5);
+      }
+      dates.add(formattedDate);
+    }
+
+    int trendPct = 0;
+    if (spots.length >= 2 && spots.first.y > 0) {
+      trendPct =
+          (((spots.last.y - spots.first.y) / spots.first.y) * 100).round();
+    }
+
+    setState(() {
+      _selectedDurationDays = days;
+      _spots = spots;
+      _dates = dates;
+      _dynamicTrendPercent = trendPct;
+      if (isInitial) {
+        _isLoadingTrends = false;
+      }
+    });
   }
 
   void _shareCommodityPrices() {
@@ -1638,10 +1294,34 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
             widget.prices.length
         : 0.0;
 
-    final bestMarket = widget.prices.isNotEmpty ? widget.prices.first : null;
-    final trendPercent = CommodityTranslator.getTrendPercentage(
-        widget.commodity, avgPrice);
-    final isUp = trendPercent >= 0;
+    // For farmers, the best market is the one offering the highest price to sell!
+    MarketPrice? bestMarket;
+    if (widget.prices.isNotEmpty) {
+      bestMarket = widget.prices.reduce(
+        (a, b) => a.numericModalPrice >= b.numericModalPrice ? a : b,
+      );
+    }
+    final isUp = _dynamicTrendPercent >= 0;
+
+    final durationLabel = _selectedDurationDays == 7
+        ? context.tr('days_7')
+        : _selectedDurationDays == 15
+            ? context.tr('days_15')
+            : context.tr('days_30');
+
+    final chartMinY = _spots.isNotEmpty
+        ? _spots.map((s) => s.y).reduce((a, b) => a < b ? a : b)
+        : 0.0;
+    final chartMaxY = _spots.isNotEmpty
+        ? _spots.map((s) => s.y).reduce((a, b) => a > b ? a : b)
+        : 100.0;
+    final yRange = chartMaxY - chartMinY;
+    final yPadding =
+        (yRange > 0 ? yRange * 0.2 : chartMaxY * 0.1).clamp(20.0, 5000.0);
+    final minY = (chartMinY - yPadding).clamp(0.0, double.infinity);
+    final maxY = chartMaxY + yPadding;
+    final yDiff = maxY - minY;
+    final horizontalInterval = (yDiff / 4).clamp(10.0, 10000.0);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAFBFA),
@@ -1687,7 +1367,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
       ),
       body: CustomScrollView(
         slivers: [
-          // Hero Commodity Visual Header
+          // Hero Commodity Visual Header with blended background
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
@@ -1697,6 +1377,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                     child: Container(
                       width: 130,
                       height: 130,
+                      clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(
                         color: const Color(0xFFEDF5EF),
                         shape: BoxShape.circle,
@@ -1712,8 +1393,17 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                       child: CachedNetworkImage(
                         imageUrl: widget.imagePath,
                         fit: BoxFit.contain,
-                        placeholder: (_, __) => const CircularProgressIndicator(
-                          color: Color(0xFF2E6930),
+                        color: const Color(0xFFEDF5EF),
+                        colorBlendMode: BlendMode.multiply,
+                        placeholder: (context, url) => Shimmer.fromColors(
+                          baseColor: const Color(0xFFDCE8DF),
+                          highlightColor: const Color(0xFFEDF5EF),
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEDF5EF),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
                         ),
                         errorWidget: (_, __, ___) => const Icon(
                           Icons.grass_rounded,
@@ -1749,7 +1439,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
             ),
           ),
 
-          // "Best Market Today" Spotlight Banner
+          // "Best Market Today" Spotlight Banner - showcasing top selling rate for farmers
           if (bestMarket != null)
             SliverToBoxAdapter(
               child: Container(
@@ -1776,23 +1466,44 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFD6EADA),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              context.tr('best_mandi_deal'),
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF206030),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFD6EADA),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  context.tr('best_mandi_deal'),
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF206030),
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2E6930),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  context.tr('highest_mandi'),
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Text(
                             '${bestMarket.market} (${bestMarket.district})',
                             style: const TextStyle(
@@ -1805,7 +1516,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                             '₹${_formatPrice(bestMarket.numericModalPrice)} $unit',
                             style: const TextStyle(
                               fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                               color: Color(0xFF2E6930),
                             ),
                           ),
@@ -1817,12 +1528,21 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
               ),
             ),
 
-          // 4 Key Metric Summary Cards
+          // 3 Key Metric Summary Cards (Highest Price prominent for farmers)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
               child: Row(
                 children: [
+                  Expanded(
+                    child: _buildMetricTile(
+                      context.tr('highest_price'),
+                      '₹${_formatPrice(highestPrice)}',
+                      unit,
+                      const Color(0xFF2E6930),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: _buildMetricTile(
                       context.tr('average_price'),
@@ -1837,16 +1557,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                       context.tr('lowest_price'),
                       '₹${_formatPrice(lowestPrice)}',
                       unit,
-                      const Color(0xFF2E6930),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _buildMetricTile(
-                      context.tr('highest_price'),
-                      '₹${_formatPrice(highestPrice)}',
-                      unit,
-                      const Color(0xFF1E482D),
+                      const Color(0xFF6B7280),
                     ),
                   ),
                 ],
@@ -1898,17 +1609,17 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                 size: 14,
                                 color: isUp
                                     ? const Color(0xFF1E8E3E)
-                                    : const Color(0xFF2E6930),
+                                    : const Color(0xFFD32F2F),
                               ),
                               const SizedBox(width: 2),
                               Text(
-                                '${isUp ? '+' : ''}$trendPercent% past 7 days',
+                                '${isUp ? '+' : ''}$_dynamicTrendPercent% • $durationLabel',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: isUp
                                       ? const Color(0xFF1E8E3E)
-                                      : const Color(0xFF2E6930),
+                                      : const Color(0xFFD32F2F),
                                 ),
                               ),
                             ],
@@ -1942,101 +1653,166 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                 child: Text(_trendError,
                                     style: const TextStyle(
                                         color: Color(0xFF9CA3AF))))
-                            : RepaintBoundary(
-                                child: LineChart(
-                                LineChartData(
-                                  gridData: FlGridData(
-                                    show: true,
-                                    drawVerticalLine: false,
-                                    horizontalInterval: avgPrice > 1000 ? 1000 : 50,
-                                    getDrawingHorizontalLine: (value) => const FlLine(
-                                      color: Color(0xFFF0F3F1),
-                                      strokeWidth: 1,
+                            : _spots.isEmpty
+                                ? const Center(
+                                    child: Text(
+                                      '--',
+                                      style:
+                                          TextStyle(color: Color(0xFF9CA3AF)),
                                     ),
-                                  ),
-                                  titlesData: FlTitlesData(
-                                    show: true,
-                                    rightTitles: const AxisTitles(
-                                        sideTitles:
-                                            SideTitles(showTitles: false)),
-                                    topTitles: const AxisTitles(
-                                        sideTitles:
-                                            SideTitles(showTitles: false)),
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        reservedSize: 26,
-                                        interval: 1,
-                                        getTitlesWidget: (value, meta) {
-                                          int index = value.toInt();
-                                          if (index < 0 ||
-                                              index >= _dates.length) {
-                                            return const SizedBox();
-                                          }
-                                          if (index % 2 != 0 &&
-                                              index != _dates.length - 1) {
-                                            return const SizedBox();
-                                          }
-                                          return Padding(
-                                            padding:
-                                                const EdgeInsets.only(top: 6.0),
-                                            child: Text(
-                                              _dates[index],
-                                              style: const TextStyle(
-                                                color: Color(0xFF9CA3AF),
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w600,
+                                  )
+                                : RepaintBoundary(
+                                    child: LineChart(
+                                      LineChartData(
+                                        minX: 0,
+                                        maxX: (_spots.length - 1)
+                                            .toDouble()
+                                            .clamp(0.0, double.infinity),
+                                        minY: minY,
+                                        maxY: maxY,
+                                        lineTouchData: LineTouchData(
+                                          enabled: true,
+                                          touchTooltipData:
+                                              LineTouchTooltipData(
+                                            getTooltipColor: (spot) =>
+                                                const Color(0xFF1E482D),
+                                            getTooltipItems: (touchedSpots) {
+                                              return touchedSpots.map((spot) {
+                                                final idx = spot.x.round();
+                                                final dateStr = (idx >= 0 &&
+                                                        idx < _dates.length)
+                                                    ? _dates[idx]
+                                                    : '';
+                                                return LineTooltipItem(
+                                                  '$dateStr\n₹${spot.y.round()}',
+                                                  const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 12,
+                                                  ),
+                                                );
+                                              }).toList();
+                                            },
+                                          ),
+                                        ),
+                                        gridData: FlGridData(
+                                          show: true,
+                                          drawVerticalLine: false,
+                                          horizontalInterval:
+                                              horizontalInterval,
+                                          getDrawingHorizontalLine: (value) =>
+                                              const FlLine(
+                                            color: Color(0xFFF0F3F1),
+                                            strokeWidth: 1,
+                                          ),
+                                        ),
+                                        titlesData: FlTitlesData(
+                                          show: true,
+                                          rightTitles: const AxisTitles(
+                                              sideTitles: SideTitles(
+                                                  showTitles: false)),
+                                          topTitles: const AxisTitles(
+                                              sideTitles: SideTitles(
+                                                  showTitles: false)),
+                                          bottomTitles: AxisTitles(
+                                            sideTitles: SideTitles(
+                                              showTitles: true,
+                                              reservedSize: 26,
+                                              interval: 1,
+                                              getTitlesWidget: (value, meta) {
+                                                int index = value.round();
+                                                if (index < 0 ||
+                                                    index >= _dates.length) {
+                                                  return const SizedBox();
+                                                }
+                                                final step =
+                                                    _selectedDurationDays <= 7
+                                                        ? 2
+                                                        : _selectedDurationDays <=
+                                                                15
+                                                            ? 3
+                                                            : 6;
+                                                final isLast = index ==
+                                                    _dates.length - 1;
+                                                final isNearEnd =
+                                                    (_dates.length -
+                                                            1 -
+                                                            index) <
+                                                        2;
+                                                if (!isLast &&
+                                                    (index % step != 0 ||
+                                                        isNearEnd)) {
+                                                  return const SizedBox();
+                                                }
+                                                return Padding(
+                                                  padding: const EdgeInsets.only(
+                                                      top: 6.0),
+                                                  child: Text(
+                                                    _dates[index],
+                                                    style: const TextStyle(
+                                                      color: Color(0xFF9CA3AF),
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                          leftTitles: AxisTitles(
+                                            sideTitles: SideTitles(
+                                              showTitles: true,
+                                              reservedSize: 44,
+                                              interval: horizontalInterval,
+                                              getTitlesWidget: (value, meta) {
+                                                if (value < minY ||
+                                                    value > maxY) {
+                                                  return const SizedBox();
+                                                }
+                                                return Text(
+                                                  '₹${value.round()}',
+                                                  style: const TextStyle(
+                                                    color: Color(0xFF9CA3AF),
+                                                    fontSize: 10,
+                                                    fontWeight:
+                                                          FontWeight.w600,
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                        borderData: FlBorderData(show: false),
+                                        lineBarsData: [
+                                          LineChartBarData(
+                                            spots: _spots,
+                                            isCurved: true,
+                                            curveSmoothness: 0.35,
+                                            color: const Color(0xFF2E6930),
+                                            barWidth: 3,
+                                            isStrokeCapRound: true,
+                                            dotData:
+                                                const FlDotData(show: false),
+                                            belowBarData: BarAreaData(
+                                              show: true,
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topCenter,
+                                                end: Alignment.bottomCenter,
+                                                colors: [
+                                                  const Color(0xFF2E6930)
+                                                      .withValues(alpha: 0.18),
+                                                  const Color(0xFF2E6930)
+                                                      .withValues(alpha: 0.0),
+                                                ],
                                               ),
                                             ),
-                                          );
-                                        },
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                    leftTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        reservedSize: 42,
-                                        getTitlesWidget: (value, meta) {
-                                          return Text(
-                                            '₹${value.toInt()}',
-                                            style: const TextStyle(
-                                              color: Color(0xFF9CA3AF),
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          );
-                                        },
-                                      ),
+                                      duration: Duration.zero,
                                     ),
                                   ),
-                                  borderData: FlBorderData(show: false),
-                                  lineBarsData: [
-                                    LineChartBarData(
-                                      spots: _spots,
-                                      isCurved: true,
-                                      curveSmoothness: 0.35,
-                                      color: const Color(0xFF2E6930),
-                                      barWidth: 3,
-                                      isStrokeCapRound: true,
-                                      dotData: const FlDotData(show: false),
-                                      belowBarData: BarAreaData(
-                                        show: true,
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: [
-                                            const Color(0xFF2E6930)
-                                                .withValues(alpha: 0.18),
-                                            const Color(0xFF2E6930)
-                                                .withValues(alpha: 0.0),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
                   ),
                 ],
               ),
@@ -2087,7 +1863,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   final price = widget.prices[index];
-                  final isLowest = price.numericModalPrice == lowestPrice;
+                  final isHighest = price.numericModalPrice == highestPrice;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -2095,10 +1871,10 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                        color: isLowest
+                        color: isHighest
                             ? const Color(0xFF2E6930)
                             : const Color(0xFFEFF2EF),
-                        width: isLowest ? 1.4 : 1,
+                        width: isHighest ? 1.5 : 1,
                       ),
                       boxShadow: [
                         BoxShadow(
@@ -2116,11 +1892,15 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFEDF5EF),
+                              color: isHighest
+                                  ? const Color(0xFFEDF5EF)
+                                  : const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.storefront_rounded,
-                                color: Color(0xFF2E6930)),
+                            child: Icon(Icons.storefront_rounded,
+                                color: isHighest
+                                    ? const Color(0xFF2E6930)
+                                    : const Color(0xFF6B7280)),
                           ),
                           const SizedBox(width: 14),
                           Expanded(
@@ -2141,7 +1921,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    if (isLowest) ...[
+                                    if (isHighest) ...[
                                       const SizedBox(width: 6),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
@@ -2152,7 +1932,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                               BorderRadius.circular(6),
                                         ),
                                         child: Text(
-                                          context.tr('lowest_price'),
+                                          context.tr('highest_mandi'),
                                           style: const TextStyle(
                                             fontSize: 9,
                                             fontWeight: FontWeight.w700,
@@ -2237,13 +2017,9 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
     final isSelected = _selectedDurationDays == days;
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _selectedDurationDays = days;
-        });
-        final targetDistrict = widget.prices.isNotEmpty
-            ? widget.prices.first.district
-            : widget.currentDistrict;
-        _fetchTrends(targetDistrict);
+        if (_selectedDurationDays != days) {
+          _applyDuration(days);
+        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

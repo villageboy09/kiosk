@@ -39,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    ReelsScreen.isTabActive.value = (_selectedIndex == 3);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -57,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    ReelsScreen.isTabActive.value = false;
     _pulseController.dispose();
     super.dispose();
   }
@@ -308,7 +310,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
       const CropAdvisoryGridScreen(key: ValueKey('advisory_tab')),
       const NewsFeedScreen(key: ValueKey('news_tab')),
-      const ReelsScreen(key: ValueKey('reels_tab')),
+      ReelsScreen(
+        key: const ValueKey('reels_tab'),
+        isTabVisible: _selectedIndex == 3,
+      ),
     ];
 
     return PopScope(

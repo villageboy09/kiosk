@@ -13,7 +13,8 @@ import 'package:cropsync/screens/creator/creator_home_screen.dart';
 
 /// Ultra-Smooth, Instagram Reels / TikTok Style Fullscreen Feed
 class ReelsScreen extends StatefulWidget {
-  const ReelsScreen({super.key});
+  final bool? isTabVisible;
+  const ReelsScreen({super.key, this.isTabVisible});
 
   /// Static notifier so parent screens (HomeScreen) can notify tab visibility
   static final ValueNotifier<bool> isTabActive = ValueNotifier<bool>(false);
@@ -43,17 +44,44 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
     _pageController = PageController();
     _checkCreatorStatus();
 
-    // 1. Instant Cache-First Load
+    // 1. Initial visibility
+    _isVisible = widget.isTabVisible ?? ReelsScreen.isTabActive.value;
+
+    // 2. Instant Cache-First Load
     _loadReelsCacheFirst();
 
-    // 2. Tab visibility listener
-    _isVisible = ReelsScreen.isTabActive.value;
+    // 3. Tab visibility listener
     ReelsScreen.isTabActive.addListener(_onTabVisibilityChanged);
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ignore: deprecated_member_use
+    final isTickerOn = TickerMode.of(context);
+    if (!isTickerOn) {
+      _updateVisibility(false);
+    } else if (widget.isTabVisible != null) {
+      _updateVisibility(widget.isTabVisible!);
+    } else {
+      _updateVisibility(ReelsScreen.isTabActive.value);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ReelsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isTabVisible != null && widget.isTabVisible != oldWidget.isTabVisible) {
+      _updateVisibility(widget.isTabVisible!);
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
       _pauseAllVideos();
     } else if (state == AppLifecycleState.resumed && _isVisible) {
       _playCurrentVideo();
@@ -61,9 +89,24 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
   }
 
   void _onTabVisibilityChanged() {
-    final nowVisible = ReelsScreen.isTabActive.value;
-    if (_isVisible == nowVisible) return;
-    _isVisible = nowVisible;
+    _updateVisibility(ReelsScreen.isTabActive.value);
+  }
+
+  void _updateVisibility(bool nowVisible) {
+    if (_isVisible == nowVisible) {
+      if (nowVisible) {
+        _playCurrentVideo();
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isVisible = nowVisible;
+      });
+    } else {
+      _isVisible = nowVisible;
+    }
 
     if (nowVisible) {
       // Warm up current and next immediately
@@ -115,8 +158,11 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
         _reels = cached;
         _isLoading = false;
       });
-      // Warm up controller 0 immediately
-      _preloadSurrounding(0);
+      // Warm up current focused reel immediately
+      _preloadSurrounding(_focusedIndex);
+      if (_isVisible) {
+        _playCurrentVideo();
+      }
     }
 
     // Step 2: Fetch fresh data from backend
@@ -125,12 +171,23 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
       if (!mounted) return;
 
       if (fresh.isNotEmpty) {
+        if (_controllers.containsKey(_focusedIndex) &&
+            _focusedIndex < fresh.length &&
+            _controllers[_focusedIndex]?.dataSource != fresh[_focusedIndex].videoUrl) {
+          final old = _controllers.remove(_focusedIndex);
+          old?.pause();
+          old?.dispose();
+        }
+
         setState(() {
           _reels = fresh;
           _isLoading = false;
           _hasError = false;
         });
         _preloadSurrounding(_focusedIndex);
+        if (_isVisible) {
+          _playCurrentVideo();
+        }
       } else if (_reels.isEmpty) {
         setState(() {
           _isLoading = false;
@@ -173,6 +230,10 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
       if (idx == centerIndex && _isVisible) {
         controller.setVolume(_isMuted ? 0.0 : 1.0);
         controller.setLooping(true);
+        if (controller.value.duration > Duration.zero &&
+            controller.value.position >= controller.value.duration) {
+          controller.seekTo(Duration.zero);
+        }
         if (!controller.value.isPlaying) {
           controller.play();
         }
@@ -219,6 +280,10 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
 
         if (index == _focusedIndex && _isVisible) {
           controller.setVolume(_isMuted ? 0.0 : 1.0);
+          if (controller.value.duration > Duration.zero &&
+              controller.value.position >= controller.value.duration) {
+            controller.seekTo(Duration.zero);
+          }
           controller.play();
         } else {
           controller.pause();
@@ -247,10 +312,22 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
   }
 
   void _playCurrentVideo() {
+    if (_reels.isEmpty) return;
+    if (_focusedIndex < 0 || _focusedIndex >= _reels.length) {
+      _focusedIndex = 0;
+    }
+
     final controller = _controllers[_focusedIndex];
     if (controller != null && controller.value.isInitialized) {
       controller.setVolume(_isMuted ? 0.0 : 1.0);
-      controller.play();
+      controller.setLooping(true);
+      if (controller.value.duration > Duration.zero &&
+          controller.value.position >= controller.value.duration) {
+        controller.seekTo(Duration.zero);
+      }
+      if (!controller.value.isPlaying) {
+        controller.play();
+      }
     } else {
       _initControllerForIndex(_focusedIndex);
     }
@@ -262,6 +339,9 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
       _focusedIndex = index;
     });
     _preloadSurrounding(index);
+    if (_isVisible) {
+      _playCurrentVideo();
+    }
   }
 
   void _toggleGlobalMute() {
@@ -396,7 +476,7 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
                   return _AuthenticReelItem(
                     key: ValueKey('reel_${_reels[index].id}'),
                     reel: _reels[index],
-                    isActive: index == _focusedIndex,
+                    isActive: (index == _focusedIndex) && _isVisible,
                     controller: _controllers[index],
                     isMuted: _isMuted,
                     onToggleMute: _toggleGlobalMute,
@@ -546,10 +626,45 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
     _discRotateController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
-    )..repeat();
+    );
 
     if (widget.isActive) {
       _playStartTime = DateTime.now();
+      _isPlaying = true;
+      _discRotateController.repeat();
+      if (widget.controller != null && widget.controller!.value.isInitialized) {
+        if (!widget.controller!.value.isPlaying) {
+          widget.controller!.play();
+        }
+      }
+    } else {
+      _isPlaying = false;
+      _discRotateController.stop();
+    }
+
+    _attachControllerListener(widget.controller);
+  }
+
+  void _attachControllerListener(VideoPlayerController? controller) {
+    controller?.addListener(_onControllerStateChanged);
+  }
+
+  void _detachControllerListener(VideoPlayerController? controller) {
+    controller?.removeListener(_onControllerStateChanged);
+  }
+
+  void _onControllerStateChanged() {
+    if (!mounted || widget.controller == null) return;
+    final isPlaying = widget.controller!.value.isPlaying;
+    if (_isPlaying != isPlaying && widget.isActive) {
+      setState(() {
+        _isPlaying = isPlaying;
+      });
+      if (isPlaying) {
+        if (!_discRotateController.isAnimating) _discRotateController.repeat();
+      } else {
+        if (_discRotateController.isAnimating) _discRotateController.stop();
+      }
     }
   }
 
@@ -621,16 +736,58 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
       _currentReel = widget.reel;
     }
 
+    if (oldWidget.controller != widget.controller) {
+      _detachControllerListener(oldWidget.controller);
+      _attachControllerListener(widget.controller);
+      if (widget.isActive && widget.controller != null && widget.controller!.value.isInitialized) {
+        widget.controller!.setVolume(widget.isMuted ? 0.0 : 1.0);
+        widget.controller!.setLooping(true);
+        if (widget.controller!.value.duration > Duration.zero &&
+            widget.controller!.value.position >= widget.controller!.value.duration) {
+          widget.controller!.seekTo(Duration.zero);
+        }
+        if (!widget.controller!.value.isPlaying) {
+          widget.controller!.play();
+        }
+        _isPlaying = true;
+        if (!_discRotateController.isAnimating) {
+          _discRotateController.repeat();
+        }
+      }
+    }
+
+    if (widget.isMuted != oldWidget.isMuted &&
+        widget.controller != null &&
+        widget.controller!.value.isInitialized) {
+      widget.controller!.setVolume(widget.isMuted ? 0.0 : 1.0);
+    }
+
     if (widget.isActive != oldWidget.isActive) {
       if (widget.isActive) {
         _playStartTime = DateTime.now();
         _isPlaying = true;
+        if (widget.controller != null && widget.controller!.value.isInitialized) {
+          widget.controller!.setVolume(widget.isMuted ? 0.0 : 1.0);
+          widget.controller!.setLooping(true);
+          if (widget.controller!.value.duration > Duration.zero &&
+              widget.controller!.value.position >= widget.controller!.value.duration) {
+            widget.controller!.seekTo(Duration.zero);
+          }
+          if (!widget.controller!.value.isPlaying) {
+            widget.controller!.play();
+          }
+        }
         if (!_discRotateController.isAnimating) {
           _discRotateController.repeat();
         }
       } else {
         _logWatchDuration();
         _isPlaying = false;
+        if (widget.controller != null &&
+            widget.controller!.value.isInitialized &&
+            widget.controller!.value.isPlaying) {
+          widget.controller!.pause();
+        }
         if (_discRotateController.isAnimating) {
           _discRotateController.stop();
         }
@@ -652,6 +809,12 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
 
   @override
   void dispose() {
+    _detachControllerListener(widget.controller);
+    if (widget.controller != null &&
+        widget.controller!.value.isInitialized &&
+        widget.controller!.value.isPlaying) {
+      widget.controller!.pause();
+    }
     _logWatchDuration();
     _heartAnimController.dispose();
     _discRotateController.dispose();
