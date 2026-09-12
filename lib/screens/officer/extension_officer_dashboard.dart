@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:cropsync/models/user.dart';
@@ -7,6 +7,7 @@ import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/widgets/language_selector.dart';
 import 'package:cropsync/auth/signup_screen.dart';
 import 'package:cropsync/widgets/animated_widgets.dart';
+import 'package:cropsync/utils/safe_parser.dart';
 
 class ExtensionOfficerDashboard extends StatefulWidget {
   const ExtensionOfficerDashboard({super.key});
@@ -37,7 +38,7 @@ class _ExtensionOfficerDashboardState extends State<ExtensionOfficerDashboard> {
       try {
         final response = await ApiService.getOfficerInfo(_currentUser!.phoneNumber ?? _currentUser!.userId);
         if (response != null && response['success'] == true) {
-          final officerId = response['officer_id'] as int;
+          final officerId = SafeParser.toInt(response['officer_id']);
           final dashboard = await ApiService.getExtensionDashboard(officerId);
           final outbreaks = await ApiService.getActiveOutbreaks(
             district: response['user']['district'],

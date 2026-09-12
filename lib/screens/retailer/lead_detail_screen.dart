@@ -1,10 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/widgets/animated_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
+import 'package:cropsync/utils/safe_parser.dart';
 
 class LeadDetailScreen extends StatefulWidget {
   final Map<String, dynamic> lead;
@@ -54,7 +55,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
       final String langCode = context.locale.languageCode;
       final advisoryData = await ApiService.getAdvisories(problemId, lang: langCode);
       if (advisoryData != null) {
-        final advisoryId = advisoryData['id'] as int?;
+        final advisoryId = SafeParser.toNullableInt(advisoryData['id']);
         if (advisoryId != null) {
           final components = await ApiService.getAdvisoryComponents(advisoryId, lang: langCode);
           if (mounted) {

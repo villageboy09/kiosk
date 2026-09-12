@@ -1,5 +1,4 @@
-﻿// lib/screens/settings_screen.dart
-// ignore_for_file: deprecated_member_use, use_build_context_synchronously
+// lib/screens/settings_screen.dart
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_date_timeline/easy_date_timeline.dart';
@@ -11,6 +10,7 @@ import 'package:cropsync/services/global_notifiers.dart';
 import 'package:cropsync/services/notification_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cropsync/theme/app_theme.dart';
+import 'package:cropsync/utils/safe_parser.dart';
 
 String _getDisplayFieldName(String name) {
   if (name == 'Field 1' || name == 'పొలం 1') return 'field_1'.tr();
@@ -344,9 +344,9 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       final cropsData = await ApiService.getCrops(lang: langCode);
       final List<Crop> loadedCrops = cropsData
           .map((c) => Crop(
-              id: c['id'] as int,
-              name: c['name'] as String,
-              imageUrl: c['image_url'] as String?))
+              id: SafeParser.toInt(c['id']),
+              name: SafeParser.toStringVal(c['name'], 'Crop'),
+              imageUrl: c['image_url']?.toString()))
           .toList();
 
       // Get used field names for current user
@@ -386,9 +386,9 @@ class _AddNewCropSelectionViewState extends State<AddNewCropSelectionView>
       final varietiesData = await ApiService.getVarieties(cropId);
       final List<CropVariety> loadedVarieties = varietiesData
           .map((v) => CropVariety(
-              id: v['id'] as int,
-              name: v['variety_name'] as String,
-              imageUrl: v['packet_image_url'] as String?))
+              id: SafeParser.toInt(v['id']),
+              name: SafeParser.toStringVal(v['variety_name'], 'Variety'),
+              imageUrl: v['packet_image_url']?.toString()))
           .toList();
       if (mounted) {
         setState(() {
@@ -995,12 +995,12 @@ class _MyFieldsViewState extends State<MyFieldsView>
 
       final selections = response
           .map((item) => FarmerSelection(
-                selectionId: item['selection_id'] as int,
-                fieldName: item['field_name'] as String,
-                cropName: item['crop_name'] as String,
-                cropImageUrl: item['crop_image_url'] as String?,
-                varietyName: item['variety_name'] as String? ?? '',
-                sowingDate: DateTime.parse(item['sowing_date'] as String),
+                selectionId: SafeParser.toInt(item['selection_id']),
+                fieldName: SafeParser.toStringVal(item['field_name'], 'Field'),
+                cropName: SafeParser.toStringVal(item['crop_name'], 'Crop'),
+                cropImageUrl: item['crop_image_url']?.toString(),
+                varietyName: SafeParser.toStringVal(item['variety_name']),
+                sowingDate: DateTime.tryParse(item['sowing_date']?.toString() ?? '') ?? DateTime.now(),
               ))
           .toList();
 
@@ -1297,9 +1297,9 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
       final cropsData = await ApiService.getCrops(lang: langCode);
       _crops = cropsData
           .map((c) => Crop(
-              id: c['id'] as int,
-              name: c['name'] as String,
-              imageUrl: c['image_url'] as String?))
+              id: SafeParser.toInt(c['id']),
+              name: SafeParser.toStringVal(c['name'], 'Crop'),
+              imageUrl: c['image_url']?.toString()))
           .toList();
 
       _selectedCrop = _crops.firstWhere(
@@ -1334,9 +1334,9 @@ class _EditSelectionSheetState extends State<EditSelectionSheet> {
       final varietiesData = await ApiService.getVarieties(cropId);
       _varieties = varietiesData
           .map((v) => CropVariety(
-              id: v['id'] as int,
-              name: v['variety_name'] as String,
-              imageUrl: v['packet_image_url'] as String?))
+              id: SafeParser.toInt(v['id']),
+              name: SafeParser.toStringVal(v['variety_name'], 'Variety'),
+              imageUrl: v['packet_image_url']?.toString()))
           .toList();
     } catch (e) {
       _showFeedbackSnackbar(

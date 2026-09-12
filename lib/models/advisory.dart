@@ -35,14 +35,14 @@ class AdvisoryRecommendation {
 
   factory AdvisoryRecommendation.fromJson(Map<String, dynamic> json) {
     return AdvisoryRecommendation(
-      type: json['component_type'] as String? ?? 'General',
-      name: json['component_name'] as String? ?? 'N/A',
-      altName: json['alt_component_name'] as String?,
-      dose: json['dose'] as String?,
-      method: json['application_method'] as String?,
-      notes: json['notes'] as String?,
-      stageScope: json['stage_scope'] as String?,
-      imageUrl: json['image_url'] as String?,
+      type: json['component_type']?.toString() ?? 'General',
+      name: json['component_name']?.toString() ?? 'N/A',
+      altName: json['alt_component_name']?.toString(),
+      dose: json['dose']?.toString(),
+      method: json['application_method']?.toString(),
+      notes: json['notes']?.toString(),
+      stageScope: json['stage_scope']?.toString(),
+      imageUrl: json['image_url']?.toString(),
     );
   }
 }

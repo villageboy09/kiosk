@@ -1,5 +1,4 @@
 // lib/profile_screen.dart
-// ignore_for_file: use_build_context_synchronously
 
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/auth_service.dart';
@@ -311,11 +310,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         );
                         await AuthService.saveUserSession(updated);
 
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                        }
                         if (mounted) {
                           setState(() {
                             _userFuture = Future.value(updated);
                           });
-                          Navigator.pop(ctx);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Profile updated successfully!'),
@@ -470,7 +471,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => _buildResponsiveBottomSheet(
+      builder: (sheetCtx) => _buildResponsiveBottomSheet(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -509,7 +510,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () => Navigator.pop(sheetCtx),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         side: const BorderSide(color: AppTheme.error),
@@ -531,7 +532,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
-                        Navigator.pop(context);
+                        Navigator.pop(sheetCtx);
                         await AuthService.logout();
                         if (mounted) {
                           Navigator.of(context).pushAndRemoveUntil(

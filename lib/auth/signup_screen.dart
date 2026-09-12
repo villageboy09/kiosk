@@ -250,8 +250,8 @@ class _SignupScreenState extends State<SignupScreen>
                 const SizedBox(height: 20),
               ] else ...[
                 ...simList.map((sim) {
-                  final int slot = sim['slot'] as int? ?? 1;
-                  final String carrier = sim['carrier'] as String? ?? 'Carrier';
+                  final int slot = int.tryParse(sim['slot']?.toString() ?? '1') ?? 1;
+                  final String carrier = sim['carrier']?.toString() ?? 'Carrier';
                   final String rawNumber = sim['number'] as String? ?? '';
                   final String displayNum = rawNumber.isNotEmpty ? rawNumber : 'Select Number (Not Available)';
 

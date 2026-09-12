@@ -1,4 +1,4 @@
-﻿import 'package:cropsync/models/farmer_crop.dart';
+import 'package:cropsync/models/farmer_crop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -8,6 +8,7 @@ import 'package:cropsync/widgets/skeletons/shimmer_grid_skeleton.dart';
 import '../services/api_service.dart';
 import 'crop_problems_screen.dart';
 import 'package:cropsync/theme/app_theme.dart';
+import 'package:cropsync/utils/safe_parser.dart';
 
 class CropStage {
   final int id;
@@ -71,22 +72,22 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
 
       int? currentStageId;
       for (var d in durations) {
-        final start = d['start_day_from_sowing'] as int? ?? 0;
-        final end = d['end_day_from_sowing'] as int? ?? 999;
+        final start = SafeParser.toInt(d['start_day_from_sowing'], 0);
+        final end = SafeParser.toInt(d['end_day_from_sowing'], 999);
         if (widget.crop.daysSinceSowing >= start &&
             widget.crop.daysSinceSowing <= end) {
-          currentStageId = d['stage_id'] as int?;
+          currentStageId = SafeParser.toNullableInt(d['stage_id']);
           break;
         }
       }
 
       final List<CropStage> loadedStages = stagesData.map((s) {
-        final id = s['id'] as int;
+        final id = SafeParser.toInt(s['id']);
         return CropStage(
           id: id,
-          name: s['name'] as String? ?? 'Stage',
-          imageUrl: s['image_url'] as String?,
-          description: s['description'] as String?,
+          name: SafeParser.toStringVal(s['name'], 'Stage'),
+          imageUrl: s['image_url']?.toString(),
+          description: s['description']?.toString(),
           isCurrentStage: id == currentStageId,
         );
       }).toList();

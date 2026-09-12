@@ -11,6 +11,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
 import 'package:cropsync/services/location_service.dart';
+import 'package:cropsync/utils/safe_parser.dart';
 
 class WeatherScreen extends StatefulWidget {
   const WeatherScreen({super.key});
@@ -66,7 +67,7 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
               .take(12)
               .map((h) => _HourlyData(
                     time: h['datetime']?.substring(0, 5) ?? '00:00',
-                    temp: (h['temp'] ?? 0.0).toDouble(),
+                    temp: SafeParser.toDouble(h['temp']),
                     icon: h['icon'] ?? 'clear-day',
                   ))
               .toList();
@@ -75,27 +76,27 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
               .take(7)
               .map((d) => _DailyData(
                     date: d['datetime'] ?? '',
-                    temp: (d['temp'] ?? 0.0).toDouble(),
-                    tempMax: (d['tempmax'] ?? 0.0).toDouble(),
-                    tempMin: (d['tempmin'] ?? 0.0).toDouble(),
+                    temp: SafeParser.toDouble(d['temp']),
+                    tempMax: SafeParser.toDouble(d['tempmax']),
+                    tempMin: SafeParser.toDouble(d['tempmin']),
                     conditions: d['conditions'] ?? 'N/A',
                     icon: d['icon'] ?? 'clear-day',
-                    humidity: (d['humidity'] ?? 0.0).toDouble(),
-                    windSpeed: (d['windspeed'] ?? 0.0).toDouble(),
-                    precipProb: (d['precipprob'] ?? 0.0).toDouble(),
+                    humidity: SafeParser.toDouble(d['humidity']),
+                    windSpeed: SafeParser.toDouble(d['windspeed']),
+                    precipProb: SafeParser.toDouble(d['precipprob']),
                   ))
               .toList();
 
           final summary = _WeatherSummary(
             location: cachedLoc,
-            temp: (today['temp'] ?? 0.0).toDouble(),
-            tempMax: (today['tempmax'] ?? 0.0).toDouble(),
-            tempMin: (today['tempmin'] ?? 0.0).toDouble(),
+            temp: SafeParser.toDouble(today['temp']),
+            tempMax: SafeParser.toDouble(today['tempmax']),
+            tempMin: SafeParser.toDouble(today['tempmin']),
             conditions: today['conditions'] ?? 'N/A',
             icon: today['icon'] ?? 'clear-day',
-            humidity: (today['humidity'] ?? 0.0).toDouble(),
-            windSpeed: (today['windspeed'] ?? 0.0).toDouble(),
-            precipProb: (today['precipprob'] ?? 0.0).toDouble(),
+            humidity: SafeParser.toDouble(today['humidity']),
+            windSpeed: SafeParser.toDouble(today['windspeed']),
+            precipProb: SafeParser.toDouble(today['precipprob']),
             hourly: hours,
             daily: dailyList,
             latitude: prefs.getDouble('cached_weather_latitude') ?? 0.0,
@@ -157,7 +158,7 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
         .take(12)
         .map((h) => _HourlyData(
               time: h['datetime']?.substring(0, 5) ?? '00:00',
-              temp: (h['temp'] ?? 0.0).toDouble(),
+              temp: SafeParser.toDouble(h['temp']),
               icon: h['icon'] ?? 'clear-day',
             ))
         .toList();
@@ -166,27 +167,27 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
         .take(7)
         .map((d) => _DailyData(
               date: d['datetime'] ?? '',
-              temp: (d['temp'] ?? 0.0).toDouble(),
-              tempMax: (d['tempmax'] ?? 0.0).toDouble(),
-              tempMin: (d['tempmin'] ?? 0.0).toDouble(),
+              temp: SafeParser.toDouble(d['temp']),
+              tempMax: SafeParser.toDouble(d['tempmax']),
+              tempMin: SafeParser.toDouble(d['tempmin']),
               conditions: d['conditions'] ?? 'N/A',
               icon: d['icon'] ?? 'clear-day',
-              humidity: (d['humidity'] ?? 0.0).toDouble(),
-              windSpeed: (d['windspeed'] ?? 0.0).toDouble(),
-              precipProb: (d['precipprob'] ?? 0.0).toDouble(),
+              humidity: SafeParser.toDouble(d['humidity']),
+              windSpeed: SafeParser.toDouble(d['windspeed']),
+              precipProb: SafeParser.toDouble(d['precipprob']),
             ))
         .toList();
 
     final summary = _WeatherSummary(
       location: locationName,
-      temp: (today['temp'] ?? 0.0).toDouble(),
-      tempMax: (today['tempmax'] ?? 0.0).toDouble(),
-      tempMin: (today['tempmin'] ?? 0.0).toDouble(),
+      temp: SafeParser.toDouble(today['temp']),
+      tempMax: SafeParser.toDouble(today['tempmax']),
+      tempMin: SafeParser.toDouble(today['tempmin']),
       conditions: today['conditions'] ?? 'N/A',
       icon: today['icon'] ?? 'clear-day',
-      humidity: (today['humidity'] ?? 0.0).toDouble(),
-      windSpeed: (today['windspeed'] ?? 0.0).toDouble(),
-      precipProb: (today['precipprob'] ?? 0.0).toDouble(),
+      humidity: SafeParser.toDouble(today['humidity']),
+      windSpeed: SafeParser.toDouble(today['windspeed']),
+      precipProb: SafeParser.toDouble(today['precipprob']),
       hourly: hours,
       daily: dailyList,
       latitude: lat,

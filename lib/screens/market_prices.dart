@@ -10,6 +10,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:cropsync/utils/commodity_translator.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:cropsync/widgets/language_selector.dart';
 
 class MarketPrice {
   final String state;
@@ -350,99 +351,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   }
 
   void _showLanguageSelector() {
-    final currentCode = context.locale.languageCode;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        final languages = [
-          {'name': 'తెలుగు (Telugu)', 'code': 'te'},
-          {'name': 'English', 'code': 'en'},
-          {'name': 'हिन्दी (Hindi)', 'code': 'hi'},
-        ];
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      context.tr('language_select_title'),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, color: Colors.grey),
-                      onPressed: () => Navigator.pop(context),
-                    )
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ...languages.map((lang) {
-                  final isSelected = lang['code'] == currentCode;
-                  return InkWell(
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await context.setLocale(Locale(lang['code']!));
-                      setState(() {});
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFFEDF5EF)
-                            : const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isSelected
-                              ? const Color(0xFF2E6930)
-                              : const Color(0xFFE5E7EB),
-                          width: isSelected ? 1.5 : 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            lang['name']!,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: isSelected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: isSelected
-                                  ? const Color(0xFF1E482D)
-                                  : const Color(0xFF111827),
-                            ),
-                          ),
-                          if (isSelected)
-                            const Icon(Icons.check_circle_rounded,
-                                color: Color(0xFF2E6930), size: 22),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    LanguageSelector.show(context);
   }
 
   void _showCompareMarketsSheet() {
@@ -2033,7 +1942,8 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                 child: Text(_trendError,
                                     style: const TextStyle(
                                         color: Color(0xFF9CA3AF))))
-                            : LineChart(
+                            : RepaintBoundary(
+                                child: LineChart(
                                 LineChartData(
                                   gridData: FlGridData(
                                     show: true,
@@ -2126,6 +2036,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                   ],
                                 ),
                               ),
+                            ),
                   ),
                 ],
               ),

@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cropsync/utils/safe_parser.dart';
 
 /// Way2News & Inshorts Style News Cards Feed
 /// Designed to seamlessly match CropSync's modern, clean, light green theme
@@ -641,8 +642,8 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
 
     if (res['success'] == true) {
       final updated = widget.article.copyWith(
-        hasLiked: res['is_liked'] as bool? ?? _hasLiked,
-        likesCount: res['likes_count'] as int? ?? _likesCount,
+        hasLiked: SafeParser.toBool(res['is_liked'], _hasLiked),
+        likesCount: SafeParser.toInt(res['likes_count'], _likesCount),
       );
       widget.onArticleUpdated(updated);
     } else {

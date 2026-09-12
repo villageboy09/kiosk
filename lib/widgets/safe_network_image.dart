@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+/// High-performance, memory-safe network image widget.
+/// Drastically cuts GPU memory usage by decoding images directly to the target
+/// display dimensions rather than caching 4K/full-resolution camera bitmaps in RAM.
 class SafeNetworkImage extends StatelessWidget {
   final String? imageUrl;
   final BoxFit fit;
   final Widget? placeholder;
   final double? width;
   final double? height;
+  final int? memCacheWidth;
+  final int? memCacheHeight;
 
   const SafeNetworkImage({
     super.key,
@@ -15,6 +20,8 @@ class SafeNetworkImage extends StatelessWidget {
     this.placeholder,
     this.width,
     this.height,
+    this.memCacheWidth,
+    this.memCacheHeight,
   });
 
   Widget _buildPlaceholder() {
@@ -25,7 +32,7 @@ class SafeNetworkImage extends StatelessWidget {
           child: Icon(
             Icons.image_outlined,
             color: Colors.grey.shade400,
-            size: 32,
+            size: 28,
           ),
         );
   }
@@ -41,11 +48,19 @@ class SafeNetworkImage extends StatelessWidget {
       );
     }
 
+    // Auto-compute memory cache boundaries (2x display size for retina displays, capped to 800)
+    final int calculatedMemWidth = memCacheWidth ??
+        ((width != null && width! > 0) ? (width! * 2).round().clamp(100, 800) : 600);
+    final int? calculatedMemHeight = memCacheHeight ??
+        ((height != null && height! > 0) ? (height! * 2).round().clamp(100, 800) : null);
+
     return CachedNetworkImage(
       imageUrl: url,
       width: width,
       height: height,
       fit: fit,
+      memCacheWidth: calculatedMemWidth,
+      memCacheHeight: calculatedMemHeight,
       fadeInDuration: const Duration(milliseconds: 120),
       placeholder: (_, __) => SizedBox(
         width: width,

@@ -11,6 +11,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/theme/app_theme.dart';
 
 import 'package:cropsync/services/farmer_analytics_service.dart';
+import 'package:cropsync/utils/safe_parser.dart';
 
 // Enum to manage the state of the identification button
 enum IdentificationState { initial, loading, success, error }
@@ -97,7 +98,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       }
 
       // Fetch recommendations/components
-      final advisoryId = advisoryData['id'] as int?;
+      final advisoryId = SafeParser.toNullableInt(advisoryData['id']);
       List<AdvisoryRecommendation> recommendations = [];
 
       if (advisoryId != null) {

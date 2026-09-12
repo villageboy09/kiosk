@@ -1,3 +1,5 @@
+import 'package:cropsync/utils/safe_parser.dart';
+
 class CropProblem {
   final int id;
   final String name;
@@ -17,12 +19,12 @@ class CropProblem {
 
   factory CropProblem.fromJson(Map<String, dynamic> json) {
     return CropProblem(
-      id: json['id'] as int,
-      name: json['name'] as String? ?? 'Unknown',
-      category: json['category'] as String?,
-      imageUrl1: json['image_url1'] as String?,
-      imageUrl2: json['image_url2'] as String?,
-      imageUrl3: json['image_url3'] as String?,
+      id: SafeParser.toInt(json['id']),
+      name: SafeParser.toStringVal(json['name'], 'Unknown'),
+      category: json['category']?.toString(),
+      imageUrl1: json['image_url1']?.toString(),
+      imageUrl2: json['image_url2']?.toString(),
+      imageUrl3: json['image_url3']?.toString(),
     );
   }
 }

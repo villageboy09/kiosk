@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
@@ -10,6 +10,7 @@ import 'package:cropsync/auth/signup_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:cropsync/widgets/animated_widgets.dart';
 import 'package:cropsync/screens/retailer/lead_detail_screen.dart';
+import 'package:cropsync/utils/safe_parser.dart';
 
 class RetailerDashboard extends StatefulWidget {
   const RetailerDashboard({super.key});
@@ -58,7 +59,7 @@ class _RetailerDashboardState extends State<RetailerDashboard> {
         // We can pass user's phone to identify the retailer id.
         final response = await ApiService.getRetailerInfo(_currentUser!.phoneNumber ?? _currentUser!.userId);
         if (response != null && response['success'] == true) {
-          final retailerId = response['retailer_id'] as int;
+          final retailerId = SafeParser.toInt(response['retailer_id']);
           final dashboard = await ApiService.getRetailerDashboard(retailerId, lang: langCode);
           final leads = await ApiService.getRetailerLeads(retailerId, lang: langCode);
           

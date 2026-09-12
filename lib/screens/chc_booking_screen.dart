@@ -1,5 +1,3 @@
-﻿// ignore_for_file: deprecated_member_use, use_build_context_synchronously
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -232,14 +230,15 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
 
   Future<void> _loadData({bool force = false}) async {
     if (!mounted) return;
+    final locale = context.locale.languageCode;
 
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     if (force) {
       await prefs.remove('cached_chc_equipments');
       await prefs.remove('cached_chc_crops');
+      if (!mounted) return;
     }
-
-    final locale = context.locale.languageCode;
     final cachedEquip = prefs.getString('cached_chc_equipments');
     final cachedCrops = prefs.getString('cached_chc_crops');
 
@@ -413,9 +412,11 @@ class _CHCBookingScreenState extends State<CHCBookingScreen> {
           _successTotalCost = totalCost;
         });
       } else {
+        if (!mounted) return;
         _showErrorSnackBar(result['error'] ?? 'Booking failed');
       }
     } catch (e) {
+      if (!mounted) return;
       _showErrorSnackBar('Error: $e');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

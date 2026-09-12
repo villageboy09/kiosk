@@ -1170,7 +1170,9 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
                     child: SizedBox(
                       width: controller.value.size.width,
                       height: controller.value.size.height,
-                      child: VideoPlayer(controller),
+                      child: RepaintBoundary(
+                        child: VideoPlayer(controller),
+                      ),
                     ),
                   ),
                 )

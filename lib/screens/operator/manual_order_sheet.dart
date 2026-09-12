@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:cropsync/models/chc_operator.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
+import 'package:cropsync/utils/safe_parser.dart';
 
 
 class ManualOrderSheet extends StatefulWidget {
@@ -326,8 +327,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     if (_isMultiService) {
       double total = 0.0;
       for (int i = 0; i < _services.length; i++) {
-        final h = _services[i]['hours'] as int? ?? 0;
-        final m = _services[i]['minutes'] as int? ?? 0;
+        final h = SafeParser.toInt(_services[i]['hours']);
+        final m = SafeParser.toInt(_services[i]['minutes']);
         final qty = h + (m / 60.0);
         final rate = double.tryParse(_rateControllers[i].text) ?? 0.0;
         total += qty * rate;
@@ -404,8 +405,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     }
     if (_isMultiService) {
       for (int i = 0; i < _services.length; i++) {
-        final h = _services[i]['hours'] as int? ?? 0;
-        final m = _services[i]['minutes'] as int? ?? 0;
+        final h = SafeParser.toInt(_services[i]['hours']);
+        final m = SafeParser.toInt(_services[i]['minutes']);
         final qty = h + (m / 60.0);
         final rate = double.tryParse(_rateControllers[i].text) ?? 0.0;
         if (qty <= 0 || rate <= 0) return false;
@@ -429,8 +430,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
     if (_isMultiService) {
       for (int i = 0; i < _services.length; i++) {
-        final h = _services[i]['hours'] as int? ?? 0;
-        final m = _services[i]['minutes'] as int? ?? 0;
+        final h = SafeParser.toInt(_services[i]['hours']);
+        final m = SafeParser.toInt(_services[i]['minutes']);
         _services[i]['qty'] = h + (m / 60.0);
         _services[i]['rate'] = double.tryParse(_rateControllers[i].text) ?? 0.0;
       }
@@ -685,7 +686,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                         flex: 2,
                         child: _buildDurationDropdown(
                           label: 'operator_hours'.tr(),
-                          value: _services[index]['hours'] as int? ?? 0,
+                          value: SafeParser.toInt(_services[index]['hours']),
                           items: List<int>.generate(24, (i) => i),
                           suffix: 'operator_select_hours'.tr(),
                           onChanged: (value) =>
@@ -697,7 +698,7 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                         flex: 2,
                         child: _buildDurationDropdown(
                           label: 'operator_minutes'.tr(),
-                          value: _services[index]['minutes'] as int? ?? 0,
+                          value: SafeParser.toInt(_services[index]['minutes']),
                           items: List<int>.generate(60, (i) => i),
                           suffix: 'operator_select_minutes'.tr(),
                           onChanged: (value) => setState(
@@ -870,8 +871,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                   ..._services.asMap().entries.map((entry) {
                     final i = entry.key;
                     final svc = entry.value;
-                    final h = svc['hours'] as int? ?? 0;
-                    final m = svc['minutes'] as int? ?? 0;
+                    final h = SafeParser.toInt(svc['hours']);
+                    final m = SafeParser.toInt(svc['minutes']);
                     final qty = h + (m / 60.0);
                     final lineRate =
                         double.tryParse(_rateControllers[i].text) ?? 0.0;

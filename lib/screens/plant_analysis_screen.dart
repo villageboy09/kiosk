@@ -9,6 +9,7 @@ import 'package:cropsync/services/location_service.dart';
 import 'package:cropsync/services/razorpay_payment_service.dart';
 import 'package:cropsync/services/text_to_speech_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
+import 'package:cropsync/utils/safe_parser.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -274,7 +275,7 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
       await AiCreditService.consumeCredit();
       await _loadCreditStatus();
 
-      final matchedId = parsed['matched_problem_id'] as int?;
+      final matchedId = SafeParser.toNullableInt(parsed['matched_problem_id']);
       bool hasVerifiedAdvisory = false;
       if (matchedId != null) {
         try {
@@ -817,7 +818,7 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
       );
     }
 
-    final matchedId = result['matched_problem_id'] as int?;
+    final matchedId = SafeParser.toNullableInt(result['matched_problem_id']);
     final problemName = result['matched_problem_name']?.toString() ?? "Unknown";
     final confidence = ((result['confidence'] as num? ?? 0.88) * 100).round();
     final rawAnalysis = result['ai_analysis']?.toString() ?? "";

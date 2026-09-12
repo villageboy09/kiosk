@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/creator_service.dart';
+import 'package:cropsync/utils/safe_parser.dart';
 
 /// Clean, Editorial, Minimalist News Article Detail View
 class NewsDetailScreen extends StatefulWidget {
@@ -154,8 +155,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     if (!mounted) return;
     if (res['success'] == true) {
       setState(() {
-        _isLiked = res['is_liked'] == true;
-        _likesCount = res['likes_count'] as int? ?? _likesCount;
+        _isLiked = SafeParser.toBool(res['is_liked'], false);
+        _likesCount = SafeParser.toInt(res['likes_count'], _likesCount);
       });
     } else {
       setState(() {

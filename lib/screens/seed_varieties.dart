@@ -1,6 +1,5 @@
 // lib/screens/seed_varieties.dart
 
-// ignore_for_file: use_build_context_synchronously
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chewie/chewie.dart';
@@ -13,6 +12,7 @@ import 'package:cropsync/services/api_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:video_player/video_player.dart';
+import 'package:cropsync/widgets/dialogs/app_success_dialog.dart';
 
 String _getTranslatedCropName(BuildContext context, String cropName) {
   final key = cropName.toLowerCase();
@@ -583,80 +583,15 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
   }
 
   void _showSuccessPopup(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  duration: const Duration(milliseconds: 600),
-                  curve: Curves.elasticOut,
-                  builder: (context, value, child) {
-                    return Transform.scale(
-                      scale: value,
-                      child: const Icon(
-                        Icons.check_circle_rounded,
-                        color: AppTheme.primary,
-                        size: 80,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  context.tr('success'),
-                  style: AppTheme.getTextStyle(context, 
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: AppTheme.getTextStyle(context, 
-                    fontSize: 16,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(dialogContext).pop(); // close dialog
-                      Navigator.of(context).pop(); // close the bottom sheet
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      context.tr('ok'),
-                      style: AppTheme.getTextStyle(context, 
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+    AppSuccessDialog.show(
+      context,
+      title: context.tr('success'),
+      message: message,
+      buttonText: context.tr('ok'),
+      onConfirm: () {
+        if (mounted) {
+          Navigator.of(context).pop(); // close the bottom sheet
+        }
       },
     );
   }
