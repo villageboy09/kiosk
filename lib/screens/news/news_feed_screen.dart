@@ -8,15 +8,15 @@ import 'package:cropsync/services/auth_service.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:cropsync/services/share_service.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:cropsync/utils/safe_parser.dart';
 
 /// Way2News & Inshorts Style News Cards Feed
 /// Designed to seamlessly match CropSync's modern, clean, light green theme
 class NewsFeedScreen extends StatefulWidget {
-  const NewsFeedScreen({super.key});
+  final int? initialArticleId;
+  const NewsFeedScreen({super.key, this.initialArticleId});
 
   @override
   State<NewsFeedScreen> createState() => _NewsFeedScreenState();
@@ -83,18 +83,26 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
         language: langCode,
       );
 
+      int initialIdx = 0;
+      if (widget.initialArticleId != null) {
+        final found = items.indexWhere((a) => a.id == widget.initialArticleId);
+        if (found != -1) {
+          initialIdx = found;
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         _articles = items;
         _isLoading = false;
-        _currentPageIndex = 0;
+        _currentPageIndex = initialIdx;
       });
 
       if (_pageController.hasClients) {
-        _pageController.jumpToPage(0);
+        _pageController.jumpToPage(initialIdx);
       }
 
-      _scheduleViewTracking(0);
+      _scheduleViewTracking(initialIdx);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -654,43 +662,25 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
     }
   }
 
-  Future<void> _shareOnWhatsApp() async {
-    HapticFeedback.selectionClick();
-    final langCode = context.locale.languageCode;
-    final articleTitle = widget.article.localizedTitle(langCode);
-    final articleSummary = widget.article.localizedSummary(langCode);
-    final text = '🌾 *$articleTitle*\n\n'
-        '$articleSummary\n\n'
-        '📲 *${'news_read_full_story'.tr()} on CropSync:*\n'
-        'https://cropsync.in/news/${widget.article.id}';
-
-    final uri = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(text)}');
-
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        final webUri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
-        if (await canLaunchUrl(webUri)) {
-          await launchUrl(webUri, mode: LaunchMode.externalApplication);
-        } else {
-          await SharePlus.instance.share(ShareParams(text: text));
-        }
-      }
-    } catch (_) {
-      await SharePlus.instance.share(ShareParams(text: text));
-    }
-  }
+  Future<void> _shareOnWhatsApp() async => _shareGeneral();
 
   Future<void> _shareGeneral() async {
     HapticFeedback.selectionClick();
     final langCode = context.locale.languageCode;
     final articleTitle = widget.article.localizedTitle(langCode);
     final articleSummary = widget.article.localizedSummary(langCode);
-    final text = '🌾 $articleTitle\n\n'
-        '$articleSummary\n\n'
-        '${'news_read_full_story'.tr()} on CropSync: https://cropsync.in/news/${widget.article.id}';
-    await SharePlus.instance.share(ShareParams(text: text));
+    final desc = articleSummary.isNotEmpty
+        ? articleSummary
+        : widget.article.localizedContent(langCode);
+
+    await ShareService.shareItem(
+      context: context,
+      type: 'news',
+      id: widget.article.id.toString(),
+      title: articleTitle,
+      description: desc,
+      imageUrl: widget.article.imageUrl,
+    );
   }
 
   void _openCommentsSheet() {

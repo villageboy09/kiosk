@@ -17,6 +17,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:cropsync/services/notification_service.dart';
+import 'package:cropsync/services/deep_link_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +26,7 @@ Future<void> main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     await NotificationService.initialize();
+    await DeepLinkService.initialize();
   } catch (e) {
     // Gracefully handle if Firebase/Notifications are not configured or supported (e.g. on Web)
     debugPrint("Firebase/Notification initialization failed/skipped: $e");

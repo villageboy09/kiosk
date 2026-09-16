@@ -379,12 +379,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  Future<void> _loadCreditStatus() async {
-    final status = await AiCreditService.getCreditStatus();
+  Future<void> _loadCreditStatus([String? userId]) async {
+    final effectiveUid = userId ?? AuthService.currentUser?.userId;
+
+    // 1. Immediately render local status for zero UI delay
+    final localStatus = await AiCreditService.getCreditStatus(userId: effectiveUid);
     if (mounted) {
       setState(() {
-        _creditStatus = status;
+        _creditStatus = localStatus;
       });
+    }
+
+    // 2. Fetch live server purchased credits balance & sync
+    try {
+      final syncedStatus = await AiCreditService.syncWithServer(userId: effectiveUid);
+      if (mounted) {
+        setState(() {
+          _creditStatus = syncedStatus;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error syncing credit status in profile: $e");
     }
   }
 
@@ -421,7 +436,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               paymentId: result.paymentId,
             );
           }
-          await _loadCreditStatus();
+          await _loadCreditStatus(userId);
 
           if (mounted) {
             showModernPillToast(
@@ -453,6 +468,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user != null) {
       _nameController.text = user.name;
       _phoneController.text = user.phoneNumber ?? '';
+      _loadCreditStatus(user.userId);
     }
 
     return user;
@@ -1184,122 +1200,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFBBF7D0)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF16A34A).withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF16A34A).withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDCFCE7),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF86EFAC)),
-                ),
-                child: const Icon(Icons.verified_rounded, color: Color(0xFF16A34A), size: 24),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDCFCE7),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF86EFAC)),
+            ),
+            child: const Icon(Icons.verified_rounded, color: Color(0xFF16A34A), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      'unlimited_advisory_title'.tr(),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF14532D),
-                        letterSpacing: -0.3,
+                    Flexible(
+                      child: Text(
+                        'unlimited_advisory_title'.tr(),
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF14532D),
+                          letterSpacing: -0.2,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                       decoration: BoxDecoration(
                         color: const Color(0xFF16A34A),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         'unlimited_advisory_badge'.tr(),
                         style: const TextStyle(
-                          fontSize: 10,
+                          fontSize: 8.5,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'unlimited_advisory_desc'.tr(),
-            style: const TextStyle(
-              fontSize: 13.5,
-              color: Color(0xFF166534),
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: 14),
-          const Divider(color: Color(0xFFDCFCE7), height: 1),
-          const SizedBox(height: 12),
-          _buildAdvisoryFeatureItem(Icons.eco_rounded, 'unlimited_advisory_feature1'.tr()),
-          const SizedBox(height: 8),
-          _buildAdvisoryFeatureItem(Icons.cloud_sync_rounded, 'unlimited_advisory_feature2'.tr()),
-          const SizedBox(height: 8),
-          _buildAdvisoryFeatureItem(Icons.storefront_rounded, 'unlimited_advisory_feature3'.tr()),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF16A34A)),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'unlimited_advisory_footer'.tr(),
+                const SizedBox(height: 3),
+                Text(
+                  'unlimited_advisory_desc'.tr(),
                   style: const TextStyle(
                     fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF15803D),
+                    color: Color(0xFF166534),
+                    fontWeight: FontWeight.w500,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  static Widget _buildAdvisoryFeatureItem(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: const Color(0xFF16A34A)),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF14532D),
-            ),
-          ),
-        ),
-      ],
     );
   }
 

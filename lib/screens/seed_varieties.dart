@@ -13,6 +13,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:video_player/video_player.dart';
 import 'package:cropsync/widgets/dialogs/app_success_dialog.dart';
+import 'package:cropsync/services/share_service.dart';
 
 String _getTranslatedCropName(BuildContext context, String cropName) {
   final key = cropName.toLowerCase();
@@ -75,7 +76,14 @@ class SeedVariety {
 
 /// Main seed varieties screen - e-commerce grid style
 class SeedVarietiesScreen extends StatefulWidget {
-  const SeedVarietiesScreen({super.key});
+  final String? initialCrop;
+  final int? initialVarietyId;
+
+  const SeedVarietiesScreen({
+    super.key,
+    this.initialCrop,
+    this.initialVarietyId,
+  });
 
   @override
   State<SeedVarietiesScreen> createState() => _SeedVarietiesScreenState();
@@ -109,7 +117,29 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
       );
       _allVarieties = response.map((v) => SeedVariety.fromJson(v)).toList();
       if (mounted) {
-        setState(() => _filteredVarieties = _allVarieties);
+        setState(() {
+          if (widget.initialCrop != null && widget.initialCrop!.isNotEmpty) {
+            _selectedCrop = widget.initialCrop;
+            _filteredVarieties = _allVarieties
+                .where((v) =>
+                    v.cropName.toLowerCase() ==
+                    widget.initialCrop!.toLowerCase())
+                .toList();
+          } else {
+            _filteredVarieties = _allVarieties;
+          }
+        });
+
+        if (widget.initialVarietyId != null) {
+          final target = _allVarieties
+              .where((v) => v.id == widget.initialVarietyId)
+              .firstOrNull;
+          if (target != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _showDetails(target);
+            });
+          }
+        }
       }
       return _filteredVarieties;
     } catch (e) {
@@ -401,6 +431,43 @@ class _SeedCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      Positioned(
+                        right: 6,
+                        bottom: 6,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              final priceStr = variety.price != null
+                                  ? '₹${variety.price}${variety.priceUnit != null ? " / ${variety.priceUnit}" : ""}'
+                                  : null;
+                              ShareService.shareItem(
+                                context: context,
+                                type: 'seed',
+                                id: variety.id.toString(),
+                                crop: variety.cropName,
+                                title: '${variety.varietyName} (${variety.cropName})',
+                                price: priceStr,
+                                description: variety.details ?? 'High-yielding seed variety available on CropSync.',
+                                imageUrl: variety.imageUrl,
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(100),
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.share_outlined,
+                                color: Colors.white,
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -683,7 +750,7 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Crop badge + duration
+                  // Crop badge + duration + Share button
                   Row(
                     children: [
                       Container(
@@ -711,6 +778,27 @@ class _SeedDetailsSheetState extends State<_SeedDetailsSheet> {
                             style: TextStyle(
                                 fontSize: 12, color: Colors.grey[500])),
                       ],
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.share_outlined,
+                            size: 20, color: AppTheme.textPrimary),
+                        onPressed: () {
+                          final priceStr = variety.price != null
+                              ? '₹${variety.price}${variety.priceUnit != null ? " / ${variety.priceUnit}" : ""}'
+                              : null;
+                          ShareService.shareItem(
+                            context: context,
+                            type: 'seed',
+                            id: variety.id.toString(),
+                            crop: variety.cropName,
+                            title: '${variety.varietyName} (${variety.cropName})',
+                            price: priceStr,
+                            description: variety.details ??
+                                'High-yielding seed variety available on CropSync.',
+                            imageUrl: variety.imageUrl,
+                          );
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),

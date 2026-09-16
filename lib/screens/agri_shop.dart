@@ -2,9 +2,11 @@
 
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/farmer_analytics_service.dart';
+import 'package:cropsync/services/share_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/widgets/safe_network_image.dart';
@@ -591,7 +593,7 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Product Image (Occupies 3:4 of card height, full width edge-to-edge fill)
+              // Product Image
               Expanded(
                 flex: 3,
                 child: Stack(
@@ -601,7 +603,7 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
                       width: double.infinity,
                       height: double.infinity,
                       decoration: const BoxDecoration(
-                        color: Color(0xFFF1F5F9),
+                        color: Colors.white,
                         borderRadius:
                             BorderRadius.vertical(top: Radius.circular(15)),
                       ),
@@ -610,20 +612,68 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
                             const BorderRadius.vertical(top: Radius.circular(15)),
                         child: Hero(
                           tag: 'product_image_${widget.product.id}',
-                          child: SafeNetworkImage(
-                            imageUrl: widget.product.imageUrl1,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                            placeholder: Container(
-                              color: const Color(0xFFF1F5F9),
-                              alignment: Alignment.center,
-                              child: Icon(
-                                Icons.eco_outlined,
-                                color: Colors.grey.shade300,
-                                size: 36,
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: SafeNetworkImage(
+                              imageUrl: (widget.product.imageUrl1 != null &&
+                                      widget.product.imageUrl1!.trim().isNotEmpty)
+                                  ? widget.product.imageUrl1
+                                  : ((widget.product.imageUrl2 != null &&
+                                          widget.product.imageUrl2!.trim().isNotEmpty)
+                                      ? widget.product.imageUrl2
+                                      : widget.product.imageUrl3),
+                              fit: BoxFit.contain,
+                              placeholder: Container(
+                                color: Colors.white,
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  Icons.eco_outlined,
+                                  color: Colors.grey.shade300,
+                                  size: 36,
+                                ),
                               ),
                             ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Quick Share Button
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: GestureDetector(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          ShareService.shareItem(
+                            context: context,
+                            type: 'shop',
+                            id: widget.product.id.toString(),
+                            title: widget.product.name,
+                            description: widget.product.description,
+                            price: '₹${widget.product.price}',
+                            imageUrl: widget.product.imageUrl1 ??
+                                widget.product.imageUrl2 ??
+                                widget.product.imageUrl3,
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(5.5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.share_outlined,
+                            size: 14,
+                            color: AppTheme.textPrimary,
                           ),
                         ),
                       ),

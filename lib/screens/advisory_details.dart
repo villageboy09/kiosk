@@ -11,6 +11,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/theme/app_theme.dart';
 
 import 'package:cropsync/services/farmer_analytics_service.dart';
+import 'package:cropsync/services/share_service.dart';
+import 'package:flutter/services.dart';
 import 'package:cropsync/utils/safe_parser.dart';
 
 // Enum to manage the state of the identification button
@@ -476,6 +478,31 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       pinned: true,
       leadingWidth: 72,
       leading: Center(child: AppTheme.backButton(context, color: Colors.white)),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: IconButton(
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black.withValues(alpha: 0.35),
+              shape: const CircleBorder(),
+            ),
+            icon: const Icon(Icons.share_outlined, color: Colors.white, size: 20),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              final firstImg = images.whereType<String>().firstOrNull;
+              ShareService.shareItem(
+                context: context,
+                type: 'advisory',
+                id: widget.problem.id.toString(),
+                crop: widget.cropName,
+                title: '${widget.problem.name}${widget.cropName != null ? " (${widget.cropName})" : ""}',
+                description: 'CropSync Advisory: Symptoms and treatment remedies for ${widget.problem.name}.',
+                imageUrl: firstImg,
+              );
+            },
+          ),
+        ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         centerTitle: true,
         title: Text(

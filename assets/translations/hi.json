@@ -837,5 +837,13 @@
   "ai_doctor_purchased": "खरीदे गए क्रेडिट",
   "ai_doctor_never_expires": "कभी समाप्त नहीं होते • आजीवन मान्य",
   "ai_doctor_add_credits": "10 क्रेडिट जोड़ें (₹1)",
-  "ai_doctor_open_scanner": "प्लांट डॉक्टर खोलें"
+  "ai_doctor_open_scanner": "प्लांट डॉक्टर खोलें",
+  "share_view_on_cropsync": "👉 क्रॉपसिंक पर पूरा विवरण देखें:",
+  "share_shop_subject": "क्रॉपसिंक मार्केट: {}",
+  "share_advisory_subject": "फसल सलाह: {}",
+  "share_market_subject": "मंडी भाव: {}",
+  "share_seed_subject": "बीज किस्म: {}",
+  "share_news_subject": "कृषि समाचार: {}",
+  "share_reel_subject": "क्रॉपसिंक कृषि रील - @{}",
+  "share_button": "शेयर करें"
 }

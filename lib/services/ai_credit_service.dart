@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cropsync/services/api_service.dart';
 
 /// Manages CropSync AI Plant Doctor daily free quota (10 free scans/day)
 /// and purchased in-app credit balance (e.g., +10 scans for ₹1 via Razorpay).
@@ -124,6 +125,25 @@ class AiCreditService {
     }
 
     debugPrint("🔄 AiCreditService: Synced purchased credits from server for user $uid (Total: $totalCount)");
+    return getCreditStatus(userId: uid);
+  }
+
+  /// Fetches latest purchased credits balance directly from server API and persists locally
+  static Future<CreditStatus> syncWithServer({String? userId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final uid = _resolveUserId(userId, prefs);
+
+    if (uid.isNotEmpty && uid != 'guest_farmer') {
+      try {
+        final serverCredits = await ApiService.getAiCreditBalance(userId: uid);
+        if (serverCredits != null) {
+          await prefs.setInt('ai_credit_purchased_$uid', serverCredits);
+          debugPrint("🔄 AiCreditService: Synced $serverCredits purchased credits from server for user $uid");
+        }
+      } catch (e) {
+        debugPrint("AiCreditService: server sync error: $e");
+      }
+    }
     return getCreditStatus(userId: uid);
   }
 

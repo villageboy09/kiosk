@@ -4,10 +4,9 @@ import 'package:cropsync/services/news_service.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/creator_service.dart';
+import 'package:cropsync/services/share_service.dart';
 import 'package:cropsync/utils/safe_parser.dart';
 
 /// Clean, Editorial, Minimalist News Article Detail View
@@ -166,37 +165,25 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     }
   }
 
-  Future<void> _shareOnWhatsApp() async {
-    HapticFeedback.selectionClick();
-    final text = '🌾 *${_article.title}*\n\n'
-        '${_article.summary.isNotEmpty ? _article.summary : _article.content}\n\n'
-        '📲 *Read full story on CropSync:*\n'
-        'https://cropsync.in/news/${_article.id}';
-
-    final uri = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(text)}');
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        final webUri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
-        if (await canLaunchUrl(webUri)) {
-          await launchUrl(webUri, mode: LaunchMode.externalApplication);
-        } else {
-          await SharePlus.instance.share(ShareParams(text: text));
-        }
-      }
-    } catch (_) {
-      await SharePlus.instance.share(ShareParams(text: text));
-    }
-  }
-
   void _shareGeneral() {
     HapticFeedback.lightImpact();
-    final text = '🌾 ${_article.title}\n\n'
-        '${_article.summary.isNotEmpty ? _article.summary : _article.content}\n\n'
-        'Read more on CropSync App: https://cropsync.in/news/${_article.id}';
-    SharePlus.instance.share(ShareParams(text: text, subject: _article.title));
+    final langCode = context.locale.languageCode;
+    final title = _article.localizedTitle(langCode);
+    final desc = _article.localizedSummary(langCode).isNotEmpty
+        ? _article.localizedSummary(langCode)
+        : _article.localizedContent(langCode);
+
+    ShareService.shareItem(
+      context: context,
+      type: 'news',
+      id: _article.id.toString(),
+      title: title,
+      description: desc,
+      imageUrl: _article.imageUrl,
+    );
   }
+
+  void _shareOnWhatsApp() => _shareGeneral();
 
   void _openCommentBottomSheet() {
     HapticFeedback.lightImpact();

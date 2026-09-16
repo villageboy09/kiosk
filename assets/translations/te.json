@@ -838,5 +838,13 @@
   "ai_doctor_purchased": "కొనుగోలు చేసిన క్రెడిట్లు",
   "ai_doctor_never_expires": "ఎప్పటికీ ముగియవు • శాశ్వత చెల్లుబాటు",
   "ai_doctor_add_credits": "10 క్రెడిట్లు జోడించండి (₹1)",
-  "ai_doctor_open_scanner": "ప్లాంట్ డాక్టర్ తెరవండి"
+  "ai_doctor_open_scanner": "ప్లాంట్ డాక్టర్ తెరవండి",
+  "share_view_on_cropsync": "👉 క్రాప్‌సింక్‌లో పూర్తి వివరాలు చూడండి:",
+  "share_shop_subject": "క్రాప్‌సింక్ మార్కెట్: {}",
+  "share_advisory_subject": "పంట సలహా: {}",
+  "share_market_subject": "మండి మార్కెట్ ధరలు: {}",
+  "share_seed_subject": "విత్తన రకం: {}",
+  "share_news_subject": "వ్యవసాయ వార్తలు: {}",
+  "share_reel_subject": "క్రాప్‌సింక్ అగ్రి రీల్ - @{}",
+  "share_button": "షేర్ చేయండి"
 }

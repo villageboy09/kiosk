@@ -9,7 +9,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cropsync/utils/commodity_translator.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:cropsync/services/share_service.dart';
 import 'package:cropsync/widgets/language_selector.dart';
 
 class MarketPrice {
@@ -62,7 +62,8 @@ class MarketPrice {
 }
 
 class MarketPricesScreen extends StatefulWidget {
-  const MarketPricesScreen({super.key});
+  final String? initialCommodity;
+  const MarketPricesScreen({super.key, this.initialCommodity});
 
   @override
   State<MarketPricesScreen> createState() => _MarketPricesScreenState();
@@ -88,6 +89,11 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialCommodity != null && widget.initialCommodity!.isNotEmpty) {
+      _searchController.text = widget.initialCommodity!;
+      _searchQuery = widget.initialCommodity!.trim().toLowerCase();
+      _isSearchExpanded = true;
+    }
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.trim().toLowerCase();
@@ -956,41 +962,75 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
 
               const SizedBox(height: 8),
 
-              // Trend Badge Pill: e.g. ↑ +6% or ↓ -3%
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isUp
-                      ? const Color(0xFFEDF5EF)
-                      : const Color(0xFFFDE8E8),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isUp
-                          ? Icons.arrow_upward_rounded
-                          : Icons.arrow_downward_rounded,
-                      size: 13,
+              // Trend Badge Pill and Share Button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
                       color: isUp
-                          ? const Color(0xFF1E8E3E)
-                          : const Color(0xFFD32F2F),
+                          ? const Color(0xFFEDF5EF)
+                          : const Color(0xFFFDE8E8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(width: 3),
-                    Text(
-                      '${isUp ? '+' : ''}$trendPercent%',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: isUp
-                            ? const Color(0xFF1E8E3E)
-                            : const Color(0xFFD32F2F),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isUp
+                              ? Icons.arrow_upward_rounded
+                              : Icons.arrow_downward_rounded,
+                          size: 13,
+                          color: isUp
+                              ? const Color(0xFF1E8E3E)
+                              : const Color(0xFFD32F2F),
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${isUp ? '+' : ''}$trendPercent%',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isUp
+                                ? const Color(0xFF1E8E3E)
+                                : const Color(0xFFD32F2F),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        ShareService.shareItem(
+                          context: context,
+                          type: 'market',
+                          commodity: price.commodity,
+                          title: '$localizedName (${price.market})',
+                          price: '₹${_formatPrice(price.modalPrice)} ${_getDisplayUnit(price)}',
+                          description: 'Min: ₹${_formatPrice(price.minPrice)} | Max: ₹${_formatPrice(price.maxPrice)}',
+                          imageUrl: imageUrl,
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(100),
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEDF5EF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.share_outlined,
+                          size: 15,
+                          color: Color(0xFF206030),
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1255,20 +1295,18 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
     final locale = context.locale.languageCode;
     final name = CommodityTranslator.getLocalizedName(widget.commodity, locale);
     final unit = _getUnit();
+    final topPrice = widget.prices.isNotEmpty ? widget.prices.first : null;
+    final priceStr = topPrice != null ? '₹${topPrice.modalPrice} $unit' : '';
 
-    final buffer = StringBuffer();
-    buffer.writeln('🌾 *CropSync Market Prices - $name* 🌾');
-    buffer.writeln('📅 ${DateFormat('dd MMM yyyy').format(DateTime.now())}');
-    buffer.writeln('');
-
-    for (var p in widget.prices.take(5)) {
-      buffer.writeln('📍 *${p.market}* (${p.district}): ₹${p.modalPrice} $unit');
-    }
-    buffer.writeln('');
-    buffer.writeln('Check real-time APMC mandi prices on CropSync!');
-
-    // ignore: deprecated_member_use
-    Share.share(buffer.toString(), subject: '$name Market Prices');
+    ShareService.shareItem(
+      context: context,
+      type: 'market',
+      commodity: widget.commodity,
+      title: '$name Market Prices',
+      price: priceStr,
+      description: 'Check real-time APMC mandi prices for $name across markets in CropSync.',
+      imageUrl: widget.imagePath,
+    );
   }
 
   @override

@@ -838,5 +838,13 @@
   "ai_doctor_purchased": "Purchased Credits",
   "ai_doctor_never_expires": "Never expire • Valid forever",
   "ai_doctor_add_credits": "Add 10 Credits (₹1)",
-  "ai_doctor_open_scanner": "Open Plant Doctor"
+  "ai_doctor_open_scanner": "Open Plant Doctor",
+  "share_view_on_cropsync": "👉 View details on CropSync:",
+  "share_shop_subject": "CropSync Market: {}",
+  "share_advisory_subject": "Crop Advisory: {}",
+  "share_market_subject": "Mandi Market Prices: {}",
+  "share_seed_subject": "Seed Variety: {}",
+  "share_news_subject": "Agri News: {}",
+  "share_reel_subject": "Agri Reel by @{}",
+  "share_button": "Share"
 }

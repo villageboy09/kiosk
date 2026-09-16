@@ -6082,25 +6082,37 @@ function verifyRazorpayPaymentHandler($pdo) {
  * GET /api/api.php?action=get_ai_credit_balance&user_id=1234567890
  */
 function getAiCreditBalanceHandler($pdo) {
-    $rawUser = $_GET['user_id'] ?? $_POST['user_id'] ?? '';
-    $cleanPhone = preg_replace('/[^0-9]/', '', (string)$rawUser);
-    $userId = (strlen($cleanPhone) > 10) ? substr($cleanPhone, -10) : ($cleanPhone ?: trim((string)$rawUser));
+    $rawUser = trim((string)($_GET['user_id'] ?? $_POST['user_id'] ?? ''));
+    $cleanPhone = preg_replace('/[^0-9]/', '', $rawUser);
+    $tenDigit = (strlen($cleanPhone) >= 10) ? substr($cleanPhone, -10) : $cleanPhone;
+    $withCountry = '91' . $tenDigit;
+    $withPlus = '+91' . $tenDigit;
 
-    if (empty($userId)) {
+    if (empty($rawUser) && empty($tenDigit)) {
         echo json_encode(['success' => false, 'error' => 'user_id is required']);
         return;
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT ai_purchased_credits FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
-        $stmt->execute([$userId, $userId]);
+        $stmt = $pdo->prepare("
+            SELECT ai_purchased_credits 
+            FROM users 
+            WHERE user_id IN (?, ?, ?, ?) 
+               OR phone_number IN (?, ?, ?, ?)
+            ORDER BY ai_purchased_credits DESC 
+            LIMIT 1
+        ");
+        $stmt->execute([
+            $rawUser, $tenDigit, $withCountry, $withPlus,
+            $rawUser, $tenDigit, $withCountry, $withPlus
+        ]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         $purchasedCredits = (int)($row['ai_purchased_credits'] ?? 0);
 
         echo json_encode([
             'success' => true,
-            'user_id' => $userId,
+            'user_id' => $tenDigit ?: $rawUser,
             'purchased_credits' => $purchasedCredits
         ]);
     } catch (PDOException $e) {

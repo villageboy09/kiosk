@@ -5,7 +5,9 @@ import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/farmer_analytics_service.dart';
+import 'package:cropsync/services/share_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -260,9 +262,33 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       pinned: true,
       floating: false,
       stretch: true,
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: Colors.white,
       elevation: 0,
       leading: AppTheme.backButton(context),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: IconButton(
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black.withValues(alpha: 0.05),
+              shape: const CircleBorder(),
+            ),
+            icon: const Icon(Icons.share_outlined, color: AppTheme.textPrimary, size: 20),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              ShareService.shareItem(
+                context: context,
+                type: 'shop',
+                id: widget.product.id.toString(),
+                title: widget.product.name,
+                description: widget.product.description,
+                price: '₹${widget.product.price}',
+                imageUrl: primaryImageUrl,
+              );
+            },
+          ),
+        ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,
@@ -270,31 +296,40 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             if (hasVideo)
               Chewie(controller: _chewieController!)
             else if (imageUrls.isNotEmpty)
-              PageView.builder(
-                controller: _pageController,
-                itemCount: imageUrls.length,
-                itemBuilder: (context, index) {
-                  final img = SafeNetworkImage(
-                    imageUrl: imageUrls[index],
-                    fit: BoxFit.cover,
-                    placeholder: Container(
-                      color: Colors.grey.shade200,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        color: Colors.grey.shade400,
-                        size: 36,
+              Container(
+                color: Colors.white,
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: imageUrls.length,
+                  itemBuilder: (context, index) {
+                    final img = Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20.0, vertical: 16.0),
+                        child: SafeNetworkImage(
+                          imageUrl: imageUrls[index],
+                          fit: BoxFit.contain,
+                          placeholder: Container(
+                            color: Colors.white,
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              color: Colors.grey.shade300,
+                              size: 36,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  );
-
-                  if (index == 0) {
-                    return Hero(
-                      tag: 'product_image_${widget.product.id}',
-                      child: img,
                     );
-                  }
-                  return img;
-                },
+
+                    if (index == 0) {
+                      return Hero(
+                        tag: 'product_image_${widget.product.id}',
+                        child: img,
+                      );
+                    }
+                    return img;
+                  },
+                ),
               )
             else
               Hero(
@@ -304,7 +339,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               ),
             if (imageUrls.length > 1 && !hasVideo)
               Positioned(
-                bottom: 20,
+                bottom: 16,
                 left: 0,
                 right: 0,
                 child: Row(
@@ -317,7 +352,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       width: _currentPage == index ? 24 : 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: _currentPage == index
+                            ? AppTheme.textPrimary
+                            : Colors.grey.shade300,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -404,18 +441,22 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: primaryImageUrl != null
-                        ? SafeNetworkImage(
-                            imageUrl: primaryImageUrl!,
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                            placeholder: Container(
+                        ? Container(
+                            color: Colors.white,
+                            padding: const EdgeInsets.all(4),
+                            child: SafeNetworkImage(
+                              imageUrl: primaryImageUrl!,
                               width: 60,
                               height: 60,
-                              color: Colors.grey.shade200,
-                              child: Icon(
-                                Icons.eco_outlined,
-                                color: Colors.grey.shade400,
+                              fit: BoxFit.contain,
+                              placeholder: Container(
+                                width: 60,
+                                height: 60,
+                                color: Colors.grey.shade100,
+                                child: Icon(
+                                  Icons.eco_outlined,
+                                  color: Colors.grey.shade400,
+                                ),
                               ),
                             ),
                           )

@@ -2,19 +2,20 @@ import 'dart:math' as math;
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:cropsync/models/reel_model.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/reels_service.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/share_service.dart';
 import 'package:cropsync/screens/creator/creator_home_screen.dart';
 
 /// Ultra-Smooth, Instagram Reels / TikTok Style Fullscreen Feed
 class ReelsScreen extends StatefulWidget {
   final bool? isTabVisible;
-  const ReelsScreen({super.key, this.isTabVisible});
+  final int? initialReelId;
+  const ReelsScreen({super.key, this.isTabVisible, this.initialReelId});
 
   /// Static notifier so parent screens (HomeScreen) can notify tab visibility
   static final ValueNotifier<bool> isTabActive = ValueNotifier<bool>(false);
@@ -193,11 +194,24 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
           old?.dispose();
         }
 
+        int initialIdx = _focusedIndex;
+        if (widget.initialReelId != null) {
+          final found = fresh.indexWhere((r) => r.id == widget.initialReelId);
+          if (found != -1) {
+            initialIdx = found;
+            _focusedIndex = found;
+          }
+        }
+
         setState(() {
           _reels = fresh;
           _isLoading = false;
           _hasError = false;
         });
+
+        if (initialIdx != 0 && _pageController.hasClients) {
+          _pageController.jumpToPage(initialIdx);
+        }
         _preloadSurrounding(_focusedIndex);
         if (_isVisible) {
           _playCurrentVideo();
@@ -1103,26 +1117,27 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem>
   Future<void> _handleWhatsAppShare() async {
     HapticFeedback.selectionClick();
     await ReelsService.logAction(_currentReel.id, 'share');
+    if (!mounted) return;
 
-    final text = '🌾 *Watch this agri video by @${_currentReel.creator.username} on CropSync:*\n\n'
-        '${_currentReel.caption.isNotEmpty ? _currentReel.caption : "Agricultural knowledge update"}\n\n'
-        '📲 *Watch video:* ${_currentReel.videoUrl}';
+    final title = _currentReel.caption.isNotEmpty
+        ? _currentReel.caption
+        : 'Agri Reel by @${_currentReel.creator.username}';
+    final desc = _currentReel.crop != null && _currentReel.crop!.isNotEmpty
+        ? '${_currentReel.crop} - Watch practical agricultural knowledge on CropSync'
+        : 'Watch agricultural reels on CropSync';
+    final thumb = _currentReel.thumbnailUrl != null && _currentReel.thumbnailUrl!.isNotEmpty
+        ? _currentReel.thumbnailUrl
+        : (_currentReel.creator.profileImageUrl.isNotEmpty ? _currentReel.creator.profileImageUrl : null);
 
-    final uri = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(text)}');
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        final webUri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
-        if (await canLaunchUrl(webUri)) {
-          await launchUrl(webUri, mode: LaunchMode.externalApplication);
-        } else {
-          await SharePlus.instance.share(ShareParams(text: text));
-        }
-      }
-    } catch (_) {
-      await SharePlus.instance.share(ShareParams(text: text));
-    }
+    await ShareService.shareItem(
+      context: context,
+      type: 'reel',
+      id: _currentReel.id.toString(),
+      crop: _currentReel.crop,
+      title: title,
+      description: desc,
+      imageUrl: thumb,
+    );
   }
 
   void _showCommentsBottomSheet() {

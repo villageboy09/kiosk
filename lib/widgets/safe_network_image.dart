@@ -39,20 +39,34 @@ class SafeNetworkImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = imageUrl?.trim();
-    if (url == null || url.isEmpty || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+    String? url = imageUrl?.trim();
+    if (url == null || url.isEmpty) {
       return SizedBox(
-        width: width,
-        height: height,
+        width: (width != null && width!.isFinite) ? width : null,
+        height: (height != null && height!.isFinite) ? height : null,
         child: _buildPlaceholder(),
       );
     }
 
+    // Auto-resolve relative paths if necessary
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      if (url.startsWith('/')) {
+        url = 'https://kiosk.cropsync.in$url';
+      } else {
+        url = 'https://kiosk.cropsync.in/$url';
+      }
+    }
+
     // Auto-compute memory cache boundaries (2x display size for retina displays, capped to 800)
+    // Note: isFinite check prevents UnsupportedError: Unsupported operation: Infinity or NaN toInt
     final int calculatedMemWidth = memCacheWidth ??
-        ((width != null && width! > 0) ? (width! * 2).round().clamp(100, 800) : 600);
+        ((width != null && width!.isFinite && width! > 0)
+            ? (width! * 2).round().clamp(100, 800)
+            : 600);
     final int? calculatedMemHeight = memCacheHeight ??
-        ((height != null && height! > 0) ? (height! * 2).round().clamp(100, 800) : null);
+        ((height != null && height!.isFinite && height! > 0)
+            ? (height! * 2).round().clamp(100, 800)
+            : null);
 
     return CachedNetworkImage(
       imageUrl: url,
@@ -63,13 +77,13 @@ class SafeNetworkImage extends StatelessWidget {
       memCacheHeight: calculatedMemHeight,
       fadeInDuration: const Duration(milliseconds: 120),
       placeholder: (_, __) => SizedBox(
-        width: width,
-        height: height,
+        width: (width != null && width!.isFinite) ? width : null,
+        height: (height != null && height!.isFinite) ? height : null,
         child: _buildPlaceholder(),
       ),
       errorWidget: (_, __, ___) => SizedBox(
-        width: width,
-        height: height,
+        width: (width != null && width!.isFinite) ? width : null,
+        height: (height != null && height!.isFinite) ? height : null,
         child: _buildPlaceholder(),
       ),
     );

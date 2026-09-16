@@ -1,4 +1,4 @@
-﻿import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -9,6 +9,7 @@ import '../models/farmer_crop.dart';
 import '../models/crop_problem.dart';
 import '../services/api_service.dart';
 import '../services/farmer_analytics_service.dart';
+import '../services/share_service.dart';
 import 'advisory_details.dart';
 import 'crop_stages_screen.dart';
 import 'package:cropsync/theme/app_theme.dart';
@@ -275,6 +276,26 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
             ),
           ],
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              icon: const Icon(Icons.share_outlined, color: AppTheme.appBarText, size: 21),
+              tooltip: context.tr('share_button'),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                ShareService.shareItem(
+                  context: context,
+                  type: 'advisory',
+                  crop: widget.cropName,
+                  title: '${widget.cropName} Crop Advisory',
+                  description: 'Complete pest, disease, and deficiency diagnosis guide for ${widget.cropName}.',
+                  imageUrl: widget.cropImageUrl,
+                );
+              },
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -452,6 +473,7 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
                         final problem = _filteredProblems[index];
                         return _ProblemCard(
                           problem: problem,
+                          cropName: widget.cropName,
                           isTablet: isTablet,
                           onTap: () => _openTreatmentDetails(problem),
                           categoryColor: _getCategoryColor(problem.category),
@@ -486,19 +508,12 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: AppTheme.primary.withValues(alpha: 0.20),
+                    color: AppTheme.primary.withValues(alpha: 0.25),
                     blurRadius: 8,
-                    spreadRadius: 0,
-                    offset: const Offset(0, 2),
+                    offset: const Offset(0, 3),
                   ),
                 ]
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -556,12 +571,14 @@ String _getLocalizedCategory(String? category) {
 
 class _ProblemCard extends StatelessWidget {
   final CropProblem problem;
+  final String cropName;
   final bool isTablet;
   final VoidCallback onTap;
   final Color categoryColor;
 
   const _ProblemCard({
     required this.problem,
+    required this.cropName,
     required this.isTablet,
     required this.onTap,
     required this.categoryColor,
@@ -651,8 +668,7 @@ class _ProblemCard extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 5),
-                            ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: isTablet ? 160 : 105),
+                            Flexible(
                               child: Text(
                                 _getLocalizedCategory(problem.category),
                                 style: TextStyle(
@@ -666,6 +682,40 @@ class _ProblemCard extends StatelessWidget {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                    ),
+                    // Quick Share Button on Image
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            ShareService.shareItem(
+                              context: context,
+                              type: 'advisory',
+                              id: problem.id.toString(),
+                              crop: cropName,
+                              title: '${problem.name} ($cropName)',
+                              description: _getLocalizedCategory(problem.category),
+                              imageUrl: problem.imageUrl1,
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(100),
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.65),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.share_outlined,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
                     ),
