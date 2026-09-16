@@ -5,6 +5,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cropsync/services/creator_service.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/widgets/modern_pill_toast.dart';
 
 class UploadNewsScreen extends StatefulWidget {
   const UploadNewsScreen({super.key});
@@ -83,11 +84,11 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not pick image: $e'),
-            backgroundColor: Colors.red.shade700,
-          ),
+        showModernPillToast(
+          context,
+          message: 'Could not pick image: $e',
+          icon: Icons.error_outline_rounded,
+          isSuccess: false,
         );
       }
     }
@@ -98,33 +99,16 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
 
     if (_pickedImage == null) {
       HapticFeedback.heavyImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.error_outline_rounded, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Please select an article cover image'),
-            ],
-          ),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ),
+      showModernPillToast(
+        context,
+        message: 'Please select an article cover image',
+        icon: Icons.image_not_supported_rounded,
+        isSuccess: false,
       );
       return;
     }
 
     HapticFeedback.mediumImpact();
-    final isHttp = _pickedImage!.path.startsWith('http');
-    final rawFileName = _pickedImage!.name.isNotEmpty
-        ? _pickedImage!.name
-        : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final sanitizedFileName = rawFileName.replaceAll(RegExp(r'[^a-zA-Z0-9_.]'), '_');
-    final imageUrl = isHttp
-        ? _pickedImage!.path
-        : 'http://kiosk.cropsync.in/News_articles/news_${DateTime.now().millisecondsSinceEpoch}_$sanitizedFileName';
-    final localFile = isHttp ? null : File(_pickedImage!.path);
-
     setState(() => _isPublishing = true);
 
     final result = await CreatorService.createNewsArticleDetailed(
@@ -132,8 +116,7 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
       summary: _summaryController.text.trim(),
       content: _contentController.text.trim(),
       category: _selectedCategory,
-      imageUrl: imageUrl,
-      imageFile: localFile,
+      imageFile: File(_pickedImage!.path),
       author: _authorController.text.trim(),
       sourceName: _sourceController.text.trim(),
       isFeatured: _isFeatured,
@@ -145,27 +128,19 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
 
     if (result.success) {
       HapticFeedback.mediumImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.white),
-              const SizedBox(width: 10),
-              Expanded(child: Text(result.message ?? 'upload_news_success'.tr())),
-            ],
-          ),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-        ),
+      showModernPillToast(
+        context,
+        message: result.message ?? 'upload_news_success'.tr(),
+        icon: Icons.check_circle_rounded,
+        isSuccess: true,
       );
       Navigator.of(context).pop(true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.error ?? 'Failed to publish article. Please check your connection and try again.'),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-        ),
+      showModernPillToast(
+        context,
+        message: result.error ?? 'Failed to publish article. Please check your connection and try again.',
+        icon: Icons.error_outline_rounded,
+        isSuccess: false,
       );
     }
   }
@@ -181,40 +156,23 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
         elevation: 0,
         scrolledUnderElevation: 1,
         shadowColor: Colors.black12,
+        automaticallyImplyLeading: false,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B), size: 18),
+          icon: const Icon(Icons.close_rounded, color: Color(0xFF1E293B), size: 22),
           onPressed: () => Navigator.of(context).pop(),
           splashRadius: 20,
+          tooltip: 'Close',
         ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2563EB).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.edit_document, color: Color(0xFF2563EB), size: 13),
-                  SizedBox(width: 4),
-                  Text(
-                    'NEWS EDITOR',
-                    style: TextStyle(
-                      color: Color(0xFF2563EB),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        title: Text(
+          'upload_news_title'.tr(),
+          style: const TextStyle(
+            color: Color(0xFF1E293B),
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+          ),
+          overflow: TextOverflow.ellipsis,
         ),
-        centerTitle: true,
+        centerTitle: false,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -233,9 +191,9 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.send_rounded, size: 14),
-              label: const Text(
-                'Publish',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+              label: Text(
+                'upload_news_publish_btn'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
               ),
             ),
           ),
@@ -758,14 +716,14 @@ class _UploadNewsScreenState extends State<UploadNewsScreen> {
                       ),
                     ],
                   )
-                : const Row(
+                : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.publish_rounded, color: Colors.white, size: 18),
-                      SizedBox(width: 8),
+                      const Icon(Icons.publish_rounded, color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
                       Text(
-                        'Publish Article Now',
-                        style: TextStyle(
+                        'upload_news_publish_btn'.tr(),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 15,
                           fontWeight: FontWeight.w800,

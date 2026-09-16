@@ -38,7 +38,7 @@ class User {
     String resolvedMembership = rawMembership ?? 'Farmer';
 
     if (resolvedRole == 'content_creator' || resolvedRole == 'creator' ||
-        rawMembership?.toLowerCase() == 'creator' || rawMembership?.toLowerCase() == 'content creator') {
+        rawMembership?.toLowerCase() == 'creator' || rawMembership?.toLowerCase() == 'content creator' || rawMembership?.toLowerCase() == 'content_creator') {
       resolvedRole = 'content_creator';
       resolvedMembership = 'Creator';
     } else if (resolvedRole == 'retailer' || rawMembership?.toLowerCase() == 'retailer') {
@@ -47,9 +47,44 @@ class User {
     } else if (resolvedRole == 'officer' || rawMembership?.toLowerCase() == 'officer') {
       resolvedRole = 'officer';
       resolvedMembership = 'Officer';
-    } else if (resolvedRole == 'chc_operator' || rawMembership?.toLowerCase() == 'chc operator') {
+    } else if (resolvedRole == 'chc_operator' || rawMembership?.toLowerCase() == 'chc operator' || rawMembership?.toLowerCase() == 'chc_operator') {
       resolvedRole = 'chc_operator';
       resolvedMembership = 'CHC Operator';
+    }
+
+    const imageKeys = [
+      'profile_image_url',
+      'profileImageUrl',
+      'profile_image',
+      'profileImage',
+      'avatar',
+      'avatar_url',
+      'image_url',
+      'imageUrl',
+      'image',
+      'photo_url',
+      'photoUrl',
+    ];
+    String? rawImage;
+    for (final key in imageKeys) {
+      final val = json[key]?.toString().trim();
+      if (val != null &&
+          val.isNotEmpty &&
+          val.toLowerCase() != 'null' &&
+          val.toLowerCase() != 'undefined') {
+        if (val.startsWith('http://kiosk.cropsync.in')) {
+          rawImage = val.replaceFirst('http://', 'https://');
+        } else if (val.startsWith('http://')) {
+          rawImage = val.replaceFirst('http://', 'https://');
+        } else if (val.startsWith('/uploads/')) {
+          rawImage = 'https://kiosk.cropsync.in$val';
+        } else if (val.startsWith('uploads/')) {
+          rawImage = 'https://kiosk.cropsync.in/$val';
+        } else {
+          rawImage = val;
+        }
+        break;
+      }
     }
 
     return User(
@@ -62,7 +97,7 @@ class User {
       region: json['region']?.toString(),
       clientCode: json['client_code']?.toString(),
       cardUid: json['card_uid']?.toString(),
-      profileImageUrl: json['profile_image_url']?.toString(),
+      profileImageUrl: rawImage,
       membershipType: resolvedMembership,
       role: resolvedRole,
     );
@@ -121,7 +156,11 @@ class User {
   bool get isCreator {
     final r = (role ?? '').toLowerCase().trim();
     final type = (membershipType ?? '').toLowerCase().trim();
-    return r == 'content_creator' || r == 'creator' || type == 'creator' || type == 'content creator';
+    return r == 'content_creator' ||
+        r == 'creator' ||
+        type == 'creator' ||
+        type == 'content creator' ||
+        type == 'content_creator';
   }
 
   /// Returns true if user has a retailer role
@@ -142,7 +181,7 @@ class User {
   bool get isOperator {
     final r = (role ?? '').toLowerCase().trim();
     final type = (membershipType ?? '').toLowerCase().trim();
-    return r == 'chc_operator' || type == 'chc operator';
+    return r == 'chc_operator' || type == 'chc operator' || type == 'chc_operator';
   }
 
   /// Returns true if user is a standard farmer

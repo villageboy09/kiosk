@@ -21,6 +21,7 @@ import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/screens/plant_analysis_screen.dart';
 import 'package:cropsync/services/ai_credit_service.dart';
 import 'package:cropsync/services/razorpay_payment_service.dart';
+import 'package:cropsync/widgets/modern_pill_toast.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -117,6 +118,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final updatedUser = await ApiService.updateUserProfile(
         userId: user.userId,
+        name: user.name,
+        phoneNumber: user.phoneNumber,
         profileImageFile: File(image.path),
       );
 
@@ -127,29 +130,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isUploadingImage = false;
           _userFuture = Future.value(updatedUser);
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle_rounded, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Profile picture updated!'),
-              ],
-            ),
-            backgroundColor: Color(0xFF10B981),
-            behavior: SnackBarBehavior.floating,
-          ),
+        showModernPillToast(
+          context,
+          message: 'Profile picture updated successfully!',
+          icon: Icons.check_circle_rounded,
+          isSuccess: true,
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isUploadingImage = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update picture: $e'),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-          ),
+        showModernPillToast(
+          context,
+          message: 'Failed to update picture: $e',
+          icon: Icons.error_outline_rounded,
+          isSuccess: false,
         );
       }
     }
@@ -317,23 +312,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           setState(() {
                             _userFuture = Future.value(updated);
                           });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Profile updated successfully!'),
-                              backgroundColor: Color(0xFF10B981),
-                              behavior: SnackBarBehavior.floating,
-                            ),
+                          showModernPillToast(
+                            context,
+                            message: 'Profile updated successfully!',
+                            icon: Icons.check_circle_rounded,
+                            isSuccess: true,
                           );
                         }
                       } catch (e) {
                         setModalState(() => isSaving = false);
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to update profile: $e'),
-                              backgroundColor: Colors.red.shade700,
-                              behavior: SnackBarBehavior.floating,
-                            ),
+                          showModernPillToast(
+                            context,
+                            message: 'Failed to update profile: $e',
+                            icon: Icons.error_outline_rounded,
+                            isSuccess: false,
                           );
                         }
                       }
@@ -431,21 +424,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           await _loadCreditStatus();
 
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("🎉 10 Crop Doctor credits verified & added successfully!"),
-                backgroundColor: Color(0xFF16A34A),
-                behavior: SnackBarBehavior.floating,
-              ),
+            showModernPillToast(
+              context,
+              message: "🎉 10 Crop Doctor credits verified & added successfully!",
+              icon: Icons.check_circle_rounded,
+              isSuccess: true,
             );
           }
         } else if (result.errorMessage != null && !result.errorMessage!.contains('cancelled')) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result.errorMessage!),
-              backgroundColor: const Color(0xFFDC2626),
-              behavior: SnackBarBehavior.floating,
-            ),
+          showModernPillToast(
+            context,
+            message: result.errorMessage!,
+            icon: Icons.error_outline_rounded,
+            isSuccess: false,
           );
         }
       },
@@ -922,10 +913,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     key: _formKey,
                     child: Column(
                       children: [
-                        _buildCropAdvisoryFreeBanner(),
-                        const SizedBox(height: 16),
-                        _buildAiDoctorCreditsCard(user),
-                        const SizedBox(height: 24),
+                        if (user.isFarmer) ...[
+                          _buildCropAdvisoryFreeBanner(),
+                          const SizedBox(height: 16),
+                          _buildAiDoctorCreditsCard(user),
+                          const SizedBox(height: 24),
+                        ],
                         _buildUserDetailsList(user),
                         const SizedBox(height: 16),
                         _buildMenuCard(user),
@@ -951,6 +944,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           if (user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty)
             CachedNetworkImage(
+              key: ValueKey('header_${user.profileImageUrl}'),
               imageUrl: user.profileImageUrl!,
               fit: BoxFit.cover,
               placeholder: (_, __) => Container(color: AppTheme.textPrimary),
@@ -1019,6 +1013,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 )
                               : (user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty)
                                   ? CachedNetworkImage(
+                                      key: ValueKey('avatar_${user.profileImageUrl}'),
                                       imageUrl: user.profileImageUrl!,
                                       fit: BoxFit.cover,
                                       placeholder: (_, __) => Container(color: Colors.grey.shade800),

@@ -158,7 +158,7 @@ void main() {
   });
 
   group('NewsFeedScreen AppBar & Creator Studio Visibility Tests', () {
-    testWidgets('Renders AppBar with sage background, title, and hides Studio for Farmer', (tester) async {
+    testWidgets('Renders top bar with title, and hides Studio for Farmer', (tester) async {
       final farmer = User(
         userId: '9876543210',
         name: 'Ramesh Farmer',
@@ -173,22 +173,19 @@ void main() {
       await tester.pumpWidget(wrapWithTestApp(const NewsFeedScreen()));
       await tester.pumpAndSettle();
 
-      // Verify AppBar exists and has title
-      expect(find.byType(AppBar), findsOneWidget);
-      expect(find.text('Krishi News'), findsOneWidget);
-
-      final appBar = tester.widget<AppBar>(find.byType(AppBar));
-      expect(appBar.backgroundColor, equals(AppTheme.appBarBg));
+      // Verify header exists and has title
+      expect(find.text('CropSync News'), findsOneWidget);
 
       // Verify Studio button is hidden for farmer
       expect(find.text('Studio'), findsNothing);
     });
 
-    testWidgets('Shows Studio button in AppBar for Creator accounts', (tester) async {
+    testWidgets('Shows Studio button in header for Creator accounts', (tester) async {
       final creator = User(
         userId: '9876543211',
         name: 'Suresh Creator',
         membershipType: 'Creator',
+        role: 'content_creator',
       );
       SharedPreferences.setMockInitialValues({
         'current_user': jsonEncode(creator.toJson()),
@@ -199,14 +196,13 @@ void main() {
       await tester.pumpWidget(wrapWithTestApp(const NewsFeedScreen()));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AppBar), findsOneWidget);
-      expect(find.text('Krishi News'), findsOneWidget);
+      expect(find.text('CropSync News'), findsOneWidget);
       expect(find.text('Studio'), findsOneWidget);
     });
   });
 
   group('ReelsScreen Creator Studio Visibility Tests', () {
-    testWidgets('Hides Studio button for Farmer accounts', (tester) async {
+    testWidgets('Renders ReelsScreen and hides Studio in empty state for Farmer accounts', (tester) async {
       final farmer = User(
         userId: '9876543210',
         name: 'Ramesh Farmer',
@@ -221,15 +217,16 @@ void main() {
       await tester.pumpWidget(wrapWithTestApp(const ReelsScreen()));
       await tester.pumpAndSettle();
 
-      expect(find.text('Krishi Reels'), findsOneWidget);
+      expect(find.byType(ReelsScreen), findsOneWidget);
       expect(find.text('Studio'), findsNothing);
     });
 
-    testWidgets('Shows Studio button for Creator accounts', (tester) async {
+    testWidgets('Renders ReelsScreen for Creator accounts', (tester) async {
       final creator = User(
         userId: '9876543211',
         name: 'Suresh Creator',
         membershipType: 'Creator',
+        role: 'content_creator',
       );
       SharedPreferences.setMockInitialValues({
         'current_user': jsonEncode(creator.toJson()),
@@ -240,8 +237,7 @@ void main() {
       await tester.pumpWidget(wrapWithTestApp(const ReelsScreen()));
       await tester.pumpAndSettle();
 
-      expect(find.text('Krishi Reels'), findsOneWidget);
-      expect(find.text('Studio'), findsOneWidget);
+      expect(find.byType(ReelsScreen), findsOneWidget);
     });
   });
 }

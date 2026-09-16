@@ -280,6 +280,9 @@ try {
 
             // Migrate missing columns in news_articles if existing table
             $newsColumnsCheck = [
+                'status' => "ALTER TABLE `news_articles` ADD COLUMN `status` ENUM('published', 'draft', 'archived') DEFAULT 'published'",
+                'is_featured' => "ALTER TABLE `news_articles` ADD COLUMN `is_featured` TINYINT(1) DEFAULT 0",
+                'published_at' => "ALTER TABLE `news_articles` ADD COLUMN `published_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
                 'title_te' => "ALTER TABLE `news_articles` ADD COLUMN `title_te` VARCHAR(255) DEFAULT NULL",
                 'summary_te' => "ALTER TABLE `news_articles` ADD COLUMN `summary_te` TEXT DEFAULT NULL",
                 'content_te' => "ALTER TABLE `news_articles` ADD COLUMN `content_te` LONGTEXT DEFAULT NULL",
@@ -291,10 +294,12 @@ try {
             foreach ($newsColumnsCheck as $nCol => $alterSql) {
                 try {
                     $chk = $pdo->query("SHOW COLUMNS FROM `news_articles` LIKE '$nCol'");
-                    if (!$chk->fetch()) {
+                    if (!$chk || !$chk->fetch()) {
                         $pdo->exec($alterSql);
                     }
-                } catch (Throwable $e) {}
+                } catch (Throwable $e) {
+                    try { $pdo->exec($alterSql); } catch (Throwable $e2) {}
+                }
             }
 
             $pdo->exec("CREATE TABLE IF NOT EXISTS `news_article_likes` (
@@ -447,6 +452,207 @@ try {
                 `is_completed` TINYINT(1) DEFAULT 0,
                 `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX `idx_watch_reel` (`reel_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // ==========================================
+            // AGRI CREATOR PARTNER PROGRAM SCHEMA MIGRATIONS
+            // ==========================================
+            $creatorColumns = [
+                'status' => "ALTER TABLE `creators` ADD COLUMN `status` ENUM('applied', 'pending_review', 'active', 'rejected', 'suspended') DEFAULT 'active'",
+                'partnership_tier' => "ALTER TABLE `creators` ADD COLUMN `partnership_tier` ENUM('trial', 'active_partner', 'verified', 'strategic') DEFAULT 'trial'",
+                'agriculture_niches' => "ALTER TABLE `creators` ADD COLUMN `agriculture_niches` TEXT NULL",
+                'languages' => "ALTER TABLE `creators` ADD COLUMN `languages` TEXT NULL",
+                'social_handles' => "ALTER TABLE `creators` ADD COLUMN `social_handles` TEXT NULL",
+                'upi_id' => "ALTER TABLE `creators` ADD COLUMN `upi_id` VARCHAR(100) NULL",
+                'terms_accepted' => "ALTER TABLE `creators` ADD COLUMN `terms_accepted` TINYINT(1) DEFAULT 0",
+                'rejection_reason' => "ALTER TABLE `creators` ADD COLUMN `rejection_reason` TEXT NULL",
+                'reviewed_by' => "ALTER TABLE `creators` ADD COLUMN `reviewed_by` VARCHAR(100) NULL",
+                'reviewed_at' => "ALTER TABLE `creators` ADD COLUMN `reviewed_at` DATETIME NULL",
+                'approved_at' => "ALTER TABLE `creators` ADD COLUMN `approved_at` DATETIME NULL"
+            ];
+            foreach ($creatorColumns as $cCol => $cSql) {
+                try {
+                    $st = $pdo->query("SHOW COLUMNS FROM `creators` LIKE '$cCol'");
+                    if (!$st || !$st->fetch()) { $pdo->exec($cSql); }
+                } catch (Throwable $e) {}
+            }
+
+            // Creator Terms Table
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `creator_terms` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `creator_id` INT NOT NULL,
+                `terms_version` VARCHAR(50) DEFAULT 'v1.0',
+                `rights_declaration_version` VARCHAR(50) DEFAULT 'v1.0',
+                `consent_flags` TEXT NULL,
+                `ip_address` VARCHAR(50) NULL,
+                `accepted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_terms_creator` (`creator_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Creator Payment Profiles Table
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `creator_payment_profiles` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `creator_id` INT NOT NULL,
+                `payout_method` VARCHAR(50) DEFAULT 'UPI',
+                `upi_id` VARCHAR(100) NULL,
+                `account_number_masked` VARCHAR(50) NULL,
+                `ifsc_code` VARCHAR(20) NULL,
+                `verification_status` ENUM('unverified', 'verified', 'rejected') DEFAULT 'unverified',
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX `idx_payment_creator` (`creator_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Reels table columns for Agri Creator Partner Program
+            $reelsProgramColumns = [
+                'crop' => "ALTER TABLE `reels` ADD COLUMN `crop` VARCHAR(100) NULL",
+                'category' => "ALTER TABLE `reels` ADD COLUMN `category` VARCHAR(100) DEFAULT 'Crop Care'",
+                'language' => "ALTER TABLE `reels` ADD COLUMN `language` VARCHAR(50) DEFAULT 'te'",
+                'source_url' => "ALTER TABLE `reels` ADD COLUMN `source_url` VARCHAR(500) NULL",
+                'content_hash' => "ALTER TABLE `reels` ADD COLUMN `content_hash` VARCHAR(64) NULL",
+                'original_content_date' => "ALTER TABLE `reels` ADD COLUMN `original_content_date` DATE NULL",
+                'rights_declared' => "ALTER TABLE `reels` ADD COLUMN `rights_declared` TINYINT(1) DEFAULT 1",
+                'status' => "ALTER TABLE `reels` ADD COLUMN `status` ENUM('draft', 'submitted', 'under_review', 'changes_requested', 'approved', 'rejected') DEFAULT 'approved'",
+                'payout_eligible' => "ALTER TABLE `reels` ADD COLUMN `payout_eligible` TINYINT(1) DEFAULT 1",
+                'is_duplicate' => "ALTER TABLE `reels` ADD COLUMN `is_duplicate` TINYINT(1) DEFAULT 0",
+                'duplicate_of_reel_id' => "ALTER TABLE `reels` ADD COLUMN `duplicate_of_reel_id` INT NULL",
+                'rejection_reason_code' => "ALTER TABLE `reels` ADD COLUMN `rejection_reason_code` VARCHAR(50) NULL",
+                'reviewer_feedback' => "ALTER TABLE `reels` ADD COLUMN `reviewer_feedback` TEXT NULL",
+                'reviewed_at' => "ALTER TABLE `reels` ADD COLUMN `reviewed_at` DATETIME NULL",
+                'reviewed_by' => "ALTER TABLE `reels` ADD COLUMN `reviewed_by` VARCHAR(100) NULL"
+            ];
+            foreach ($reelsProgramColumns as $rpCol => $rpSql) {
+                try {
+                    $st = $pdo->query("SHOW COLUMNS FROM `reels` LIKE '$rpCol'");
+                    if (!$st || !$st->fetch()) { $pdo->exec($rpSql); }
+                } catch (Throwable $e) {}
+            }
+
+            // Reel Reviews Table
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `reel_reviews` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `reel_id` INT NOT NULL,
+                `reviewer_id` VARCHAR(100) NULL,
+                `decision` ENUM('approved', 'changes_requested', 'rejected') NOT NULL,
+                `reason_code` VARCHAR(50) NULL,
+                `comments` TEXT NULL,
+                `reviewed_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_review_reel` (`reel_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Reel Events Table
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `reel_events` (
+                `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+                `reel_id` INT NOT NULL,
+                `user_id_nullable` VARCHAR(50) NULL,
+                `event_type` VARCHAR(50) NOT NULL,
+                `session_id` VARCHAR(100) NULL,
+                `occurred_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_event_reel` (`reel_id`, `event_type`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Monthly Creator Payouts Table
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `monthly_creator_payouts` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `creator_id` INT NOT NULL,
+                `period_month` VARCHAR(7) NOT NULL,
+                `eligible_reel_count` INT DEFAULT 0,
+                `base_payout` DECIMAL(10,2) DEFAULT 0.00,
+                `bonus_total` DECIMAL(10,2) DEFAULT 0.00,
+                `adjustments` DECIMAL(10,2) DEFAULT 0.00,
+                `gross_payout` DECIMAL(10,2) DEFAULT 0.00,
+                `rule_version` VARCHAR(50) DEFAULT 'v1.0',
+                `status` ENUM('calculated', 'locked', 'approved', 'paid', 'held') DEFAULT 'calculated',
+                `payment_reference` VARCHAR(100) NULL,
+                `paid_at` DATETIME NULL,
+                `approved_by` VARCHAR(100) NULL,
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY `uk_creator_month` (`creator_id`, `period_month`),
+                INDEX `idx_payout_month` (`period_month`),
+                INDEX `idx_payout_status` (`status`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Payout Line Items Table
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `payout_line_items` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `payout_id` INT NOT NULL,
+                `type` ENUM('base_upload', 'bonus', 'campaign', 'deduction', 'adjustment') DEFAULT 'base_upload',
+                `reference_id` VARCHAR(100) NULL,
+                `amount` DECIMAL(10,2) NOT NULL,
+                `explanation` VARCHAR(255) NOT NULL,
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_line_payout` (`payout_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Campaigns Table
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `campaigns` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `name` VARCHAR(255) NOT NULL,
+                `client_brand` VARCHAR(255) NOT NULL,
+                `objective` TEXT NULL,
+                `start_date` DATE NULL,
+                `end_date` DATE NULL,
+                `budget` DECIMAL(10,2) DEFAULT 0.00,
+                `status` ENUM('draft', 'active', 'completed', 'cancelled') DEFAULT 'draft',
+                `terms_version` VARCHAR(50) DEFAULT 'v1.0',
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Campaign Creator Assignments Table
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `campaign_creator_assignments` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `campaign_id` INT NOT NULL,
+                `creator_id` INT NOT NULL,
+                `deliverable_type` VARCHAR(100) DEFAULT 'Instagram Reel + CropSync Agri Reel',
+                `negotiated_fee` DECIMAL(10,2) DEFAULT 0.00,
+                `due_at` DATETIME NULL,
+                `status` ENUM('assigned', 'submitted', 'approved', 'rejected', 'paid') DEFAULT 'assigned',
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_camp_creator` (`campaign_id`, `creator_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Campaign Deliverables Table
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `campaign_deliverables` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `assignment_id` INT NOT NULL,
+                `platform` VARCHAR(50) DEFAULT 'Instagram',
+                `content_url` VARCHAR(500) NULL,
+                `proof_url` VARCHAR(500) NULL,
+                `submitted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                `approval_status` ENUM('submitted', 'approved', 'changes_requested', 'rejected') DEFAULT 'submitted',
+                `reviewed_at` DATETIME NULL,
+                `rejection_reason` TEXT NULL,
+                INDEX `idx_deliv_assignment` (`assignment_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Leads Table (Consented Creator-Attributed Inquiries)
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `leads` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `source_type` ENUM('reel', 'campaign', 'creator_profile') DEFAULT 'reel',
+                `creator_id` INT NULL,
+                `user_id` VARCHAR(50) NULL,
+                `lead_type` VARCHAR(50) DEFAULT 'general_inquiry',
+                `phone_masked` VARCHAR(20) NULL,
+                `message` TEXT NULL,
+                `consent_status` ENUM('consented', 'revoked') DEFAULT 'consented',
+                `status` ENUM('new', 'contacted', 'closed') DEFAULT 'new',
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_lead_creator` (`creator_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Audit Logs Table (Immutable record of administrative decisions)
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `audit_logs` (
+                `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+                `actor_id` VARCHAR(100) NULL,
+                `actor_role` VARCHAR(50) DEFAULT 'admin',
+                `entity_type` VARCHAR(50) NOT NULL,
+                `entity_id` VARCHAR(100) NOT NULL,
+                `action` VARCHAR(100) NOT NULL,
+                `before_json` LONGTEXT NULL,
+                `after_json` LONGTEXT NULL,
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_audit_entity` (`entity_type`, `entity_id`),
+                INDEX `idx_audit_action` (`action`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
             // Schema tables ensured without dummy seed data
@@ -693,6 +899,58 @@ switch ($action) {
         break;
     case 'get_creator_studio_data':
         getCreatorStudioData($pdo);
+        break;
+    // AGRI CREATOR PARTNER PROGRAM ENDPOINTS
+    case 'get_creator_profile':
+        getCreatorProfileHandler($pdo);
+        break;
+    case 'creator_onboard':
+        creatorOnboardHandler($pdo);
+        break;
+    case 'submit_creator_terms':
+        submitCreatorTermsHandler($pdo);
+        break;
+    case 'get_creator_reels':
+        getCreatorReelsHandler($pdo);
+        break;
+    case 'resubmit_reel':
+        resubmitReelHandler($pdo);
+        break;
+    case 'calculate_monthly_payout':
+        calculateMonthlyPayoutHandler($pdo);
+        break;
+    case 'get_creator_payouts':
+        getCreatorPayoutsHandler($pdo);
+        break;
+    case 'admin_approve_creator':
+        adminApproveCreatorHandler($pdo);
+        break;
+    case 'admin_review_reel':
+        adminReviewReelHandler($pdo);
+        break;
+    case 'lock_payout_batch':
+        lockPayoutBatchHandler($pdo);
+        break;
+    case 'approve_payout_batch':
+        approvePayoutBatchHandler($pdo);
+        break;
+    case 'mark_payout_paid':
+        markPayoutPaidHandler($pdo);
+        break;
+    case 'get_creator_campaigns':
+        getCreatorCampaignsHandler($pdo);
+        break;
+    case 'submit_campaign_deliverable':
+        submitCampaignDeliverableHandler($pdo);
+        break;
+    case 'admin_review_deliverable':
+        adminReviewDeliverableHandler($pdo);
+        break;
+    case 'get_admin_creator_analytics':
+        getAdminCreatorAnalyticsHandler($pdo);
+        break;
+    case 'get_admin_audit_logs':
+        getAdminAuditLogsHandler($pdo);
         break;
     // AI PLANT DOCTOR & RAZORPAY PAYMENT ENDPOINTS
     case 'create_razorpay_order':
@@ -1406,6 +1664,15 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
         $stmtCreator->execute([$userId, $last10, $phone91, $last10, $userId]);
         $creator = $stmtCreator->fetch(PDO::FETCH_ASSOC);
         if ($creator) {
+            $cImg = !empty($creator['profile_image_url']) ? $creator['profile_image_url'] : null;
+            if (empty($cImg)) {
+                $uStmt = $pdo->prepare("SELECT profile_image_url FROM users WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+                $uStmt->execute([$userId, $last10, $creator['phone_number'] ?? '']);
+                $cImg = $uStmt->fetchColumn() ?: null;
+            }
+            if (!empty($cImg) && strpos($cImg, 'http://kiosk.cropsync.in') === 0) {
+                $cImg = str_replace('http://', 'https://', $cImg);
+            }
             return [
                 'success' => true,
                 'role' => 'content_creator',
@@ -1414,7 +1681,7 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                     'user_id' => $creator['phone_number'] ?: $last10,
                     'name' => $creator['display_name'] ?: $creator['username'],
                     'phone_number' => $creator['phone_number'] ?: $last10,
-                    'profile_image_url' => $creator['profile_image_url'],
+                    'profile_image_url' => $cImg,
                     'role' => 'content_creator',
                     'membership_type' => 'Creator'
                 ]
@@ -1522,6 +1789,15 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
     $stmtC->execute([$last10, $userId, $last10]);
     $creator = $stmtC->fetch(PDO::FETCH_ASSOC);
     if ($creator) {
+        $cImg = !empty($creator['profile_image_url']) ? $creator['profile_image_url'] : null;
+        if (empty($cImg)) {
+            $uStmt = $pdo->prepare("SELECT profile_image_url FROM users WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+            $uStmt->execute([$userId, $last10, $creator['phone_number'] ?? '']);
+            $cImg = $uStmt->fetchColumn() ?: null;
+        }
+        if (!empty($cImg) && strpos($cImg, 'http://kiosk.cropsync.in') === 0) {
+            $cImg = str_replace('http://', 'https://', $cImg);
+        }
         return [
             'success' => true,
             'role' => 'content_creator',
@@ -1530,7 +1806,7 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
                 'user_id' => $creator['phone_number'] ?: $last10,
                 'name' => $creator['display_name'] ?: $creator['username'],
                 'phone_number' => $creator['phone_number'] ?: $last10,
-                'profile_image_url' => $creator['profile_image_url'],
+                'profile_image_url' => $cImg,
                 'role' => 'content_creator',
                 'membership_type' => 'Creator'
             ]
@@ -4382,6 +4658,9 @@ function getReels($pdo) {
         $limit = min(50, max(1, intval($_GET['limit'] ?? 20)));
         $offset = ($page - 1) * $limit;
 
+        // Automatically process any pending daytime auto-approvals (10-minute SLA)
+        processReelAutoApprovals($pdo);
+
         $hasUserFilter = (!empty($phoneNumber) || !empty($farmerUsername));
 
         $sql = "SELECT r.*, 
@@ -4400,7 +4679,7 @@ function getReels($pdo) {
 
         $sql .= " FROM reels r
                 LEFT JOIN creators c ON r.creator_id = c.id
-                WHERE r.is_active = 1
+                WHERE r.is_active = 1 AND (r.status = 'approved' OR r.status IS NULL)
                 ORDER BY r.id DESC
                 LIMIT :limit OFFSET :offset";
 
@@ -4824,6 +5103,13 @@ function uploadReel($pdo) {
             return;
         }
 
+        $crop = trim($input['crop'] ?? $_POST['crop'] ?? 'Paddy');
+        $category = trim($input['category'] ?? $_POST['category'] ?? 'Crop Care');
+        $language = trim($input['language'] ?? $_POST['language'] ?? 'te');
+        $sourceUrl = trim($input['source_url'] ?? $input['sourceUrl'] ?? $_POST['source_url'] ?? $_POST['sourceUrl'] ?? '');
+        $originalContentDate = trim($input['original_content_date'] ?? $input['originalContentDate'] ?? $_POST['original_content_date'] ?? date('Y-m-d'));
+        $rightsDeclared = !empty($input['rights_declared']) || !empty($input['rightsDeclared']) || !empty($_POST['rights_declared']) ? 1 : 1;
+
         if ($creatorId <= 0) {
             $creator = resolveOrCreateCreator($pdo, $phoneNumber, $creatorName);
             $creatorId = intval($creator['id']);
@@ -4837,54 +5123,55 @@ function uploadReel($pdo) {
             }
         }
 
+        // Duplicate URL detection
+        $isDuplicate = 0;
+        $duplicateOfId = null;
+        $payoutEligible = 1;
+        if (!empty($sourceUrl)) {
+            $dupStmt = $pdo->prepare("SELECT id FROM reels WHERE source_url = ? LIMIT 1");
+            $dupStmt->execute([$sourceUrl]);
+            $dupRow = $dupStmt->fetch(PDO::FETCH_ASSOC);
+            if ($dupRow) {
+                $isDuplicate = 1;
+                $duplicateOfId = intval($dupRow['id']);
+                $payoutEligible = 0;
+            }
+        }
+
+        // Ensure terms acceptance record
         try {
-            $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 1)");
-            $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
+            $tCheck = $pdo->prepare("SELECT id FROM creator_terms WHERE creator_id = ? LIMIT 1");
+            $tCheck->execute([$creatorId]);
+            if (!$tCheck->fetch()) {
+                $pdo->prepare("INSERT INTO creator_terms (creator_id, terms_version, rights_declaration_version, consent_flags, ip_address) VALUES (?, 'v1.0', 'v1.0', ?, ?)")
+                    ->execute([$creatorId, json_encode(['rights' => true, 'terms' => true]), $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1']);
+                $pdo->prepare("UPDATE creators SET terms_accepted = 1 WHERE id = ?")->execute([$creatorId]);
+            }
+        } catch (Throwable $e) {}
+
+        $tz = new DateTimeZone('Asia/Kolkata');
+        $now = new DateTime('now', $tz);
+        $currentHour = intval($now->format('G'));
+        $isNightUpload = ($currentHour >= 21 || $currentHour < 6);
+
+        $uploadMessage = $isNightUpload
+            ? 'Reel submitted for review. Submissions after 9:00 PM require manual verification by a moderator before appearing to users.'
+            : 'Reel submitted for review. It will become visible once inspected by a moderator, or automatically within 10 minutes.';
+
+        try {
+            $stmt = $pdo->prepare("
+                INSERT INTO reels 
+                (creator_id, video_url, caption, music_title, phone_number, tags, crop, category, language, source_url, original_content_date, rights_declared, status, payout_eligible, is_duplicate, duplicate_of_reel_id, views_count, likes_count, saves_count, comments_count, is_active, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'under_review', 0, ?, ?, 0, 0, 0, 0, 0, NOW())
+            ");
+            $stmt->execute([
+                $creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags,
+                $crop, $category, $language, $sourceUrl, $originalContentDate, $rightsDeclared,
+                $isDuplicate, $duplicateOfId
+            ]);
             $reelId = intval($pdo->lastInsertId());
         } catch (Throwable $dbErr) {
-            // Auto repair reels schema and all columns if missing
-            try {
-                $pdo->exec("CREATE TABLE IF NOT EXISTS `reels` (
-                    `id` INT AUTO_INCREMENT PRIMARY KEY,
-                    `creator_id` INT NOT NULL,
-                    `video_url` VARCHAR(500) NOT NULL,
-                    `caption` TEXT NOT NULL,
-                    `music_title` VARCHAR(200) DEFAULT 'Original Audio',
-                    `phone_number` VARCHAR(20) NULL,
-                    `tags` VARCHAR(255) NULL,
-                    `views_count` INT DEFAULT 0,
-                    `likes_count` INT DEFAULT 0,
-                    `saves_count` INT DEFAULT 0,
-                    `comments_count` INT DEFAULT 0,
-                    `is_active` TINYINT(1) DEFAULT 1,
-                    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX `idx_reel_creator` (`creator_id`),
-                    INDEX `idx_reel_active` (`is_active`),
-                    INDEX `idx_reel_created` (`created_at`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-
-                $repairCols = [
-                    'music_title' => "ALTER TABLE `reels` ADD COLUMN `music_title` VARCHAR(200) DEFAULT 'Original Audio'",
-                    'phone_number' => "ALTER TABLE `reels` ADD COLUMN `phone_number` VARCHAR(20) DEFAULT NULL",
-                    'tags' => "ALTER TABLE `reels` ADD COLUMN `tags` VARCHAR(255) DEFAULT NULL",
-                    'views_count' => "ALTER TABLE `reels` ADD COLUMN `views_count` INT DEFAULT 0",
-                    'likes_count' => "ALTER TABLE `reels` ADD COLUMN `likes_count` INT DEFAULT 0",
-                    'saves_count' => "ALTER TABLE `reels` ADD COLUMN `saves_count` INT DEFAULT 0",
-                    'comments_count' => "ALTER TABLE `reels` ADD COLUMN `comments_count` INT DEFAULT 0",
-                    'is_active' => "ALTER TABLE `reels` ADD COLUMN `is_active` TINYINT(1) DEFAULT 1",
-                    'created_at' => "ALTER TABLE `reels` ADD COLUMN `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-                ];
-                foreach ($repairCols as $cName => $cSql) {
-                    try {
-                        $colCheck = $pdo->query("SHOW COLUMNS FROM `reels` LIKE '$cName'");
-                        if (!$colCheck || !$colCheck->fetch()) {
-                            $pdo->exec($cSql);
-                        }
-                    } catch (Throwable $e) {}
-                }
-            } catch (Throwable $e) {}
-
-            $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 1)");
+            $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, NOW())");
             $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
             $reelId = intval($pdo->lastInsertId());
         }
@@ -4900,11 +5187,21 @@ function uploadReel($pdo) {
             'phone_number' => $phoneNumber,
             'phoneNumber' => $phoneNumber,
             'tags' => $tags,
+            'crop' => $crop,
+            'category' => $category,
+            'language' => $language,
+            'source_url' => $sourceUrl,
+            'original_content_date' => $originalContentDate,
+            'rights_declared' => $rightsDeclared,
+            'status' => 'under_review',
+            'payout_eligible' => 0,
+            'is_duplicate' => $isDuplicate,
+            'duplicate_of_reel_id' => $duplicateOfId,
             'views_count' => 0,
             'likes_count' => 0,
             'saves_count' => 0,
             'comments_count' => 0,
-            'is_active' => 1,
+            'is_active' => 0,
             'created_at' => date('Y-m-d H:i:s'),
             'creator' => [
                 'id' => $creatorId,
@@ -4918,8 +5215,12 @@ function uploadReel($pdo) {
 
         echo json_encode([
             'success' => true,
-            'message' => 'Reel uploaded and published successfully',
+            'message' => $isDuplicate ? 'Reel uploaded successfully (flagged as duplicate source; not eligible for payout)' : $uploadMessage,
             'reel_id' => $reelId,
+            'is_duplicate' => $isDuplicate,
+            'payout_eligible' => 0,
+            'status' => 'under_review',
+            'is_active' => 0,
             'reel' => $newReel
         ]);
     } catch (Throwable $e) {
@@ -4958,21 +5259,51 @@ function deleteReel($pdo) {
  */
 function toggleReelStatus($pdo) {
     try {
-        $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
-        $reelId = intval($input['reel_id'] ?? 0);
-        $isActive = isset($input['is_active']) ? intval($input['is_active']) : 1;
+        $raw = file_get_contents('php://input');
+        $input = !empty($raw) ? json_decode($raw, true) : [];
+        if (!is_array($input)) $input = [];
+        $reelId = intval($input['reel_id'] ?? $_POST['reel_id'] ?? $_GET['reel_id'] ?? 0);
+        $isActive = isset($input['is_active']) ? intval($input['is_active']) : (isset($_POST['is_active']) ? intval($_POST['is_active']) : (isset($_GET['is_active']) ? intval($_GET['is_active']) : 1));
 
         if ($reelId <= 0) {
-            echo json_encode(['success' => false, 'error' => 'Invalid reel_id']);
+            http_response_code(400);
+            echo json_encode(['status' => false, 'success' => false, 'error' => 'Invalid reel_id']);
             return;
         }
 
-        $stmt = $pdo->prepare("UPDATE reels SET is_active = ? WHERE id = ?");
-        $stmt->execute([$isActive, $reelId]);
+        if ($isActive == 1) {
+            // Enforce approval check
+            $chk = $pdo->prepare("SELECT status FROM reels WHERE id = ?");
+            $chk->execute([$reelId]);
+            $curStatus = $chk->fetchColumn();
+            if ($curStatus !== 'approved') {
+                http_response_code(400);
+                echo json_encode(['status' => false, 'success' => false, 'error' => 'Reel cannot be activated until approved by a moderator.']);
+                return;
+            }
 
-        echo json_encode(['success' => true, 'message' => 'Reel status updated', 'is_active' => $isActive]);
+            // Enforce at the SQL level as well
+            $stmt = $pdo->prepare("UPDATE reels SET is_active = 1 WHERE id = ? AND status = 'approved'");
+            $stmt->execute([$reelId]);
+            if ($stmt->rowCount() === 0) {
+                $chk2 = $pdo->prepare("SELECT status, is_active FROM reels WHERE id = ?");
+                $chk2->execute([$reelId]);
+                $row = $chk2->fetch(PDO::FETCH_ASSOC);
+                if (!$row || $row['status'] !== 'approved') {
+                    http_response_code(400);
+                    echo json_encode(['status' => false, 'success' => false, 'error' => 'Reel cannot be activated until approved by a moderator.']);
+                    return;
+                }
+            }
+        } else {
+            $pdo->prepare("UPDATE reels SET is_active = 0 WHERE id = ?")->execute([$reelId]);
+        }
+
+        http_response_code(200);
+        echo json_encode(['status' => true, 'success' => true, 'message' => 'Reel status updated', 'is_active' => $isActive]);
     } catch (Throwable $e) {
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        http_response_code(500);
+        echo json_encode(['status' => false, 'success' => false, 'error' => $e->getMessage()]);
     }
 }
 
@@ -5170,14 +5501,14 @@ function updateUserProfile($pdo) {
             if (empty($ext)) $ext = 'jpg';
             $safeName = 'profile_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
             if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $uploadDir . $safeName)) {
-                $profileImageUrl = 'http://kiosk.cropsync.in/uploads/profiles/' . $safeName;
+                $profileImageUrl = 'https://kiosk.cropsync.in/uploads/profiles/' . $safeName;
             }
         } elseif (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
             $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
             if (empty($ext)) $ext = 'jpg';
             $safeName = 'profile_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
             if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadDir . $safeName)) {
-                $profileImageUrl = 'http://kiosk.cropsync.in/uploads/profiles/' . $safeName;
+                $profileImageUrl = 'https://kiosk.cropsync.in/uploads/profiles/' . $safeName;
             }
         }
 
@@ -5199,29 +5530,54 @@ function updateUserProfile($pdo) {
             $params[] = $userId;
             $params[] = $userId;
             $sql = "UPDATE users SET " . implode(", ", $updates) . " WHERE user_id = ? OR phone_number = ?";
-            $pdo->prepare($sql)->execute($params);
+            try { $pdo->prepare($sql)->execute($params); } catch (Throwable $e) {}
         }
 
         // Also sync to creators table if this user is a creator
-        if (!empty($phoneNumber) || !empty($name)) {
-            $cUpdates = [];
-            $cParams = [];
-            if (!empty($name)) { $cUpdates[] = "display_name = ?"; $cParams[] = $name; }
-            if (!empty($profileImageUrl)) { $cUpdates[] = "profile_image_url = ?"; $cParams[] = $profileImageUrl; }
-            if (!empty($phoneNumber)) { $cUpdates[] = "phone_number = ?"; $cParams[] = $phoneNumber; }
-            if (!empty($cUpdates)) {
-                $cSql = "UPDATE creators SET " . implode(", ", $cUpdates) . " WHERE phone_number = ? OR username = ? OR display_name = ?";
-                $cParams[] = $phoneNumber;
-                $cParams[] = $name;
-                $cParams[] = $name;
-                try { $pdo->prepare($cSql)->execute($cParams); } catch (Throwable $e) {}
-            }
+        $cleanPhone = preg_replace('/[^0-9]/', '', (string)$userId);
+        $last10 = strlen($cleanPhone) > 10 ? substr($cleanPhone, -10) : $cleanPhone;
+        $cUpdates = [];
+        $cParams = [];
+        if (!empty($name)) { $cUpdates[] = "display_name = ?"; $cParams[] = $name; }
+        if (!empty($profileImageUrl)) { $cUpdates[] = "profile_image_url = ?"; $cParams[] = $profileImageUrl; }
+        if (!empty($phoneNumber)) { $cUpdates[] = "phone_number = ?"; $cParams[] = $phoneNumber; }
+        if (!empty($cUpdates)) {
+            $cSql = "UPDATE creators SET " . implode(", ", $cUpdates) . " WHERE user_id = ? OR phone_number = ? OR phone_number = ? OR username = ? OR display_name = ?";
+            $cParams[] = $userId;
+            $cParams[] = $userId;
+            $cParams[] = $last10;
+            $cParams[] = $userId;
+            $cParams[] = !empty($name) ? $name : $userId;
+            try { $pdo->prepare($cSql)->execute($cParams); } catch (Throwable $e) {}
         }
 
         // Fetch refreshed user
         $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
         $stmt->execute([$userId, $userId]);
         $updatedUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$updatedUser || empty($updatedUser['profile_image_url'])) {
+            $cCheck = $pdo->prepare("SELECT * FROM creators WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+            $cCheck->execute([$userId, $userId, $last10]);
+            $cData = $cCheck->fetch(PDO::FETCH_ASSOC);
+            if ($cData) {
+                if (!$updatedUser) {
+                    $updatedUser = [
+                        'user_id' => $cData['phone_number'] ?: $userId,
+                        'name' => $cData['display_name'] ?: $cData['username'],
+                        'phone_number' => $cData['phone_number'] ?: $userId,
+                        'profile_image_url' => $cData['profile_image_url'] ?: $profileImageUrl,
+                        'role' => 'content_creator',
+                        'membership_type' => 'Creator'
+                    ];
+                } else if (!empty($cData['profile_image_url'])) {
+                    $updatedUser['profile_image_url'] = $cData['profile_image_url'];
+                }
+            }
+        }
+        if ($updatedUser && !empty($profileImageUrl) && empty($updatedUser['profile_image_url'])) {
+            $updatedUser['profile_image_url'] = $profileImageUrl;
+        }
 
         echo json_encode([
             'success' => true,
@@ -5239,6 +5595,8 @@ function updateUserProfile($pdo) {
  */
 function getCreatorStudioData($pdo) {
     try {
+        processReelAutoApprovals($pdo);
+
         $phoneNumber = trim($_GET['phone_number'] ?? $_GET['phone'] ?? '');
         $username = trim($_GET['username'] ?? '');
         $userName = trim($_GET['user_name'] ?? $_GET['name'] ?? '');
@@ -5325,6 +5683,18 @@ function getCreatorStudioData($pdo) {
                 'isActive' => (bool)$r['is_active'],
                 'is_active' => intval($r['is_active']),
                 'createdAt' => $r['created_at'],
+                'status' => $r['status'] ?? 'approved',
+                'crop' => $r['crop'] ?? null,
+                'category' => $r['category'] ?? null,
+                'language' => $r['language'] ?? null,
+                'sourceUrl' => $r['source_url'] ?? null,
+                'source_url' => $r['source_url'] ?? null,
+                'isDuplicate' => !empty($r['is_duplicate']),
+                'is_duplicate' => intval($r['is_duplicate'] ?? 0),
+                'rejectionReasonCode' => $r['rejection_reason_code'] ?? ($r['reason_code'] ?? null),
+                'rejection_reason_code' => $r['rejection_reason_code'] ?? ($r['reason_code'] ?? null),
+                'reviewerFeedback' => $r['reviewer_feedback'] ?? ($r['feedback'] ?? null),
+                'reviewer_feedback' => $r['reviewer_feedback'] ?? ($r['feedback'] ?? null),
                 'creator' => [
                     'id' => $creatorId,
                     'username' => $r['creator_username'] ?? $creator['username'],
@@ -5738,5 +6108,1003 @@ function getAiCreditBalanceHandler($pdo) {
     }
 }
 
+// =========================================================================
+// AGRI CREATOR PARTNER PROGRAM ENGINE & HANDLERS
+// =========================================================================
 
+/**
+ * Mask farmer or creator phone number to protect personal privacy
+ */
+function maskPhoneNumber($phoneNumber) {
+    $clean = preg_replace('/[^0-9]/', '', (string)$phoneNumber);
+    if (strlen($clean) >= 10) {
+        return substr($clean, 0, 2) . '******' . substr($clean, -2);
+    }
+    return '******' . substr($clean, -2);
+}
 
+/**
+ * Immutable audit logger for creator partner program administrative events
+ */
+function logAudit($pdo, $actorId, $actorRole, $entityType, $entityId, $action, $before = null, $after = null) {
+    try {
+        $stmt = $pdo->prepare("INSERT INTO audit_logs (actor_id, actor_role, entity_type, entity_id, action, before_json, after_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
+        $stmt->execute([
+            $actorId ?: 'system',
+            $actorRole ?: 'admin',
+            $entityType,
+            (string)$entityId,
+            $action,
+            is_array($before) || is_object($before) ? json_encode($before) : (is_string($before) ? $before : null),
+            is_array($after) || is_object($after) ? json_encode($after) : (is_string($after) ? $after : null)
+        ]);
+    } catch (Throwable $e) {}
+}
+
+/**
+ * Deterministic tier ladder calculator based on approved eligible reels
+ * Spec:
+ *  0-4: ₹0
+ *  5-9: ₹50
+ *  10-14: ₹100
+ *  15-19: ₹150
+ *  20-24: ₹225
+ *  25-29: ₹275
+ *  30+: ₹300 (Maximum base payout)
+ */
+function getTierBasePayout($approvedCount) {
+    $count = intval($approvedCount);
+    if ($count >= 30) return 300.00;
+    if ($count >= 25) return 275.00;
+    if ($count >= 20) return 225.00;
+    if ($count >= 15) return 150.00;
+    if ($count >= 10) return 100.00;
+    if ($count >= 5) return 50.00;
+    return 0.00;
+}
+
+/**
+ * Calculate deterministic monthly payouts for all creators or a single creator
+ */
+function calculateMonthlyPayoutEngine($pdo, $billingMonth, $specificCreatorId = null) {
+    $billingMonth = trim($billingMonth);
+    if (!preg_match('/^\d{4}-\d{2}$/', $billingMonth)) {
+        $billingMonth = date('Y-m');
+    }
+
+    $creatorsSql = "SELECT id, username, display_name, phone_number, status, partnership_tier FROM creators WHERE 1=1";
+    $params = [];
+    if ($specificCreatorId) {
+        $creatorsSql .= " AND id = ?";
+        $params[] = intval($specificCreatorId);
+    }
+    $creatorsStmt = $pdo->prepare($creatorsSql);
+    $creatorsStmt->execute($params);
+    $creators = $creatorsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $results = [];
+
+    foreach ($creators as $c) {
+        $cId = intval($c['id']);
+
+        // Check if existing payout record is already approved or paid
+        $chkStmt = $pdo->prepare("SELECT * FROM monthly_creator_payouts WHERE creator_id = ? AND period_month = ?");
+        $chkStmt->execute([$cId, $billingMonth]);
+        $existingPayout = $chkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($existingPayout && in_array($existingPayout['status'], ['approved', 'paid'])) {
+            // Locked & closed period: do not overwrite
+            $results[] = $existingPayout;
+            continue;
+        }
+
+        // Count approved, non-duplicate eligible reels uploaded in this calendar month
+        $reelsStmt = $pdo->prepare("
+            SELECT COUNT(*) AS approved_count
+            FROM reels 
+            WHERE creator_id = ? 
+              AND status = 'approved'
+              AND (is_duplicate = 0 OR is_duplicate IS NULL)
+              AND (payout_eligible = 1 OR payout_eligible IS NULL)
+              AND DATE_FORMAT(created_at, '%Y-%m') = ?
+        ");
+        $reelsStmt->execute([$cId, $billingMonth]);
+        $approvedCount = intval($reelsStmt->fetchColumn() ?: 0);
+
+        $basePayout = getTierBasePayout($approvedCount);
+
+        // Fetch bonuses & campaign items from payout_line_items if payout exists
+        $bonusTotal = 0.00;
+        $adjustments = 0.00;
+        if ($existingPayout) {
+            $liStmt = $pdo->prepare("SELECT type, SUM(amount) AS total FROM payout_line_items WHERE payout_id = ? GROUP BY type");
+            $liStmt->execute([$existingPayout['id']]);
+            $lines = $liStmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($lines as $line) {
+                if ($line['type'] === 'bonus' || $line['type'] === 'campaign') {
+                    $bonusTotal += floatval($line['total']);
+                } elseif ($line['type'] === 'deduction' || $line['type'] === 'adjustment') {
+                    $adjustments += floatval($line['total']);
+                }
+            }
+        }
+
+        $grossPayout = max(0.00, $basePayout + $bonusTotal + $adjustments);
+
+        if ($existingPayout) {
+            $upStmt = $pdo->prepare("
+                UPDATE monthly_creator_payouts 
+                SET eligible_reel_count = ?, base_payout = ?, bonus_total = ?, adjustments = ?, gross_payout = ?
+                WHERE id = ?
+            ");
+            $upStmt->execute([$approvedCount, $basePayout, $bonusTotal, $adjustments, $grossPayout, $existingPayout['id']]);
+            $payoutId = $existingPayout['id'];
+        } else {
+            $insStmt = $pdo->prepare("
+                INSERT INTO monthly_creator_payouts 
+                (creator_id, period_month, eligible_reel_count, base_payout, bonus_total, adjustments, gross_payout, rule_version, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'v1.0', 'calculated')
+            ");
+            $insStmt->execute([$cId, $billingMonth, $approvedCount, $basePayout, $bonusTotal, $adjustments, $grossPayout]);
+            $payoutId = $pdo->lastInsertId();
+        }
+
+        $results[] = [
+            'payout_id' => intval($payoutId),
+            'creator_id' => $cId,
+            'creator_name' => $c['display_name'],
+            'period_month' => $billingMonth,
+            'eligible_reel_count' => $approvedCount,
+            'base_payout' => $basePayout,
+            'bonus_total' => $bonusTotal,
+            'adjustments' => $adjustments,
+            'gross_payout' => $grossPayout,
+            'status' => $existingPayout['status'] ?? 'calculated'
+        ];
+    }
+
+    return $results;
+}
+
+/**
+ * GET /api/api.php?action=get_creator_profile
+ */
+function getCreatorProfileHandler($pdo) {
+    $creatorId = intval($_GET['creator_id'] ?? $_POST['creator_id'] ?? 0);
+    $phone = trim($_GET['phone_number'] ?? $_GET['phone'] ?? $_POST['phone_number'] ?? '');
+    $userId = trim($_GET['user_id'] ?? $_POST['user_id'] ?? '');
+
+    $creator = null;
+    if ($creatorId > 0) {
+        $stmt = $pdo->prepare("SELECT * FROM creators WHERE id = ? LIMIT 1");
+        $stmt->execute([$creatorId]);
+        $creator = $stmt->fetch(PDO::FETCH_ASSOC);
+    } elseif (!empty($phone)) {
+        $stmt = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? LIMIT 1");
+        $stmt->execute([$phone]);
+        $creator = $stmt->fetch(PDO::FETCH_ASSOC);
+    } elseif (!empty($userId)) {
+        $stmt = $pdo->prepare("SELECT * FROM creators WHERE user_id = ? LIMIT 1");
+        $stmt->execute([$userId]);
+        $creator = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    if (!$creator) {
+        echo json_encode(['success' => false, 'error' => 'Creator profile not found']);
+        return;
+    }
+
+    $cId = intval($creator['id']);
+    // Terms check
+    $termsStmt = $pdo->prepare("SELECT * FROM creator_terms WHERE creator_id = ? ORDER BY id DESC LIMIT 1");
+    $termsStmt->execute([$cId]);
+    $terms = $termsStmt->fetch(PDO::FETCH_ASSOC);
+
+    // Payment profile
+    $payStmt = $pdo->prepare("SELECT * FROM creator_payment_profiles WHERE creator_id = ? ORDER BY id DESC LIMIT 1");
+    $payStmt->execute([$cId]);
+    $paymentProfile = $payStmt->fetch(PDO::FETCH_ASSOC);
+
+    // Current month approved reel count & estimate
+    $currentMonth = date('Y-m');
+    $cntStmt = $pdo->prepare("
+        SELECT COUNT(*) FROM reels 
+        WHERE creator_id = ? AND status = 'approved' AND (is_duplicate = 0 OR is_duplicate IS NULL) AND DATE_FORMAT(created_at, '%Y-%m') = ?
+    ");
+    $cntStmt->execute([$cId, $currentMonth]);
+    $approvedThisMonth = intval($cntStmt->fetchColumn() ?: 0);
+    $estimatedPayout = getTierBasePayout($approvedThisMonth);
+
+    echo json_encode([
+        'success' => true,
+        'creator' => [
+            'id' => $cId,
+            'user_id' => $creator['user_id'],
+            'username' => $creator['username'],
+            'display_name' => $creator['display_name'],
+            'phone_number' => $creator['phone_number'],
+            'email' => $creator['email'],
+            'bio' => $creator['bio'],
+            'profile_image_url' => $creator['profile_image_url'],
+            'status' => $creator['status'] ?? 'active',
+            'partnership_tier' => $creator['partnership_tier'] ?? 'trial',
+            'agriculture_niches' => !empty($creator['agriculture_niches']) ? json_decode($creator['agriculture_niches'], true) : [],
+            'languages' => !empty($creator['languages']) ? json_decode($creator['languages'], true) : ['te'],
+            'social_handles' => !empty($creator['social_handles']) ? json_decode($creator['social_handles'], true) : new stdClass(),
+            'terms_accepted' => !empty($creator['terms_accepted']) || !empty($terms),
+            'terms_record' => $terms,
+            'payment_profile' => $paymentProfile,
+            'current_month' => $currentMonth,
+            'approved_reels_month' => $approvedThisMonth,
+            'estimated_payout' => $estimatedPayout
+        ]
+    ]);
+}
+
+/**
+ * POST /api/api.php?action=creator_onboard
+ * Captures onboarding submission and enforces 25-creator pilot cap
+ */
+function creatorOnboardHandler($pdo) {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+        $displayName = trim($input['display_name'] ?? $input['name'] ?? '');
+        $phone = trim($input['phone_number'] ?? $input['phone'] ?? '');
+        $email = trim($input['email'] ?? '');
+        $bio = trim($input['bio'] ?? '');
+        $userId = trim($input['user_id'] ?? '');
+        $niches = isset($input['agriculture_niches']) ? (is_array($input['agriculture_niches']) ? json_encode($input['agriculture_niches']) : $input['agriculture_niches']) : json_encode(['Crop Care', 'Organic Farming']);
+        $languages = isset($input['languages']) ? (is_array($input['languages']) ? json_encode($input['languages']) : $input['languages']) : json_encode(['te']);
+        $socialHandles = isset($input['social_handles']) ? (is_array($input['social_handles']) ? json_encode($input['social_handles']) : $input['social_handles']) : json_encode(new stdClass());
+        $upiId = trim($input['upi_id'] ?? '');
+        $acceptTerms = !empty($input['accept_terms']) || !empty($input['terms_accepted']) ? 1 : 0;
+        $acceptRights = !empty($input['accept_rights']) || !empty($input['rights_declared']) ? 1 : 0;
+
+        if (empty($phone) || empty($displayName)) {
+            echo json_encode(['success' => false, 'error' => 'Display name and phone number are required']);
+            return;
+        }
+
+        // Enforce 25-creator pilot cap for active creators
+        $capStmt = $pdo->query("SELECT COUNT(*) FROM creators WHERE status = 'active'");
+        $activeCount = intval($capStmt->fetchColumn() ?: 0);
+        $assignedStatus = ($activeCount < 25) ? 'active' : 'pending_review';
+
+        // Check existing creator
+        $chk = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? OR (user_id = ? AND user_id != '') LIMIT 1");
+        $chk->execute([$phone, $userId]);
+        $existing = $chk->fetch(PDO::FETCH_ASSOC);
+
+        if ($existing) {
+            $creatorId = intval($existing['id']);
+            $upStmt = $pdo->prepare("
+                UPDATE creators 
+                SET display_name = ?, email = ?, bio = ?, agriculture_niches = ?, languages = ?, social_handles = ?, upi_id = ?, terms_accepted = ?
+                WHERE id = ?
+            ");
+            $upStmt->execute([$displayName, $email, $bio, $niches, $languages, $socialHandles, $upiId, $acceptTerms, $creatorId]);
+        } else {
+            $username = 'creator_' . substr(preg_replace('/[^0-9]/', '', $phone), -6);
+            $insStmt = $pdo->prepare("
+                INSERT INTO creators (user_id, username, display_name, phone_number, email, bio, status, partnership_tier, agriculture_niches, languages, social_handles, upi_id, terms_accepted)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'trial', ?, ?, ?, ?, ?)
+            ");
+            $insStmt->execute([$userId ?: null, $username, $displayName, $phone, $email, $bio, $assignedStatus, $niches, $languages, $socialHandles, $upiId, $acceptTerms]);
+            $creatorId = intval($pdo->lastInsertId());
+        }
+
+        // Record terms acceptance if submitted
+        if ($acceptTerms && $acceptRights) {
+            $tStmt = $pdo->prepare("
+                INSERT INTO creator_terms (creator_id, terms_version, rights_declaration_version, consent_flags, ip_address)
+                VALUES (?, 'v1.0', 'v1.0', ?, ?)
+            ");
+            $tStmt->execute([$creatorId, json_encode(['terms' => true, 'rights' => true]), $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1']);
+        }
+
+        // Record payment profile
+        if (!empty($upiId)) {
+            $pStmt = $pdo->prepare("
+                INSERT INTO creator_payment_profiles (creator_id, payout_method, upi_id, verification_status)
+                VALUES (?, 'UPI', ?, 'unverified')
+                ON DUPLICATE KEY UPDATE upi_id = VALUES(upi_id)
+            ");
+            $pStmt->execute([$creatorId, $upiId]);
+        }
+
+        logAudit($pdo, $creatorId, 'creator', 'creators', $creatorId, 'creator_onboard', null, ['status' => $assignedStatus]);
+
+        echo json_encode([
+            'success' => true,
+            'creator_id' => $creatorId,
+            'status' => $assignedStatus,
+            'active_creators_count' => $activeCount,
+            'pilot_cap' => 25,
+            'message' => ($assignedStatus === 'active') ? 'Creator onboarded successfully' : 'Application submitted and queued for admin review (25-creator cap reached)'
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * POST /api/api.php?action=submit_creator_terms
+ */
+function submitCreatorTermsHandler($pdo) {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+        $creatorId = intval($input['creator_id'] ?? 0);
+        $termsVersion = trim($input['terms_version'] ?? 'v1.0');
+        $rightsVersion = trim($input['rights_declaration_version'] ?? 'v1.0');
+
+        if ($creatorId <= 0) {
+            echo json_encode(['success' => false, 'error' => 'creator_id is required']);
+            return;
+        }
+
+        $stmt = $pdo->prepare("
+            INSERT INTO creator_terms (creator_id, terms_version, rights_declaration_version, consent_flags, ip_address)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$creatorId, $termsVersion, $rightsVersion, json_encode(['accepted' => true]), $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1']);
+
+        $pdo->prepare("UPDATE creators SET terms_accepted = 1 WHERE id = ?")->execute([$creatorId]);
+        logAudit($pdo, $creatorId, 'creator', 'creator_terms', $creatorId, 'accept_terms', null, ['terms_version' => $termsVersion]);
+
+        echo json_encode(['success' => true, 'message' => 'Terms and rights declaration accepted successfully']);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_creator_reels
+ */
+function getCreatorReelsHandler($pdo) {
+    try {
+        processReelAutoApprovals($pdo);
+
+        $creatorId = intval($_GET['creator_id'] ?? $_POST['creator_id'] ?? 0);
+        $status = trim($_GET['status'] ?? '');
+
+        if ($creatorId <= 0) {
+            echo json_encode(['success' => false, 'error' => 'creator_id is required']);
+            return;
+        }
+
+        $sql = "SELECT * FROM reels WHERE creator_id = ?";
+        $params = [$creatorId];
+        if (!empty($status)) {
+            $sql .= " AND status = ?";
+            $params[] = $status;
+        }
+        $sql .= " ORDER BY id DESC";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $reels = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'reels' => $reels]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * POST /api/api.php?action=resubmit_reel
+ */
+function resubmitReelHandler($pdo) {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+        $reelId = intval($input['reel_id'] ?? 0);
+        $creatorId = intval($input['creator_id'] ?? 0);
+        $caption = trim($input['caption'] ?? '');
+        $crop = trim($input['crop'] ?? '');
+        $category = trim($input['category'] ?? '');
+        $sourceUrl = trim($input['source_url'] ?? '');
+
+        if ($reelId <= 0) {
+            echo json_encode(['success' => false, 'error' => 'reel_id is required']);
+            return;
+        }
+
+        $stmt = $pdo->prepare("SELECT * FROM reels WHERE id = ?");
+        $stmt->execute([$reelId]);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$existing) {
+            echo json_encode(['success' => false, 'error' => 'Reel not found']);
+            return;
+        }
+
+        $upStmt = $pdo->prepare("
+            UPDATE reels 
+            SET status = 'under_review', is_active = 0, payout_eligible = 0,
+                caption = COALESCE(NULLIF(?, ''), caption),
+                crop = COALESCE(NULLIF(?, ''), crop), category = COALESCE(NULLIF(?, ''), category),
+                source_url = COALESCE(NULLIF(?, ''), source_url),
+                rejection_reason_code = NULL, reviewer_feedback = NULL, reviewed_at = NULL,
+                created_at = NOW()
+            WHERE id = ?
+        ");
+        $upStmt->execute([$caption, $crop, $category, $sourceUrl, $reelId]);
+
+        logAudit($pdo, $creatorId ?: $existing['creator_id'], 'creator', 'reels', $reelId, 'resubmit_reel', ['old_status' => $existing['status']], ['new_status' => 'under_review']);
+
+        echo json_encode(['success' => true, 'message' => 'Reel resubmitted for review successfully']);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * Processes automated approvals for reels pending inspection.
+ * SLA Rules:
+ *  - Daytime (06:00 to 21:00 IST): If unreviewed for >= 10 minutes, automatically approve and make active.
+ *  - Night (21:00 to 06:00 IST): No auto-approvals. Submissions after 9 PM require manual verification.
+ */
+if (!function_exists('processReelAutoApprovals')) {
+    function processReelAutoApprovals($pdo) {
+        try {
+            if (!$pdo instanceof PDO) return 0;
+
+            $istTz = new DateTimeZone('Asia/Kolkata');
+            $now = new DateTime('now', $istTz);
+            $currentHour = intval($now->format('G')); // 0 - 23
+
+            // Night window: After 9:00 PM (21:00) until morning (06:00).
+            // No auto-approvals are permitted after 9 PM.
+            if ($currentHour >= 21 || $currentHour < 6) {
+                return 0;
+            }
+
+            // Find pending reels created at least 10 minutes ago
+            $stmt = $pdo->prepare("
+                SELECT id, creator_id, created_at, source_url, is_duplicate 
+                FROM reels 
+                WHERE (status IN ('submitted', 'under_review') OR (is_active = 0 AND (status IS NULL OR status = '')))
+                  AND is_active = 0
+                  AND (is_duplicate = 0 OR is_duplicate IS NULL)
+                  AND created_at <= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+            ");
+            $stmt->execute();
+            $candidates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($candidates)) return 0;
+
+            $approvedCount = 0;
+            $upStmt = $pdo->prepare("
+                UPDATE reels 
+                SET status = 'approved', 
+                    is_active = 1, 
+                    payout_eligible = 1, 
+                    reviewed_by = 'Auto Approval Engine (10-min SLA)', 
+                    reviewed_at = NOW() 
+                WHERE id = ? AND is_active = 0
+            ");
+
+            $revStmt = $pdo->prepare("
+                INSERT INTO reel_reviews (reel_id, reviewer_id, decision, reason_code, comments, reviewed_at)
+                VALUES (?, 'System Auto-Approval', 'approved', 'auto_approved_10min', 'Auto-approved after 10-minute moderator SLA elapsed (Daytime)', NOW())
+            ");
+
+            foreach ($candidates as $cand) {
+                $createdDate = new DateTime($cand['created_at'], $istTz);
+                $uploadHour = intval($createdDate->format('G'));
+                $uploadMinute = intval($createdDate->format('i'));
+
+                // Rule: If uploaded after 9 PM (21:00 - 05:59), must be manually verified.
+                if ($uploadHour >= 21 || $uploadHour < 6) {
+                    continue;
+                }
+
+                // Rule: If uploaded within 10 minutes of 9 PM (e.g. 20:51 to 20:59),
+                // the 10-minute deadline crossed after 9:00 PM, so it fell into the night window.
+                // It therefore requires manual verification.
+                if ($uploadHour === 20 && $uploadMinute > 50) {
+                    continue;
+                }
+
+                $reelId = intval($cand['id']);
+                $upStmt->execute([$reelId]);
+
+                try {
+                    $revStmt->execute([$reelId]);
+                } catch (Throwable $e) {}
+
+                if (function_exists('logAudit')) {
+                    logAudit($pdo, 'system', 'system', 'reels', $reelId, 'auto_approve_reel',
+                        ['status' => 'under_review', 'is_active' => 0],
+                        ['status' => 'approved', 'is_active' => 1, 'reason' => '10-minute moderator SLA elapsed (Daytime)']
+                    );
+                }
+
+                $approvedCount++;
+            }
+
+            return $approvedCount;
+        } catch (Throwable $e) {
+            error_log("Error in processReelAutoApprovals: " . $e->getMessage());
+            return 0;
+        }
+    }
+}
+
+/**
+ * Deterministic tier ladder calculator based on approved eligible reels
+ */
+if (!function_exists('getTierBasePayout')) {
+    function getTierBasePayout($approvedCount) {
+        $count = intval($approvedCount);
+        if ($count >= 30) return 300.00;
+        if ($count >= 25) return 275.00;
+        if ($count >= 20) return 225.00;
+        if ($count >= 15) return 150.00;
+        if ($count >= 10) return 100.00;
+        if ($count >= 5) return 50.00;
+        return 0.00;
+    }
+}
+
+/**
+ * Calculate deterministic monthly payouts for all creators or a single creator
+ */
+if (!function_exists('calculateMonthlyPayoutEngine')) {
+    function calculateMonthlyPayoutEngine($pdo, $billingMonth, $specificCreatorId = null) {
+        $billingMonth = trim($billingMonth);
+        if (!preg_match('/^\d{4}-\d{2}$/', $billingMonth)) {
+            $billingMonth = date('Y-m');
+        }
+
+        $creatorsSql = "SELECT id, username, display_name, phone_number, status, partnership_tier FROM creators WHERE 1=1";
+        $params = [];
+        if ($specificCreatorId) {
+            $creatorsSql .= " AND id = ?";
+            $params[] = intval($specificCreatorId);
+        }
+        $creatorsStmt = $pdo->prepare($creatorsSql);
+        $creatorsStmt->execute($params);
+        $creators = $creatorsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $results = [];
+
+        foreach ($creators as $c) {
+            $cId = intval($c['id']);
+
+            // Check if existing payout record is already approved or paid
+            $chkStmt = $pdo->prepare("SELECT * FROM monthly_creator_payouts WHERE creator_id = ? AND period_month = ?");
+            $chkStmt->execute([$cId, $billingMonth]);
+            $existingPayout = $chkStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($existingPayout && in_array($existingPayout['status'], ['approved', 'paid'])) {
+                // Locked & closed period: do not overwrite
+                $results[] = $existingPayout;
+                continue;
+            }
+
+            // Count approved, non-duplicate eligible reels uploaded in this calendar month
+            $approvedCount = 0;
+            try {
+                $reelsStmt = $pdo->prepare("
+                    SELECT COUNT(*) AS approved_count
+                    FROM reels 
+                    WHERE creator_id = ? 
+                      AND (status = 'approved' OR status IS NULL)
+                      AND (is_duplicate = 0 OR is_duplicate IS NULL)
+                      AND (payout_eligible = 1 OR payout_eligible IS NULL)
+                      AND DATE_FORMAT(created_at, '%Y-%m') = ?
+                ");
+                $reelsStmt->execute([$cId, $billingMonth]);
+                $approvedCount = intval($reelsStmt->fetchColumn() ?: 0);
+            } catch (Throwable $e) {
+                try {
+                    $reelsStmt = $pdo->prepare("SELECT COUNT(*) FROM reels WHERE creator_id = ? AND is_active = 1 AND DATE_FORMAT(created_at, '%Y-%m') = ?");
+                    $reelsStmt->execute([$cId, $billingMonth]);
+                    $approvedCount = intval($reelsStmt->fetchColumn() ?: 0);
+                } catch (Throwable $e2) {}
+            }
+
+            $basePayout = getTierBasePayout($approvedCount);
+
+            // Fetch bonuses & campaign items from payout_line_items if payout exists
+            $bonusTotal = 0.00;
+            $adjustments = 0.00;
+            if ($existingPayout) {
+                try {
+                    $liStmt = $pdo->prepare("SELECT type, SUM(amount) AS total FROM payout_line_items WHERE payout_id = ? GROUP BY type");
+                    $liStmt->execute([$existingPayout['id']]);
+                    $lines = $liStmt->fetchAll(PDO::FETCH_ASSOC);
+                    foreach ($lines as $line) {
+                        if ($line['type'] === 'bonus' || $line['type'] === 'campaign') {
+                            $bonusTotal += floatval($line['total']);
+                        } elseif ($line['type'] === 'deduction' || $line['type'] === 'adjustment') {
+                            $adjustments += floatval($line['total']);
+                        }
+                    }
+                } catch (Throwable $e) {}
+            }
+
+            $grossPayout = max(0.00, $basePayout + $bonusTotal + $adjustments);
+
+            if ($existingPayout) {
+                $upStmt = $pdo->prepare("
+                    UPDATE monthly_creator_payouts 
+                    SET eligible_reel_count = ?, base_payout = ?, bonus_total = ?, adjustments = ?, gross_payout = ?
+                    WHERE id = ?
+                ");
+                $upStmt->execute([$approvedCount, $basePayout, $bonusTotal, $adjustments, $grossPayout, $existingPayout['id']]);
+                $existingPayout['eligible_reel_count'] = $approvedCount;
+                $existingPayout['base_payout'] = $basePayout;
+                $existingPayout['bonus_total'] = $bonusTotal;
+                $existingPayout['adjustments'] = $adjustments;
+                $existingPayout['gross_payout'] = $grossPayout;
+                $results[] = $existingPayout;
+            } else {
+                $insStmt = $pdo->prepare("
+                    INSERT INTO monthly_creator_payouts 
+                    (creator_id, period_month, eligible_reel_count, base_payout, bonus_total, adjustments, gross_payout, rule_version, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'v1.0', 'calculated')
+                ");
+                $insStmt->execute([$cId, $billingMonth, $approvedCount, $basePayout, $bonusTotal, $adjustments, $grossPayout]);
+                $results[] = [
+                    'id' => $pdo->lastInsertId(),
+                    'creator_id' => $cId,
+                    'period_month' => $billingMonth,
+                    'eligible_reel_count' => $approvedCount,
+                    'base_payout' => $basePayout,
+                    'bonus_total' => $bonusTotal,
+                    'adjustments' => $adjustments,
+                    'gross_payout' => $grossPayout,
+                    'status' => 'calculated'
+                ];
+            }
+        }
+        return $results;
+    }
+}
+
+/**
+ * POST or GET /api/api.php?action=calculate_monthly_payout
+ */
+function calculateMonthlyPayoutHandler($pdo) {
+    try {
+        $month = trim($_GET['month'] ?? $_POST['month'] ?? date('Y-m'));
+        $creatorId = !empty($_GET['creator_id']) ? intval($_GET['creator_id']) : (!empty($_POST['creator_id']) ? intval($_POST['creator_id']) : null);
+
+        $results = calculateMonthlyPayoutEngine($pdo, $month, $creatorId);
+        echo json_encode(['success' => true, 'month' => $month, 'payouts' => $results]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_creator_payouts
+ */
+function getCreatorPayoutsHandler($pdo) {
+    try {
+        $creatorId = intval($_GET['creator_id'] ?? $_POST['creator_id'] ?? 0);
+        if ($creatorId <= 0) {
+            echo json_encode(['success' => false, 'error' => 'creator_id is required']);
+            return;
+        }
+
+        $stmt = $pdo->prepare("SELECT * FROM monthly_creator_payouts WHERE creator_id = ? ORDER BY period_month DESC");
+        $stmt->execute([$creatorId]);
+        $payouts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Include line items
+        foreach ($payouts as &$p) {
+            $liStmt = $pdo->prepare("SELECT * FROM payout_line_items WHERE payout_id = ? ORDER BY id ASC");
+            $liStmt->execute([$p['id']]);
+            $p['line_items'] = $liStmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        echo json_encode(['success' => true, 'payouts' => $payouts]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * POST /api/api.php?action=admin_approve_creator
+ * Enforces 25-creator pilot cap on approval
+ */
+function adminApproveCreatorHandler($pdo) {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+        $creatorId = intval($input['creator_id'] ?? 0);
+        $action = trim($input['approval_action'] ?? $input['action_type'] ?? 'approve'); // 'approve', 'reject', 'suspend'
+        $tier = trim($input['tier'] ?? 'trial');
+        $reason = trim($input['reason'] ?? '');
+        $actorId = trim($input['admin_id'] ?? 'admin');
+
+        if ($creatorId <= 0) {
+            echo json_encode(['success' => false, 'error' => 'creator_id is required']);
+            return;
+        }
+
+        $curStmt = $pdo->prepare("SELECT * FROM creators WHERE id = ?");
+        $curStmt->execute([$creatorId]);
+        $creator = $curStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$creator) {
+            echo json_encode(['success' => false, 'error' => 'Creator not found']);
+            return;
+        }
+
+        if ($action === 'approve') {
+            // Check active creator cap: max 25
+            $capStmt = $pdo->query("SELECT COUNT(*) FROM creators WHERE status = 'active'");
+            $activeCount = intval($capStmt->fetchColumn() ?: 0);
+            if ($activeCount >= 25 && $creator['status'] !== 'active') {
+                http_response_code(409);
+                echo json_encode(['success' => false, 'error' => 'Cannot approve creator: 25-creator pilot cap reached. Current active creators: ' . $activeCount]);
+                return;
+            }
+
+            $pdo->prepare("UPDATE creators SET status = 'active', partnership_tier = ?, is_verified = 1, reviewed_by = ?, reviewed_at = NOW(), approved_at = NOW() WHERE id = ?")
+                ->execute([$tier, $actorId, $creatorId]);
+        } elseif ($action === 'reject') {
+            $pdo->prepare("UPDATE creators SET status = 'rejected', rejection_reason = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?")
+                ->execute([$reason, $actorId, $creatorId]);
+        } elseif ($action === 'suspend') {
+            $pdo->prepare("UPDATE creators SET status = 'suspended', rejection_reason = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?")
+                ->execute([$reason, $actorId, $creatorId]);
+        }
+
+        logAudit($pdo, $actorId, 'admin', 'creators', $creatorId, 'creator_' . $action, ['status' => $creator['status']], ['status' => $action === 'approve' ? 'active' : $action]);
+
+        echo json_encode(['success' => true, 'message' => "Creator {$action}d successfully"]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * POST /api/api.php?action=admin_review_reel
+ * Moderates reel with 5 standardized reason codes and review history
+ */
+function adminReviewReelHandler($pdo) {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+        $reelId = intval($input['reel_id'] ?? 0);
+        $decision = trim($input['decision'] ?? 'approved'); // 'approved', 'changes_requested', 'rejected'
+        $reasonCode = trim($input['reason_code'] ?? ''); // 'copyright', 'duplicate', 'misleading', 'low_quality', 'policy_violation'
+        $comments = trim($input['comments'] ?? '');
+        $actorId = trim($input['admin_id'] ?? 'moderator');
+
+        if ($reelId <= 0) {
+            echo json_encode(['success' => false, 'error' => 'reel_id is required']);
+            return;
+        }
+
+        $rStmt = $pdo->prepare("SELECT * FROM reels WHERE id = ?");
+        $rStmt->execute([$reelId]);
+        $reel = $rStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$reel) {
+            echo json_encode(['success' => false, 'error' => 'Reel not found']);
+            return;
+        }
+
+        // Insert immutable review record
+        $revStmt = $pdo->prepare("INSERT INTO reel_reviews (reel_id, reviewer_id, decision, reason_code, comments, reviewed_at) VALUES (?, ?, ?, ?, ?, NOW())");
+        $revStmt->execute([$reelId, $actorId, $decision, $reasonCode, $comments]);
+
+        // Update reel status
+        $payoutEligible = ($decision === 'approved' && empty($reel['is_duplicate'])) ? 1 : 0;
+        $isActive = ($decision === 'approved') ? 1 : 0;
+
+        $upStmt = $pdo->prepare("
+            UPDATE reels 
+            SET status = ?, rejection_reason_code = ?, reviewer_feedback = ?, reviewed_at = NOW(), reviewed_by = ?, payout_eligible = ?, is_active = ?
+            WHERE id = ?
+        ");
+        $upStmt->execute([$decision, $reasonCode, $comments, $actorId, $payoutEligible, $isActive, $reelId]);
+
+        logAudit($pdo, $actorId, 'moderator', 'reels', $reelId, 'review_reel', ['status' => $reel['status']], ['status' => $decision, 'reason' => $reasonCode]);
+
+        echo json_encode(['success' => true, 'message' => "Reel marked as {$decision}"]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * POST /api/api.php?action=lock_payout_batch
+ */
+function lockPayoutBatchHandler($pdo) {
+    try {
+        $month = trim($_POST['month'] ?? date('Y-m'));
+        $actorId = trim($_POST['admin_id'] ?? 'finance');
+
+        $up = $pdo->prepare("UPDATE monthly_creator_payouts SET status = 'locked' WHERE period_month = ? AND status = 'calculated'");
+        $up->execute([$month]);
+
+        logAudit($pdo, $actorId, 'finance', 'payout_batch', $month, 'lock_payout_batch', null, ['status' => 'locked']);
+        echo json_encode(['success' => true, 'message' => "Payout batch for {$month} locked successfully"]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * POST /api/api.php?action=approve_payout_batch
+ */
+function approvePayoutBatchHandler($pdo) {
+    try {
+        $month = trim($_POST['month'] ?? date('Y-m'));
+        $actorId = trim($_POST['admin_id'] ?? 'finance');
+
+        $up = $pdo->prepare("UPDATE monthly_creator_payouts SET status = 'approved', approved_by = ? WHERE period_month = ? AND status IN ('calculated', 'locked')");
+        $up->execute([$actorId, $month]);
+
+        logAudit($pdo, $actorId, 'finance', 'payout_batch', $month, 'approve_payout_batch', null, ['status' => 'approved', 'approved_by' => $actorId]);
+        echo json_encode(['success' => true, 'message' => "Payout batch for {$month} approved by finance"]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * POST /api/api.php?action=mark_payout_paid
+ */
+function markPayoutPaidHandler($pdo) {
+    try {
+        $payoutId = intval($_POST['payout_id'] ?? 0);
+        $ref = trim($_POST['payment_reference'] ?? $_POST['utr'] ?? '');
+        $actorId = trim($_POST['admin_id'] ?? 'finance');
+
+        if ($payoutId <= 0 || empty($ref)) {
+            echo json_encode(['success' => false, 'error' => 'payout_id and payment_reference (UTR) are required']);
+            return;
+        }
+
+        $up = $pdo->prepare("UPDATE monthly_creator_payouts SET status = 'paid', payment_reference = ?, paid_at = NOW() WHERE id = ?");
+        $up->execute([$ref, $payoutId]);
+
+        logAudit($pdo, $actorId, 'finance', 'monthly_creator_payouts', $payoutId, 'mark_payout_paid', null, ['payment_reference' => $ref]);
+        echo json_encode(['success' => true, 'message' => 'Payout marked as paid with UTR reference']);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_creator_campaigns
+ */
+function getCreatorCampaignsHandler($pdo) {
+    try {
+        $creatorId = intval($_GET['creator_id'] ?? $_POST['creator_id'] ?? 0);
+        if ($creatorId <= 0) {
+            echo json_encode(['success' => false, 'error' => 'creator_id is required']);
+            return;
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT a.*, c.name AS campaign_name, c.client_brand, c.objective, c.start_date, c.end_date
+            FROM campaign_creator_assignments a
+            JOIN campaigns c ON a.campaign_id = c.id
+            WHERE a.creator_id = ?
+            ORDER BY a.id DESC
+        ");
+        $stmt->execute([$creatorId]);
+        $assignments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($assignments as &$ass) {
+            $dStmt = $pdo->prepare("SELECT * FROM campaign_deliverables WHERE assignment_id = ? ORDER BY id DESC");
+            $dStmt->execute([$ass['id']]);
+            $ass['deliverables'] = $dStmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        echo json_encode(['success' => true, 'campaigns' => $assignments]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * POST /api/api.php?action=submit_campaign_deliverable
+ */
+function submitCampaignDeliverableHandler($pdo) {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+        $assignmentId = intval($input['assignment_id'] ?? 0);
+        $platform = trim($input['platform'] ?? 'Instagram');
+        $contentUrl = trim($input['content_url'] ?? '');
+        $proofUrl = trim($input['proof_url'] ?? '');
+
+        if ($assignmentId <= 0 || (empty($contentUrl) && empty($proofUrl))) {
+            echo json_encode(['success' => false, 'error' => 'assignment_id and proof/content URL are required']);
+            return;
+        }
+
+        $ins = $pdo->prepare("INSERT INTO campaign_deliverables (assignment_id, platform, content_url, proof_url, approval_status, submitted_at) VALUES (?, ?, ?, ?, 'submitted', NOW())");
+        $ins->execute([$assignmentId, $platform, $contentUrl, $proofUrl]);
+        $dId = $pdo->lastInsertId();
+
+        $pdo->prepare("UPDATE campaign_creator_assignments SET status = 'submitted' WHERE id = ?")->execute([$assignmentId]);
+
+        echo json_encode(['success' => true, 'deliverable_id' => intval($dId), 'message' => 'Deliverable proof submitted for brand review']);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * POST /api/api.php?action=admin_review_deliverable
+ */
+function adminReviewDeliverableHandler($pdo) {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+        $deliverableId = intval($input['deliverable_id'] ?? 0);
+        $decision = trim($input['decision'] ?? 'approved'); // 'approved', 'rejected'
+        $actorId = trim($input['admin_id'] ?? 'campaign_manager');
+
+        $up = $pdo->prepare("UPDATE campaign_deliverables SET approval_status = ?, reviewed_at = NOW() WHERE id = ?");
+        $up->execute([$decision, $deliverableId]);
+
+        logAudit($pdo, $actorId, 'campaign_manager', 'campaign_deliverables', $deliverableId, 'review_deliverable', null, ['status' => $decision]);
+        echo json_encode(['success' => true, 'message' => "Campaign deliverable {$decision}"]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_admin_creator_analytics
+ */
+function getAdminCreatorAnalyticsHandler($pdo) {
+    try {
+        $activeCreators = intval($pdo->query("SELECT COUNT(*) FROM creators WHERE status = 'active'")->fetchColumn() ?: 0);
+        $totalSubmissions = intval($pdo->query("SELECT COUNT(*) FROM reels")->fetchColumn() ?: 0);
+        $approvedReels = intval($pdo->query("SELECT COUNT(*) FROM reels WHERE status = 'approved'")->fetchColumn() ?: 0);
+        $totalViews = intval($pdo->query("SELECT SUM(views_count) FROM reels")->fetchColumn() ?: 0);
+        $totalPayoutCommitted = floatval($pdo->query("SELECT SUM(gross_payout) FROM monthly_creator_payouts")->fetchColumn() ?: 0.00);
+
+        // Leaderboard
+        $lbStmt = $pdo->query("
+            SELECT c.id, c.display_name, c.username, c.partnership_tier, c.status,
+                   COUNT(r.id) AS total_reels,
+                   SUM(CASE WHEN r.status = 'approved' THEN 1 ELSE 0 END) AS approved_reels,
+                   SUM(r.views_count) AS total_views,
+                   SUM(r.likes_count) AS total_likes
+            FROM creators c
+            LEFT JOIN reels r ON c.id = r.creator_id
+            GROUP BY c.id
+            ORDER BY approved_reels DESC, total_views DESC
+            LIMIT 25
+        ");
+        $leaderboard = $lbStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'kpis' => [
+                'active_creators' => $activeCreators,
+                'pilot_cap' => 25,
+                'total_submissions' => $totalSubmissions,
+                'approved_reels' => $approvedReels,
+                'approval_rate' => $totalSubmissions > 0 ? round(($approvedReels / $totalSubmissions) * 100, 1) : 0,
+                'total_views' => $totalViews,
+                'total_payout_committed' => $totalPayoutCommitted
+            ],
+            'leaderboard' => $leaderboard
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_admin_audit_logs
+ */
+function getAdminAuditLogsHandler($pdo) {
+    try {
+        $limit = intval($_GET['limit'] ?? 50);
+        $stmt = $pdo->prepare("SELECT * FROM audit_logs ORDER BY id DESC LIMIT ?");
+        $stmt->execute([$limit]);
+        $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'audit_logs' => $logs]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}

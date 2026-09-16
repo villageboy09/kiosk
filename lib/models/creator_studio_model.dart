@@ -137,4 +137,20 @@ class CreatorStudioData {
       dailyTrends: trends,
     );
   }
+
+  CreatorStudioData copyWith({
+    ReelCreator? creator,
+    CreatorStats? stats,
+    List<ReelModel>? reels,
+    List<NewsArticle>? articles,
+    List<DailyTrendItem>? dailyTrends,
+  }) {
+    return CreatorStudioData(
+      creator: creator ?? this.creator,
+      stats: stats ?? this.stats,
+      reels: reels ?? this.reels,
+      articles: articles ?? this.articles,
+      dailyTrends: dailyTrends ?? this.dailyTrends,
+    );
+  }
 }

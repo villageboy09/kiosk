@@ -143,6 +143,7 @@ void main() {
         'hasSaved': false,
         'commentsCount': 12,
         'viewsCount': 8900,
+        'thumbnail_url': 'https://example.com/thumb5.jpg',
         'created_at': DateTime.now().toIso8601String(),
       };
 
@@ -150,6 +151,7 @@ void main() {
       expect(reel.id, 5);
       expect(reel.videoUrl, 'https://example.com/sample_video.mp4');
       expect(reel.creator.username, 'agri_master');
+      expect(reel.thumbnailUrl, 'https://example.com/thumb5.jpg');
       expect(reel.hasLiked, false);
       expect(reel.likes, '1.5K');
       expect(reel.saves, '250');
@@ -165,6 +167,7 @@ void main() {
       expect(updated.hasSaved, true);
       expect(updated.likesRaw, 1501);
       expect(updated.id, 5);
+      expect(updated.thumbnailUrl, 'https://example.com/thumb5.jpg');
     });
   });
 
@@ -351,6 +354,58 @@ void main() {
       for (final item in deactivatedItems) {
         expect((item as dynamic).isActive, isFalse);
       }
+    });
+
+    testWidgets('ReelsScreen mounts RefreshIndicator and supports pull-to-refresh', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      ReelsScreen.isTabActive.value = true;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: ReelsScreen(isTabVisible: true),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.byType(RefreshIndicator), findsOneWidget);
+
+      // Verify pull gesture on PageView triggers refresh cycle
+      await tester.fling(find.byType(PageView), const Offset(0, 300), 1000);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.byType(ReelsScreen), findsOneWidget);
+    });
+
+    testWidgets('ReelsScreen supports smooth swiping between reels without errors', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      ReelsScreen.isTabActive.value = true;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: ReelsScreen(isTabVisible: true),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Scroll forward to page 1
+      await tester.fling(find.byType(PageView), const Offset(0, -600), 1000);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Scroll forward to page 2
+      await tester.fling(find.byType(PageView), const Offset(0, -600), 1000);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Scroll backward to page 1
+      await tester.fling(find.byType(PageView), const Offset(0, 600), 1000);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.byType(ReelsScreen), findsOneWidget);
     });
   });
 }

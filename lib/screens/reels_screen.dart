@@ -32,10 +32,12 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
   bool _isCreator = false;
   bool _isMuted = false;
   bool _isVisible = false;
+  User? _currentUser;
 
   // Video controller pool: only current ± 1 are kept alive
   final Map<int, VideoPlayerController> _controllers = {};
   final Set<int> _initializingIndices = {};
+  final Set<int> _failedIndices = {};
 
   @override
   void initState() {
@@ -43,6 +45,7 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _pageController = PageController();
     _checkCreatorStatus();
+    _loadCurrentUser();
 
     // 1. Initial visibility
     _isVisible = widget.isTabVisible ?? ReelsScreen.isTabActive.value;
@@ -52,6 +55,17 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
 
     // 3. Tab visibility listener
     ReelsScreen.isTabActive.addListener(_onTabVisibilityChanged);
+  }
+
+  Future<void> _loadCurrentUser() async {
+    try {
+      final user = await AuthService.getCurrentUser();
+      if (mounted) {
+        setState(() {
+          _currentUser = user;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -209,64 +223,104 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
   void _preloadSurrounding(int centerIndex) {
     if (_reels.isEmpty) return;
 
-    final targetIndices = <int>[
-      centerIndex,
-      if (centerIndex + 1 < _reels.length) centerIndex + 1,
-      if (centerIndex - 1 >= 0) centerIndex - 1,
-    ];
-
-    // Initialize required controllers
-    for (final index in targetIndices) {
-      if (!_controllers.containsKey(index) && !_initializingIndices.contains(index)) {
-        _initControllerForIndex(index);
-      }
+    // 1. Proactively preload current video first if needed
+    if (!_controllers.containsKey(centerIndex) &&
+        !_initializingIndices.contains(centerIndex) &&
+        !_failedIndices.contains(centerIndex)) {
+      _initControllerForIndex(centerIndex);
     }
 
-    // Play active controller, pause others
+    // 2. Next upcoming video
+    final nextIndex = centerIndex + 1;
+    if (nextIndex < _reels.length &&
+        !_controllers.containsKey(nextIndex) &&
+        !_initializingIndices.contains(nextIndex) &&
+        !_failedIndices.contains(nextIndex)) {
+      _initControllerForIndex(nextIndex);
+    }
+
+    // 3. Previous video (for instant backwards swiping)
+    final prevIndex = centerIndex - 1;
+    if (prevIndex >= 0 &&
+        !_controllers.containsKey(prevIndex) &&
+        !_initializingIndices.contains(prevIndex) &&
+        !_failedIndices.contains(prevIndex)) {
+      _initControllerForIndex(prevIndex);
+    }
+
+    // 4. Play active controller, pause others
     for (final entry in _controllers.entries) {
       final idx = entry.key;
       final controller = entry.value;
 
-      if (idx == centerIndex && _isVisible) {
-        controller.setVolume(_isMuted ? 0.0 : 1.0);
-        controller.setLooping(true);
-        if (controller.value.duration > Duration.zero &&
-            controller.value.position >= controller.value.duration) {
-          controller.seekTo(Duration.zero);
+      try {
+        if (!controller.value.isInitialized) continue;
+        if (idx == centerIndex && _isVisible) {
+          controller.setVolume(_isMuted ? 0.0 : 1.0);
+          controller.setLooping(true);
+          if (controller.value.duration > Duration.zero &&
+              controller.value.position >= controller.value.duration) {
+            controller.seekTo(Duration.zero);
+          }
+          if (!controller.value.isPlaying) {
+            controller.play();
+          }
+        } else {
+          if (controller.value.isPlaying) {
+            controller.pause();
+          }
+          controller.setVolume(0.0);
         }
-        if (!controller.value.isPlaying) {
-          controller.play();
-        }
-      } else {
-        if (controller.value.isPlaying) {
-          controller.pause();
-        }
-        controller.setVolume(0.0);
-      }
+      } catch (_) {}
     }
 
-    // Clean up distant controllers (2+ pages away) to prevent memory leaks
+    // 5. Clean up distant controllers (2+ pages away) to prevent memory leaks & hardware decoder contention
     final toRemove = _controllers.keys
         .where((key) => (key - centerIndex).abs() > 1)
         .toList();
 
-    for (final key in toRemove) {
-      final controller = _controllers.remove(key);
-      if (controller != null) {
-        controller.pause();
-        controller.dispose();
+    if (toRemove.isNotEmpty) {
+      for (final key in toRemove) {
+        final controller = _controllers.remove(key);
+        if (controller != null) {
+          try {
+            controller.pause();
+            controller.dispose();
+          } catch (_) {}
+        }
+      }
+      if (mounted) {
+        setState(() {});
       }
     }
   }
 
   Future<void> _initControllerForIndex(int index) async {
-    if (index < 0 || index >= _reels.length) return;
-    if (_initializingIndices.contains(index)) return;
-    _initializingIndices.add(index);
+    if (index < 0 || index >= _reels.length) {
+      return;
+    }
+    if (_initializingIndices.contains(index) ||
+        _controllers.containsKey(index) ||
+        _failedIndices.contains(index)) {
+      return;
+    }
 
     final reel = _reels[index];
+    if (reel.videoUrl.trim().isEmpty) {
+      _failedIndices.add(index);
+      return;
+    }
+
+    final uri = Uri.tryParse(reel.videoUrl.trim());
+    if (uri == null) {
+      _failedIndices.add(index);
+      return;
+    }
+
+    _initializingIndices.add(index);
+
     final controller = VideoPlayerController.networkUrl(
-      Uri.parse(reel.videoUrl),
+      uri,
       videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     );
 
@@ -275,6 +329,16 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
       controller.setLooping(true);
 
       if (mounted) {
+        // If user already scrolled away while this controller was initializing,
+        // dispose immediately to prevent memory leaks and hardware decoder contention.
+        if ((index - _focusedIndex).abs() > 1) {
+          _initializingIndices.remove(index);
+          try {
+            controller.dispose();
+          } catch (_) {}
+          return;
+        }
+
         _controllers[index] = controller;
         _initializingIndices.remove(index);
 
@@ -290,24 +354,30 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
           controller.setVolume(0.0);
         }
 
-        // Only trigger rebuild if this is the active video needing presentation
-        if (index == _focusedIndex) {
-          setState(() {});
-        }
+        // Rebuild so _AuthenticReelItem gets the controller attached
+        setState(() {});
       } else {
-        controller.dispose();
+        _initializingIndices.remove(index);
+        try {
+          controller.dispose();
+        } catch (_) {}
       }
     } catch (_) {
       _initializingIndices.remove(index);
-      controller.dispose();
+      _failedIndices.add(index);
+      try {
+        controller.dispose();
+      } catch (_) {}
     }
   }
 
   void _pauseAllVideos() {
     for (final controller in _controllers.values) {
-      if (controller.value.isInitialized && controller.value.isPlaying) {
-        controller.pause();
-      }
+      try {
+        if (controller.value.isInitialized && controller.value.isPlaying) {
+          controller.pause();
+        }
+      } catch (_) {}
     }
   }
 
@@ -319,15 +389,17 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
 
     final controller = _controllers[_focusedIndex];
     if (controller != null && controller.value.isInitialized) {
-      controller.setVolume(_isMuted ? 0.0 : 1.0);
-      controller.setLooping(true);
-      if (controller.value.duration > Duration.zero &&
-          controller.value.position >= controller.value.duration) {
-        controller.seekTo(Duration.zero);
-      }
-      if (!controller.value.isPlaying) {
-        controller.play();
-      }
+      try {
+        controller.setVolume(_isMuted ? 0.0 : 1.0);
+        controller.setLooping(true);
+        if (controller.value.duration > Duration.zero &&
+            controller.value.position >= controller.value.duration) {
+          controller.seekTo(Duration.zero);
+        }
+        if (!controller.value.isPlaying) {
+          controller.play();
+        }
+      } catch (_) {}
     } else {
       _initControllerForIndex(_focusedIndex);
     }
@@ -335,13 +407,56 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
 
   void _onPageChanged(int index) {
     if (_focusedIndex == index) return;
+    final prevIndex = _focusedIndex;
     setState(() {
       _focusedIndex = index;
     });
+
+    // Immediately pause previous controller to free GPU/decoder and avoid audio overlap
+    final prevController = _controllers[prevIndex];
+    if (prevController != null) {
+      try {
+        if (prevController.value.isInitialized && prevController.value.isPlaying) {
+          prevController.pause();
+        }
+      } catch (_) {}
+    }
+
     _preloadSurrounding(index);
     if (_isVisible) {
       _playCurrentVideo();
     }
+  }
+
+  /// Pull to refresh and re-sync reels feed
+  Future<void> _handleRefresh() async {
+    try {
+      final fresh = await ReelsService.getReels(forceRefresh: true);
+      if (!mounted) return;
+
+      if (fresh.isNotEmpty) {
+        for (final c in _controllers.values) {
+          try {
+            c.pause();
+            c.dispose();
+          } catch (_) {}
+        }
+        _controllers.clear();
+        _initializingIndices.clear();
+        _failedIndices.clear();
+
+        setState(() {
+          _reels = fresh;
+          _hasError = false;
+          _focusedIndex = 0;
+        });
+
+        _preloadSurrounding(0);
+        if (_isVisible) {
+          _playCurrentVideo();
+        }
+      }
+    } catch (_) {}
   }
 
   void _toggleGlobalMute() {
@@ -402,47 +517,60 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
     if (_hasError && _reels.isEmpty) {
       return Scaffold(
         backgroundColor: Colors.black,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    shape: BoxShape.circle,
+        body: RefreshIndicator(
+          color: const Color(0xFF10B981),
+          backgroundColor: const Color(0xFF18181B),
+          onRefresh: _handleRefresh,
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.videocam_off_rounded,
+                            color: Colors.white60,
+                            size: 44,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'reels_empty_title'.tr(),
+                          style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'reels_empty_desc'.tr(),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13),
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton.icon(
+                          onPressed: _handleRefresh,
+                          icon: const Icon(Icons.refresh_rounded, size: 16),
+                          label: const Text('Refresh'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.videocam_off_rounded,
-                    color: Colors.white60,
-                    size: 44,
-                  ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'reels_empty_title'.tr(),
-                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'reels_empty_desc'.tr(),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton.icon(
-                  onPressed: _loadReelsCacheFirst,
-                  icon: const Icon(Icons.refresh_rounded, size: 16),
-                  label: const Text('Refresh'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -462,30 +590,54 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Snappy, Smooth Page Snapping Physics
-              MediaQuery.removePadding(
-                context: context,
-                removeTop: true,
-                child: PageView.builder(
-                  controller: _pageController,
-                  scrollDirection: Axis.vertical,
-                  physics: const PageScrollPhysics(),
-                  itemCount: _reels.length,
-                onPageChanged: _onPageChanged,
-                itemBuilder: (context, index) {
-                  return _AuthenticReelItem(
-                    key: ValueKey('reel_${_reels[index].id}'),
-                    reel: _reels[index],
-                    isActive: (index == _focusedIndex) && _isVisible,
-                    controller: _controllers[index],
-                    isMuted: _isMuted,
-                    onToggleMute: _toggleGlobalMute,
-                    onReelChanged: (updated) => _onReelUpdated(index, updated),
-                    onDeleteReel: () => _handleReelDeleted(index),
-                  );
-                },
+              // Snappy, Smooth Page Snapping Physics with Pull to Refresh
+              RefreshIndicator(
+                color: const Color(0xFF10B981),
+                backgroundColor: const Color(0xFF18181B),
+                displacement: 60,
+                onRefresh: _handleRefresh,
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeTop: true,
+                  child: PageView.builder(
+                    controller: _pageController,
+                    scrollDirection: Axis.vertical,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    findChildIndexCallback: (Key key) {
+                      if (key is ValueKey<String>) {
+                        final str = key.value;
+                        if (str.startsWith('reel_')) {
+                          final id = int.tryParse(str.substring(5));
+                          if (id != null) {
+                            final idx = _reels.indexWhere((r) => r.id == id);
+                            return idx == -1 ? null : idx;
+                          }
+                        }
+                      }
+                      return null;
+                    },
+                    itemCount: _reels.length,
+                    onPageChanged: _onPageChanged,
+                    itemBuilder: (context, index) {
+                      final reel = _reels[index];
+                      return RepaintBoundary(
+                        key: ValueKey('reel_${reel.id}'),
+                        child: _AuthenticReelItem(
+                          key: ValueKey('item_${reel.id}'),
+                          reel: reel,
+                          isActive: (index == _focusedIndex) && _isVisible,
+                          controller: _controllers[index],
+                          currentUser: _currentUser,
+                          isMuted: _isMuted,
+                          onToggleMute: _toggleGlobalMute,
+                          onReelChanged: (updated) => _onReelUpdated(index, updated),
+                          onDeleteReel: () => _handleReelDeleted(index),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
 
               // Minimalist Top Bar (Transparent & Uncluttered)
               Positioned(
@@ -580,6 +732,7 @@ class _AuthenticReelItem extends StatefulWidget {
   final Reel reel;
   final bool isActive;
   final VideoPlayerController? controller;
+  final User? currentUser;
   final bool isMuted;
   final VoidCallback onToggleMute;
   final ValueChanged<Reel> onReelChanged;
@@ -590,6 +743,7 @@ class _AuthenticReelItem extends StatefulWidget {
     required this.reel,
     required this.isActive,
     this.controller,
+    this.currentUser,
     required this.isMuted,
     required this.onToggleMute,
     required this.onReelChanged,
@@ -600,14 +754,26 @@ class _AuthenticReelItem extends StatefulWidget {
   State<_AuthenticReelItem> createState() => _AuthenticReelItemState();
 }
 
-class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProviderStateMixin {
+class _AuthenticReelItemState extends State<_AuthenticReelItem>
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive {
+    if (widget.isActive) return true;
+    final c = widget.controller;
+    if (c == null) return false;
+    try {
+      return c.value.isInitialized;
+    } catch (_) {
+      return false;
+    }
+  }
+
   bool _isPlaying = true;
   bool _showPlayPauseOverlay = false;
   bool _showHeartOverlay = false;
   bool _isCaptionExpanded = false;
   late Reel _currentReel;
   DateTime? _playStartTime;
-  User? _currentUser;
 
   late AnimationController _heartAnimController;
   late AnimationController _discRotateController;
@@ -616,7 +782,6 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
   void initState() {
     super.initState();
     _currentReel = widget.reel;
-    _checkCurrentUser();
 
     _heartAnimController = AnimationController(
       vsync: this,
@@ -632,11 +797,13 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
       _playStartTime = DateTime.now();
       _isPlaying = true;
       _discRotateController.repeat();
-      if (widget.controller != null && widget.controller!.value.isInitialized) {
-        if (!widget.controller!.value.isPlaying) {
-          widget.controller!.play();
+      try {
+        if (widget.controller != null && widget.controller!.value.isInitialized) {
+          if (!widget.controller!.value.isPlaying) {
+            widget.controller!.play();
+          }
         }
-      }
+      } catch (_) {}
     } else {
       _isPlaying = false;
       _discRotateController.stop();
@@ -646,45 +813,45 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
   }
 
   void _attachControllerListener(VideoPlayerController? controller) {
-    controller?.addListener(_onControllerStateChanged);
+    try {
+      controller?.addListener(_onControllerStateChanged);
+    } catch (_) {}
   }
 
   void _detachControllerListener(VideoPlayerController? controller) {
-    controller?.removeListener(_onControllerStateChanged);
+    try {
+      controller?.removeListener(_onControllerStateChanged);
+    } catch (_) {}
   }
 
   void _onControllerStateChanged() {
     if (!mounted || widget.controller == null) return;
-    final isPlaying = widget.controller!.value.isPlaying;
-    if (_isPlaying != isPlaying && widget.isActive) {
-      setState(() {
-        _isPlaying = isPlaying;
-      });
-      if (isPlaying) {
-        if (!_discRotateController.isAnimating) _discRotateController.repeat();
-      } else {
-        if (_discRotateController.isAnimating) _discRotateController.stop();
-      }
-    }
-  }
-
-  Future<void> _checkCurrentUser() async {
     try {
-      final user = await AuthService.getCurrentUser();
-      if (mounted) setState(() => _currentUser = user);
+      final isPlaying = widget.controller!.value.isPlaying;
+      if (_isPlaying != isPlaying && widget.isActive) {
+        setState(() {
+          _isPlaying = isPlaying;
+        });
+        if (isPlaying) {
+          if (!_discRotateController.isAnimating) _discRotateController.repeat();
+        } else {
+          if (_discRotateController.isAnimating) _discRotateController.stop();
+        }
+      }
     } catch (_) {}
   }
 
   bool _isOwnerOfCurrentReel() {
-    if (_currentUser == null) return false;
-    final currentPhone = (_currentUser!.phoneNumber ?? _currentUser!.userId).trim();
+    final user = widget.currentUser;
+    if (user == null) return false;
+    final currentPhone = (user.phoneNumber ?? user.userId).trim();
     final reelPhone = _currentReel.phoneNumber.trim();
     if (reelPhone.isNotEmpty && (reelPhone == currentPhone || currentPhone.endsWith(reelPhone) || reelPhone.endsWith(currentPhone))) return true;
     final creatorUser = _currentReel.creator.username.toLowerCase().trim();
-    final myName = _currentUser!.name.toLowerCase().trim();
-    final myId = _currentUser!.userId.toLowerCase().trim();
+    final myName = user.name.toLowerCase().trim();
+    final myId = user.userId.toLowerCase().trim();
     if (creatorUser.isNotEmpty && (creatorUser == myName || creatorUser == myId)) return true;
-    if (_currentUser!.isCreator && _currentReel.creator.displayName.toLowerCase().trim() == myName) return true;
+    if (user.isCreator && _currentReel.creator.displayName.toLowerCase().trim() == myName) return true;
     return false;
   }
 
@@ -736,37 +903,15 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
       _currentReel = widget.reel;
     }
 
+    if (widget.isActive != oldWidget.isActive || widget.controller != oldWidget.controller) {
+      updateKeepAlive();
+    }
+
     if (oldWidget.controller != widget.controller) {
       _detachControllerListener(oldWidget.controller);
       _attachControllerListener(widget.controller);
-      if (widget.isActive && widget.controller != null && widget.controller!.value.isInitialized) {
-        widget.controller!.setVolume(widget.isMuted ? 0.0 : 1.0);
-        widget.controller!.setLooping(true);
-        if (widget.controller!.value.duration > Duration.zero &&
-            widget.controller!.value.position >= widget.controller!.value.duration) {
-          widget.controller!.seekTo(Duration.zero);
-        }
-        if (!widget.controller!.value.isPlaying) {
-          widget.controller!.play();
-        }
-        _isPlaying = true;
-        if (!_discRotateController.isAnimating) {
-          _discRotateController.repeat();
-        }
-      }
-    }
-
-    if (widget.isMuted != oldWidget.isMuted &&
-        widget.controller != null &&
-        widget.controller!.value.isInitialized) {
-      widget.controller!.setVolume(widget.isMuted ? 0.0 : 1.0);
-    }
-
-    if (widget.isActive != oldWidget.isActive) {
-      if (widget.isActive) {
-        _playStartTime = DateTime.now();
-        _isPlaying = true;
-        if (widget.controller != null && widget.controller!.value.isInitialized) {
+      try {
+        if (widget.isActive && widget.controller != null && widget.controller!.value.isInitialized) {
           widget.controller!.setVolume(widget.isMuted ? 0.0 : 1.0);
           widget.controller!.setLooping(true);
           if (widget.controller!.value.duration > Duration.zero &&
@@ -776,18 +921,53 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
           if (!widget.controller!.value.isPlaying) {
             widget.controller!.play();
           }
+          _isPlaying = true;
+          if (!_discRotateController.isAnimating) {
+            _discRotateController.repeat();
+          }
         }
+      } catch (_) {}
+    }
+
+    if (widget.isMuted != oldWidget.isMuted &&
+        widget.controller != null) {
+      try {
+        if (widget.controller!.value.isInitialized) {
+          widget.controller!.setVolume(widget.isMuted ? 0.0 : 1.0);
+        }
+      } catch (_) {}
+    }
+
+    if (widget.isActive != oldWidget.isActive) {
+      if (widget.isActive) {
+        _playStartTime = DateTime.now();
+        _isPlaying = true;
+        try {
+          if (widget.controller != null && widget.controller!.value.isInitialized) {
+            widget.controller!.setVolume(widget.isMuted ? 0.0 : 1.0);
+            widget.controller!.setLooping(true);
+            if (widget.controller!.value.duration > Duration.zero &&
+                widget.controller!.value.position >= widget.controller!.value.duration) {
+              widget.controller!.seekTo(Duration.zero);
+            }
+            if (!widget.controller!.value.isPlaying) {
+              widget.controller!.play();
+            }
+          }
+        } catch (_) {}
         if (!_discRotateController.isAnimating) {
           _discRotateController.repeat();
         }
       } else {
         _logWatchDuration();
         _isPlaying = false;
-        if (widget.controller != null &&
-            widget.controller!.value.isInitialized &&
-            widget.controller!.value.isPlaying) {
-          widget.controller!.pause();
-        }
+        try {
+          if (widget.controller != null &&
+              widget.controller!.value.isInitialized &&
+              widget.controller!.value.isPlaying) {
+            widget.controller!.pause();
+          }
+        } catch (_) {}
         if (_discRotateController.isAnimating) {
           _discRotateController.stop();
         }
@@ -810,11 +990,13 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
   @override
   void dispose() {
     _detachControllerListener(widget.controller);
-    if (widget.controller != null &&
-        widget.controller!.value.isInitialized &&
-        widget.controller!.value.isPlaying) {
-      widget.controller!.pause();
-    }
+    try {
+      if (widget.controller != null &&
+          widget.controller!.value.isInitialized &&
+          widget.controller!.value.isPlaying) {
+        widget.controller!.pause();
+      }
+    } catch (_) {}
     _logWatchDuration();
     _heartAnimController.dispose();
     _discRotateController.dispose();
@@ -823,23 +1005,28 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
 
   void _togglePlayPause() {
     final controller = widget.controller;
-    if (controller == null || !controller.value.isInitialized) return;
+    if (controller == null) return;
+    try {
+      if (!controller.value.isInitialized) return;
 
-    HapticFeedback.lightImpact();
-    if (controller.value.isPlaying) {
-      controller.pause();
-      setState(() {
-        _isPlaying = false;
-        _showPlayPauseOverlay = true;
-      });
-      _discRotateController.stop();
-    } else {
-      controller.play();
-      setState(() {
-        _isPlaying = true;
-        _showPlayPauseOverlay = true;
-      });
-      _discRotateController.repeat();
+      HapticFeedback.lightImpact();
+      if (controller.value.isPlaying) {
+        controller.pause();
+        setState(() {
+          _isPlaying = false;
+          _showPlayPauseOverlay = true;
+        });
+        _discRotateController.stop();
+      } else {
+        controller.play();
+        setState(() {
+          _isPlaying = true;
+          _showPlayPauseOverlay = true;
+        });
+        _discRotateController.repeat();
+      }
+    } catch (_) {
+      return;
     }
 
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -1307,6 +1494,7 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final controller = widget.controller;
     final isInitialized = controller != null && controller.value.isInitialized;
     final hasContactPhone = _currentReel.phoneNumber.isNotEmpty || _currentReel.creator.phoneNumber.isNotEmpty;
@@ -1322,11 +1510,18 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem> with TickerProvi
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Dark Background placeholder
-              Container(color: Colors.black),
+              // Dark Background / Thumbnail placeholder
+              if (_currentReel.thumbnailUrl != null && _currentReel.thumbnailUrl!.isNotEmpty)
+                Image.network(
+                  _currentReel.thumbnailUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(color: Colors.black),
+                )
+              else
+                Container(color: Colors.black),
 
               // Fitted Fullscreen Video Player
-              if (isInitialized)
+              if (isInitialized && controller.value.size.width > 0 && controller.value.size.height > 0)
                 SizedBox.expand(
                   child: FittedBox(
                     fit: BoxFit.cover,

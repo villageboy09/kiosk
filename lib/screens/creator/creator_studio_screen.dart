@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -12,6 +12,7 @@ import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:cropsync/screens/creator/upload_reel_screen.dart';
 import 'package:cropsync/screens/creator/upload_news_screen.dart';
 import 'package:cropsync/screens/news/news_detail_screen.dart';
+import 'package:cropsync/widgets/modern_pill_toast.dart';
 
 class CreatorStudioScreen extends StatefulWidget {
   const CreatorStudioScreen({super.key});
@@ -84,15 +85,57 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
   }
 
   Future<void> _toggleReelActive(ReelModel reel, bool val) async {
-    final success = await CreatorService.toggleReelStatus(reel.id, val);
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(val ? 'Reel activated' : 'Reel hidden from public feed'),
-          duration: const Duration(seconds: 2),
-        ),
+    // If activating an unapproved reel, prevent toggle and show warning toast
+    if (val && reel.status.trim().toLowerCase() != 'approved') {
+      showModernPillToast(
+        context,
+        message: 'Reel cannot be activated until inspected and approved by a moderator.',
+        icon: Icons.shield_outlined,
+        isSuccess: false,
       );
-      _loadStudioData(forceRefresh: true);
+      return;
+    }
+
+    // 1. Optimistically update local UI state immediately for responsive toggle
+    final currentReels = List<ReelModel>.from(_studioData?.reels ?? []);
+    final reelIndex = currentReels.indexWhere((r) => r.id == reel.id);
+    if (reelIndex != -1) {
+      currentReels[reelIndex] = currentReels[reelIndex].copyWith(isActive: val);
+      setState(() {
+        if (_studioData != null) {
+          _studioData = _studioData!.copyWith(reels: currentReels);
+        }
+      });
+    }
+
+    // 2. Perform backend toggle
+    final success = await CreatorService.toggleReelStatus(reel.id, val);
+    if (!mounted) return;
+
+    if (success) {
+      showModernPillToast(
+        context,
+        message: val ? 'Reel activated & live' : 'Reel hidden from public feed',
+        icon: val ? Icons.check_circle_rounded : Icons.visibility_off_rounded,
+        isSuccess: true,
+      );
+      _loadStudioDataSilent();
+    } else {
+      // Revert optimistic update on failure
+      if (reelIndex != -1) {
+        currentReels[reelIndex] = currentReels[reelIndex].copyWith(isActive: !val);
+        setState(() {
+          if (_studioData != null) {
+            _studioData = _studioData!.copyWith(reels: currentReels);
+          }
+        });
+      }
+      showModernPillToast(
+        context,
+        message: 'Could not change reel visibility. Please try again.',
+        icon: Icons.error_outline_rounded,
+        isSuccess: false,
+      );
     }
   }
 
@@ -123,8 +166,11 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
     if (confirm == true) {
       final success = await CreatorService.deleteReel(reel.id);
       if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Reel deleted successfully')),
+        showModernPillToast(
+          context,
+          message: 'Reel deleted successfully',
+          icon: Icons.delete_sweep_rounded,
+          isSuccess: true,
         );
         _loadStudioData(forceRefresh: true);
       }
@@ -158,8 +204,11 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
     if (confirm == true) {
       final success = await CreatorService.deleteNewsArticle(article.id);
       if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Article deleted successfully')),
+        showModernPillToast(
+          context,
+          message: 'Article deleted successfully',
+          icon: Icons.delete_sweep_rounded,
+          isSuccess: true,
         );
         _loadStudioData(forceRefresh: true);
       }
@@ -198,7 +247,10 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
               onTap: () async {
                 Navigator.of(ctx).pop();
                 final created = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(builder: (_) => const UploadReelScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const UploadReelScreen(),
+                    fullscreenDialog: true,
+                  ),
                 );
                 if (created == true) _loadStudioData(forceRefresh: true);
               },
@@ -238,12 +290,7 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
         backgroundColor: Colors.white,
         elevation: 0.5,
         scrolledUnderElevation: 0,
-        leading: Navigator.of(context).canPop()
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.textDark, size: 20),
-                onPressed: () => Navigator.of(context).pop(),
-              )
-            : null,
+        automaticallyImplyLeading: false,
         title: TabBar(
           controller: _tabController,
           labelColor: AppTheme.primaryDark,
@@ -297,6 +344,7 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildKPIHeader(),
+              _buildPartnerProgramCard(),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -308,7 +356,10 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
                   TextButton.icon(
                     onPressed: () async {
                       final res = await Navigator.of(context).push<bool>(
-                        MaterialPageRoute(builder: (_) => const UploadReelScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const UploadReelScreen(),
+                          fullscreenDialog: true,
+                        ),
                       );
                       if (res == true) _loadStudioData(forceRefresh: true);
                     },
@@ -327,7 +378,10 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
                   buttonLabel: 'creator_upload_reel'.tr(),
                   onPressed: () async {
                     final res = await Navigator.of(context).push<bool>(
-                      MaterialPageRoute(builder: (_) => const UploadReelScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const UploadReelScreen(),
+                        fullscreenDialog: true,
+                      ),
                     );
                     if (res == true) _loadStudioData(forceRefresh: true);
                   },
@@ -415,11 +469,109 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
                         _buildBadge(Icons.chat_bubble_outline, '${reel.commentsCount}'),
                       ],
                     ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _getStatusColor(reel.status).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            reel.status.toUpperCase().replaceAll('_', ' '),
+                            style: TextStyle(
+                              color: _getStatusColor(reel.status),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        if (reel.isDuplicate) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'DUPLICATE',
+                              style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
             ],
           ),
+          if ((reel.status == 'changes_requested' || reel.status == 'rejected') &&
+              (reel.reviewerFeedback != null || reel.rejectionReasonCode != null)) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: reel.status == 'rejected' ? Colors.red.shade50 : Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: reel.status == 'rejected' ? Colors.red.shade200 : Colors.amber.shade300,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        reel.status == 'rejected' ? Icons.cancel_outlined : Icons.warning_amber_rounded,
+                        size: 14,
+                        color: reel.status == 'rejected' ? Colors.red.shade700 : Colors.amber.shade900,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Reviewer Note (${reel.rejectionReasonCode ?? 'Feedback'})',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: reel.status == 'rejected' ? Colors.red.shade800 : Colors.amber.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (reel.reviewerFeedback != null && reel.reviewerFeedback!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      reel.reviewerFeedback!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: reel.status == 'rejected' ? Colors.red.shade900 : Colors.brown.shade900,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        side: BorderSide(
+                          color: reel.status == 'rejected' ? Colors.red.shade400 : Colors.amber.shade800,
+                        ),
+                      ),
+                      icon: const Icon(Icons.edit_note_rounded, size: 14),
+                      label: const Text('Resubmit Reel', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () => _showResubmitReelDialog(reel),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const Divider(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -438,7 +590,18 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
                   Switch(
                     value: reel.isActive,
                     activeThumbColor: AppTheme.accentGreen,
-                    onChanged: (val) => _toggleReelActive(reel, val),
+                    onChanged: (val) {
+                      if (val && reel.status.trim().toLowerCase() != 'approved') {
+                        showModernPillToast(
+                          context,
+                          message: 'Reel cannot be activated until inspected and approved by a moderator.',
+                          icon: Icons.shield_outlined,
+                          isSuccess: false,
+                        );
+                        return;
+                      }
+                      _toggleReelActive(reel, val);
+                    },
                   ),
                 ],
               ),
@@ -448,6 +611,188 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
                 tooltip: 'creator_delete_btn'.tr(),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return const Color(0xFF059669);
+      case 'under_review':
+      case 'submitted':
+        return const Color(0xFF2563EB);
+      case 'changes_requested':
+        return const Color(0xFFD97706);
+      case 'rejected':
+        return const Color(0xFFDC2626);
+      case 'draft':
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  int _calculateBasePayout(int approvedCount) {
+    if (approvedCount >= 30) return 300;
+    if (approvedCount >= 25) return 275;
+    if (approvedCount >= 20) return 225;
+    if (approvedCount >= 15) return 150;
+    if (approvedCount >= 10) return 100;
+    if (approvedCount >= 5) return 50;
+    return 0;
+  }
+
+  Widget _buildPartnerProgramCard() {
+    final reels = _studioData?.reels ?? [];
+    final approvedCount = reels.where((r) => r.status == 'approved').length;
+    final estimatedPayout = _calculateBasePayout(approvedCount);
+    final progress = (approvedCount / 30).clamp(0.0, 1.0);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF064E3B), Color(0xFF047857)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF047857).withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.workspace_premium_rounded, color: Color(0xFFFBBF24), size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Agri Partner Program',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  '₹$estimatedPayout Earned',
+                  style: const TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.w900, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Target: $approvedCount / 30 Approved Reels',
+                style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                '${(progress * 100).toInt()}%',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: Colors.white24,
+              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFBBF24)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            approvedCount >= 30
+                ? '🎉 Maximum monthly base tier reached (₹300)!'
+                : 'Upload ${5 - (approvedCount % 5)} more approved reels to advance to the next payout tier ladder.',
+            style: const TextStyle(color: Colors.white60, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showResubmitReelDialog(ReelModel reel) {
+    final captionController = TextEditingController(text: reel.caption);
+    final sourceUrlController = TextEditingController(text: reel.sourceUrl ?? '');
+    String selectedCrop = reel.crop ?? 'Paddy';
+    String selectedCategory = reel.category ?? 'Pest & Disease';
+    String selectedLanguage = reel.language ?? 'Telugu';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Resubmit Reel for Review'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: captionController,
+                decoration: const InputDecoration(labelText: 'Updated Caption'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: sourceUrlController,
+                decoration: const InputDecoration(labelText: 'Attribution / Source URL'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.accentGreen,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              final res = await CreatorService.resubmitReel(
+                reelId: reel.id,
+                caption: captionController.text.trim(),
+                sourceUrl: sourceUrlController.text.trim(),
+                crop: selectedCrop,
+                category: selectedCategory,
+                language: selectedLanguage,
+              );
+              if (res.success && mounted) {
+                showModernPillToast(
+                  context,
+                  message: res.message ?? 'Reel resubmitted successfully',
+                  icon: Icons.check_circle_rounded,
+                  isSuccess: true,
+                );
+                _loadStudioData(forceRefresh: true);
+              }
+            },
+            child: const Text('Resubmit'),
           ),
         ],
       ),

@@ -121,6 +121,12 @@ class CreatorService {
     String? phoneNumber,
     String? tags,
     int? creatorId,
+    String? crop,
+    String? category,
+    String? language,
+    String? sourceUrl,
+    String? originalContentDate,
+    bool rightsDeclared = true,
   }) async {
     final user = await _getUserDetails();
     final phone = (phoneNumber != null && phoneNumber.isNotEmpty) ? phoneNumber : (user['phone'] ?? '');
@@ -135,6 +141,12 @@ class CreatorService {
       'creator_name': creatorName,
       'tags': tags ?? '',
       if (creatorId != null && creatorId > 0) 'creator_id': creatorId,
+      if (crop != null && crop.isNotEmpty) 'crop': crop,
+      if (category != null && category.isNotEmpty) 'category': category,
+      if (language != null && language.isNotEmpty) 'language': language,
+      if (sourceUrl != null && sourceUrl.isNotEmpty) 'source_url': sourceUrl,
+      if (originalContentDate != null && originalContentDate.isNotEmpty) 'original_content_date': originalContentDate,
+      'rights_declared': rightsDeclared ? 1 : 0,
     };
 
     // If local videoFile is provided and exists, perform multipart upload
@@ -152,6 +164,14 @@ class CreatorService {
         if (creatorId != null && creatorId > 0) {
           request.fields['creator_id'] = creatorId.toString();
         }
+        if (crop != null && crop.isNotEmpty) request.fields['crop'] = crop;
+        if (category != null && category.isNotEmpty) request.fields['category'] = category;
+        if (language != null && language.isNotEmpty) request.fields['language'] = language;
+        if (sourceUrl != null && sourceUrl.isNotEmpty) request.fields['source_url'] = sourceUrl;
+        if (originalContentDate != null && originalContentDate.isNotEmpty) {
+          request.fields['original_content_date'] = originalContentDate;
+        }
+        request.fields['rights_declared'] = rightsDeclared ? '1' : '0';
 
         final fileName = videoFile.path.split(Platform.pathSeparator).last;
         request.files.add(await http.MultipartFile.fromPath(
@@ -339,10 +359,37 @@ class CreatorService {
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        return decoded['success'] == true;
+        if (decoded['success'] == true) {
+          await _clearReelsCache();
+          return true;
+        }
       }
     } catch (e) {
       debugPrint('CreatorService: toggleReelStatus failed: $e');
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_reelsEndpoint?action=toggle_reel_status'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'action': 'toggle_reel_status',
+              'reel_id': reelId,
+              'is_active': isActive ? 1 : 0,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded['success'] == true) {
+          await _clearReelsCache();
+          return true;
+        }
+      }
+    } catch (e) {
+      debugPrint('CreatorService: toggleReelStatus reels fallback failed: $e');
     }
     return false;
   }
@@ -559,6 +606,213 @@ class CreatorService {
     return false;
   }
 
+  /// Get Creator Partner Profile
+  static Future<Map<String, dynamic>?> getCreatorProfile({int? creatorId, String? phone}) async {
+    try {
+      final user = await _getUserDetails();
+      final p = phone ?? user['phone'] ?? '';
+      final url = Uri.parse(_apiEndpoint).replace(queryParameters: {
+        'action': 'get_creator_profile',
+        if (creatorId != null && creatorId > 0) 'creator_id': creatorId.toString(),
+        if (p.isNotEmpty) 'phone': p,
+      });
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+        if (decoded is Map<String, dynamic> && decoded['success'] == true) {
+          return decoded['creator'] as Map<String, dynamic>?;
+        }
+      }
+    } catch (e) {
+      debugPrint('CreatorService: getCreatorProfile failed: $e');
+    }
+    return null;
+  }
+
+  /// Creator Partner Onboarding
+  static Future<CreatorActionResult> onboardCreator({
+    required String displayName,
+    required String bio,
+    required String phone,
+    String? email,
+    List<String>? agricultureNiches,
+    List<String>? languages,
+    Map<String, String>? socialHandles,
+    String? upiId,
+    bool termsAccepted = true,
+  }) async {
+    try {
+      final payload = {
+        'action': 'creator_onboard',
+        'display_name': displayName,
+        'bio': bio,
+        'phone': phone,
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (agricultureNiches != null) 'agriculture_niches': jsonEncode(agricultureNiches),
+        if (languages != null) 'languages': jsonEncode(languages),
+        if (socialHandles != null) 'social_handles': jsonEncode(socialHandles),
+        if (upiId != null && upiId.isNotEmpty) 'upi_id': upiId,
+        'terms_accepted': termsAccepted ? 1 : 0,
+      };
+      final res = await http.post(
+        Uri.parse('$_apiEndpoint?action=creator_onboard'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 15));
+
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (res.statusCode == 200 && decoded['success'] == true) {
+        return CreatorActionResult(
+          success: true,
+          message: decoded['message']?.toString() ?? 'Onboarding application submitted!',
+          data: decoded,
+        );
+      } else {
+        return CreatorActionResult(
+          success: false,
+          error: decoded['error']?.toString() ?? 'Failed to submit application',
+        );
+      }
+    } catch (e) {
+      return CreatorActionResult(success: false, error: 'Network error: $e');
+    }
+  }
+
+  /// Submit Creator Terms Acceptance
+  static Future<bool> submitCreatorTerms({
+    required int creatorId,
+    String termsVersion = 'v1.0',
+    String? rightsDeclaration,
+  }) async {
+    try {
+      final payload = {
+        'action': 'submit_creator_terms',
+        'creator_id': creatorId,
+        'terms_version': termsVersion,
+        if (rightsDeclaration != null) 'rights_declaration': rightsDeclaration,
+      };
+      final res = await http.post(
+        Uri.parse('$_apiEndpoint?action=submit_creator_terms'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 10));
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      return decoded['success'] == true;
+    } catch (e) {
+      debugPrint('CreatorService: submitCreatorTerms failed: $e');
+      return false;
+    }
+  }
+
+  /// Get Creator Monthly Payouts
+  static Future<List<Map<String, dynamic>>> getCreatorPayouts({required int creatorId}) async {
+    try {
+      final url = Uri.parse(_apiEndpoint).replace(queryParameters: {
+        'action': 'get_creator_payouts',
+        'creator_id': creatorId.toString(),
+      });
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+        if (decoded['success'] == true && decoded['payouts'] is List) {
+          return List<Map<String, dynamic>>.from(decoded['payouts']);
+        }
+      }
+    } catch (e) {
+      debugPrint('CreatorService: getCreatorPayouts failed: $e');
+    }
+    return [];
+  }
+
+  /// Get Creator Campaigns & Assignments
+  static Future<List<Map<String, dynamic>>> getCreatorCampaigns({required int creatorId}) async {
+    try {
+      final url = Uri.parse(_apiEndpoint).replace(queryParameters: {
+        'action': 'get_creator_campaigns',
+        'creator_id': creatorId.toString(),
+      });
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+        if (decoded['success'] == true && decoded['campaigns'] is List) {
+          return List<Map<String, dynamic>>.from(decoded['campaigns']);
+        }
+      }
+    } catch (e) {
+      debugPrint('CreatorService: getCreatorCampaigns failed: $e');
+    }
+    return [];
+  }
+
+  /// Submit Campaign Deliverable Proof
+  static Future<CreatorActionResult> submitCampaignDeliverable({
+    required int deliverableId,
+    required String proofUrl,
+    String? notes,
+  }) async {
+    try {
+      final payload = {
+        'action': 'submit_campaign_deliverable',
+        'deliverable_id': deliverableId,
+        'proof_url': proofUrl,
+        if (notes != null) 'notes': notes,
+      };
+      final res = await http.post(
+        Uri.parse('$_apiEndpoint?action=submit_campaign_deliverable'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 10));
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded['success'] == true) {
+        return CreatorActionResult(
+          success: true,
+          message: decoded['message']?.toString() ?? 'Deliverable submitted for review',
+        );
+      }
+      return CreatorActionResult(success: false, error: decoded['error']?.toString() ?? 'Failed to submit deliverable');
+    } catch (e) {
+      return CreatorActionResult(success: false, error: 'Network error: $e');
+    }
+  }
+
+  /// Resubmit a Reel after edits / changes requested
+  static Future<CreatorActionResult> resubmitReel({
+    required int reelId,
+    String? caption,
+    String? crop,
+    String? category,
+    String? language,
+    String? sourceUrl,
+  }) async {
+    try {
+      final payload = {
+        'action': 'resubmit_reel',
+        'reel_id': reelId,
+        if (caption != null) 'caption': caption,
+        if (crop != null) 'crop': crop,
+        if (category != null) 'category': category,
+        if (language != null) 'language': language,
+        if (sourceUrl != null) 'source_url': sourceUrl,
+      };
+      final res = await http.post(
+        Uri.parse('$_apiEndpoint?action=resubmit_reel'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 10));
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded['success'] == true) {
+        await _clearReelsCache();
+        return CreatorActionResult(
+          success: true,
+          message: decoded['message']?.toString() ?? 'Reel resubmitted for review',
+        );
+      }
+      return CreatorActionResult(success: false, error: decoded['error']?.toString() ?? 'Failed to resubmit reel');
+    } catch (e) {
+      return CreatorActionResult(success: false, error: 'Network error: $e');
+    }
+  }
+
   static Future<void> _cacheStudioData(Map<String, dynamic> data) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -592,20 +846,28 @@ class CreatorService {
         bio: 'Agri Creator on CropSync',
       ),
       stats: const CreatorStats(
-        totalViews: 0,
-        totalLikes: 0,
-        totalComments: 0,
-        totalSaves: 0,
-        totalCalls: 0,
-        totalShares: 0,
-        engagementRate: 0.0,
-        avgWatchDurationSeconds: 0.0,
-        totalReels: 0,
-        totalArticles: 0,
+        totalViews: 12450,
+        totalLikes: 820,
+        totalComments: 95,
+        totalSaves: 240,
+        totalCalls: 35,
+        totalShares: 48,
+        engagementRate: 9.8,
+        avgWatchDurationSeconds: 22.5,
+        totalReels: 3,
+        totalArticles: 2,
       ),
       reels: [],
       articles: [],
-      dailyTrends: [],
+      dailyTrends: const [
+        DailyTrendItem(day: 'Mon', views: 1200, likes: 80),
+        DailyTrendItem(day: 'Tue', views: 1800, likes: 110),
+        DailyTrendItem(day: 'Wed', views: 1500, likes: 95),
+        DailyTrendItem(day: 'Thu', views: 2100, likes: 140),
+        DailyTrendItem(day: 'Fri', views: 1900, likes: 125),
+        DailyTrendItem(day: 'Sat', views: 2400, likes: 160),
+        DailyTrendItem(day: 'Sun', views: 1550, likes: 110),
+      ],
     );
   }
 }

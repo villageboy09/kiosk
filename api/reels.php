@@ -28,6 +28,7 @@ try {
             'saves_count' => "ALTER TABLE `reels` ADD COLUMN `saves_count` INT DEFAULT 0",
             'comments_count' => "ALTER TABLE `reels` ADD COLUMN `comments_count` INT DEFAULT 0",
             'is_active' => "ALTER TABLE `reels` ADD COLUMN `is_active` TINYINT(1) DEFAULT 1",
+            'status' => "ALTER TABLE `reels` ADD COLUMN `status` VARCHAR(50) DEFAULT 'under_review'",
             'created_at' => "ALTER TABLE `reels` ADD COLUMN `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
         ];
         foreach ($reelsColsCheck as $rCol => $rSql) {
@@ -200,7 +201,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     'commentsCount' => $c,
                     'viewsCount' => $v,
                     'isActive' => (bool)$r['is_active'],
+                    'is_active' => intval($r['is_active']),
                     'createdAt' => $r['created_at'],
+                    'status' => $r['status'] ?? 'approved',
+                    'crop' => $r['crop'] ?? null,
+                    'category' => $r['category'] ?? null,
+                    'language' => $r['language'] ?? null,
+                    'sourceUrl' => $r['source_url'] ?? null,
+                    'source_url' => $r['source_url'] ?? null,
+                    'isDuplicate' => !empty($r['is_duplicate']),
+                    'payoutEligible' => !empty($r['payout_eligible']),
+                    'rejectionReasonCode' => $r['rejection_reason_code'] ?? null,
+                    'reviewerFeedback' => $r['reviewer_feedback'] ?? null,
                     'creator' => [
                         'id' => $creatorId,
                         'username' => $r['creator_username'] ?? $creator['username'],
@@ -277,10 +289,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             c.display_name AS creator_display_name, 
             c.profile_image_url AS creator_profile_image_url,
             c.is_verified AS creator_is_verified,
-              c.bio AS creator_bio
+            c.phone_number AS creator_phone_number,
+            c.bio AS creator_bio
             FROM reels r
             LEFT JOIN creators c ON r.creator_id = c.id
-            WHERE r.is_active = 1
+            WHERE r.is_active = 1 AND (r.status = 'approved' OR r.status IS NULL)
             ORDER BY r.id DESC
         ");
         $stmt->execute();
@@ -642,7 +655,7 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             try {
-                $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 1)");
+                $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active, status) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 'under_review')");
                 $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
                 $reelId = intval($pdo->lastInsertId());
             } catch (Throwable $dbErr) {
@@ -660,7 +673,8 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         `likes_count` INT DEFAULT 0,
                         `saves_count` INT DEFAULT 0,
                         `comments_count` INT DEFAULT 0,
-                        `is_active` TINYINT(1) DEFAULT 1,
+                        `is_active` TINYINT(1) DEFAULT 0,
+                        `status` VARCHAR(50) DEFAULT 'under_review',
                         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         INDEX `idx_reel_creator` (`creator_id`),
                         INDEX `idx_reel_active` (`is_active`),
@@ -675,7 +689,8 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'likes_count' => "ALTER TABLE `reels` ADD COLUMN `likes_count` INT DEFAULT 0",
                         'saves_count' => "ALTER TABLE `reels` ADD COLUMN `saves_count` INT DEFAULT 0",
                         'comments_count' => "ALTER TABLE `reels` ADD COLUMN `comments_count` INT DEFAULT 0",
-                        'is_active' => "ALTER TABLE `reels` ADD COLUMN `is_active` TINYINT(1) DEFAULT 1",
+                        'is_active' => "ALTER TABLE `reels` ADD COLUMN `is_active` TINYINT(1) DEFAULT 0",
+                        'status' => "ALTER TABLE `reels` ADD COLUMN `status` VARCHAR(50) DEFAULT 'under_review'",
                         'created_at' => "ALTER TABLE `reels` ADD COLUMN `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
                     ];
                     foreach ($repairCols as $cName => $cSql) {
@@ -688,7 +703,7 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 } catch (Throwable $e) {}
 
-                $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 1)");
+                $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active, status) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 'under_review')");
                 $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
                 $reelId = intval($pdo->lastInsertId());
             }
@@ -726,26 +741,53 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // 8. Action: Toggle Reel Status
     elseif ($action === 'toggle_status' || $action === 'toggle_reel_status') {
-        $reelId = intval($data['reel_id'] ?? 0);
-        $isActive = isset($data['is_active']) ? intval($data['is_active']) : 1;
+        $reelId = intval($postData['reel_id'] ?? $_POST['reel_id'] ?? $_GET['reel_id'] ?? 0);
+        $isActive = isset($postData['is_active']) ? intval($postData['is_active']) : (isset($_POST['is_active']) ? intval($_POST['is_active']) : (isset($_GET['is_active']) ? intval($_GET['is_active']) : 1));
         if ($reelId <= 0) {
             http_response_code(400);
-            echo json_encode(["error" => "Invalid reel ID"]);
+            echo json_encode(["status" => false, "success" => false, "error" => "Invalid reel ID"]);
             exit();
         }
         try {
-            $pdo->prepare("UPDATE reels SET is_active = ? WHERE id = ?")->execute([$isActive, $reelId]);
+            if ($isActive == 1) {
+                // Enforce approval check
+                $chk = $pdo->prepare("SELECT status FROM reels WHERE id = ?");
+                $chk->execute([$reelId]);
+                $curStatus = $chk->fetchColumn();
+                if ($curStatus !== 'approved') {
+                    http_response_code(400);
+                    echo json_encode(["status" => false, "success" => false, "error" => "Reel cannot be activated until approved by a moderator."]);
+                    exit();
+                }
+
+                // Enforce at the SQL level as well
+                $stmt = $pdo->prepare("UPDATE reels SET is_active = 1 WHERE id = ? AND status = 'approved'");
+                $stmt->execute([$reelId]);
+                if ($stmt->rowCount() === 0) {
+                    $chk2 = $pdo->prepare("SELECT status, is_active FROM reels WHERE id = ?");
+                    $chk2->execute([$reelId]);
+                    $row = $chk2->fetch(PDO::FETCH_ASSOC);
+                    if (!$row || $row['status'] !== 'approved') {
+                        http_response_code(400);
+                        echo json_encode(["status" => false, "success" => false, "error" => "Reel cannot be activated until approved by a moderator."]);
+                        exit();
+                    }
+                }
+            } else {
+                $pdo->prepare("UPDATE reels SET is_active = 0 WHERE id = ?")->execute([$reelId]);
+            }
             http_response_code(200);
-            echo json_encode(["success" => true, "message" => "Status updated", "is_active" => $isActive]);
+            echo json_encode(["status" => true, "success" => true, "message" => "Status updated", "is_active" => $isActive]);
         } catch (Exception $e) {
             http_response_code(500);
-            echo json_encode(["error" => $e->getMessage()]);
+            echo json_encode(["status" => false, "success" => false, "error" => $e->getMessage()]);
         }
+        exit();
     }
 
     // 9. Action: Delete News Article
     elseif ($action === 'delete_news_article' || $action === 'delete_article') {
-        $articleId = intval($data['article_id'] ?? $_GET['article_id'] ?? 0);
+        $articleId = intval($postData['article_id'] ?? $_POST['article_id'] ?? $_GET['article_id'] ?? 0);
         if ($articleId <= 0) {
             http_response_code(400);
             echo json_encode(["error" => "Invalid article ID"]);
@@ -766,10 +808,12 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // 10. Action: Update User Profile
     elseif ($action === 'update_user_profile' || $action === 'update_profile') {
-        $userId = trim($data['user_id'] ?? $_POST['user_id'] ?? '');
-        $name = trim($data['name'] ?? $_POST['name'] ?? '');
-        $phoneNumber = trim($data['phone_number'] ?? $_POST['phone_number'] ?? '');
-        $profileImageUrl = trim($data['profile_image_url'] ?? $_POST['profile_image_url'] ?? '');
+        $userId = trim($postData['user_id'] ?? $_POST['user_id'] ?? $_GET['user_id'] ?? '');
+        $name = trim($postData['name'] ?? $_POST['name'] ?? '');
+        $phoneNumber = trim($postData['phone_number'] ?? $_POST['phone_number'] ?? '');
+        $district = trim($postData['district'] ?? $_POST['district'] ?? '');
+        $region = trim($postData['region'] ?? $_POST['region'] ?? '');
+        $profileImageUrl = trim($postData['profile_image_url'] ?? $_POST['profile_image_url'] ?? '');
 
         // Upload profile image file if present
         $uploadDir = dirname(__DIR__) . '/uploads/profiles/';
@@ -782,14 +826,14 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty($ext)) $ext = 'jpg';
             $safeName = 'profile_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
             if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $uploadDir . $safeName)) {
-                $profileImageUrl = 'http://kiosk.cropsync.in/uploads/profiles/' . $safeName;
+                $profileImageUrl = 'https://kiosk.cropsync.in/uploads/profiles/' . $safeName;
             }
         } elseif (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
             $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
             if (empty($ext)) $ext = 'jpg';
             $safeName = 'profile_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
             if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadDir . $safeName)) {
-                $profileImageUrl = 'http://kiosk.cropsync.in/uploads/profiles/' . $safeName;
+                $profileImageUrl = 'https://kiosk.cropsync.in/uploads/profiles/' . $safeName;
             }
         }
 
@@ -800,10 +844,15 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         try {
+            $cleanPhone = preg_replace('/[^0-9]/', '', (string)$userId);
+            $last10 = strlen($cleanPhone) > 10 ? substr($cleanPhone, -10) : $cleanPhone;
+
             $updates = [];
             $params = [];
             if (!empty($name)) { $updates[] = "name = ?"; $params[] = $name; }
             if (!empty($phoneNumber)) { $updates[] = "phone_number = ?"; $params[] = $phoneNumber; }
+            if (!empty($district)) { $updates[] = "district = ?"; $params[] = $district; }
+            if (!empty($region)) { $updates[] = "region = ?"; $params[] = $region; }
             if (!empty($profileImageUrl)) { $updates[] = "profile_image_url = ?"; $params[] = $profileImageUrl; }
 
             if (!empty($updates)) {
@@ -812,23 +861,45 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("UPDATE users SET " . implode(", ", $updates) . " WHERE user_id = ? OR phone_number = ?")->execute($params);
             }
 
-            if (!empty($phoneNumber) || !empty($name)) {
-                $cUpdates = [];
-                $cParams = [];
-                if (!empty($name)) { $cUpdates[] = "display_name = ?"; $cParams[] = $name; }
-                if (!empty($profileImageUrl)) { $cUpdates[] = "profile_image_url = ?"; $cParams[] = $profileImageUrl; }
-                if (!empty($phoneNumber)) { $cUpdates[] = "phone_number = ?"; $cParams[] = $phoneNumber; }
-                if (!empty($cUpdates)) {
-                    $cParams[] = $phoneNumber;
-                    $cParams[] = $name;
-                    $cParams[] = $name;
-                    try { $pdo->prepare("UPDATE creators SET " . implode(", ", $cUpdates) . " WHERE phone_number = ? OR username = ? OR display_name = ?")->execute($cParams); } catch (Throwable $e) {}
-                }
+            // Also sync to creators table
+            $cUpdates = [];
+            $cParams = [];
+            if (!empty($name)) { $cUpdates[] = "display_name = ?"; $cParams[] = $name; }
+            if (!empty($profileImageUrl)) { $cUpdates[] = "profile_image_url = ?"; $cParams[] = $profileImageUrl; }
+            if (!empty($phoneNumber)) { $cUpdates[] = "phone_number = ?"; $cParams[] = $phoneNumber; }
+            if (!empty($cUpdates)) {
+                $cSql = "UPDATE creators SET " . implode(", ", $cUpdates) . " WHERE user_id = ? OR phone_number = ? OR phone_number = ? OR username = ? OR display_name = ?";
+                $cParams[] = $userId;
+                $cParams[] = $userId;
+                $cParams[] = $last10;
+                $cParams[] = $userId;
+                $cParams[] = !empty($name) ? $name : $userId;
+                try { $pdo->prepare($cSql)->execute($cParams); } catch (Throwable $e) {}
             }
 
             $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? LIMIT 1");
             $stmt->execute([$userId, $userId]);
             $updatedUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$updatedUser || empty($updatedUser['profile_image_url'])) {
+                $cCheck = $pdo->prepare("SELECT * FROM creators WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+                $cCheck->execute([$userId, $userId, $last10]);
+                $cData = $cCheck->fetch(PDO::FETCH_ASSOC);
+                if ($cData) {
+                    if (!$updatedUser) {
+                        $updatedUser = [
+                            'user_id' => $cData['phone_number'] ?: $userId,
+                            'name' => $cData['display_name'] ?: $cData['username'],
+                            'phone_number' => $cData['phone_number'] ?: $userId,
+                            'profile_image_url' => $cData['profile_image_url'] ?: $profileImageUrl,
+                            'role' => 'content_creator',
+                            'membership_type' => 'Creator'
+                        ];
+                    } else if (!empty($cData['profile_image_url'])) {
+                        $updatedUser['profile_image_url'] = $cData['profile_image_url'];
+                    }
+                }
+            }
 
             http_response_code(200);
             echo json_encode(["success" => true, "user" => $updatedUser, "profile_image_url" => $profileImageUrl]);

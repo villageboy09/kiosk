@@ -187,7 +187,10 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
                 onTap: () async {
                   Navigator.of(ctx).pop();
                   final created = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(builder: (_) => const UploadReelScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const UploadReelScreen(),
+                      fullscreenDialog: true,
+                    ),
                   );
                   if (created == true) _fetchCreatorDetails();
                 },
@@ -289,6 +292,7 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
 
   PreferredSizeWidget _buildCreatorAppBar() {
     return AppBar(
+      automaticallyImplyLeading: false,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -413,17 +417,25 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
   Widget _buildAvatar() {
     if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
       return Container(
+        width: 34,
+        height: 34,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: const Color(0xFF10B981), width: 1.5),
         ),
-        child: CircleAvatar(
-          radius: 15,
-          backgroundColor: Colors.white10,
-          backgroundImage: CachedNetworkImageProvider(
-            _profileImageUrl!,
-            maxWidth: 60,
-            maxHeight: 60,
+        child: ClipOval(
+          child: CachedNetworkImage(
+            key: ValueKey('creator_avatar_$_profileImageUrl'),
+            imageUrl: _profileImageUrl!,
+            width: 34,
+            height: 34,
+            fit: BoxFit.cover,
+            placeholder: (_, __) => Container(color: Colors.white10),
+            errorWidget: (_, __, ___) => const CircleAvatar(
+              radius: 15,
+              backgroundColor: Colors.white,
+              backgroundImage: AssetImage('assets/images/logo.png'),
+            ),
           ),
         ),
       );

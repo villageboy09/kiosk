@@ -42,7 +42,16 @@ class ApiService {
       final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && data['success'] == true) {
-        final userData = data['user'] as Map<String, dynamic>;
+        final userData = (data['user'] is Map<String, dynamic>)
+            ? Map<String, dynamic>.from(data['user'] as Map)
+            : <String, dynamic>{
+                'user_id': userId,
+                if (name != null) 'name': name,
+                if (phoneNumber != null) 'phone_number': phoneNumber,
+              };
+        if (data['profile_image_url'] != null && (userData['profile_image_url'] == null || userData['profile_image_url'].toString().isEmpty)) {
+          userData['profile_image_url'] = data['profile_image_url'];
+        }
         return User.fromJson(userData);
       } else {
         throw Exception(data['message'] ?? data['error'] ?? 'Failed to update profile');
@@ -64,7 +73,16 @@ class ApiService {
 
       final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (response.statusCode == 200 && data['success'] == true) {
-        final userData = data['user'] as Map<String, dynamic>;
+        final userData = (data['user'] is Map<String, dynamic>)
+            ? Map<String, dynamic>.from(data['user'] as Map)
+            : <String, dynamic>{
+                'user_id': userId,
+                if (name != null) 'name': name,
+                if (phoneNumber != null) 'phone_number': phoneNumber,
+              };
+        if (data['profile_image_url'] != null && (userData['profile_image_url'] == null || userData['profile_image_url'].toString().isEmpty)) {
+          userData['profile_image_url'] = data['profile_image_url'];
+        }
         return User.fromJson(userData);
       } else {
         throw Exception(data['message'] ?? data['error'] ?? 'Failed to update profile');

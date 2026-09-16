@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:cropsync/services/creator_service.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/widgets/modern_pill_toast.dart';
 
 class UploadReelScreen extends StatefulWidget {
   const UploadReelScreen({super.key});
@@ -18,6 +19,11 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
   final _formKey = GlobalKey<FormState>();
   final _captionController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _sourceUrlController = TextEditingController();
+  String _selectedCrop = 'Paddy';
+  String _selectedCategory = 'Pest & Disease';
+  String _selectedLanguage = 'Telugu';
+  bool _rightsDeclared = true;
 
   final ImagePicker _picker = ImagePicker();
   XFile? _pickedVideo;
@@ -63,6 +69,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
   void dispose() {
     _captionController.dispose();
     _phoneController.dispose();
+    _sourceUrlController.dispose();
     _videoPlayerController?.dispose();
     super.dispose();
   }
@@ -82,11 +89,11 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not select video: $e'),
-            backgroundColor: Colors.red.shade700,
-          ),
+        showModernPillToast(
+          context,
+          message: 'Could not select video: $e',
+          icon: Icons.error_outline_rounded,
+          isSuccess: false,
         );
       }
     }
@@ -140,18 +147,11 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
 
     if (_pickedVideo == null) {
       HapticFeedback.heavyImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.white),
-              const SizedBox(width: 8),
-              Text('upload_reel_select_video'.tr()),
-            ],
-          ),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-        ),
+      showModernPillToast(
+        context,
+        message: 'upload_reel_select_video'.tr(),
+        icon: Icons.video_call_rounded,
+        isSuccess: false,
       );
       return;
     }
@@ -163,7 +163,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     final fileName = 'reel_${DateTime.now().millisecondsSinceEpoch}_$safeBaseName';
     final videoUrl = _pickedVideo!.path.startsWith('http')
         ? _pickedVideo!.path
-        : 'http://kiosk.cropsync.in/Reels/$fileName';
+        : 'https://kiosk.cropsync.in/Reels/$fileName';
 
     setState(() => _isPublishing = true);
 
@@ -175,6 +175,11 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
       musicTitle: 'Original Audio',
       phoneNumber: _phoneController.text.trim(),
       tags: tags,
+      crop: _selectedCrop,
+      category: _selectedCategory,
+      language: _selectedLanguage,
+      sourceUrl: _sourceUrlController.text.trim(),
+      rightsDeclared: _rightsDeclared,
     );
 
     if (!mounted) return;
@@ -182,27 +187,19 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
 
     if (result.success) {
       HapticFeedback.mediumImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.white),
-              const SizedBox(width: 10),
-              Expanded(child: Text(result.message ?? 'upload_reel_success'.tr())),
-            ],
-          ),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-        ),
+      showModernPillToast(
+        context,
+        message: result.message ?? 'upload_reel_success'.tr(),
+        icon: Icons.check_circle_rounded,
+        isSuccess: true,
       );
       Navigator.of(context).pop(true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.error ?? 'Failed to publish reel. Please try again.'),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-        ),
+      showModernPillToast(
+        context,
+        message: result.error ?? 'Failed to publish reel. Please try again.',
+        icon: Icons.error_outline_rounded,
+        isSuccess: false,
       );
     }
   }
@@ -211,6 +208,546 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$m:$s';
+  }
+
+  // --- PROGRAM DATA BOTTOM SHEETS ---
+
+  void _showCropBottomSheet() {
+    HapticFeedback.selectionClick();
+    final crops = [
+      {'name': 'Paddy', 'sub': 'Rice, Basmati, Sona Masoori', 'icon': Icons.grass_rounded},
+      {'name': 'Cotton', 'sub': 'Bt Cotton, Raw Cotton', 'icon': Icons.cloud_outlined},
+      {'name': 'Chilli', 'sub': 'Red & Green Chillies, Guntur Mirchi', 'icon': Icons.local_fire_department_rounded},
+      {'name': 'Maize', 'sub': 'Corn, Sweet Corn, Fodder', 'icon': Icons.grain_rounded},
+      {'name': 'Soybean', 'sub': 'Oilseed, Pulses', 'icon': Icons.eco_rounded},
+      {'name': 'Wheat', 'sub': 'Rabi crop, Flour varieties', 'icon': Icons.bakery_dining_rounded},
+      {'name': 'Groundnut', 'sub': 'Peanuts, Oilseed', 'icon': Icons.scatter_plot_rounded},
+      {'name': 'Sugarcane', 'sub': 'Cane crops, Jaggery varieties', 'icon': Icons.forest_rounded},
+      {'name': 'Vegetables', 'sub': 'Tomato, Onion, Brinjal, Okra', 'icon': Icons.local_florist_rounded},
+      {'name': 'Fruits', 'sub': 'Mango, Banana, Guava, Citrus', 'icon': Icons.apple_rounded},
+      {'name': 'Other', 'sub': 'Millets, Pulses & Mixed Crops', 'icon': Icons.more_horiz_rounded},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final filtered = crops.where((c) {
+              final name = c['name'] as String;
+              final sub = c['sub'] as String;
+              return name.toLowerCase().contains(searchQuery.toLowerCase()) ||
+                  sub.toLowerCase().contains(searchQuery.toLowerCase());
+            }).toList();
+
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.75,
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.grass_rounded, color: Color(0xFF059669), size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Target Crop',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1E293B),
+                                ),
+                              ),
+                              Text(
+                                'Select the crop this reel is targeted for',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search crop...',
+                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF059669), size: 20),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
+                      onChanged: (val) {
+                        setModalState(() => searchQuery = val);
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, idx) {
+                          final item = filtered[idx];
+                          final isSelected = _selectedCrop == item['name'];
+                          return InkWell(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              setState(() => _selectedCrop = item['name'] as String);
+                              Navigator.pop(ctx);
+                            },
+                            borderRadius: BorderRadius.circular(14),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+                                  width: isSelected ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    item['icon'] as IconData,
+                                    color: isSelected ? const Color(0xFF059669) : const Color(0xFF64748B),
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item['name'] as String,
+                                          style: TextStyle(
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: isSelected ? const Color(0xFF047857) : const Color(0xFF1E293B),
+                                          ),
+                                        ),
+                                        Text(
+                                          item['sub'] as String,
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            color: isSelected ? const Color(0xFF059669) : const Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                    color: isSelected ? const Color(0xFF059669) : const Color(0xFFCBD5E1),
+                                    size: 22,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showCategoryBottomSheet() {
+    HapticFeedback.selectionClick();
+    final categories = [
+      {'name': 'Pest & Disease', 'sub': 'Pest remedies, fungal diseases, chemical sprays', 'icon': Icons.bug_report_rounded},
+      {'name': 'Fertilizer', 'sub': 'NPK dosages, nano urea, micronutrients', 'icon': Icons.science_rounded},
+      {'name': 'Soil Health', 'sub': 'Soil testing, composting, organic matter', 'icon': Icons.landscape_rounded},
+      {'name': 'Harvesting', 'sub': 'Harvest timing, storage & handling', 'icon': Icons.content_cut_rounded},
+      {'name': 'Farm Machinery', 'sub': 'Drones, tractors, weeders, tools', 'icon': Icons.agriculture_rounded},
+      {'name': 'Market Rates', 'sub': 'Mandi prices, MSP updates, forecasts', 'icon': Icons.trending_up_rounded},
+      {'name': 'Govt Schemes', 'sub': 'PM-KISAN, subsidies, crop insurance', 'icon': Icons.account_balance_rounded},
+      {'name': 'General Advisory', 'sub': 'Seasonal tips, weather alerts, crop care', 'icon': Icons.lightbulb_rounded},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.75,
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.category_rounded, color: Color(0xFF2563EB), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Advisory Category',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          Text(
+                            'Select the topic domain for this reel',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: categories.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, idx) {
+                      final item = categories[idx];
+                      final isSelected = _selectedCategory == item['name'];
+                      return InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => _selectedCategory = item['name'] as String);
+                          Navigator.pop(ctx);
+                        },
+                        borderRadius: BorderRadius.circular(14),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFFE2E8F0),
+                              width: isSelected ? 1.5 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                item['icon'] as IconData,
+                                color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF64748B),
+                                size: 22,
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item['name'] as String,
+                                      style: TextStyle(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: isSelected ? const Color(0xFF1D4ED8) : const Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                    Text(
+                                      item['sub'] as String,
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFCBD5E1),
+                                size: 22,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showLanguageBottomSheet() {
+    HapticFeedback.selectionClick();
+    final languages = [
+      {'name': 'Telugu', 'native': 'తెలుగు', 'badge': 'Recommended'},
+      {'name': 'English', 'native': 'English', 'badge': 'Universal'},
+      {'name': 'Hindi', 'native': 'हिन्दी', 'badge': 'National'},
+      {'name': 'Kannada', 'native': 'ಕನ್ನಡ', 'badge': 'Regional'},
+      {'name': 'Tamil', 'native': 'தமிழ்', 'badge': 'Regional'},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.65,
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFAF5FF),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.translate_rounded, color: Color(0xFF9333EA), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Audio / Spoken Language',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          Text(
+                            'Select the primary language spoken in your video',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: languages.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, idx) {
+                      final item = languages[idx];
+                      final isSelected = _selectedLanguage == item['name'];
+                      return InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => _selectedLanguage = item['name'] as String);
+                          Navigator.pop(ctx);
+                        },
+                        borderRadius: BorderRadius.circular(14),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFFFAF5FF) : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFFA855F7) : const Color(0xFFE2E8F0),
+                              width: isSelected ? 1.5 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: isSelected ? const Color(0xFFF3E8FF) : const Color(0xFFE2E8F0),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    (item['name'] as String).substring(0, 2).toUpperCase(),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13,
+                                      color: isSelected ? const Color(0xFF9333EA) : const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          item['name'] as String,
+                                          style: TextStyle(
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: isSelected ? const Color(0xFF7E22CE) : const Color(0xFF1E293B),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade100,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            item['badge'] as String,
+                                            style: TextStyle(fontSize: 9.5, color: Colors.grey.shade700, fontWeight: FontWeight.w700),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      item['native'] as String,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isSelected ? const Color(0xFF9333EA) : const Color(0xFF64748B),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                color: isSelected ? const Color(0xFF9333EA) : const Color(0xFFCBD5E1),
+                                size: 22,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -222,32 +759,34 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
         elevation: 0,
         scrolledUnderElevation: 1,
         shadowColor: Colors.black12,
+        automaticallyImplyLeading: false,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B), size: 18),
+          icon: const Icon(Icons.close_rounded, color: Color(0xFF1E293B), size: 22),
           onPressed: () => Navigator.of(context).pop(),
           splashRadius: 20,
+          tooltip: 'Close',
         ),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
                 color: const Color(0xFF10B981).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(100),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.video_library_rounded, color: Color(0xFF059669), size: 13),
-                  SizedBox(width: 4),
+                  const Icon(Icons.video_library_rounded, color: Color(0xFF059669), size: 14),
+                  const SizedBox(width: 5),
                   Text(
-                    'REELS STUDIO',
-                    style: TextStyle(
+                    'upload_reel_title'.tr(),
+                    style: const TextStyle(
                       color: Color(0xFF059669),
-                      fontSize: 11,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ],
@@ -274,31 +813,99 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.rocket_launch_rounded, size: 14),
-              label: const Text(
-                'Publish',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+              label: Text(
+                'upload_reel_publish_btn'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
               ),
             ),
           ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-          children: [
-            _buildModernVideoCard(),
-            const SizedBox(height: 18),
-            _buildCaptionCard(),
-            const SizedBox(height: 18),
-            _buildContactPhoneCard(),
-            const SizedBox(height: 18),
-            _buildHashtagCard(),
-            const SizedBox(height: 32),
-            _buildBottomPublishButton(),
-            const SizedBox(height: 40),
-          ],
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildModernHeroBanner(),
+              const SizedBox(height: 18),
+              _buildModernVideoCard(),
+              const SizedBox(height: 18),
+              _buildCaptionCard(),
+              const SizedBox(height: 18),
+              _buildHashtagCard(),
+              const SizedBox(height: 18),
+              _buildPartnerMetadataCard(),
+              const SizedBox(height: 18),
+              _buildContactPhoneCard(),
+              const SizedBox(height: 18),
+              _buildRightsDeclarationCard(),
+              const SizedBox(height: 28),
+              _buildBottomPublishButton(),
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildModernHeroBanner() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF064E3B), Color(0xFF047857), Color(0xFF059669)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF059669).withValues(alpha: 0.25),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Agri Creator Partner Program',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Earn monthly base payouts & reach 100K+ farmers across your region with verified advisory reels.',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -310,11 +917,15 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: hasVideo ? const Color(0xFF10B981).withValues(alpha: 0.4) : const Color(0xFF1E293B),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -330,11 +941,11 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     SizedBox(
-                      width: 32,
-                      height: 32,
+                      width: 34,
+                      height: 34,
                       child: CircularProgressIndicator(strokeWidth: 3, color: Color(0xFF10B981)),
                     ),
-                    SizedBox(height: 14),
+                    SizedBox(height: 16),
                     Text(
                       'Optimizing Video Preview...',
                       style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
@@ -351,7 +962,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                   aspectRatio: 9 / 16,
                   child: VideoPlayer(_videoPlayerController!),
                 ),
-                // Gradient vignette overlays
+                // Vignette overlays
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
@@ -359,23 +970,23 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.black.withValues(alpha: 0.45),
+                          Colors.black.withValues(alpha: 0.5),
                           Colors.transparent,
-                          Colors.black.withValues(alpha: 0.65),
+                          Colors.black.withValues(alpha: 0.7),
                         ],
-                        stops: const [0.0, 0.4, 1.0],
+                        stops: const [0.0, 0.45, 1.0],
                       ),
                     ),
                   ),
                 ),
-                // Play / Pause central button
+                // Center Play/Pause button
                 IconButton(
                   icon: Icon(
                     _videoPlayerController!.value.isPlaying
                         ? Icons.pause_circle_filled_rounded
                         : Icons.play_circle_filled_rounded,
-                    size: 64,
-                    color: Colors.white.withValues(alpha: 0.9),
+                    size: 68,
+                    color: Colors.white.withValues(alpha: 0.95),
                   ),
                   onPressed: () {
                     HapticFeedback.selectionClick();
@@ -393,18 +1004,18 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
+                      color: Colors.black.withValues(alpha: 0.65),
                       borderRadius: BorderRadius.circular(100),
                       border: Border.all(color: Colors.white24),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.timer_outlined, color: Color(0xFF10B981), size: 12),
+                        const Icon(Icons.timer_outlined, color: Color(0xFF10B981), size: 13),
                         const SizedBox(width: 4),
                         Text(
                           _formatDuration(_videoPlayerController!.value.duration),
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -419,7 +1030,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.55),
+                        color: Colors.black.withValues(alpha: 0.65),
                         borderRadius: BorderRadius.circular(100),
                         border: Border.all(color: Colors.white24),
                       ),
@@ -445,8 +1056,8 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
               child: Column(
                 children: [
                   Container(
-                    width: 72,
-                    height: 72,
+                    width: 76,
+                    height: 76,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
@@ -457,14 +1068,14 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                       ),
                     ),
                     child: const Center(
-                      child: Icon(Icons.video_call_rounded, color: Color(0xFF10B981), size: 36),
+                      child: Icon(Icons.video_call_rounded, color: Color(0xFF10B981), size: 40),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Select Short Video',
-                    style: TextStyle(
-                      fontSize: 18,
+                  const SizedBox(height: 16),
+                  Text(
+                    'upload_reel_select_video'.tr(),
+                    style: const TextStyle(
+                      fontSize: 19,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
                     ),
@@ -482,12 +1093,12 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                         child: ElevatedButton.icon(
                           onPressed: () => _pickVideo(ImageSource.gallery),
                           icon: const Icon(Icons.photo_library_rounded, size: 16),
-                          label: const Text('From Gallery', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                          label: Text('upload_reel_gallery'.tr(), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF10B981),
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 13),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
@@ -497,11 +1108,11 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                         child: OutlinedButton.icon(
                           onPressed: () => _pickVideo(ImageSource.camera),
                           icon: const Icon(Icons.camera_alt_rounded, size: 16),
-                          label: const Text('Record Video', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                          label: Text('upload_reel_camera'.tr(), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.white,
-                            side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.35)),
+                            padding: const EdgeInsets.symmetric(vertical: 13),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
@@ -526,9 +1137,9 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -539,14 +1150,20 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'CAPTION',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF64748B),
-                  letterSpacing: 0.6,
-                ),
+              const Row(
+                children: [
+                  Icon(Icons.edit_note_rounded, size: 18, color: Color(0xFF059669)),
+                  SizedBox(width: 6),
+                  Text(
+                    'CAPTION',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF64748B),
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ],
               ),
               Text(
                 '$charCount / 500',
@@ -571,7 +1188,15 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
               fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
               ),
               contentPadding: const EdgeInsets.all(14),
             ),
@@ -582,17 +1207,18 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
               return null;
             },
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           // Quick Hooks Bar
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildQuickHookChip('🌾 Paddy Update'),
-                _buildQuickHookChip('🚜 Machinery Test'),
+                _buildQuickHookChip('🌾 PaddyCare'),
+                _buildQuickHookChip('🚜 DroneSpray'),
                 _buildQuickHookChip('💧 Drip Irrigation'),
                 _buildQuickHookChip('🐛 Pest Remedy'),
                 _buildQuickHookChip('💰 High Yield Formula'),
+                _buildQuickHookChip('🌱 Organic Farming'),
               ],
             ),
           ),
@@ -608,7 +1234,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
         onTap: () => _insertQuickHook(text),
         borderRadius: BorderRadius.circular(100),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
             color: const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(100),
@@ -623,6 +1249,261 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     );
   }
 
+  Widget _buildHashtagCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.tag_rounded, size: 18, color: Color(0xFF059669)),
+              SizedBox(width: 6),
+              Text(
+                'TAGS & TOPICS',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF64748B),
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _suggestedTags.map((tag) {
+              final isSelected = _selectedTags.contains(tag);
+              return FilterChip(
+                label: Text(tag),
+                selected: isSelected,
+                selectedColor: const Color(0xFF10B981).withValues(alpha: 0.15),
+                checkmarkColor: const Color(0xFF059669),
+                labelStyle: TextStyle(
+                  color: isSelected ? const Color(0xFF059669) : const Color(0xFF334155),
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  fontSize: 12,
+                ),
+                backgroundColor: const Color(0xFFF1F5F9),
+                side: BorderSide(
+                  color: isSelected ? const Color(0xFF10B981) : Colors.transparent,
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                onSelected: (_) => _toggleTag(tag),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPartnerMetadataCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFECFDF5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.stars_rounded, color: Color(0xFF059669), size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Program Data & Targeting',
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                  ),
+                  Text(
+                    'Helps match reels with relevant farmers',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // 1. Target Crop Selector (Bottom Sheet trigger)
+          _buildProgramSelectorTile(
+            title: 'Target Crop',
+            value: _selectedCrop,
+            icon: Icons.grass_rounded,
+            badgeColor: const Color(0xFF059669),
+            badgeBg: const Color(0xFFECFDF5),
+            onTap: _showCropBottomSheet,
+          ),
+          const SizedBox(height: 12),
+          // 2. Advisory Category Selector (Bottom Sheet trigger)
+          _buildProgramSelectorTile(
+            title: 'Advisory Category',
+            value: _selectedCategory,
+            icon: Icons.category_rounded,
+            badgeColor: const Color(0xFF2563EB),
+            badgeBg: const Color(0xFFEFF6FF),
+            onTap: _showCategoryBottomSheet,
+          ),
+          const SizedBox(height: 12),
+          // 3. Language Selector (Bottom Sheet trigger)
+          _buildProgramSelectorTile(
+            title: 'Content Language',
+            value: _selectedLanguage,
+            icon: Icons.translate_rounded,
+            badgeColor: const Color(0xFF9333EA),
+            badgeBg: const Color(0xFFFAF5FF),
+            onTap: _showLanguageBottomSheet,
+          ),
+          const SizedBox(height: 14),
+          // Source URL (attribution)
+          TextFormField(
+            controller: _sourceUrlController,
+            decoration: InputDecoration(
+              labelText: 'Source / Attribution URL (Optional)',
+              hintText: 'https://youtube.com/watch?v=... or reel link',
+              prefixIcon: const Icon(Icons.link_rounded, size: 18, color: Color(0xFF059669)),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgramSelectorTile({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color badgeColor,
+    required Color badgeBg,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: badgeColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        value,
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Change',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: badgeColor,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: badgeColor),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildContactPhoneCard() {
     return Container(
       decoration: BoxDecoration(
@@ -631,9 +1512,9 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -643,12 +1524,12 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.call_rounded, size: 14, color: Color(0xFF10B981)),
+              const Icon(Icons.call_rounded, size: 16, color: Color(0xFF10B981)),
               const SizedBox(width: 6),
               const Text(
                 'FARMER DIRECT CONTACT',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF64748B),
                   letterSpacing: 0.6,
@@ -680,7 +1561,15 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
               fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
@@ -695,57 +1584,35 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     );
   }
 
-  Widget _buildHashtagCard() {
+  Widget _buildRightsDeclarationCard() {
     return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF86EFAC)),
       ),
-      padding: const EdgeInsets.all(18),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'TAGS & CATEGORIES',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF64748B),
-              letterSpacing: 0.6,
-            ),
+          Checkbox(
+            value: _rightsDeclared,
+            activeColor: const Color(0xFF059669),
+            onChanged: (val) {
+              setState(() => _rightsDeclared = val ?? true);
+            },
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _suggestedTags.map((tag) {
-              final isSelected = _selectedTags.contains(tag);
-              return FilterChip(
-                label: Text(tag),
-                selected: isSelected,
-                selectedColor: const Color(0xFF10B981).withValues(alpha: 0.15),
-                checkmarkColor: const Color(0xFF059669),
-                labelStyle: TextStyle(
-                  color: isSelected ? const Color(0xFF059669) : const Color(0xFF334155),
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                  fontSize: 12,
-                ),
-                backgroundColor: const Color(0xFFF1F5F9),
-                side: BorderSide(
-                  color: isSelected ? const Color(0xFF10B981) : Colors.transparent,
-                ),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                onSelected: (_) => _toggleTag(tag),
-              );
-            }).toList(),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'I confirm that I own or hold valid commercial distribution rights to this agricultural media, that it does not infringe third-party IP, and complies with CropSync Partner Program guidelines.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Color(0xFF166534),
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
           ),
         ],
       ),
@@ -790,14 +1657,14 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                       ),
                     ],
                   )
-                : const Row(
+                : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 18),
-                      SizedBox(width: 8),
+                      const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
                       Text(
-                        'Publish Reel Now',
-                        style: TextStyle(
+                        'upload_reel_publish_btn'.tr(),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 15,
                           fontWeight: FontWeight.w800,

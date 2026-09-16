@@ -127,6 +127,16 @@ class Reel {
   final int viewsCount;
   final bool isActive;
   final DateTime createdAt;
+  final String status;
+  final String? crop;
+  final String? category;
+  final String? language;
+  final String? sourceUrl;
+  final String? thumbnailUrl;
+  final bool payoutEligible;
+  final bool isDuplicate;
+  final String? rejectionReasonCode;
+  final String? reviewerFeedback;
 
   const Reel({
     required this.id,
@@ -147,6 +157,16 @@ class Reel {
     this.viewsCount = 0,
     this.isActive = true,
     required this.createdAt,
+    this.status = 'approved',
+    this.crop,
+    this.category,
+    this.language,
+    this.sourceUrl,
+    this.thumbnailUrl,
+    this.payoutEligible = true,
+    this.isDuplicate = false,
+    this.rejectionReasonCode,
+    this.reviewerFeedback,
   });
 
   factory Reel.fromJson(Map<String, dynamic> json) {
@@ -203,6 +223,16 @@ class Reel {
       viewsCount: json['viewsCount'] is int ? json['viewsCount'] as int : int.tryParse(json['views_count']?.toString() ?? '0') ?? 0,
       isActive: json['isActive'] == true || json['is_active'] == 1 || json['is_active'] == '1' || json['is_active'] == null,
       createdAt: parsedDate,
+      status: json['status']?.toString() ?? 'approved',
+      crop: json['crop']?.toString(),
+      category: json['category']?.toString(),
+      language: json['language']?.toString(),
+      sourceUrl: json['sourceUrl']?.toString() ?? json['source_url']?.toString(),
+      thumbnailUrl: json['thumbnailUrl']?.toString() ?? json['thumbnail_url']?.toString(),
+      payoutEligible: json['payoutEligible'] == true || json['payout_eligible'] == 1 || json['payout_eligible'] == '1' || json['payout_eligible'] == null,
+      isDuplicate: json['isDuplicate'] == true || json['is_duplicate'] == 1 || json['is_duplicate'] == '1',
+      rejectionReasonCode: json['rejectionReasonCode']?.toString() ?? json['rejection_reason_code']?.toString(),
+      reviewerFeedback: json['reviewerFeedback']?.toString() ?? json['reviewer_feedback']?.toString(),
     );
   }
 
@@ -234,6 +264,16 @@ class Reel {
     int? viewsCount,
     bool? isActive,
     DateTime? createdAt,
+    String? status,
+    String? crop,
+    String? category,
+    String? language,
+    String? sourceUrl,
+    String? thumbnailUrl,
+    bool? payoutEligible,
+    bool? isDuplicate,
+    String? rejectionReasonCode,
+    String? reviewerFeedback,
   }) {
     return Reel(
       id: id ?? this.id,
@@ -254,6 +294,16 @@ class Reel {
       viewsCount: viewsCount ?? this.viewsCount,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
+      status: status ?? this.status,
+      crop: crop ?? this.crop,
+      category: category ?? this.category,
+      language: language ?? this.language,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      payoutEligible: payoutEligible ?? this.payoutEligible,
+      isDuplicate: isDuplicate ?? this.isDuplicate,
+      rejectionReasonCode: rejectionReasonCode ?? this.rejectionReasonCode,
+      reviewerFeedback: reviewerFeedback ?? this.reviewerFeedback,
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -267,6 +268,91 @@ void main() {
       // Select Govt Schemes category chip
       await tester.tap(find.text('Govt Schemes'));
       await tester.pumpAndSettle();
+    });
+
+    testWidgets('CreatorStudioScreen blocks activating unapproved reel and shows toast', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final cachedData = {
+        'success': true,
+        'creator': {
+          'id': 1,
+          'username': 'dr_kalyan',
+          'display_name': 'Dr. Kalyan Kumar',
+          'profile_image_url': '',
+          'is_verified': 1,
+          'phone_number': '9876543210',
+          'bio': 'Agronomist',
+        },
+        'stats': {
+          'totalViews': 100,
+          'totalLikes': 10,
+          'totalComments': 2,
+          'totalSaves': 1,
+          'totalCalls': 0,
+          'totalShares': 0,
+          'engagementRate': 1.0,
+          'avgWatchDurationSeconds': 10.0,
+          'totalReels': 1,
+          'totalArticles': 0,
+        },
+        'reels': [
+          {
+            'id': 999,
+            'video_url': 'https://example.com/unapproved.mp4',
+            'caption': 'Unapproved Pest Management Video',
+            'music_title': 'Original Audio',
+            'phone_number': '9876543210',
+            'tags': '#pest',
+            'views_count': 0,
+            'likes_count': 0,
+            'saves_count': 0,
+            'comments_count': 0,
+            'is_active': 0,
+            'status': 'under_review',
+            'creator': {
+              'id': 1,
+              'username': 'dr_kalyan',
+              'displayName': 'Dr. Kalyan Kumar',
+              'profileImageUrl': '',
+            }
+          }
+        ],
+        'articles': [],
+        'trends': []
+      };
+
+      SharedPreferences.setMockInitialValues({
+        'user_phone': '9876543210',
+        'user_name': 'Dr. Kalyan',
+        'cropsync_creator_studio_cache_v1': jsonEncode(cachedData),
+      });
+
+      await tester.pumpWidget(createTestApp(const CreatorStudioScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unapproved Pest Management Video'), findsOneWidget);
+      expect(find.text('UNDER REVIEW'), findsOneWidget);
+
+      final switchFinder = find.byType(Switch);
+      expect(switchFinder, findsOneWidget);
+      Switch switchWidget = tester.widget(switchFinder);
+      expect(switchWidget.value, isFalse);
+
+      // Attempt to toggle switch from inactive to active
+      await tester.tap(switchFinder);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Verify switch is still false and warning toast appears
+      switchWidget = tester.widget(switchFinder);
+      expect(switchWidget.value, isFalse);
+      expect(
+        find.text('Reel cannot be activated until inspected and approved by a moderator.'),
+        findsOneWidget,
+      );
     });
   });
 }

@@ -105,6 +105,31 @@ if (isset($pdo) && $pdo instanceof PDO) {
             INDEX `idx_reel_created` (`created_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
+        // Migrate any missing columns in creators
+        $creatorCols = [
+            'status' => "ALTER TABLE `creators` ADD COLUMN `status` ENUM('applied', 'pending_review', 'active', 'rejected', 'suspended') DEFAULT 'active'",
+            'partnership_tier' => "ALTER TABLE `creators` ADD COLUMN `partnership_tier` ENUM('trial', 'active_partner', 'verified', 'strategic') DEFAULT 'trial'",
+            'agriculture_niches' => "ALTER TABLE `creators` ADD COLUMN `agriculture_niches` TEXT NULL",
+            'languages' => "ALTER TABLE `creators` ADD COLUMN `languages` TEXT NULL",
+            'social_handles' => "ALTER TABLE `creators` ADD COLUMN `social_handles` TEXT NULL",
+            'upi_id' => "ALTER TABLE `creators` ADD COLUMN `upi_id` VARCHAR(100) NULL",
+            'terms_accepted' => "ALTER TABLE `creators` ADD COLUMN `terms_accepted` TINYINT(1) DEFAULT 0",
+            'rejection_reason' => "ALTER TABLE `creators` ADD COLUMN `rejection_reason` TEXT NULL",
+            'reviewed_by' => "ALTER TABLE `creators` ADD COLUMN `reviewed_by` VARCHAR(100) NULL",
+            'reviewed_at' => "ALTER TABLE `creators` ADD COLUMN `reviewed_at` DATETIME NULL",
+            'approved_at' => "ALTER TABLE `creators` ADD COLUMN `approved_at` DATETIME NULL"
+        ];
+        foreach ($creatorCols as $cCol => $cSql) {
+            try {
+                $chk = $pdo->query("SHOW COLUMNS FROM `creators` LIKE '$cCol'");
+                if (!$chk || !$chk->fetch()) {
+                    $pdo->exec($cSql);
+                }
+            } catch (Throwable $e) {
+                try { $pdo->exec($cSql); } catch (Throwable $e2) {}
+            }
+        }
+
         // Migrate any missing columns in reels
         $reelsCols = [
             'music_title' => "ALTER TABLE `reels` ADD COLUMN `music_title` VARCHAR(200) DEFAULT 'Original Audio'",
@@ -115,7 +140,8 @@ if (isset($pdo) && $pdo instanceof PDO) {
             'saves_count' => "ALTER TABLE `reels` ADD COLUMN `saves_count` INT DEFAULT 0",
             'comments_count' => "ALTER TABLE `reels` ADD COLUMN `comments_count` INT DEFAULT 0",
             'is_active' => "ALTER TABLE `reels` ADD COLUMN `is_active` TINYINT(1) DEFAULT 1",
-            'created_at' => "ALTER TABLE `reels` ADD COLUMN `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            'created_at' => "ALTER TABLE `reels` ADD COLUMN `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            'status' => "ALTER TABLE `reels` ADD COLUMN `status` ENUM('draft', 'submitted', 'under_review', 'changes_requested', 'approved', 'rejected') DEFAULT 'approved'"
         ];
         foreach ($reelsCols as $cCol => $cSql) {
             try {
@@ -123,11 +149,16 @@ if (isset($pdo) && $pdo instanceof PDO) {
                 if (!$chk || !$chk->fetch()) {
                     $pdo->exec($cSql);
                 }
-            } catch (Throwable $e) {}
+            } catch (Throwable $e) {
+                try { $pdo->exec($cSql); } catch (Throwable $e2) {}
+            }
         }
 
         // Migrate any missing columns in news_articles
         $newsCols = [
+            'status' => "ALTER TABLE `news_articles` ADD COLUMN `status` ENUM('published', 'draft', 'archived') DEFAULT 'published'",
+            'is_featured' => "ALTER TABLE `news_articles` ADD COLUMN `is_featured` TINYINT(1) DEFAULT 0",
+            'published_at' => "ALTER TABLE `news_articles` ADD COLUMN `published_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
             'title_te' => "ALTER TABLE `news_articles` ADD COLUMN `title_te` VARCHAR(255) DEFAULT NULL",
             'summary_te' => "ALTER TABLE `news_articles` ADD COLUMN `summary_te` TEXT DEFAULT NULL",
             'content_te' => "ALTER TABLE `news_articles` ADD COLUMN `content_te` LONGTEXT DEFAULT NULL",
@@ -142,7 +173,9 @@ if (isset($pdo) && $pdo instanceof PDO) {
                 if (!$chk || !$chk->fetch()) {
                     $pdo->exec($nSql);
                 }
-            } catch (Throwable $e) {}
+            } catch (Throwable $e) {
+                try { $pdo->exec($nSql); } catch (Throwable $e2) {}
+            }
         }
     } catch (Throwable $e) {}
 }
@@ -533,6 +566,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO)
         $id = intval($_POST['reel_id'] ?? 0);
         $new_status = intval($_POST['is_active']) === 1 ? 0 : 1;
         if ($id > 0) {
+            if ($new_status === 1) {
+                $chk = $pdo->prepare("SELECT status FROM reels WHERE id = ?");
+                $chk->execute([$id]);
+                $rStatus = $chk->fetchColumn();
+                if ($rStatus !== 'approved') {
+                    setFlash("Reel cannot be activated until approved by a moderator.", "danger");
+                    header("Location: " . $_SERVER['PHP_SELF'] . "?tab=reels");
+                    exit();
+                }
+            }
             $pdo->prepare("UPDATE reels SET is_active = ? WHERE id = ?")->execute([$new_status, $id]);
             setFlash("Reel visibility updated.");
         }
@@ -580,20 +623,36 @@ $reelsList = [];
 $commentsList = [];
 
 if (isset($pdo) && $pdo instanceof PDO) {
+    // 1. News stats
     try {
-        $nStats = $pdo->query("SELECT COUNT(*) as total, SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) as published FROM news_articles")->fetch();
+        $hasNewsStatus = false;
+        try {
+            $chkStatus = $pdo->query("SHOW COLUMNS FROM `news_articles` LIKE 'status'");
+            $hasNewsStatus = ($chkStatus && $chkStatus->fetch());
+        } catch (Throwable $e) {}
+
+        if ($hasNewsStatus) {
+            $nStats = $pdo->query("SELECT COUNT(*) as total, SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) as published FROM news_articles")->fetch();
+        } else {
+            $nStats = $pdo->query("SELECT COUNT(*) as total, COUNT(*) as published FROM news_articles")->fetch();
+        }
         if ($nStats) {
             $totalNews = intval($nStats['total']);
             $publishedNews = intval($nStats['published']);
         }
+    } catch (Throwable $e) {}
 
+    // 2. Reels stats
+    try {
         $rStats = $pdo->query("SELECT COUNT(*) as total, SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active FROM reels")->fetch();
         if ($rStats) {
             $totalReels = intval($rStats['total']);
             $activeReels = intval($rStats['active']);
         }
+    } catch (Throwable $e) {}
 
-        // News fetch
+    // 3. News fetch
+    try {
         $newsSql = "SELECT * FROM news_articles WHERE 1=1";
         $newsParams = [];
         if (!empty($searchQuery) && $activeTab === 'news') {
@@ -610,8 +669,10 @@ if (isset($pdo) && $pdo instanceof PDO) {
         $nStmt = $pdo->prepare($newsSql);
         $nStmt->execute($newsParams);
         $articlesList = $nStmt->fetchAll();
+    } catch (Throwable $e) {}
 
-        // Reels fetch
+    // 4. Reels fetch
+    try {
         $reelSql = "SELECT r.*, c.display_name AS creator_name, c.username AS creator_username 
                     FROM reels r 
                     LEFT JOIN creators c ON r.creator_id = c.id 
@@ -628,8 +689,10 @@ if (isset($pdo) && $pdo instanceof PDO) {
         $rStmt = $pdo->prepare($reelSql);
         $rStmt->execute($reelParams);
         $reelsList = $rStmt->fetchAll();
+    } catch (Throwable $e) {}
 
-        // Comments fetch
+    // 5. Comments fetch
+    try {
         $commSql = "
             (SELECT id, article_id as parent_id, 'news' as type, user_name as author_name, phone_number, comment_text, created_at 
              FROM news_article_comments ORDER BY id DESC LIMIT 25)
@@ -639,10 +702,7 @@ if (isset($pdo) && $pdo instanceof PDO) {
             ORDER BY created_at DESC LIMIT 50";
         $cStmt = $pdo->query($commSql);
         $commentsList = $cStmt ? $cStmt->fetchAll() : [];
-
-    } catch (Throwable $e) {
-        $dbError = $e->getMessage();
-    }
+    } catch (Throwable $e) {}
 }
 
 $availableCategories = [
@@ -1175,64 +1235,154 @@ $availableCategories = [
             display: block;
         }
 
-        /* MODAL */
+        /* MODAL & DIALOG SYSTEM */
         .modal-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.45);
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: 1000;
-            padding: 16px;
+            z-index: 1100;
+            padding: 20px;
+            opacity: 0;
+            transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .modal-overlay.open {
             display: flex;
+            opacity: 1;
         }
 
         .modal-card {
             background: var(--surface);
-            border-radius: var(--radius);
+            border-radius: 16px;
             width: 100%;
-            max-width: 580px;
+            max-width: 620px;
             max-height: 90vh;
             overflow-y: auto;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.04);
+            transform: scale(0.96) translateY(8px);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .modal-overlay.open .modal-card {
+            transform: scale(1) translateY(0);
         }
 
         .modal-head {
-            padding: 14px 18px;
+            padding: 18px 24px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+            background: #ffffff;
         }
         .modal-head h3 {
-            font-size: 0.95rem;
+            font-size: 1.05rem;
             font-weight: 700;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .close-btn {
-            background: transparent;
+            background: #f1f5f9;
             border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 18px;
             cursor: pointer;
             color: var(--text-muted);
+            transition: all 0.15s ease;
         }
         .close-btn:hover {
+            background: #e2e8f0;
             color: var(--text-primary);
         }
 
         .modal-body {
-            padding: 18px;
+            padding: 24px;
+            color: var(--text-secondary);
         }
 
         .modal-foot {
-            padding: 12px 18px;
+            padding: 16px 24px;
             border-top: 1px solid var(--border);
             display: flex;
             justify-content: flex-end;
-            gap: 8px;
-            background: #fafafa;
+            align-items: center;
+            gap: 10px;
+            background: #f8fafc;
+            border-bottom-left-radius: 16px;
+            border-bottom-right-radius: 16px;
+        }
+
+        /* DIALOG BOX SPECIALIZATIONS */
+        .confirm-dialog-card {
+            max-width: 480px;
+        }
+        .confirm-icon-badge {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .confirm-icon-badge.danger {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .confirm-icon-badge.success {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+        .confirm-icon-badge.warning {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        .confirm-icon-badge.primary {
+            background: #e0f2fe;
+            color: #0284c7;
+        }
+
+        .confirm-icon-bubble {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.7rem;
+            margin: 0 auto 16px auto;
+        }
+        .confirm-icon-bubble.confirm-danger, .confirm-icon-bubble.danger {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .confirm-icon-bubble.confirm-warning, .confirm-icon-bubble.warning {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        .confirm-icon-bubble.confirm-primary, .confirm-icon-bubble.confirm-info, .confirm-icon-bubble.primary {
+            background: #e0f2fe;
+            color: #0284c7;
+        }
+        .confirm-icon-bubble.confirm-success, .confirm-icon-bubble.success {
+            background: #dcfce7;
+            color: #16a34a;
         }
 
         /* FORM CONTROLS */
@@ -2223,10 +2373,13 @@ $availableCategories = [
     <!-- MODAL: CONFIRM DELETE -->
     <!-- ============================================================== -->
     <div class="modal-overlay" id="deleteConfirmModal">
-        <div class="modal-card delete-dialog">
+        <div class="modal-card confirm-dialog-card">
             <div class="modal-head" style="border-bottom-color:#fecaca; background:#fef2f2;">
-                <h3 style="color:var(--danger); display:flex; align-items:center; gap:6px;">
-                    <i class="ph ph-warning-circle"></i> Confirm Delete
+                <h3 style="color:var(--danger); display:flex; align-items:center; gap:8px;">
+                    <div class="confirm-icon-badge danger" style="width:32px; height:32px; font-size:18px;">
+                        <i class="ph ph-warning-circle"></i>
+                    </div>
+                    Confirm Delete
                 </h3>
                 <button type="button" class="close-btn" onclick="closeModal('deleteConfirmModal')">&times;</button>
             </div>
@@ -2238,18 +2391,37 @@ $availableCategories = [
                 <input type="hidden" name="comment_type" id="del_comment_type" value="">
                 <input type="hidden" name="parent_id" id="del_parent_id" value="">
 
-                <div class="modal-body" style="font-size: 0.88rem; color: var(--text-secondary);">
+                <div class="modal-body" style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5;">
                     <p>Are you sure you want to permanently delete this item?</p>
-                    <p id="deleteItemTitle" style="font-weight: 700; color: var(--text-primary); margin-top: 6px;"></p>
-                    <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 8px;">
-                        This operation cannot be reversed.
+                    <div id="deleteItemTitle" style="font-weight: 700; color: var(--text-primary); margin: 10px 0; padding: 10px 14px; background: #f8fafc; border-radius: 8px; border: 1px solid var(--border);"></div>
+                    <p style="font-size: 0.78rem; color: #dc2626; margin-top: 8px; display: flex; align-items: center; gap: 4px;">
+                        <i class="ph ph-warning"></i> This operation cannot be reversed.
                     </p>
                 </div>
                 <div class="modal-foot">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('deleteConfirmModal')">Cancel</button>
-                    <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                    <button type="submit" class="btn btn-danger">Yes, Permanently Delete</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: UNIVERSAL APP CONFIRMATION (REPLACES BROWSER CONFIRM) -->
+    <!-- ============================================================== -->
+    <div class="modal-overlay" id="appConfirmModal">
+        <div class="modal-card confirm-dialog-card" style="max-width: 440px; text-align: center; padding: 24px;">
+            <div id="appConfirmIconBubble" class="confirm-icon-bubble confirm-warning">
+                <i id="appConfirmIcon" class="ph ph-warning-circle"></i>
+            </div>
+            <h3 id="appConfirmTitle" style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">Confirm Action</h3>
+            <p id="appConfirmMessage" style="font-size: 0.92rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px; word-break: break-word;"></p>
+            <p id="appConfirmSubtext" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.4; display: none;"></p>
+            
+            <div style="display: flex; gap: 12px; justify-content: center; width: 100%; margin-top: 14px;">
+                <button type="button" class="btn btn-secondary" style="flex: 1; padding: 9px 16px;" onclick="closeModal('appConfirmModal')">Cancel</button>
+                <button type="button" id="appConfirmBtn" class="btn btn-primary" style="flex: 1; padding: 9px 16px;" onclick="executeAppConfirm()">Confirm</button>
+            </div>
         </div>
     </div>
 
@@ -2500,10 +2672,63 @@ $availableCategories = [
             document.getElementById(barId).classList.remove('active');
         }
 
-        function confirmBulkDelete(formId, itemLabel) {
-            if (confirm('Are you sure you want to permanently delete all ' + itemLabel + '?')) {
-                document.getElementById(formId).submit();
+        // --- App Universal Confirmation (Zero Browser Popups) ---
+        let confirmCallback = null;
+
+        function showAppConfirm(opts) {
+            document.getElementById('appConfirmTitle').innerText = opts.title || 'Confirm Action';
+            document.getElementById('appConfirmMessage').innerText = opts.message || 'Are you sure you want to proceed?';
+            
+            const subtextEl = document.getElementById('appConfirmSubtext');
+            if (opts.subtext) {
+                subtextEl.innerText = opts.subtext;
+                subtextEl.style.display = 'block';
+            } else {
+                subtextEl.style.display = 'none';
             }
+
+            const iconBadge = document.getElementById('appConfirmIconBubble');
+            iconBadge.className = 'confirm-icon-bubble ' + (opts.iconColor ? 'confirm-' + opts.iconColor : 'confirm-warning');
+            
+            const iconEl = document.getElementById('appConfirmIcon');
+            iconEl.className = 'ph ' + (opts.icon || 'ph-warning-circle');
+
+            const confirmBtn = document.getElementById('appConfirmBtn');
+            confirmBtn.className = 'btn ' + (opts.confirmClass || 'btn-primary');
+            if (opts.confirmStyle) {
+                confirmBtn.setAttribute('style', opts.confirmStyle);
+            } else {
+                confirmBtn.removeAttribute('style');
+                confirmBtn.style.flex = '1';
+                confirmBtn.style.padding = '9px 16px';
+            }
+            confirmBtn.innerText = opts.confirmText || 'Confirm';
+
+            confirmCallback = opts.onConfirm || null;
+            openModal('appConfirmModal');
+        }
+
+        function executeAppConfirm() {
+            closeModal('appConfirmModal');
+            if (typeof confirmCallback === 'function') {
+                confirmCallback();
+            }
+        }
+
+        function confirmBulkDelete(formId, itemLabel) {
+            showAppConfirm({
+                title: 'Confirm Bulk Deletion',
+                message: 'Are you sure you want to permanently delete all ' + itemLabel + '?',
+                subtext: 'This operation cannot be reversed. Selected records will be permanently removed.',
+                icon: 'ph-trash',
+                iconColor: 'danger',
+                confirmText: 'Yes, Delete All',
+                confirmClass: 'btn-danger',
+                confirmStyle: 'flex: 1; padding: 9px 16px; background: #dc2626; border-color: #dc2626; color: white;',
+                onConfirm: () => {
+                    document.getElementById(formId).submit();
+                }
+            });
         }
     </script>
 </body>
