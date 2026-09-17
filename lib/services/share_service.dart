@@ -53,7 +53,7 @@ class ShareService {
     return null;
   }
 
-  /// Builds universal web share URL with query parameters
+  /// Builds concise, ultra-short universal web share URL
   static String buildWebShareUrl({
     required String type,
     String? id,
@@ -67,15 +67,10 @@ class ShareService {
     Map<String, String>? extra,
   }) {
     final params = <String, String>{
-      'type': type,
+      't': type,
       if (id != null && id.isNotEmpty) 'id': id,
-      if (crop != null && crop.isNotEmpty) 'crop': crop,
-      if (commodity != null && commodity.isNotEmpty) 'commodity': commodity,
-      if (title != null && title.isNotEmpty) 'title': title,
-      if (desc != null && desc.isNotEmpty) 'desc': desc,
-      if (imageUrl != null && imageUrl.isNotEmpty) 'img': imageUrl,
-      if (price != null && price.isNotEmpty) 'price': price,
-      if (lang != null && lang.isNotEmpty) 'lang': lang,
+      if (crop != null && crop.isNotEmpty) 'c': crop,
+      if (commodity != null && commodity.isNotEmpty && commodity != crop) 'c': commodity,
       if (extra != null) ...extra,
     };
 
@@ -96,19 +91,12 @@ class ShareService {
     String? commodity,
     Map<String, String>? extraParams,
   }) async {
-    final lang = context.locale.languageCode;
-
-    // Generate universal link
+    // Generate concise universal link
     final shareUrl = buildWebShareUrl(
       type: type,
       id: id,
       crop: crop,
       commodity: commodity,
-      title: title,
-      desc: description,
-      imageUrl: imageUrl,
-      price: price,
-      lang: lang,
       extra: extraParams,
     );
 

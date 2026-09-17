@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/models/chc_operator.dart';
+import 'package:cropsync/models/chc_official.dart';
 import 'package:cropsync/services/cache_service.dart';
 
 /// API Service class for handling all HTTP requests to the MySQL backend
@@ -1618,6 +1619,175 @@ class ApiService {
     } catch (e) {
       return null;
     }
+  }
+
+  // ==============================================================================
+  // CHC OFFICIAL DASHBOARD METHODS
+  // ==============================================================================
+
+  /// Authenticate official with email and password
+  static Future<ChcOfficial> chcOfficialLogin(String email, String password) async {
+    final url = Uri.parse('$baseUrl/api.php?action=chc_official_login');
+    try {
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email.trim(),
+              'password': password.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['success'] == true) {
+        return ChcOfficial.fromJson(data['data'] as Map<String, dynamic>);
+      } else {
+        throw Exception(data['error'] ?? data['message'] ?? 'Login failed');
+      }
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Connection error: $e');
+    }
+  }
+
+  /// Fetch dashboard metrics, KPIs, equipment breakdown, crop stats, and live operators
+  static Future<Map<String, dynamic>> getChcOfficialDashboard({
+    required String clientCode,
+    String? region,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final queryParams = <String, String>{
+      'action': 'get_chc_official_dashboard',
+      'client_code': clientCode,
+    };
+    if (region != null && region.isNotEmpty) queryParams['region'] = region;
+    if (startDate != null && startDate.isNotEmpty) queryParams['start_date'] = startDate;
+    if (endDate != null && endDate.isNotEmpty) queryParams['end_date'] = endDate;
+
+    final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
+    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (data['success'] == true) {
+        return data;
+      }
+      throw Exception(data['error'] ?? 'Failed to load dashboard data');
+    }
+    throw Exception('Server error: ${response.statusCode}');
+  }
+
+  /// Fetch list of bookings with optional search and filters
+  static Future<List<Map<String, dynamic>>> getChcOfficialBookings({
+    required String clientCode,
+    String? region,
+    String? status,
+    String? search,
+    String? equipmentType,
+    String? startDate,
+    String? endDate,
+    int limit = 60,
+    int offset = 0,
+  }) async {
+    final queryParams = <String, String>{
+      'action': 'get_chc_official_bookings',
+      'client_code': clientCode,
+      'limit': limit.toString(),
+      'offset': offset.toString(),
+    };
+    if (region != null && region.isNotEmpty) queryParams['region'] = region;
+    if (status != null && status.isNotEmpty && status != 'All') queryParams['status'] = status;
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+    if (equipmentType != null && equipmentType.isNotEmpty) queryParams['equipment_type'] = equipmentType;
+    if (startDate != null && startDate.isNotEmpty) queryParams['start_date'] = startDate;
+    if (endDate != null && endDate.isNotEmpty) queryParams['end_date'] = endDate;
+
+    final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
+    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (data['success'] == true && data['bookings'] is List) {
+        return List<Map<String, dynamic>>.from(data['bookings']);
+      }
+      return [];
+    }
+    throw Exception('Failed to load bookings');
+  }
+
+  /// Fetch booking details by booking ID
+  static Future<Map<String, dynamic>> getChcBookingDetails(String bookingId) async {
+    final uri = Uri.parse('$baseUrl/api.php?action=get_chc_booking_details&booking_id=${Uri.encodeComponent(bookingId)}');
+    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (data['success'] == true && data['data'] is Map) {
+        return data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(data['error'] ?? 'Booking not found');
+    }
+    throw Exception('Failed to load booking details');
+  }
+
+  /// Fetch operator cancelled orders audit list
+  static Future<List<Map<String, dynamic>>> getChcCancelledOrders({required String clientCode, String? region}) async {
+    final queryParams = <String, String>{
+      'action': 'get_chc_cancelled_orders',
+      'client_code': clientCode,
+    };
+    if (region != null && region.isNotEmpty) queryParams['region'] = region;
+
+    final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
+    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (data['success'] == true && data['cancelled_orders'] is List) {
+        return List<Map<String, dynamic>>.from(data['cancelled_orders']);
+      }
+      return [];
+    }
+    return [];
+  }
+
+  /// Fetch fleet operators
+  static Future<List<Map<String, dynamic>>> getChcOperators({required String clientCode, String? region}) async {
+    final queryParams = <String, String>{
+      'action': 'get_chc_operators',
+      'client_code': clientCode,
+    };
+    if (region != null && region.isNotEmpty) queryParams['region'] = region;
+
+    final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
+    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (data['success'] == true && data['operators'] is List) {
+        return List<Map<String, dynamic>>.from(data['operators']);
+      }
+      return [];
+    }
+    return [];
+  }
+
+  /// Fetch fleet machinery & inventory
+  static Future<List<Map<String, dynamic>>> getChcInventory({required String clientCode, String? region}) async {
+    final queryParams = <String, String>{
+      'action': 'get_chc_inventory',
+      'client_code': clientCode,
+    };
+    if (region != null && region.isNotEmpty) queryParams['region'] = region;
+
+    final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
+    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (data['success'] == true && data['inventory'] is List) {
+        return List<Map<String, dynamic>>.from(data['inventory']);
+      }
+      return [];
+    }
+    return [];
   }
 }
 

@@ -10,8 +10,10 @@ import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
 import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
 import 'package:cropsync/screens/operator/operator_dashboard.dart';
 import 'package:cropsync/screens/creator/creator_home_screen.dart';
+import 'package:cropsync/screens/official/chc_official_dashboard.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/operator_auth_service.dart';
+import 'package:cropsync/services/official_auth_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/widgets/auth/auth_alert_banner.dart';
 import 'package:cropsync/widgets/auth/auth_logo_header.dart';
@@ -32,9 +34,11 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   final FocusNode _phoneFocusNode = FocusNode();
+  final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
 
   late final AnimationController _animController;
@@ -53,6 +57,7 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
     _phoneFocusNode.addListener(_onFocusChange);
+    _emailFocusNode.addListener(_onFocusChange);
     _passwordFocusNode.addListener(_onFocusChange);
 
     _animController = AnimationController(
@@ -87,10 +92,13 @@ class _LoginScreenState extends State<LoginScreen>
   void dispose() {
     _errorTimer?.cancel();
     _phoneFocusNode.removeListener(_onFocusChange);
+    _emailFocusNode.removeListener(_onFocusChange);
     _passwordFocusNode.removeListener(_onFocusChange);
     _phoneFocusNode.dispose();
+    _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
     _phoneController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _animController.dispose();
     super.dispose();
@@ -285,9 +293,40 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _login() async {
-    final phone = _phoneController.text.trim();
     final password = _passwordController.text.trim();
 
+    if (_selectedRole == 'official') {
+      final email = _emailController.text.trim();
+      if (email.isEmpty) {
+        _showError('Official Email address is required');
+        return;
+      }
+      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+        _showError('Please enter a valid email address');
+        return;
+      }
+      if (password.isEmpty) {
+        _showError('Password is required for Official Login');
+        return;
+      }
+
+      setState(() => _isLoading = true);
+      try {
+        await OfficialAuthService.login(email, password);
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const ChcOfficialDashboardScreen()),
+        );
+      } catch (e) {
+        _showError(e.toString().replaceFirst('Exception: ', ''));
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+      return;
+    }
+
+    final phone = _phoneController.text.trim();
     final phoneError = validatePhoneNumber(phone);
     if (phoneError != null) {
       _showError(phoneError);
@@ -365,6 +404,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   String _getRoleTitle() {
     switch (_selectedRole) {
+      case 'official':
+        return 'Government / CHC Official';
       case 'retailer':
         return 'role_retailer_title'.tr();
       case 'officer':
@@ -381,6 +422,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   IconData _getRoleIcon() {
     switch (_selectedRole) {
+      case 'official':
+        return Icons.admin_panel_settings_rounded;
       case 'retailer':
         return Icons.storefront_rounded;
       case 'officer':
@@ -399,6 +442,7 @@ class _LoginScreenState extends State<LoginScreen>
     HapticFeedback.selectionClick();
     final roles = [
       {'key': 'farmer', 'title': 'role_farmer_title'.tr(), 'desc': 'Access crop advisories & services', 'icon': Icons.eco_rounded},
+      {'key': 'official', 'title': 'Government / CHC Official', 'desc': 'CHC Operations, bookings & analytics oversight', 'icon': Icons.admin_panel_settings_rounded},
       {'key': 'chc_operator', 'title': 'role_chc_operator_title'.tr(), 'desc': 'Custom Hiring Center & equipment', 'icon': Icons.agriculture_rounded},
       {'key': 'retailer', 'title': 'role_retailer_title'.tr(), 'desc': 'Fertilizers & seeds retail partner', 'icon': Icons.storefront_rounded},
       {'key': 'officer', 'title': 'role_officer_title'.tr(), 'desc': 'Agricultural Extension Officer', 'icon': Icons.verified_user_rounded},
@@ -616,10 +660,16 @@ class _LoginScreenState extends State<LoginScreen>
           SizedBox(height: isShort ? 18 : 24),
           _buildRoleSelectorPill(isCompact: isShort),
           SizedBox(height: isShort ? 14 : 20),
-          _buildPhoneInputField(isCompact: isShort),
-          if (_selectedRole == 'chc_operator') ...[
+          if (_selectedRole == 'official') ...[
+            _buildEmailInputField(isCompact: isShort),
             SizedBox(height: isShort ? 12 : 16),
             _buildPasswordInputField(isCompact: isShort),
+          ] else ...[
+            _buildPhoneInputField(isCompact: isShort),
+            if (_selectedRole == 'chc_operator') ...[
+              SizedBox(height: isShort ? 12 : 16),
+              _buildPasswordInputField(isCompact: isShort),
+            ],
           ],
           SizedBox(height: isShort ? 20 : 28),
           _buildSubmitButton(isCompact: isShort),
@@ -733,9 +783,11 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Enter your 10-digit mobile number to access your account.',
-                      style: TextStyle(
+                    Text(
+                      _selectedRole == 'official'
+                          ? 'Enter your official credentials to access the administrative dashboard.'
+                          : 'Enter your 10-digit mobile number to access your account.',
+                      style: const TextStyle(
                         fontSize: 14,
                         color: AppTheme.textSecondary,
                         fontWeight: FontWeight.w500,
@@ -744,10 +796,16 @@ class _LoginScreenState extends State<LoginScreen>
                     const SizedBox(height: 24),
                     _buildRoleSelectorPill(isCompact: false),
                     const SizedBox(height: 18),
-                    _buildPhoneInputField(isCompact: false),
-                    if (_selectedRole == 'chc_operator') ...[
+                    if (_selectedRole == 'official') ...[
+                      _buildEmailInputField(isCompact: false),
                       const SizedBox(height: 16),
                       _buildPasswordInputField(isCompact: false),
+                    ] else ...[
+                      _buildPhoneInputField(isCompact: false),
+                      if (_selectedRole == 'chc_operator') ...[
+                        const SizedBox(height: 16),
+                        _buildPasswordInputField(isCompact: false),
+                      ],
                     ],
                     const SizedBox(height: 24),
                     _buildSubmitButton(isCompact: false),
@@ -876,6 +934,112 @@ class _LoginScreenState extends State<LoginScreen>
           ],
         ),
       ),
+    );
+  }
+
+  /// Direct Manual Email Input Field for Officials
+  Widget _buildEmailInputField({required bool isCompact}) {
+    final email = _emailController.text.trim();
+    final bool isEmailValid =
+        RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _emailFocusNode.requestFocus(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: isCompact ? 56 : 64,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(
+                color: _emailFocusNode.hasFocus
+                    ? AppTheme.textPrimary
+                    : (email.isNotEmpty && !isEmailValid
+                        ? Colors.redAccent
+                        : AppTheme.border.withValues(alpha: 0.5)),
+                width: _emailFocusNode.hasFocus ? 2.0 : 1.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 20, right: 12),
+                  child: AnimatedScale(
+                    scale: _emailFocusNode.hasFocus ? 1.15 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.admin_panel_settings_rounded,
+                      size: 22,
+                      color: _emailFocusNode.hasFocus
+                          ? AppTheme.textPrimary
+                          : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _emailController,
+                    focusNode: _emailFocusNode,
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    textCapitalization: TextCapitalization.none,
+                    onChanged: (val) {
+                      setState(() {});
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'Official Email (e.g. chc@gov.in)',
+                      hintStyle: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textHint,
+                      ),
+                      border: InputBorder.none,
+                      filled: false,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                if (email.isNotEmpty) ...[
+                  if (isEmailValid)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 12),
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF16A34A),
+                        size: 20,
+                      ),
+                    )
+                  else
+                    IconButton(
+                      icon: const Icon(Icons.cancel_rounded,
+                          size: 18, color: Color(0xFF9CA3AF)),
+                      onPressed: () {
+                        _emailController.clear();
+                        setState(() {});
+                      },
+                    ),
+                ],
+                const SizedBox(width: 8),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1163,11 +1327,20 @@ class _LoginScreenState extends State<LoginScreen>
 
   /// Sign In Action Button
   Widget _buildSubmitButton({required bool isCompact}) {
-    final String phone = _phoneController.text.trim();
-    final String cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
-    final bool canProceed = cleanPhone.length == 10 &&
-        (_selectedRole != 'chc_operator' ||
-            _passwordController.text.trim().isNotEmpty);
+    bool canProceed = false;
+    if (_selectedRole == 'official') {
+      final email = _emailController.text.trim();
+      final hasValidEmail =
+          RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+      canProceed =
+          hasValidEmail && _passwordController.text.trim().isNotEmpty;
+    } else {
+      final String phone = _phoneController.text.trim();
+      final String cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+      canProceed = cleanPhone.length == 10 &&
+          (_selectedRole != 'chc_operator' ||
+              _passwordController.text.trim().isNotEmpty);
+    }
     final bool isButtonDisabled = _isLoading || !canProceed;
 
     return ElevatedButton(
@@ -1197,7 +1370,9 @@ class _LoginScreenState extends State<LoginScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'login_submit'.tr(),
+                  _selectedRole == 'official'
+                      ? 'Access Dashboard'
+                      : 'login_submit'.tr(),
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -1217,6 +1392,36 @@ class _LoginScreenState extends State<LoginScreen>
 
   /// Create Account Outlined Link Button
   Widget _buildSignupLink({required bool isCompact}) {
+    if (_selectedRole == 'official') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFBFDBFE)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.info_outline_rounded,
+                size: 16, color: Color(0xFF1D4ED8)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Official accounts are provisioned by Department Admin.',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E40AF),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return OutlinedButton(
       onPressed: () {
         HapticFeedback.lightImpact();

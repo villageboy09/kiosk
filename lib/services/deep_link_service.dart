@@ -67,11 +67,11 @@ class DeepLinkService {
     }
 
     final query = uri.queryParameters;
-    final type = query['type']?.toLowerCase().trim() ?? '';
-    final id = query['id']?.trim() ?? '';
-    final crop = query['crop']?.trim() ?? '';
-    final commodity = query['commodity']?.trim() ?? '';
-    final lang = query['lang']?.toLowerCase().trim();
+    final type = (query['t'] ?? query['type'])?.toLowerCase().trim() ?? '';
+    final id = (query['id'] ?? query['i'])?.trim() ?? '';
+    final crop = (query['c'] ?? query['crop'])?.trim() ?? '';
+    final commodity = (query['c'] ?? query['commodity'] ?? query['comm'])?.trim() ?? '';
+    final lang = (query['l'] ?? query['lang'])?.toLowerCase().trim();
 
     // Optionally adapt locale if passed and valid
     if (lang != null && ['en', 'hi', 'te'].contains(lang)) {
@@ -165,7 +165,7 @@ class DeepLinkService {
   }
 
   static Future<void> _handleAdvisoryRoute(NavigatorState nav, String id, String crop, Map<String, String> query) async {
-    final cropName = crop.isNotEmpty ? crop : (query['crop'] ?? query['title'] ?? 'Crop');
+    final cropName = crop.isNotEmpty ? crop : (query['crop'] ?? query['c'] ?? query['title'] ?? 'Crop');
     final problemId = int.tryParse(id);
 
     if (problemId != null) {

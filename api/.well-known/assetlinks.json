@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.cropsync.cropsync",
+      "sha256_cert_fingerprints": [
+        "DA:3E:10:32:63:5B:42:C5:63:89:6F:46:7C:94:36:D9:8F:03:D2:D8:34:22:8D:7A:C7:05:D8:D7:9B:F0:56:66",
+        "02:40:F0:F5:9E:EC:76:E6:51:F6:52:D8:E9:70:B1:C1:A4:A0:00:71:45:FE:FF:15:8B:D7:B8:4F:DF:FA:DE:2D"
+      ]
+    }
+  }
+]

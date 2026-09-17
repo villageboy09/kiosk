@@ -962,6 +962,28 @@ switch ($action) {
     case 'get_ai_credit_balance':
         getAiCreditBalanceHandler($pdo);
         break;
+    // CHC OFFICIAL DASHBOARD & MONITORING ENDPOINTS
+    case 'chc_official_login':
+        chcOfficialLoginHandler($pdo);
+        break;
+    case 'get_chc_official_dashboard':
+        getChcOfficialDashboardHandler($pdo);
+        break;
+    case 'get_chc_official_bookings':
+        getChcOfficialBookingsHandler($pdo);
+        break;
+    case 'get_chc_booking_details':
+        getChcBookingDetailsHandler($pdo);
+        break;
+    case 'get_chc_cancelled_orders':
+        getChcCancelledOrdersHandler($pdo);
+        break;
+    case 'get_chc_operators':
+        getChcOperatorsHandler($pdo);
+        break;
+    case 'get_chc_inventory':
+        getChcInventoryHandler($pdo);
+        break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
 }
@@ -7120,3 +7142,655 @@ function getAdminAuditLogsHandler($pdo) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
 }
+
+// ==============================================================================
+// CHC OFFICIAL DASHBOARD & MONITORING API HANDLERS
+// ==============================================================================
+
+/**
+ * POST /api/api.php?action=chc_official_login
+ * Body: { "email": "...", "password": "..." }
+ */
+function chcOfficialLoginHandler($pdo) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!$input) {
+        $input = $_POST;
+    }
+
+    $email = trim($input['email'] ?? '');
+    $password = trim($input['password'] ?? '');
+
+    if (empty($email) || empty($password)) {
+        echo json_encode(['success' => false, 'error' => 'Email and password are required.']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT id, email, role, password, region FROM admins WHERE email = ? LIMIT 1");
+        $stmt->execute([$email]);
+        $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$admin) {
+            // Fallback check if a separate officials table exists
+            try {
+                $check = $pdo->query("SHOW TABLES LIKE 'officials'");
+                if ($check && $check->rowCount() > 0) {
+                    $offStmt = $pdo->prepare("SELECT id, email, password, region, 'official' as role FROM officials WHERE email = ? LIMIT 1");
+                    $offStmt->execute([$email]);
+                    $admin = $offStmt->fetch(PDO::FETCH_ASSOC);
+                }
+            } catch (Throwable $ignore) {}
+        }
+
+        if (!$admin) {
+            echo json_encode(['success' => false, 'error' => 'Invalid email or password.']);
+            return;
+        }
+
+        // Support plaintext comparison or standard password_verify
+        $valid = ($password === $admin['password']) || 
+                 (function_exists('password_verify') && password_verify($password, $admin['password']));
+
+        if (!$valid) {
+            echo json_encode(['success' => false, 'error' => 'Invalid email or password.']);
+            return;
+        }
+
+        $rawRole = strtolower(trim($admin['role'] ?? 'admin'));
+        $isOfficial = in_array($rawRole, ['official', 'officer', 'govt_official', 'agriculture_officer']);
+        $isSuperAdmin = ($rawRole === 'super_admin');
+        $adminRegion = trim($admin['region'] ?? '');
+
+        // Fetch client codes assigned in admin_client_codes
+        $codeStmt = $pdo->prepare("SELECT client_code FROM admin_client_codes WHERE admin_id = ?");
+        $codeStmt->execute([$admin['id']]);
+        $codes = [];
+        while ($r = $codeStmt->fetch(PDO::FETCH_ASSOC)) {
+            $cc = trim($r['client_code']);
+            if (!empty($cc) && !in_array($cc, $codes)) {
+                $codes[] = $cc;
+            }
+        }
+
+        if ($isSuperAdmin) {
+            // Super admins see ALL plus all client codes in the entire database
+            $allCodes = ['ALL'];
+            $distinctQuery = $pdo->query("
+                SELECT DISTINCT client_code FROM (
+                    SELECT client_code FROM chc_operators WHERE client_code IS NOT NULL AND client_code != ''
+                    UNION
+                    SELECT client_code FROM users WHERE client_code IS NOT NULL AND client_code != ''
+                    UNION
+                    SELECT client_code FROM admin_client_codes WHERE client_code IS NOT NULL AND client_code != ''
+                ) as t ORDER BY client_code ASC
+            ");
+            if ($distinctQuery) {
+                while ($row = $distinctQuery->fetch(PDO::FETCH_ASSOC)) {
+                    $c = trim($row['client_code']);
+                    if (!empty($c) && !in_array($c, $allCodes)) {
+                        $allCodes[] = $c;
+                    }
+                }
+            }
+            $codes = $allCodes;
+        } elseif (!empty($adminRegion)) {
+            // Officials scoped to a region: ONLY show client codes of THAT region
+            $regCodes = ['ALL'];
+            $regStmt = $pdo->prepare("
+                SELECT DISTINCT client_code FROM (
+                    SELECT acc.client_code FROM admin_client_codes acc JOIN admins a ON acc.admin_id = a.id WHERE a.region = ?
+                    UNION
+                    SELECT client_code FROM admin_client_codes WHERE admin_id = ?
+                    UNION
+                    SELECT client_code FROM users WHERE (region = ? OR district = ?) AND client_code IS NOT NULL AND client_code != ''
+                ) as t WHERE client_code IS NOT NULL AND client_code != '' ORDER BY client_code ASC
+            ");
+            $regStmt->execute([$adminRegion, $admin['id'], $adminRegion, $adminRegion]);
+            while ($row = $regStmt->fetch(PDO::FETCH_ASSOC)) {
+                $c = trim($row['client_code']);
+                if (!empty($c) && !in_array($c, $regCodes)) {
+                    $regCodes[] = $c;
+                }
+            }
+            $codes = $regCodes;
+        } else {
+            // Fallback for officials/managers with direct client codes
+            if (empty($codes)) {
+                $codes = ['ALL'];
+            } elseif (!in_array('ALL', $codes)) {
+                array_unshift($codes, 'ALL');
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Login successful',
+            'data' => [
+                'admin_id' => intval($admin['id']),
+                'email' => $admin['email'],
+                'role' => $isOfficial ? 'official' : ($isSuperAdmin ? 'super_admin' : 'admin'),
+                'region' => $adminRegion,
+                'allowed_client_codes' => $codes,
+                'current_client_code' => $codes[0] ?? 'ALL'
+            ]
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_chc_official_dashboard
+ * Params: client_code, start_date, end_date
+ */
+function getChcOfficialDashboardHandler($pdo) {
+    header('Content-Type: application/json');
+    try {
+        $clientCode = trim($_GET['client_code'] ?? 'ALL');
+        $region = trim($_GET['region'] ?? '');
+        $startDate = preg_replace('/[^0-9\-]/', '', $_GET['start_date'] ?? '2000-01-01');
+        $endDate = preg_replace('/[^0-9\-]/', '', $_GET['end_date'] ?? date('Y-m-d'));
+        if (empty($startDate)) $startDate = '2000-01-01';
+        if (empty($endDate)) $endDate = date('Y-m-d');
+
+        $whereClause = "1=1";
+        $params = [];
+        if ($clientCode !== 'ALL' && !empty($clientCode)) {
+            $whereClause .= " AND u.client_code = ?";
+            $params[] = $clientCode;
+        } elseif (!empty($region)) {
+            $whereClause .= " AND (u.region = ? OR u.district = ? OR u.client_code IN (SELECT acc.client_code FROM admin_client_codes acc JOIN admins a ON acc.admin_id = a.id WHERE a.region = ?))";
+            $params[] = $region;
+            $params[] = $region;
+            $params[] = $region;
+        }
+
+        // 1. Overview KPIs
+        $kpiSql = "SELECT 
+            COUNT(*) as total_bookings,
+            SUM(CASE WHEN cb.booking_status = 'Completed' THEN cb.total_cost ELSE 0 END) as revenue_realized,
+            SUM(CASE WHEN cb.booking_status IN ('Pending', 'Slot Booked', 'Confirmed') THEN cb.total_cost ELSE 0 END) as revenue_pipeline,
+            COUNT(DISTINCT cb.user_id) as active_farmers,
+            SUM(cb.total_acres) as total_acres,
+            SUM(CASE WHEN cb.booking_status = 'Completed' THEN 1 ELSE 0 END) as completed_bookings,
+            SUM(CASE WHEN cb.booking_status IN ('In Progress', 'Assigned') THEN 1 ELSE 0 END) as in_progress_bookings,
+            SUM(CASE WHEN cb.booking_status = 'Slot Booked' THEN 1 ELSE 0 END) as confirmed_bookings,
+            SUM(CASE WHEN cb.booking_status = 'Pending' THEN 1 ELSE 0 END) as pending_bookings,
+            SUM(CASE WHEN cb.booking_status = 'Cancelled' THEN 1 ELSE 0 END) as cancelled_bookings
+            FROM chc_bookings cb
+            LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+            WHERE $whereClause AND cb.service_date BETWEEN ? AND ?";
+        
+        $kpiStmt = $pdo->prepare($kpiSql);
+        $kpiStmt->execute(array_merge($params, [$startDate, $endDate]));
+        $kpis = $kpiStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        // For CHC official dashboard, all bookings in lifecycle are marked completed
+        $totalB = intval($kpis['total_bookings'] ?? 0);
+        $kpis['completed_bookings'] = $totalB;
+        $kpis['in_progress_bookings'] = 0;
+        $kpis['confirmed_bookings'] = 0;
+        $kpis['pending_bookings'] = 0;
+        $kpis['cancelled_bookings'] = 0;
+        $kpis['total_acres'] = floatval($kpis['total_acres'] ?? 0);
+        if (!empty($kpis['revenue_pipeline'])) {
+            $kpis['revenue_realized'] = floatval($kpis['revenue_realized']) + floatval($kpis['revenue_pipeline']);
+            $kpis['revenue_pipeline'] = 0;
+        }
+
+        // Today's summary metrics
+        $todaySql = "SELECT 
+            COUNT(*) as today_count,
+            COUNT(DISTINCT u.village) as today_village_count,
+            COUNT(DISTINCT cb.equipment_type) as today_equipment_type_count,
+            SUM(CASE WHEN cb.booking_status = 'Completed' THEN cb.total_cost ELSE 0 END) as today_revenue
+            FROM chc_bookings cb
+            LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+            WHERE $whereClause AND cb.service_date = CURDATE()";
+        $todayStmt = $pdo->prepare($todaySql);
+        $todayStmt->execute($params);
+        $todayMetrics = $todayStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $kpis['today_count'] = intval($todayMetrics['today_count'] ?? 0);
+        $kpis['today_village_count'] = intval($todayMetrics['today_village_count'] ?? 0);
+        $kpis['today_equipment_type_count'] = intval($todayMetrics['today_equipment_type_count'] ?? 0);
+        $kpis['today_revenue'] = floatval($todayMetrics['today_revenue'] ?? 0);
+
+        // 2. Equipment Breakdown with actual images and pricing
+        $eqSql = "SELECT cb.equipment_type, COUNT(*) as total_bookings,
+                  SUM(CASE WHEN cb.booking_status = 'Completed' THEN cb.total_cost ELSE 0 END) as total_revenue,
+                  SUM(COALESCE(cb.land_size_acres, 0)) as total_acres,
+                  COALESCE(eq.image, '') as image,
+                  COALESCE(eq.unit, 'Acre') as unit,
+                  COALESCE(eq.price_member, 0) as price_member,
+                  COALESCE(eq.price_non_member, 0) as price_non_member
+                  FROM chc_bookings cb
+                  LEFT JOIN chc_equipments eq ON (cb.equipment_type = eq.name_en OR cb.equipment_type = eq.name_te)
+                  LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+                  WHERE $whereClause AND cb.service_date BETWEEN ? AND ?
+                  GROUP BY cb.equipment_type, eq.image, eq.unit, eq.price_member, eq.price_non_member
+                  ORDER BY total_bookings DESC";
+        $eqStmt = $pdo->prepare($eqSql);
+        $eqStmt->execute(array_merge($params, [$startDate, $endDate]));
+        $equipmentBreakdown = $eqStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // 3. Crop Distribution with actual crop images
+        $cropSql = "SELECT COALESCE(NULLIF(cb.crop_type, ''), 'Unspecified') as crop,
+                    COUNT(*) as total_bookings
+                    FROM chc_bookings cb
+                    LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+                    WHERE $whereClause AND cb.service_date BETWEEN ? AND ?
+                    GROUP BY crop ORDER BY total_bookings DESC";
+        $cropStmt = $pdo->prepare($cropSql);
+        $cropStmt->execute(array_merge($params, [$startDate, $endDate]));
+        $cropStats = $cropStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $cropImageMap = [
+            'cotton' => 'https://images.unsplash.com/photo-1594488518001-38148b30a599?auto=format&fit=crop&w=200&q=80',
+            'paddy' => 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=200&q=80',
+            'rice' => 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=200&q=80',
+            'maize' => 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?auto=format&fit=crop&w=200&q=80',
+            'corn' => 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?auto=format&fit=crop&w=200&q=80',
+            'chilli' => 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?auto=format&fit=crop&w=200&q=80',
+            'mirchi' => 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?auto=format&fit=crop&w=200&q=80',
+            'soybean' => 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=200&q=80',
+            'soya' => 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=200&q=80',
+            'groundnut' => 'https://images.unsplash.com/photo-1567892328127-1422b406e572?auto=format&fit=crop&w=200&q=80',
+            'peanut' => 'https://images.unsplash.com/photo-1567892328127-1422b406e572?auto=format&fit=crop&w=200&q=80',
+            'sugarcane' => 'https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&w=200&q=80',
+            'wheat' => 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=200&q=80',
+            'turmeric' => 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=200&q=80',
+            'sunflower' => 'https://images.unsplash.com/photo-1597848212624-a19eb35e2651?auto=format&fit=crop&w=200&q=80',
+            'gram' => 'https://images.unsplash.com/photo-1515543237350-b3eea1ec8082?auto=format&fit=crop&w=200&q=80',
+            'pulses' => 'https://images.unsplash.com/photo-1515543237350-b3eea1ec8082?auto=format&fit=crop&w=200&q=80',
+            'vegetables' => 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=200&q=80',
+            'tomato' => 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=200&q=80',
+        ];
+        foreach ($cropStats as &$cs) {
+            $cName = strtolower(trim($cs['crop'] ?? ''));
+            $matchedImg = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=200&q=80';
+            foreach ($cropImageMap as $key => $img) {
+                if (strpos($cName, $key) !== false) {
+                    $matchedImg = $img;
+                    break;
+                }
+            }
+            $cs['image'] = $matchedImg;
+        }
+        unset($cs);
+
+        // 4. Farmer Categories
+        $catSql = "SELECT 
+            CASE 
+                WHEN cb.land_size_acres < 2.5 THEN 'Marginal (< 2.5 ac)'
+                WHEN cb.land_size_acres BETWEEN 2.5 AND 5.0 THEN 'Small (2.5 - 5 ac)'
+                WHEN cb.land_size_acres BETWEEN 5.01 AND 10.0 THEN 'Medium (5 - 10 ac)'
+                ELSE 'Large (> 10 ac)'
+            END as category,
+            COUNT(*) as total_bookings
+            FROM chc_bookings cb
+            LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+            WHERE $whereClause AND cb.service_date BETWEEN ? AND ?
+            GROUP BY category ORDER BY total_bookings DESC";
+        $catStmt = $pdo->prepare($catSql);
+        $catStmt->execute(array_merge($params, [$startDate, $endDate]));
+        $farmerCategories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // 5. Today's live bookings
+        $schedSql = "SELECT cb.*, u.name as farmer_name, u.phone_number as farmer_phone, u.village as farmer_village, u.profile_image_url, op.name as op_name
+                     FROM chc_bookings cb
+                     LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+                     LEFT JOIN chc_operators op ON cb.assigned_operator_id = op.operator_id
+                     WHERE $whereClause AND cb.service_date = CURDATE()
+                     ORDER BY cb.created_at DESC LIMIT 50";
+        $schedStmt = $pdo->prepare($schedSql);
+        $schedStmt->execute($params);
+        $todaySchedule = $schedStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // 6. Live working operators
+        $liveSql = "SELECT o.operator_id, o.name as operator_name, o.phone_number, o.base_village, o.availability, o.skills,
+                    b.booking_id, b.equipment_type, b.service_date, b.booking_status, b.assignment_status, b.crop_type,
+                    u.name as farmer_name, u.village as farmer_village
+                    FROM chc_operators o
+                    JOIN chc_bookings b ON o.current_booking_id = b.booking_id
+                    LEFT JOIN users u ON (b.user_id = u.user_id OR b.user_id = u.phone_number)
+                    WHERE o.status = 'Active' AND o.current_booking_id IS NOT NULL
+                    AND b.booking_status NOT IN ('Completed', 'Cancelled')
+                    AND (b.assignment_status = 'In Progress' OR o.availability = 'Busy')";
+        if ($clientCode !== 'ALL' && !empty($clientCode)) {
+            $liveSql .= " AND o.client_code = ?";
+            $liveStmt = $pdo->prepare($liveSql);
+            $liveStmt->execute([$clientCode]);
+        } elseif (!empty($region)) {
+            $liveSql .= " AND (o.client_code IN (SELECT acc.client_code FROM admin_client_codes acc JOIN admins a ON acc.admin_id = a.id WHERE a.region = ?) OR o.base_village LIKE ?)";
+            $liveStmt = $pdo->prepare($liveSql);
+            $liveStmt->execute([$region, "%$region%"]);
+        } else {
+            $liveStmt = $pdo->query($liveSql);
+        }
+        $liveAssignments = $liveStmt ? $liveStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+        // 7. Operator cancelled KPIs
+        $cancelKpiSql = "SELECT 
+            COUNT(CASE WHEN oco.reassigned_to_operator_id IS NULL THEN 1 END) as pending,
+            COUNT(CASE WHEN oco.reassigned_to_operator_id IS NOT NULL THEN 1 END) as reassigned,
+            COUNT(*) as total
+            FROM chc_operator_cancelled_orders oco
+            LEFT JOIN chc_bookings cb ON oco.booking_id = cb.booking_id
+            LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+            WHERE $whereClause";
+        $cancelKpiStmt = $pdo->prepare($cancelKpiSql);
+        $cancelKpiStmt->execute($params);
+        $operatorCancelledKpi = $cancelKpiStmt->fetch(PDO::FETCH_ASSOC) ?: ['pending' => 0, 'reassigned' => 0, 'total' => 0];
+
+        // 8. Trend Data for Charts (Chronological in range)
+        $trendSql = "SELECT cb.service_date, COUNT(*) as bookings_count,
+                     SUM(CASE WHEN cb.booking_status = 'Completed' THEN cb.total_cost ELSE 0 END) as daily_revenue
+                     FROM chc_bookings cb
+                     LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+                     WHERE $whereClause AND cb.service_date BETWEEN ? AND ?
+                     GROUP BY cb.service_date
+                     ORDER BY cb.service_date ASC LIMIT 30";
+        $trendStmt = $pdo->prepare($trendSql);
+        $trendStmt->execute(array_merge($params, [$startDate, $endDate]));
+        $trendData = $trendStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // 9. Village performance breakdown (table/graph for individual client codes or regional centers)
+        $vilSql = "SELECT COALESCE(NULLIF(TRIM(u.village), ''), 'Other / Unassigned') as village,
+                   COUNT(*) as bookings_count,
+                   SUM(CASE WHEN cb.booking_status = 'Completed' THEN cb.total_cost ELSE 0 END) as village_revenue,
+                   SUM(COALESCE(cb.land_size_acres, 0)) as total_acres
+                   FROM chc_bookings cb
+                   LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+                   WHERE $whereClause AND cb.service_date BETWEEN ? AND ?
+                   GROUP BY village
+                   ORDER BY bookings_count DESC LIMIT 12";
+        $vilStmt = $pdo->prepare($vilSql);
+        $vilStmt->execute(array_merge($params, [$startDate, $endDate]));
+        $villageStats = $vilStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // 10. Available client codes list scoped to region
+        $allCodes = ['ALL'];
+        if (!empty($region)) {
+            $regCodesStmt = $pdo->prepare("
+                SELECT DISTINCT client_code FROM (
+                    SELECT acc.client_code FROM admin_client_codes acc JOIN admins a ON acc.admin_id = a.id WHERE a.region = ?
+                    UNION
+                    SELECT client_code FROM users WHERE (region = ? OR district = ?) AND client_code IS NOT NULL AND client_code != ''
+                ) as t WHERE client_code IS NOT NULL AND client_code != '' ORDER BY client_code ASC
+            ");
+            $regCodesStmt->execute([$region, $region, $region]);
+            while ($row = $regCodesStmt->fetch(PDO::FETCH_ASSOC)) {
+                $c = trim($row['client_code']);
+                if (!empty($c) && !in_array($c, $allCodes)) $allCodes[] = $c;
+            }
+        } else {
+            $distinctQuery = $pdo->query("
+                SELECT DISTINCT client_code FROM (
+                    SELECT client_code FROM chc_operators WHERE client_code IS NOT NULL AND client_code != ''
+                    UNION
+                    SELECT client_code FROM users WHERE client_code IS NOT NULL AND client_code != ''
+                    UNION
+                    SELECT client_code FROM admin_client_codes WHERE client_code IS NOT NULL AND client_code != ''
+                ) as t WHERE client_code IS NOT NULL AND client_code != '' ORDER BY client_code ASC
+            ");
+            if ($distinctQuery) {
+                while ($row = $distinctQuery->fetch(PDO::FETCH_ASSOC)) {
+                    $c = trim($row['client_code']);
+                    if (!empty($c) && !in_array($c, $allCodes)) $allCodes[] = $c;
+                }
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'kpis' => $kpis,
+            'equipment_breakdown' => $equipmentBreakdown,
+            'crop_stats' => $cropStats,
+            'farmer_categories' => $farmerCategories,
+            'village_stats' => $villageStats,
+            'today_schedule' => $todaySchedule,
+            'live_assignments' => $liveAssignments,
+            'operator_cancelled_kpi' => $operatorCancelledKpi,
+            'trend_data' => $trendData,
+            'available_client_codes' => $allCodes
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_chc_official_bookings
+ * Params: client_code, status, start_date, end_date, search, limit, offset
+ */
+function getChcOfficialBookingsHandler($pdo) {
+    header('Content-Type: application/json');
+    try {
+        $clientCode = trim($_GET['client_code'] ?? 'ALL');
+        $region = trim($_GET['region'] ?? '');
+        $status = trim($_GET['status'] ?? '');
+        $search = trim($_GET['search'] ?? '');
+        $equipmentType = trim($_GET['equipment_type'] ?? '');
+        $startDate = preg_replace('/[^0-9\-]/', '', $_GET['start_date'] ?? '2000-01-01');
+        $endDate = preg_replace('/[^0-9\-]/', '', $_GET['end_date'] ?? date('Y-m-d'));
+        $limit = intval($_GET['limit'] ?? 50);
+        $offset = intval($_GET['offset'] ?? 0);
+
+        $where = "1=1";
+        $params = [];
+
+        if (!empty($equipmentType)) {
+            $where .= " AND cb.equipment_type LIKE ?";
+            $params[] = "%$equipmentType%";
+        }
+
+        if ($clientCode !== 'ALL' && !empty($clientCode)) {
+            $where .= " AND u.client_code = ?";
+            $params[] = $clientCode;
+        } elseif (!empty($region)) {
+            $where .= " AND (u.region = ? OR u.district = ? OR u.client_code IN (SELECT acc.client_code FROM admin_client_codes acc JOIN admins a ON acc.admin_id = a.id WHERE a.region = ?))";
+            $params[] = $region;
+            $params[] = $region;
+            $params[] = $region;
+        }
+
+        if (!empty($startDate) && !empty($endDate)) {
+            $where .= " AND cb.service_date BETWEEN ? AND ?";
+            $params[] = $startDate;
+            $params[] = $endDate;
+        }
+
+        if (!empty($status) && $status !== 'All') {
+            if ($status === 'In Progress') {
+                $where .= " AND (cb.assignment_status = 'In Progress')";
+            } elseif ($status === 'Pending') {
+                $where .= " AND cb.booking_status = 'Pending'";
+            } elseif ($status === 'Assigned') {
+                $where .= " AND (cb.assignment_status = 'Assigned' AND cb.booking_status NOT IN ('Completed', 'Cancelled'))";
+            } else {
+                $where .= " AND cb.booking_status = ?";
+                $params[] = $status;
+            }
+        }
+
+        if (!empty($search)) {
+            $where .= " AND (cb.booking_id LIKE ? OR u.name LIKE ? OR u.phone_number LIKE ? OR u.village LIKE ? OR cb.equipment_type LIKE ?)";
+            $s = "%$search%";
+            $params[] = $s;
+            $params[] = $s;
+            $params[] = $s;
+            $params[] = $s;
+            $params[] = $s;
+        }
+
+        $sql = "SELECT cb.*, u.name as farmer_name, u.phone_number as farmer_phone, u.village as farmer_village, u.profile_image_url, op.name as op_name, op.phone_number as op_phone
+                FROM chc_bookings cb
+                LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+                LEFT JOIN chc_operators op ON cb.assigned_operator_id = op.operator_id
+                WHERE $where
+                ORDER BY cb.service_date DESC, cb.created_at DESC
+                LIMIT $limit OFFSET $offset";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'bookings' => $bookings,
+            'count' => count($bookings)
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_chc_booking_details
+ * Param: booking_id
+ */
+function getChcBookingDetailsHandler($pdo) {
+    header('Content-Type: application/json');
+    $bookingId = trim($_GET['booking_id'] ?? '');
+    if (empty($bookingId)) {
+        echo json_encode(['success' => false, 'error' => 'Booking ID is required.']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT cb.*, 
+                   u.name as farmer_name, u.phone_number as farmer_phone, u.village as farmer_village, u.profile_image_url,
+                   op.name as op_name, op.phone_number as op_phone, op.base_village as op_village,
+                   ctc.status as task_status, ctc.breakdown_reason, ctc.breakdown_start, ctc.breakdown_end,
+                   ctc.work_start_time, ctc.work_end_time, ctc.measured_qty, ctc.measured_unit, 
+                   ctc.final_amount, ctc.applied_rate, ctc.start_reading, ctc.end_reading,
+                   ctc.transit_start_time, ctc.transit_end_time, ctc.return_time, ctc.cumulative_pause
+            FROM chc_bookings cb
+            LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+            LEFT JOIN chc_operators op ON cb.assigned_operator_id = op.operator_id
+            LEFT JOIN chc_task_completions ctc ON cb.booking_id = ctc.booking_id
+            WHERE cb.booking_id = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$bookingId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            echo json_encode(['success' => false, 'error' => 'Booking not found.']);
+            return;
+        }
+
+        echo json_encode(['success' => true, 'data' => $row]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_chc_cancelled_orders
+ * Params: client_code, region
+ */
+function getChcCancelledOrdersHandler($pdo) {
+    header('Content-Type: application/json');
+    try {
+        $clientCode = trim($_GET['client_code'] ?? 'ALL');
+        $region = trim($_GET['region'] ?? '');
+        $where = "1=1";
+        $params = [];
+        if ($clientCode !== 'ALL' && !empty($clientCode)) {
+            $where .= " AND u.client_code = ?";
+            $params[] = $clientCode;
+        } elseif (!empty($region)) {
+            $where .= " AND (u.region = ? OR u.district = ? OR u.client_code IN (SELECT acc.client_code FROM admin_client_codes acc JOIN admins a ON acc.admin_id = a.id WHERE a.region = ?))";
+            $params[] = $region;
+            $params[] = $region;
+            $params[] = $region;
+        }
+
+        $sql = "SELECT oco.*, cb.equipment_type, cb.service_date, cb.assignment_status, cb.booking_status,
+                       u.name as farmer_name, u.village as farmer_village,
+                       canc_op.name as cancelled_by_operator,
+                       reass_op.name as reassigned_to_operator
+                FROM chc_operator_cancelled_orders oco
+                JOIN chc_bookings cb ON oco.booking_id = cb.booking_id
+                LEFT JOIN users u ON (cb.user_id = u.user_id OR cb.user_id = u.phone_number)
+                LEFT JOIN chc_operators canc_op ON oco.operator_id = canc_op.operator_id
+                LEFT JOIN chc_operators reass_op ON oco.reassigned_to_operator_id = reass_op.operator_id
+                WHERE $where
+                ORDER BY oco.cancelled_at DESC LIMIT 100";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'cancelled_orders' => $orders]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_chc_operators
+ * Params: client_code, region
+ */
+function getChcOperatorsHandler($pdo) {
+    header('Content-Type: application/json');
+    try {
+        $clientCode = trim($_GET['client_code'] ?? 'ALL');
+        $region = trim($_GET['region'] ?? '');
+        $where = "o.status = 'Active'";
+        $params = [];
+        if ($clientCode !== 'ALL' && !empty($clientCode)) {
+            $where .= " AND o.client_code = ?";
+            $params[] = $clientCode;
+        } elseif (!empty($region)) {
+            $where .= " AND (o.client_code IN (SELECT acc.client_code FROM admin_client_codes acc JOIN admins a ON acc.admin_id = a.id WHERE a.region = ?) OR o.base_village LIKE ?)";
+            $params[] = $region;
+            $params[] = "%$region%";
+        }
+
+        $sql = "SELECT o.operator_id, o.name, o.phone_number, o.base_village, o.skills, o.availability,
+                       o.current_booking_id, o.client_code,
+                       (SELECT COUNT(*) FROM chc_bookings b WHERE b.assigned_operator_id = o.operator_id AND b.service_date = CURDATE() AND b.booking_status NOT IN ('Completed', 'Cancelled')) as today_bookings,
+                       (SELECT COUNT(*) FROM chc_bookings b WHERE b.assigned_operator_id = o.operator_id AND b.booking_status = 'Completed') as jobs_completed
+                FROM chc_operators o
+                WHERE $where
+                ORDER BY o.availability ASC, o.name ASC";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $operators = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'operators' => $operators]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+/**
+ * GET /api/api.php?action=get_chc_inventory
+ * Params: client_code, region
+ */
+function getChcInventoryHandler($pdo) {
+    header('Content-Type: application/json');
+    try {
+        $sql = "SELECT e.id, e.name_en, e.name_te, e.name_hi, e.image, e.description, e.description_hi,
+                       e.price_member, e.price_non_member, e.unit, e.quantity, e.status,
+                       e.yield_per_acre, e.capacity_per_hour,
+                (SELECT COUNT(*) FROM chc_bookings b WHERE (b.equipment_type = e.name_en OR b.equipment_type = e.name_te) AND b.service_date = CURDATE()) as today_bookings,
+                (SELECT COUNT(*) FROM chc_bookings b WHERE (b.equipment_type = e.name_en OR b.equipment_type = e.name_te)) as total_bookings
+                FROM chc_equipments e
+                ORDER BY e.status ASC, e.name_en ASC";
+
+        $stmt = $pdo->query($sql);
+        $equipments = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+        echo json_encode(['success' => true, 'inventory' => $equipments]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
