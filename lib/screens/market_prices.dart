@@ -11,6 +11,7 @@ import 'package:cropsync/utils/commodity_translator.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/services/share_service.dart';
 import 'package:cropsync/widgets/language_selector.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class MarketPrice {
   final String state;
@@ -368,9 +369,13 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
             ? 'हिन्दी'
             : 'English';
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFBFA),
-      body: SafeArea(
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: GoogleFonts.googleSansTextTheme(Theme.of(context).textTheme),
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFBFA),
+        body: SafeArea(
         child: Column(
           children: [
             // Custom Top App Bar matching the reference design
@@ -489,27 +494,32 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                   if (_isSearchExpanded) ...[
                     const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.03),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
+                        color: const Color(0xFFF1F5F2),
+                        borderRadius: BorderRadius.circular(100), // Pill shape
+                        border: Border.all(color: Colors.transparent),
                       ),
                       child: TextField(
                         controller: _searchController,
                         autofocus: true,
+                        style: const TextStyle(
+                          color: Color(0xFF1E482D),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
                         decoration: InputDecoration(
                           hintText: context.tr('search_commodities_hint'),
                           hintStyle: const TextStyle(
                               color: Color(0xFF9CA3AF), fontSize: 14),
                           border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          filled: false,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
                           icon: const Icon(Icons.search_rounded,
                               color: Color(0xFF2E6930), size: 20),
                         ),
@@ -553,7 +563,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildCategoryChip(String key, String label) {
@@ -743,13 +753,6 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
           color: const Color(0xFFEDF5EF), // soft mint background
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: const Color(0xFFD6EADA), width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF1E482D).withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         child: Row(
           children: [
@@ -757,16 +760,14 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
             Container(
               width: 84,
               height: 84,
-              clipBehavior: Clip.antiAlias,
+              clipBehavior: Clip.hardEdge,
               decoration: BoxDecoration(
-                color: const Color(0xFFEDF5EF),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: CachedNetworkImage(
                 imageUrl: imageUrl,
                 fit: BoxFit.contain,
-                color: const Color(0xFFEDF5EF),
-                colorBlendMode: BlendMode.multiply,
+                memCacheWidth: 200,
                 placeholder: (context, url) => Shimmer.fromColors(
                   baseColor: const Color(0xFFDCE8DF),
                   highlightColor: const Color(0xFFEDF5EF),
@@ -853,59 +854,46 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFEFF2EF), width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.025),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          border: Border.all(color: const Color(0xFFEFF2EF)),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Clean isolated commodity photograph blended with soft card stage
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEDF5EF),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  padding: const EdgeInsets.all(8),
-                  child: Center(
-                    child: CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      fit: BoxFit.contain,
+        clipBehavior: Clip.hardEdge,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Clean isolated commodity photograph blended with soft card stage
+            Expanded(
+              child: SizedBox(
+                width: double.infinity,
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 250,
+                  placeholder: (context, url) => Shimmer.fromColors(
+                    baseColor: const Color(0xFFDCE8DF),
+                    highlightColor: const Color(0xFFEDF5EF),
+                    child: Container(
                       color: const Color(0xFFEDF5EF),
-                      colorBlendMode: BlendMode.multiply,
-                      placeholder: (context, url) => Shimmer.fromColors(
-                        baseColor: const Color(0xFFDCE8DF),
-                        highlightColor: const Color(0xFFEDF5EF),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEDF5EF),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
-                      errorWidget: (context, url, error) => const Icon(
-                        Icons.grass_rounded,
-                        size: 38,
-                        color: Color(0xFF2E6930),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        fit: BoxFit.contain,
                       ),
                     ),
                   ),
                 ),
               ),
+            ),
 
-              const SizedBox(height: 8),
-
-              // Commodity Name
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Commodity Name
               Text(
                 localizedName,
                 maxLines: 1,
@@ -928,18 +916,18 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                   children: [
                     TextSpan(
                       text: '₹${_formatPrice(price.modalPrice)}',
-                      style: const TextStyle(
+                      style: GoogleFonts.googleSans(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF111827),
+                        color: const Color(0xFF111827),
                       ),
                     ),
                     TextSpan(
                       text: ' ${_getDisplayUnit(price)}',
-                      style: const TextStyle(
+                      style: GoogleFonts.googleSans(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF6B7280),
+                        color: const Color(0xFF6B7280),
                       ),
                     ),
                   ],
@@ -1034,6 +1022,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
               ),
             ],
           ),
+        ),
+        ],
         ),
       ),
     );
@@ -1274,11 +1264,8 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
       dates.add(formattedDate);
     }
 
-    int trendPct = 0;
-    if (spots.length >= 2 && spots.first.y > 0) {
-      trendPct =
-          (((spots.last.y - spots.first.y) / spots.first.y) * 100).round();
-    }
+    final basePrice = widget.prices.isNotEmpty ? widget.prices.first.numericModalPrice : 2500.0;
+    int trendPct = CommodityTranslator.getTrendPercentage(widget.commodity, basePrice);
 
     setState(() {
       _selectedDurationDays = days;
@@ -1413,12 +1400,12 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                 children: [
                   Center(
                     child: Container(
-                      width: 130,
-                      height: 130,
+                      width: 140,
+                      height: 140,
                       clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEDF5EF),
-                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
                             color: const Color(0xFF1E482D).withValues(alpha: 0.06),
@@ -1427,26 +1414,24 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                           ),
                         ],
                       ),
-                      padding: const EdgeInsets.all(16),
                       child: CachedNetworkImage(
                         imageUrl: widget.imagePath,
-                        fit: BoxFit.contain,
-                        color: const Color(0xFFEDF5EF),
-                        colorBlendMode: BlendMode.multiply,
+                        fit: BoxFit.cover,
                         placeholder: (context, url) => Shimmer.fromColors(
                           baseColor: const Color(0xFFDCE8DF),
                           highlightColor: const Color(0xFFEDF5EF),
                           child: Container(
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFEDF5EF),
-                              shape: BoxShape.circle,
-                            ),
+                            color: const Color(0xFFEDF5EF),
                           ),
                         ),
-                        errorWidget: (_, __, ___) => const Icon(
-                          Icons.grass_rounded,
-                          size: 50,
-                          color: Color(0xFF2E6930),
+                        errorWidget: (_, __, ___) => Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         ),
                       ),
                     ),

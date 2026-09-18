@@ -183,7 +183,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(width: 6),
             ],
-            const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Color(0xFF94A3B8)),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 13, color: Color(0xFF94A3B8)),
           ],
         ),
       ),
@@ -283,7 +284,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                      icon: const Icon(Icons.close_rounded,
+                          color: Color(0xFF94A3B8), size: 22),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -332,7 +334,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.lightbulb_outline_rounded, size: 14, color: Color(0xFFD97706)),
+                          const Icon(Icons.lightbulb_outline_rounded,
+                              size: 14, color: Color(0xFFD97706)),
                           const SizedBox(width: 6),
                           Text(
                             'diag_tips_title'.tr(),
@@ -347,9 +350,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          _buildTipItem(Icons.wb_sunny_outlined, 'diag_tip_light'.tr()),
-                          _buildTipItem(Icons.center_focus_strong_outlined, 'diag_tip_focus'.tr()),
-                          _buildTipItem(Icons.vibration_rounded, 'diag_tip_steady'.tr()),
+                          _buildTipItem(
+                              Icons.wb_sunny_outlined, 'diag_tip_light'.tr()),
+                          _buildTipItem(Icons.center_focus_strong_outlined,
+                              'diag_tip_focus'.tr()),
+                          _buildTipItem(
+                              Icons.vibration_rounded, 'diag_tip_steady'.tr()),
                         ],
                       ),
                     ],
@@ -367,13 +373,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (action == 'camera') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const PlantAnalysisScreen(initialSource: ImageSource.camera),
+          builder: (_) =>
+              const PlantAnalysisScreen(initialSource: ImageSource.camera),
         ),
       );
     } else if (action == 'gallery') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const PlantAnalysisScreen(initialSource: ImageSource.gallery),
+          builder: (_) =>
+              const PlantAnalysisScreen(initialSource: ImageSource.gallery),
         ),
       );
     } else if (action == 'saved') {
@@ -384,8 +392,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
     }
   }
-
-
 
   void _onNavTap(int index) {
     if (_selectedIndex != index) {
@@ -473,9 +479,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       },
       child: Scaffold(
-        backgroundColor: _selectedIndex == 3 ? Colors.black : AppTheme.background,
+        backgroundColor:
+            _selectedIndex == 3 ? Colors.black : AppTheme.background,
         extendBodyBehindAppBar: _selectedIndex == 3,
-        appBar: (_selectedIndex == 1 || _selectedIndex == 2 || _selectedIndex == 3) ? null : _buildCurvedAppBar(),
+        appBar:
+            (_selectedIndex == 1 || _selectedIndex == 2 || _selectedIndex == 3)
+                ? null
+                : _buildCurvedAppBar(),
         body: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           child: _isLoading
@@ -493,9 +503,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   PreferredSizeWidget _buildCurvedAppBar() {
     return AppBar(
-      title: Text(
-        'CropSync',
-        style: AppTheme.appBarTitle,
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: Transform.scale(
+              scale: 1.3,
+              child: Image.asset(
+                'assets/images/logo_t.png',
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text.rich(
+            const TextSpan(
+              children: [
+                TextSpan(
+                    text: 'Crop',
+                    style: TextStyle(color: AppTheme.accentGreen)),
+                TextSpan(
+                    text: 'Sy', style: TextStyle(color: AppTheme.accentBlue)),
+                TextSpan(
+                    text: 'nc', style: TextStyle(color: AppTheme.warning)),
+              ],
+            ),
+            style: AppTheme.appBarTitle
+                .copyWith(fontWeight: FontWeight.w800, fontSize: 24),
+          ),
+        ],
       ),
       centerTitle: false,
       backgroundColor: AppTheme.appBarBg,
@@ -561,7 +603,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       height: 72,
       decoration: BoxDecoration(
         color: Colors.white,
-        border: const Border(top: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
+        border:
+            const Border(top: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -920,5 +963,3 @@ class _AnimatedCameraTab extends StatelessWidget {
     );
   }
 }
-
-

@@ -420,9 +420,7 @@ class CommodityTranslator {
     if (lower.contains('wheat')) return 'https://kiosk.cropsync.in/api/commodity/Wheat.png';
     if (lower.contains('garlic')) return 'https://kiosk.cropsync.in/api/commodity/Garlic.png';
     if (lower.contains('soya') || lower.contains('soybean')) return 'https://kiosk.cropsync.in/api/commodity/Soyabean.png';
-    if (lower.contains('chilli') || lower.contains('chili') || lower.contains('mirchi')) {
-      return 'https://kiosk.cropsync.in/api/commodity/Tomato.png'; // Fallback to fresh red crop
-    }
+
 
     // Default clean capitalization
     final clean = commodity.replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), '').trim();

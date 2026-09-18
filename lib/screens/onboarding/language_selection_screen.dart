@@ -1,10 +1,10 @@
-﻿import 'dart:math';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cropsync/auth/signup_screen.dart';
+import 'package:cropsync/auth/login_screen.dart';
 import 'package:cropsync/navigation/app_routes.dart';
 import 'package:cropsync/theme/app_theme.dart';
 
@@ -129,7 +129,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen>
     await prefs.setBool('language_selected', true);
     if (!currentContext.mounted) return;
     Navigator.of(currentContext).pushReplacement(
-      AppRoutes.fade(const SignupScreen()),
+      AppRoutes.fade(const LoginScreen()),
     );
   }
 

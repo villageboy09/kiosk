@@ -6,7 +6,7 @@ import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/screens/operator/operator_dashboard.dart';
 import 'package:cropsync/screens/onboarding/language_selection_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cropsync/auth/signup_screen.dart';
+import 'package:cropsync/auth/login_screen.dart';
 import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
 import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
 import 'package:flutter/material.dart';
@@ -107,7 +107,7 @@ class _SplashScreenState extends State<SplashScreen>
       if (!currentContext.mounted) return;
       if (hasSelectedLanguage) {
         Navigator.of(currentContext).pushReplacement(
-          MaterialPageRoute(builder: (context) => const SignupScreen()),
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
         );
       } else {
         Navigator.of(currentContext).pushReplacement(

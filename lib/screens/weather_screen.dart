@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
 import 'package:cropsync/services/location_service.dart';
 import 'package:cropsync/utils/safe_parser.dart';
+import 'package:cropsync/widgets/modern_pill_toast.dart';
 
 class WeatherScreen extends StatefulWidget {
   const WeatherScreen({super.key});
@@ -62,41 +63,48 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
       if (cachedTime != null && DateTime.now().difference(cachedTime).inMinutes < 30) {
         try {
           final data = json.decode(cachedJson);
-          final today = data['days'][0];
-          final hours = (today['hours'] as List)
-              .take(12)
-              .map((h) => _HourlyData(
-                    time: h['datetime']?.substring(0, 5) ?? '00:00',
-                    temp: SafeParser.toDouble(h['temp']),
-                    icon: h['icon'] ?? 'clear-day',
-                  ))
-              .toList();
+          final current = data['current'];
+          final days = data['days'];
+          final hoursList = data['hours'];
 
-          final dailyList = (data['days'] as List)
-              .take(7)
-              .map((d) => _DailyData(
-                    date: d['datetime'] ?? '',
-                    temp: SafeParser.toDouble(d['temp']),
-                    tempMax: SafeParser.toDouble(d['tempmax']),
-                    tempMin: SafeParser.toDouble(d['tempmin']),
-                    conditions: d['conditions'] ?? 'N/A',
-                    icon: d['icon'] ?? 'clear-day',
-                    humidity: SafeParser.toDouble(d['humidity']),
-                    windSpeed: SafeParser.toDouble(d['windspeed']),
-                    precipProb: SafeParser.toDouble(d['precipprob']),
-                  ))
-              .toList();
+          final hours = (hoursList['forecastHours'] as List?)?.take(12).map((h) {
+            final dt = h['displayDateTime'];
+            final hrs = dt['hours']?.toString().padLeft(2, '0') ?? '00';
+            final mins = dt['minutes']?.toString().padLeft(2, '0') ?? '00';
+            return _HourlyData(
+              time: '$hrs:$mins',
+              temp: SafeParser.toDouble(h['temperature']?['degrees']),
+              icon: _mapGoogleWeatherConditionType(h['weatherCondition']?['type']),
+            );
+          }).toList() ?? [];
+
+          final dailyList = (days['forecastDays'] as List?)?.take(7).map((d) {
+            final dateObj = d['displayDate'];
+            final dateStr = '${dateObj['year']}-${dateObj['month'].toString().padLeft(2, '0')}-${dateObj['day'].toString().padLeft(2, '0')}';
+            final dayFcst = d['daytimeForecast'] ?? {};
+            return _DailyData(
+              date: dateStr,
+              temp: SafeParser.toDouble(d['maxTemperature']?['degrees']),
+              tempMax: SafeParser.toDouble(d['maxTemperature']?['degrees']),
+              tempMin: SafeParser.toDouble(d['minTemperature']?['degrees']),
+              conditions: dayFcst['weatherCondition']?['description']?['text'] ?? 'N/A',
+              icon: _mapGoogleWeatherConditionType(dayFcst['weatherCondition']?['type']),
+              humidity: SafeParser.toDouble(dayFcst['relativeHumidity']),
+              windSpeed: SafeParser.toDouble(dayFcst['wind']?['speed']?['value']),
+              precipProb: SafeParser.toDouble(dayFcst['precipitation']?['probability']?['percent']),
+            );
+          }).toList() ?? [];
 
           final summary = _WeatherSummary(
             location: cachedLoc,
-            temp: SafeParser.toDouble(today['temp']),
-            tempMax: SafeParser.toDouble(today['tempmax']),
-            tempMin: SafeParser.toDouble(today['tempmin']),
-            conditions: today['conditions'] ?? 'N/A',
-            icon: today['icon'] ?? 'clear-day',
-            humidity: SafeParser.toDouble(today['humidity']),
-            windSpeed: SafeParser.toDouble(today['windspeed']),
-            precipProb: SafeParser.toDouble(today['precipprob']),
+            temp: SafeParser.toDouble(current['temperature']?['degrees']),
+            tempMax: dailyList.isNotEmpty ? dailyList.first.tempMax : SafeParser.toDouble(current['temperature']?['degrees']),
+            tempMin: dailyList.isNotEmpty ? dailyList.first.tempMin : SafeParser.toDouble(current['temperature']?['degrees']),
+            conditions: current['weatherCondition']?['description']?['text'] ?? 'N/A',
+            icon: _mapGoogleWeatherConditionType(current['weatherCondition']?['type']),
+            humidity: SafeParser.toDouble(current['relativeHumidity']),
+            windSpeed: SafeParser.toDouble(current['wind']?['speed']?['value']),
+            precipProb: SafeParser.toDouble(current['precipitation']?['probability']?['percent']),
             hourly: hours,
             daily: dailyList,
             latitude: prefs.getDouble('cached_weather_latitude') ?? 0.0,
@@ -109,9 +117,9 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
       }
     }
 
-    final apiKey = dotenv.env['WEATHER_API_KEY'];
+    final apiKey = dotenv.env['GOOGLE_API_KEY'] ?? dotenv.env['WEATHER_API_KEY'];
     if (apiKey == null || apiKey.isEmpty) {
-      throw Exception("Weather API key missing");
+      throw Exception("Google Maps Weather API key missing");
     }
 
     // Get location
@@ -145,57 +153,76 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
       }
     } catch (_) {}
 
-    // Fetch weather
-    final url = Uri.parse(
-      'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/$lat,$lon?unitGroup=metric&key=$apiKey&contentType=json',
-    );
-    final response = await http.get(url);
-    if (response.statusCode != 200) throw Exception('Weather API failed');
+    // Fetch Google Maps Weather
+    final currentUrl = 'https://weather.googleapis.com/v1/currentConditions:lookup?location.latitude=$lat&location.longitude=$lon&key=$apiKey';
+    final dailyUrl = 'https://weather.googleapis.com/v1/forecast/days:lookup?location.latitude=$lat&location.longitude=$lon&days=7&key=$apiKey';
+    final hourlyUrl = 'https://weather.googleapis.com/v1/forecast/hours:lookup?location.latitude=$lat&location.longitude=$lon&hours=12&key=$apiKey';
 
-    final data = json.decode(utf8.decode(response.bodyBytes));
-    final today = data['days'][0];
-    final hours = (today['hours'] as List)
-        .take(12)
-        .map((h) => _HourlyData(
-              time: h['datetime']?.substring(0, 5) ?? '00:00',
-              temp: SafeParser.toDouble(h['temp']),
-              icon: h['icon'] ?? 'clear-day',
-            ))
-        .toList();
+    final responses = await Future.wait([
+      http.get(Uri.parse(currentUrl)),
+      http.get(Uri.parse(dailyUrl)),
+      http.get(Uri.parse(hourlyUrl)),
+    ]);
 
-    final dailyList = (data['days'] as List)
-        .take(7)
-        .map((d) => _DailyData(
-              date: d['datetime'] ?? '',
-              temp: SafeParser.toDouble(d['temp']),
-              tempMax: SafeParser.toDouble(d['tempmax']),
-              tempMin: SafeParser.toDouble(d['tempmin']),
-              conditions: d['conditions'] ?? 'N/A',
-              icon: d['icon'] ?? 'clear-day',
-              humidity: SafeParser.toDouble(d['humidity']),
-              windSpeed: SafeParser.toDouble(d['windspeed']),
-              precipProb: SafeParser.toDouble(d['precipprob']),
-            ))
-        .toList();
+    if (responses.any((r) => r.statusCode != 200)) {
+      throw Exception('Google Weather API failed');
+    }
+
+    final currentData = json.decode(utf8.decode(responses[0].bodyBytes));
+    final daysData = json.decode(utf8.decode(responses[1].bodyBytes));
+    final hoursData = json.decode(utf8.decode(responses[2].bodyBytes));
+
+    final hoursList = (hoursData['forecastHours'] as List?)?.take(12).map((h) {
+      final dt = h['displayDateTime'];
+      final hrs = dt['hours']?.toString().padLeft(2, '0') ?? '00';
+      final mins = dt['minutes']?.toString().padLeft(2, '0') ?? '00';
+      return _HourlyData(
+        time: '$hrs:$mins',
+        temp: SafeParser.toDouble(h['temperature']?['degrees']),
+        icon: _mapGoogleWeatherConditionType(h['weatherCondition']?['type']),
+      );
+    }).toList() ?? [];
+
+    final dailyList = (daysData['forecastDays'] as List?)?.take(7).map((d) {
+      final dateObj = d['displayDate'];
+      final dateStr = '${dateObj['year']}-${dateObj['month'].toString().padLeft(2, '0')}-${dateObj['day'].toString().padLeft(2, '0')}';
+      final dayFcst = d['daytimeForecast'] ?? {};
+      return _DailyData(
+        date: dateStr,
+        temp: SafeParser.toDouble(d['maxTemperature']?['degrees']),
+        tempMax: SafeParser.toDouble(d['maxTemperature']?['degrees']),
+        tempMin: SafeParser.toDouble(d['minTemperature']?['degrees']),
+        conditions: dayFcst['weatherCondition']?['description']?['text'] ?? 'N/A',
+        icon: _mapGoogleWeatherConditionType(dayFcst['weatherCondition']?['type']),
+        humidity: SafeParser.toDouble(dayFcst['relativeHumidity']),
+        windSpeed: SafeParser.toDouble(dayFcst['wind']?['speed']?['value']),
+        precipProb: SafeParser.toDouble(dayFcst['precipitation']?['probability']?['percent']),
+      );
+    }).toList() ?? [];
 
     final summary = _WeatherSummary(
       location: locationName,
-      temp: SafeParser.toDouble(today['temp']),
-      tempMax: SafeParser.toDouble(today['tempmax']),
-      tempMin: SafeParser.toDouble(today['tempmin']),
-      conditions: today['conditions'] ?? 'N/A',
-      icon: today['icon'] ?? 'clear-day',
-      humidity: SafeParser.toDouble(today['humidity']),
-      windSpeed: SafeParser.toDouble(today['windspeed']),
-      precipProb: SafeParser.toDouble(today['precipprob']),
-      hourly: hours,
+      temp: SafeParser.toDouble(currentData['temperature']?['degrees']),
+      tempMax: dailyList.isNotEmpty ? dailyList.first.tempMax : SafeParser.toDouble(currentData['temperature']?['degrees']),
+      tempMin: dailyList.isNotEmpty ? dailyList.first.tempMin : SafeParser.toDouble(currentData['temperature']?['degrees']),
+      conditions: currentData['weatherCondition']?['description']?['text'] ?? 'N/A',
+      icon: _mapGoogleWeatherConditionType(currentData['weatherCondition']?['type']),
+      humidity: SafeParser.toDouble(currentData['relativeHumidity']),
+      windSpeed: SafeParser.toDouble(currentData['wind']?['speed']?['value']),
+      precipProb: SafeParser.toDouble(currentData['precipitation']?['probability']?['percent']),
+      hourly: hoursList,
       daily: dailyList,
       latitude: lat,
       longitude: lon,
     );
 
     // Save to cache
-    await prefs.setString('cached_weather_raw_api_data', jsonEncode(data));
+    final combinedData = {
+      'current': currentData,
+      'days': daysData,
+      'hours': hoursData,
+    };
+    await prefs.setString('cached_weather_raw_api_data', jsonEncode(combinedData));
     await prefs.setString('cached_weather_resolved_location', locationName);
     await prefs.setString('cached_weather_timestamp', DateTime.now().toIso8601String());
     await prefs.setDouble('cached_weather_latitude', lat);
@@ -205,6 +232,25 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
     _loadOrFetchAIAdvisory(summary);
 
     return summary;
+  }
+
+  String _mapGoogleWeatherConditionType(String? type) {
+    if (type == null) return 'clear-day';
+    switch (type) {
+      case 'CLEAR': return 'clear-day';
+      case 'MOSTLY_CLEAR': return 'clear-day';
+      case 'PARTLY_CLOUDY': return 'partly-cloudy-day';
+      case 'MOSTLY_CLOUDY': return 'cloudy';
+      case 'CLOUDY': return 'cloudy';
+      case 'WINDY': return 'wind';
+      case 'RAIN': return 'rain';
+      case 'HEAVY_RAIN': return 'rain';
+      case 'LIGHT_RAIN': return 'rain';
+      case 'SNOW': return 'snow';
+      case 'FOG': return 'fog';
+      case 'THUNDERSTORM': return 'rain';
+      default: return 'clear-day';
+    }
   }
 
   // Strategic AI Caching & Loader
@@ -235,12 +281,12 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
       return;
     }
 
-    // Force refresh or expired cache -> fetch from Nvidia NIM
+    // Force refresh or expired cache -> fetch from DeepSeek
     setState(() {
       _isLoadingAI = true;
     });
 
-    final aiResult = await _fetchAIAdvisoryFromNvidia(weather);
+    final aiResult = await _fetchAIAdvisory(weather);
     if (aiResult != null) {
       final nowStr = DateTime.now().toIso8601String();
       await prefs.setString(cacheKey, jsonEncode(aiResult));
@@ -257,9 +303,7 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
         _isLoadingAI = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('weather_ai_update_failed'.tr())),
-        );
+        showModernPillToast(context, message: 'weather_ai_update_failed'.tr(), isSuccess: false);
       }
     }
   }
@@ -299,10 +343,10 @@ class _WeatherScreenState extends State<WeatherScreen> with SingleTickerProvider
     return condition;
   }
 
-  Future<Map<String, dynamic>?> _fetchAIAdvisoryFromNvidia(_WeatherSummary weather) async {
-    final nvidiaKey = dotenv.env['NVIDIA_API_KEY'];
-    if (nvidiaKey == null || nvidiaKey.isEmpty) {
-      debugPrint("NVIDIA API key not set in environment");
+  Future<Map<String, dynamic>?> _fetchAIAdvisory(_WeatherSummary weather) async {
+    final apiKey = dotenv.env['DEEPSEEK_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      debugPrint("DeepSeek API key not set in environment");
       return null;
     }
 
@@ -321,16 +365,17 @@ You are an expert AI Agricultural Advisor. Analyze the following real-time weath
 - Current Precipitation Probability: ${weather.precipProb.round()}%
 - 7-Day Forecast: ${weather.daily.map((d) => "${d.date}: ${d.conditions} (Temp: ${d.temp.round()}°C, Rain: ${d.precipProb.round()}%)").join(', ')}
 
-Return a JSON object containing dynamic agricultural advisories and recommended crops suited for these conditions.
+Return a JSON object containing dynamic agricultural advisories, recommended crops suited for these conditions, and a brief today's overview.
 
 Crucially, generate advisories that are highly specific to the current point of time and the actual 7-day weather forecast (e.g. specific to the next 24-48 hours, or the current week's weather pattern like incoming rains, high temperature spikes, wind storms, or dry spells). Do NOT give generalized seasonal farming tips; focus on immediate action items for the farmer based on this week's exact weather changes.
 
-You MUST output all the JSON values (specifically crop names, descriptions, soil types, water requirements, and advisories) in the $langName language. Ensure that the JSON keys remain exactly as defined (in English) but the string values are translated/written in $langName.
+You MUST output all the JSON values (specifically crop names, descriptions, soil types, water requirements, advisories, and today_overview) in the $langName language. Ensure that the JSON keys remain exactly as defined (in English) but the string values are translated/written in $langName.
 
 Keep all crop descriptions, soil types, and advisories highly concise (under 20 words each) to prevent truncating the JSON response.
 Do NOT output any other text than the JSON block itself. Output raw JSON ONLY.
 Format:
 {
+  "today_overview": "A brief 2-sentence summary of today's weather and its general impact on farming.",
   "advisories": [
     "actionable farming tip 1",
     "actionable farming tip 2",
@@ -351,18 +396,17 @@ Format:
 
     try {
       final response = await http.post(
-        Uri.parse('https://integrate.api.nvidia.com/v1/chat/completions'),
+        Uri.parse('https://api.deepseek.com/chat/completions'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $nvidiaKey',
+          'Authorization': 'Bearer $apiKey',
         },
         body: jsonEncode({
-          'model': 'nvidia/nemotron-3-ultra-550b-a55b',
+          'model': 'deepseek-chat',
           'messages': [
             {'role': 'user', 'content': prompt}
           ],
           'temperature': 0.2,
-          'max_tokens': 4000,
         }),
       ).timeout(const Duration(seconds: 45));
 
@@ -381,10 +425,10 @@ Format:
         
         return jsonDecode(cleaned.trim()) as Map<String, dynamic>;
       } else {
-        debugPrint("Nvidia API returned status code ${response.statusCode}: ${response.body}");
+        debugPrint("DeepSeek API returned status code ${response.statusCode}: ${response.body}");
       }
     } catch (e) {
-      debugPrint("Error calling Nvidia API: $e");
+      debugPrint("Error calling DeepSeek API: $e");
     }
     return null;
   }
@@ -751,6 +795,35 @@ Format:
               ],
             ),
           ),
+          if (_aiAdvisory != null && _aiAdvisory!['today_overview'] != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFDCFCE7)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.auto_awesome_rounded, color: Color(0xFF16A34A), size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _aiAdvisory!['today_overview'],
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF14532D),
+                        height: 1.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
 
           // Weather metrics grid
@@ -952,7 +1025,7 @@ Format:
   }
 
   Widget _buildAISettingsCard(_WeatherSummary weather) {
-    final hasKey = dotenv.env['NVIDIA_API_KEY'] != null && dotenv.env['NVIDIA_API_KEY']!.isNotEmpty;
+    final hasKey = dotenv.env['DEEPSEEK_API_KEY'] != null && dotenv.env['DEEPSEEK_API_KEY']!.isNotEmpty;
     if (!hasKey) return const SizedBox.shrink();
 
     return Container(
@@ -1001,9 +1074,7 @@ Format:
                     // Prevent button spamming: limit refresh to once per 15 seconds locally
                     if (_lastRefreshTime != null && 
                         DateTime.now().difference(_lastRefreshTime!).inSeconds < 15) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("weather_refresh_wait".tr())),
-                      );
+                      showModernPillToast(context, message: "weather_refresh_wait".tr(), isSuccess: false);
                       return;
                     }
                     _loadOrFetchAIAdvisory(weather, forceRefresh: true);
