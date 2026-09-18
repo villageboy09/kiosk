@@ -244,7 +244,21 @@ class FarmerAnalyticsService {
     required int watchDurationSeconds,
     required bool isCompleted,
     String? creatorUsername,
+    String? creatorPhone,
   }) async {
+    final user = AuthService.currentUser;
+    // Do not count creator's view into analytics data
+    if (user != null) {
+      if (creatorPhone != null && creatorPhone.isNotEmpty && user.phoneNumber == creatorPhone) {
+        return;
+      }
+      if (creatorUsername != null &&
+          creatorUsername.isNotEmpty &&
+          user.name.toLowerCase() == creatorUsername.toLowerCase()) {
+        return;
+      }
+    }
+
     logInteraction(
       actionType: 'reel_view',
       itemType: 'reel',

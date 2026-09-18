@@ -519,7 +519,8 @@ try {
                 'rejection_reason_code' => "ALTER TABLE `reels` ADD COLUMN `rejection_reason_code` VARCHAR(50) NULL",
                 'reviewer_feedback' => "ALTER TABLE `reels` ADD COLUMN `reviewer_feedback` TEXT NULL",
                 'reviewed_at' => "ALTER TABLE `reels` ADD COLUMN `reviewed_at` DATETIME NULL",
-                'reviewed_by' => "ALTER TABLE `reels` ADD COLUMN `reviewed_by` VARCHAR(100) NULL"
+                'reviewed_by' => "ALTER TABLE `reels` ADD COLUMN `reviewed_by` VARCHAR(100) NULL",
+                'thumbnail_url' => "ALTER TABLE `reels` ADD COLUMN `thumbnail_url` VARCHAR(500) NULL"
             ];
             foreach ($reelsProgramColumns as $rpCol => $rpSql) {
                 try {
@@ -4985,6 +4986,49 @@ function logReelWatch($pdo) {
             return;
         }
 
+        // Do not count creator's view into analytics data
+        $isCreatorView = false;
+        try {
+            $cCheckStmt = $pdo->prepare("
+                SELECT r.creator_id, r.phone_number AS reel_phone, c.phone_number AS creator_phone, c.username AS creator_username, c.display_name AS creator_name
+                FROM reels r
+                LEFT JOIN creators c ON r.creator_id = c.id
+                WHERE r.id = ?
+            ");
+            $cCheckStmt->execute([$reelId]);
+            $reelCreatorData = $cCheckStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($reelCreatorData) {
+                $rPhone = trim($reelCreatorData['reel_phone'] ?? '');
+                $crPhone = trim($reelCreatorData['creator_phone'] ?? '');
+                $crUsername = strtolower(trim($reelCreatorData['creator_username'] ?? ''));
+                $crName = strtolower(trim($reelCreatorData['creator_name'] ?? ''));
+
+                if (!empty($phoneNumber) && ($phoneNumber === $rPhone || $phoneNumber === $crPhone)) {
+                    $isCreatorView = true;
+                }
+                if (!empty($farmerUsername) && $farmerUsername !== 'farmer' && 
+                    (strtolower($farmerUsername) === $crUsername || strtolower($farmerUsername) === $crName)) {
+                    $isCreatorView = true;
+                }
+            }
+        } catch (Throwable $e) {}
+
+        if ($isCreatorView) {
+            $vStmt = $pdo->prepare("SELECT views_count FROM reels WHERE id = ?");
+            $vStmt->execute([$reelId]);
+            $viewsCount = intval($vStmt->fetchColumn() ?: 0);
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Creator view not counted in analytics data',
+                'views_count' => $viewsCount,
+                'viewsRaw' => $viewsCount,
+                'is_creator_view' => true
+            ]);
+            return;
+        }
+
         // 1. Increment view count on reel immediately
         $pdo->prepare("UPDATE reels SET views_count = views_count + 1 WHERE id = ?")->execute([$reelId]);
 
@@ -5686,10 +5730,19 @@ function getCreatorStudioData($pdo) {
             $totalReelSaves += $sCount;
             $totalReelComments += $cCount;
 
+            $thumbUrl = !empty($r['thumbnail_url']) ? $r['thumbnail_url'] : null;
+            if (empty($thumbUrl) && !empty($r['video_url'])) {
+                if (preg_match('/(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/', $r['video_url'], $matches)) {
+                    $thumbUrl = "https://img.youtube.com/vi/{$matches[1]}/hqdefault.jpg";
+                }
+            }
+
             $reels[] = [
                 'id' => $rId,
                 'videoUrl' => $r['video_url'],
                 'video_url' => $r['video_url'],
+                'thumbnailUrl' => $thumbUrl,
+                'thumbnail_url' => $thumbUrl,
                 'caption' => $r['caption'],
                 'musicTitle' => $r['music_title'] ?? 'Original Audio',
                 'phoneNumber' => $r['phone_number'] ?? '',
@@ -5821,16 +5874,57 @@ function getCreatorStudioData($pdo) {
             'totalArticles' => count($articles)
         ];
 
-        // 5. 7-Day Trend Analytics
-        $trends = [
-            ['day' => 'Mon', 'views' => round($totalViews * 0.10), 'likes' => round($totalLikes * 0.11)],
-            ['day' => 'Tue', 'views' => round($totalViews * 0.14), 'likes' => round($totalLikes * 0.13)],
-            ['day' => 'Wed', 'views' => round($totalViews * 0.12), 'likes' => round($totalLikes * 0.10)],
-            ['day' => 'Thu', 'views' => round($totalViews * 0.18), 'likes' => round($totalLikes * 0.16)],
-            ['day' => 'Fri', 'views' => round($totalViews * 0.15), 'likes' => round($totalLikes * 0.17)],
-            ['day' => 'Sat', 'views' => round($totalViews * 0.19), 'likes' => round($totalLikes * 0.21)],
-            ['day' => 'Sun', 'views' => round($totalViews * 0.12), 'likes' => round($totalLikes * 0.12)]
-        ];
+        // 5. 7-Day Trend Analytics (Last 7 days ending today)
+        $trendsData = [];
+        $tz = new DateTimeZone('Asia/Kolkata');
+        for ($i = 6; $i >= 0; $i--) {
+            $dt = new DateTime("-$i days", $tz);
+            $dateStr = $dt->format('Y-m-d');
+            $dayName = $dt->format('D'); // Mon, Tue, etc.
+            $trendsData[$dateStr] = [
+                'day' => $dayName,
+                'date' => $dateStr,
+                'views' => 0,
+                'likes' => 0
+            ];
+        }
+
+        if (!empty($rawReels)) {
+            $reelIds = array_column($rawReels, 'id');
+            if (!empty($reelIds)) {
+                $placeholders = implode(',', array_fill(0, count($reelIds), '?'));
+                try {
+                    $twStmt = $pdo->prepare("
+                        SELECT DATE(created_at) as watch_date, COUNT(*) as daily_views 
+                        FROM reel_watch_analytics 
+                        WHERE reel_id IN ($placeholders) 
+                          AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+                        GROUP BY DATE(created_at)
+                    ");
+                    $twStmt->execute($reelIds);
+                    while ($row = $twStmt->fetch(PDO::FETCH_ASSOC)) {
+                        $wDate = $row['watch_date'];
+                        if (isset($trendsData[$wDate])) {
+                            $trendsData[$wDate]['views'] = intval($row['daily_views']);
+                        }
+                    }
+                } catch (Throwable $e) {}
+            }
+        }
+
+        $recordedViewsSum = array_sum(array_column($trendsData, 'views'));
+        if ($recordedViewsSum == 0 && $totalViews > 0) {
+            $weights = [0.10, 0.14, 0.12, 0.18, 0.15, 0.19, 0.12];
+            $idx = 0;
+            foreach ($trendsData as $dKey => &$dVal) {
+                $dVal['views'] = intval(round($totalViews * ($weights[$idx] ?? 0.14)));
+                $dVal['likes'] = intval(round($totalLikes * ($weights[$idx] ?? 0.14)));
+                $idx++;
+            }
+            unset($dVal);
+        }
+
+        $trends = array_values($trendsData);
 
         echo json_encode([
             'success' => true,
@@ -7312,7 +7406,7 @@ function getChcOfficialDashboardHandler($pdo) {
             SUM(CASE WHEN cb.booking_status = 'Completed' THEN cb.total_cost ELSE 0 END) as revenue_realized,
             SUM(CASE WHEN cb.booking_status IN ('Pending', 'Slot Booked', 'Confirmed') THEN cb.total_cost ELSE 0 END) as revenue_pipeline,
             COUNT(DISTINCT cb.user_id) as active_farmers,
-            SUM(cb.total_acres) as total_acres,
+            SUM(COALESCE(cb.land_size_acres, 0)) as total_acres,
             SUM(CASE WHEN cb.booking_status = 'Completed' THEN 1 ELSE 0 END) as completed_bookings,
             SUM(CASE WHEN cb.booking_status IN ('In Progress', 'Assigned') THEN 1 ELSE 0 END) as in_progress_bookings,
             SUM(CASE WHEN cb.booking_status = 'Slot Booked' THEN 1 ELSE 0 END) as confirmed_bookings,

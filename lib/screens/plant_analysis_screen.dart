@@ -2,24 +2,35 @@ import 'dart:async';
 import 'dart:io';
 import 'package:cropsync/models/crop_problem.dart';
 import 'package:cropsync/screens/advisory_details.dart';
+import 'package:cropsync/screens/saved_advisories_screen.dart';
 import 'package:cropsync/services/ai_credit_service.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/deepseek_plant_doctor_service.dart';
 import 'package:cropsync/services/location_service.dart';
 import 'package:cropsync/services/razorpay_payment_service.dart';
+import 'package:cropsync/services/saved_advisories_service.dart';
 import 'package:cropsync/services/text_to_speech_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/utils/safe_parser.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PlantAnalysisScreen extends StatefulWidget {
   final String? imagePath;
   final ImageSource? initialSource;
-  const PlantAnalysisScreen({super.key, this.imagePath, this.initialSource});
+  final Map<String, dynamic>? preloadedResult;
+
+  const PlantAnalysisScreen({
+    super.key,
+    this.imagePath,
+    this.initialSource,
+    this.preloadedResult,
+  });
 
   @override
   State<PlantAnalysisScreen> createState() => _PlantAnalysisScreenState();
@@ -34,23 +45,18 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
   bool _hasVerifiedAdvisory = false;
   String? _activeImagePath;
   final ImagePicker _picker = ImagePicker();
-
-  // Preparation state for launching picker
-  bool _isPreparingPicker = false;
-  ImageSource? _selectedSource;
-  Timer? _prepareTimer;
-  int _prepareCountdown = 2;
+  bool _isSaved = false;
 
   // Dynamic loading texts — resolved at runtime so locale is respected
   int _loadingTextIndex = 0;
   Timer? _loadingTimer;
   List<String> get _loadingTexts => [
-    context.tr('diag_loading_1'),
-    context.tr('diag_loading_2'),
-    context.tr('diag_loading_3'),
-    context.tr('diag_loading_4'),
-    context.tr('diag_loading_5'),
-  ];
+        'diag_loading_1'.tr(),
+        'diag_loading_2'.tr(),
+        'diag_loading_3'.tr(),
+        'diag_loading_4'.tr(),
+        'diag_loading_5'.tr(),
+      ];
 
   // Credit & Razorpay State
   CreditStatus? _creditStatus;
@@ -62,71 +68,30 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
   void initState() {
     super.initState();
     _activeImagePath = widget.imagePath;
+    _analysisResult = widget.preloadedResult;
     _razorpayService = RazorpayPaymentService();
     _ttsService = TextToSpeechService();
     _loadCreditStatus();
+
+    if (_analysisResult != null) {
+      _checkIfSaved();
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.initialSource != null) {
-        _startPrepareTimer(widget.initialSource!);
+      if (widget.initialSource != null &&
+          widget.preloadedResult == null &&
+          widget.imagePath == null) {
+        _localPickImage(widget.initialSource!);
       }
     });
   }
 
   @override
   void dispose() {
-    _prepareTimer?.cancel();
     _loadingTimer?.cancel();
     _razorpayService.dispose();
     _ttsService.stop();
     super.dispose();
-  }
-
-  void _startPrepareTimer(ImageSource source) {
-    _ttsService.stop();
-    _prepareTimer?.cancel();
-    setState(() {
-      _isPreparingPicker = true;
-      _selectedSource = source;
-      _prepareCountdown = 2;
-    });
-
-    _prepareTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        if (_prepareCountdown > 1) {
-          setState(() {
-            _prepareCountdown--;
-          });
-        } else {
-          timer.cancel();
-          setState(() {
-            _isPreparingPicker = false;
-          });
-          _localPickImage(_selectedSource!);
-        }
-      } else {
-        timer.cancel();
-      }
-    });
-  }
-
-  void _switchPrepareSource() {
-    if (_selectedSource == ImageSource.camera) {
-      _startPrepareTimer(ImageSource.gallery);
-    } else {
-      _startPrepareTimer(ImageSource.camera);
-    }
-  }
-
-  void _cancelPrepare() {
-    _ttsService.stop();
-    _prepareTimer?.cancel();
-    setState(() {
-      _isPreparingPicker = false;
-      _selectedSource = null;
-    });
-    if (_activeImagePath == null) {
-      Navigator.of(context).pop();
-    }
   }
 
   Future<void> _loadCreditStatus() async {
@@ -138,50 +103,170 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
     }
   }
 
-  Widget _buildCreditQuotaWidget() {
-    final status = _creditStatus;
-    final remaining = status?.totalAvailable ?? 10;
-    final hasCredits = remaining > 0;
-    final isUsingPurchased = status?.isUsingPurchasedCredits ?? false;
+  Future<void> _checkIfSaved() async {
+    if (_analysisResult == null) return;
+    final problemName =
+        _analysisResult!['matched_problem_name']?.toString() ?? '';
+    final cropName = _analysisResult!['detected_crop_name']?.toString();
+    if (problemName.isNotEmpty) {
+      final saved = await SavedAdvisoriesService.isAdvisorySaved(
+        problemName,
+        cropName: cropName,
+      );
+      if (mounted) {
+        setState(() => _isSaved = saved);
+      }
+    }
+  }
 
-    return InkWell(
-      onTap: () => _showPurchaseCreditsModal(),
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              hasCredits ? Icons.eco_rounded : Icons.bolt_rounded,
-              size: 16,
-              color: hasCredits ? const Color(0xFF2E7D32) : const Color(0xFFDC2626),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              hasCredits
-                  ? (isUsingPurchased
-                      ? "$remaining scans available (${status!.purchasedCredits} purchased)"
-                      : "${status?.dailyRemaining ?? 10}/10 free scans left today")
-                  : "Daily limit reached (0/10) • Add 10 scans for ₹1",
-              style: TextStyle(
-                fontSize: 13,
-                color: hasCredits ? const Color(0xFF2E7D32) : const Color(0xFFDC2626),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (!hasCredits) ...[
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 11,
-                color: Color(0xFFDC2626),
-              ),
-            ],
-          ],
+  Future<void> _toggleSaveAdvisory() async {
+    if (_analysisResult == null) return;
+    HapticFeedback.selectionClick();
+    final result = _analysisResult!;
+    final problemName =
+        result['matched_problem_name']?.toString() ?? 'Crop Issue';
+    final cropName = result['detected_crop_name']?.toString();
+    final healthStatus =
+        result['health_status']?.toString().toLowerCase() ?? 'healthy';
+    final confidence =
+        ((result['confidence'] as num? ?? 0.88) * 100).round();
+    final rawAnalysis = result['ai_analysis']?.toString() ?? '';
+    final weatherImpact = result['weather_impact']?.toString();
+    final controls = result['ai_control_measures'] as Map<String, dynamic>?;
+
+    final chemicalControls = controls?['chemical'] is List
+        ? List<String>.from(controls!['chemical'])
+        : <String>[];
+    final biologicalControls = controls?['biological'] is List
+        ? List<String>.from(controls!['biological'])
+        : <String>[];
+    final preventativeControls = controls?['preventative'] is List
+        ? List<String>.from(controls!['preventative'])
+        : <String>[];
+    final symptoms = result['observed_symptoms'] is List
+        ? List<String>.from(result['observed_symptoms'])
+        : <String>[];
+    final recoveryTips = result['recovery_recommendations'] is List
+        ? List<String>.from(result['recovery_recommendations'])
+        : <String>[];
+    final matchedId = SafeParser.toNullableInt(result['matched_problem_id']);
+
+    if (_isSaved) {
+      final list = await SavedAdvisoriesService.getSavedAdvisories();
+      final item = list.firstWhere(
+        (it) => it.problemName.toLowerCase() == problemName.toLowerCase(),
+        orElse: () => list.first,
+      );
+      await SavedAdvisoriesService.deleteAdvisory(item.id);
+      if (mounted) {
+        setState(() => _isSaved = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('diag_saved_removed'.tr()),
+            backgroundColor: const Color(0xFF334155),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      await SavedAdvisoriesService.saveAdvisory(
+        cropName: cropName,
+        problemName: problemName,
+        healthStatus: healthStatus,
+        confidence: confidence,
+        sourceImagePath: _activeImagePath,
+        summary: rawAnalysis,
+        weatherImpact: weatherImpact,
+        chemicalControls: chemicalControls,
+        biologicalControls: biologicalControls,
+        preventativeControls: preventativeControls,
+        symptoms: symptoms,
+        recoveryTips: recoveryTips,
+        matchedProblemId: matchedId,
+      );
+      if (mounted) {
+        setState(() => _isSaved = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('diag_saved_success'.tr()),
+            backgroundColor: const Color(0xFF16A34A),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  void _shareAdvisory() {
+    if (_analysisResult == null) return;
+    HapticFeedback.selectionClick();
+    final result = _analysisResult!;
+    final problemName =
+        result['matched_problem_name']?.toString() ?? 'Unknown Issue';
+    final cropName = result['detected_crop_name']?.toString();
+    final confidence =
+        ((result['confidence'] as num? ?? 0.88) * 100).round();
+    final rawAnalysis = result['ai_analysis']?.toString() ?? '';
+    final controls = result['ai_control_measures'] as Map<String, dynamic>?;
+    final weatherImpact = result['weather_impact']?.toString();
+
+    final buffer = StringBuffer();
+    buffer.writeln("🌿 CropSync Plant Doctor Advisory");
+    if (cropName != null && cropName.isNotEmpty) {
+      buffer.writeln("🌾 Crop: $cropName");
+    }
+    buffer.writeln("⚠️ Issue: $problemName ($confidence% Match)");
+    if (rawAnalysis.isNotEmpty) {
+      buffer.writeln("\n📋 Diagnosis:\n$rawAnalysis");
+    }
+
+    if (controls != null) {
+      final chem = controls['chemical'] is List
+          ? List<String>.from(controls['chemical'])
+          : <String>[];
+      final bio = controls['biological'] is List
+          ? List<String>.from(controls['biological'])
+          : <String>[];
+      if (chem.isNotEmpty) {
+        buffer.writeln("\n🧪 Recommended Chemical Spray (Per Acre):");
+        for (final c in chem) {
+          buffer.writeln("• $c");
+        }
+      }
+      if (bio.isNotEmpty) {
+        buffer.writeln("\n🌱 Organic & Biological Treatment:");
+        for (final b in bio) {
+          buffer.writeln("• $b");
+        }
+      }
+    }
+
+    if (weatherImpact != null && weatherImpact.trim().isNotEmpty) {
+      buffer.writeln("\n🌦️ Weather Spray Advice:\n$weatherImpact");
+    }
+
+    buffer.writeln("\n📲 Diagnosed via CropSync App • Smart Farming Partner");
+    buffer.writeln("https://cropsync.in");
+
+    final text = buffer.toString();
+    if (_activeImagePath != null && File(_activeImagePath!).existsSync()) {
+      SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(_activeImagePath!)],
+          text: text,
+          subject: "CropSync: $problemName",
         ),
-      ),
-    );
+      );
+    } else {
+      SharePlus.instance.share(
+        ShareParams(
+          text: text,
+          subject: "CropSync: $problemName",
+        ),
+      );
+    }
   }
 
   Future<void> _analyzeImage() async {
@@ -202,6 +287,7 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
       _isLoading = true;
       _errorMsg = null;
       _analysisResult = null;
+      _isSaved = false;
       _loadingTextIndex = 0;
     });
 
@@ -220,14 +306,14 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
     if (deepseekKey == null || deepseekKey.trim().isEmpty) {
       setState(() {
         _isLoading = false;
-        _errorMsg = "DeepSeek API Key is missing. Please add DEEPSEEK_API_KEY to your .env file.";
+        _errorMsg =
+            "DeepSeek API Key is missing. Please add DEEPSEEK_API_KEY to your .env file.";
       });
       _loadingTimer?.cancel();
       return;
     }
 
     try {
-
       final cropsList = await ApiService.getCrops(lang: locale);
       final formattedCrops = cropsList
           .map((c) => {
@@ -258,10 +344,10 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
         return;
       }
 
-      // Fetch user GPS position to allow hyper-local weather tool execution
+      // Fetch user GPS position for hyper-local weather tool execution
       final position = await LocationService.getCurrentPosition();
 
-      // Call DeepSeek Plant Doctor with automatic prompt caching and weather tool execution
+      // Call DeepSeek Plant Doctor with prompt caching and weather tool execution
       final parsed = await DeepSeekPlantDoctorService.diagnoseCrop(
         imageFile: file,
         latitude: position?.latitude,
@@ -293,6 +379,7 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
           _hasVerifiedAdvisory = hasVerifiedAdvisory;
           _isLoading = false;
         });
+        _checkIfSaved();
       }
       _loadingTimer?.cancel();
     } on DeepSeekException catch (e) {
@@ -315,35 +402,8 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) {
-          _ttsService.stop();
-        }
-      },
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        appBar: AppBar(
-          title: Text('diag_title'.tr(), style: AppTheme.appBarTitle),
-          backgroundColor: Colors.white,
-          leading: AppTheme.backButton(context, color: AppTheme.appBarText),
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          surfaceTintColor: Colors.transparent,
-          actions: [
-            _buildCreditBadge(),
-          ],
-        ),
-        body: _buildDiagnosisTab(),
-      ),
-    );
-  }
-
   Future<void> _localPickImage(ImageSource source) async {
     _ttsService.stop();
-    // Check credit status before picking photo
     final canScan = await AiCreditService.canPerformAnalysis();
     if (!canScan) {
       if (mounted) {
@@ -355,9 +415,9 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
     try {
       final XFile? photo = await _picker.pickImage(
         source: source,
-        maxWidth: 384,
-        maxHeight: 384,
-        imageQuality: 65,
+        maxWidth: 720,
+        maxHeight: 720,
+        imageQuality: 75,
         requestFullMetadata: false,
       );
       if (photo != null && mounted) {
@@ -365,358 +425,406 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
           _activeImagePath = photo.path;
           _analysisResult = null;
           _errorMsg = null;
+          _isSaved = false;
         });
-        // Auto-run analysis
-        Future.delayed(const Duration(milliseconds: 150), () {
-          if (mounted && _activeImagePath != null) {
-            _analyzeImage();
-          }
-        });
-      } else {
-        // If cancelled and we don't have an active image path yet, go back
-        if (mounted && _activeImagePath == null) {
-          Navigator.of(context).pop();
-        }
+        _analyzeImage();
       }
     } catch (e) {
-      setState(() {
-        _errorMsg = "Error picking image: $e";
-      });
+      if (mounted) {
+        setState(() {
+          _errorMsg = "Error picking image: $e";
+        });
+      }
     }
   }
 
-  Widget _buildDiagnosisTab() {
-    if (_isPreparingPicker) {
-      final isCamera = _selectedSource == ImageSource.camera;
-      return Center(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF0FDF4),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isCamera ? Icons.camera_alt_rounded : Icons.photo_library_rounded,
-                    size: 48,
-                    color: const Color(0xFF16A34A),
-                  ),
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          _ttsService.stop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          title: Text('plant_doctor_title'.tr(), style: AppTheme.appBarTitle),
+          backgroundColor: Colors.white,
+          leading: AppTheme.backButton(context, color: AppTheme.appBarText),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          actions: [
+            if (_analysisResult != null &&
+                (_analysisResult!['is_plant'] as bool? ?? false)) ...[
+              IconButton(
+                icon: Icon(
+                  _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                  color: _isSaved ? const Color(0xFF16A34A) : AppTheme.textPrimary,
+                  size: 22,
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  isCamera ? "Opening Camera..." : "Opening Gallery...",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: AppTheme.textPrimary,
-                  ),
+                tooltip: _isSaved ? 'diag_saved'.tr() : 'diag_save'.tr(),
+                onPressed: _toggleSaveAdvisory,
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.share_rounded,
+                  color: AppTheme.textPrimary,
+                  size: 20,
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  "Starting in $_prepareCountdown seconds. You can switch to the other option below.",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: 140,
-                  child: LinearProgressIndicator(
-                    backgroundColor: Colors.green.withValues(alpha: 0.1),
-                    color: Colors.green,
-                    minHeight: 4,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: OutlinedButton(
-                          onPressed: _cancelPrepare,
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.grey, width: 1.5),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text(
-                            "Cancel",
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _switchPrepareSource,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF16A34A),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text(
-                            isCamera ? "Use Gallery" : "Use Camera",
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+                tooltip: 'diag_share'.tr(),
+                onPressed: _shareAdvisory,
+              ),
+            ],
+            _buildCreditBadge(),
+          ],
         ),
-      );
-    }
+        body: _buildDiagnosisBody(),
+      ),
+    );
+  }
 
-    if (_activeImagePath == null) {
-      return Center(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF0FDF4),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.camera_enhance_rounded,
-                    size: 48,
-                    color: Color(0xFF16A34A),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  "Scan & Diagnose Crop",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  "Take a photo of your crop or upload one from the gallery to run instant AI scans for diseases, pests, or nutrient deficiencies.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 56,
-                        child: ElevatedButton.icon(
-                          onPressed: () => _startPrepareTimer(ImageSource.camera),
-                          icon: const Icon(Icons.camera_alt_rounded,
-                              color: Colors.white),
-                          label: const Text(
-                            "Camera",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF16A34A),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            elevation: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: SizedBox(
-                        height: 56,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _startPrepareTimer(ImageSource.gallery),
-                          icon: const Icon(Icons.photo_library_rounded,
-                              color: Color(0xFF16A34A)),
-                          label: const Text(
-                            "Upload",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF16A34A)),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(
-                                color: Color(0xFF16A34A), width: 1.5),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                _buildCreditQuotaWidget(),
-              ],
-            ),
-          ),
-        ),
-      );
+  Widget _buildDiagnosisBody() {
+    // If no active photo and no preloaded result, show clean landing screen
+    if (_activeImagePath == null && _analysisResult == null) {
+      return _buildLandingState();
     }
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       child: Column(
         children: [
-          Container(
-            margin: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: AspectRatio(
-              aspectRatio: 1.0,
+          // Crop Image Card
+          if (_activeImagePath != null && File(_activeImagePath!).existsSync())
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.file(
-                      File(_activeImagePath!),
-                      fit: BoxFit.cover,
-                    ),
-                    if (_isLoading) const LaserScannerOverlay(),
-                  ],
+                borderRadius: BorderRadius.circular(20),
+                child: AspectRatio(
+                  aspectRatio: 16 / 10,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(
+                        File(_activeImagePath!),
+                        fit: BoxFit.cover,
+                      ),
+                      if (_isLoading) const LaserScannerOverlay(),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
+
+          // Analyze Button if image is loaded but not yet analyzed and not loading
           if (!_isLoading && _analysisResult == null && _errorMsg == null)
-            Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: SizedBox(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Column(
+                children: [
+                  SizedBox(
                     width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
+                    height: 52,
+                    child: ElevatedButton.icon(
                       onPressed: _analyzeImage,
+                      icon: const Icon(Icons.psychology_rounded, color: Colors.white, size: 22),
+                      label: Text(
+                        'diag_btn_analyze'.tr(),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primary,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        elevation: 2,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.psychology_rounded,
-                              color: Colors.white),
-                          const SizedBox(width: 12),
-                          Text(
-                            'diag_btn_analyze'.tr(),
-                            style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white),
-                          ),
-                        ],
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 1,
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                _buildCreditQuotaWidget(),
-                const SizedBox(height: 24),
-              ],
-            ),
-          if (_isLoading)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: 140,
-                      child: LinearProgressIndicator(
-                        backgroundColor: Colors.green.withValues(alpha: 0.1),
-                        color: Colors.green,
-                        minHeight: 4,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      _loadingTexts[_loadingTextIndex],
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
-                ),
+                  const SizedBox(height: 12),
+                  _buildCreditQuotaWidget(),
+                ],
               ),
             ),
-          if (_errorMsg != null)
+
+          // Loading Progress Card
+          if (_isLoading)
             Container(
               margin: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: 140,
+                    child: LinearProgressIndicator(
+                      backgroundColor: const Color(0xFFDCFCE7),
+                      color: const Color(0xFF16A34A),
+                      minHeight: 5,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    _loadingTexts[_loadingTextIndex],
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                      fontSize: 14.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Error Card
+          if (_errorMsg != null)
+            Container(
+              margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFFEF2FE),
+                color: const Color(0xFFFEF2F2),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFFFCA5A5)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: Colors.red),
+                  const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 24),
                   const SizedBox(width: 12),
                   Expanded(
-                      child: Text(_errorMsg!,
-                          style: const TextStyle(color: Colors.red))),
+                    child: Text(
+                      _errorMsg!,
+                      style: const TextStyle(
+                        color: Color(0xFF991B1B),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, color: Color(0xFFDC2626)),
+                    onPressed: _analyzeImage,
+                    tooltip: 'Retry',
+                  ),
                 ],
               ),
             ),
+
+          // Results Section
           if (_analysisResult != null) _buildResultSection(),
         ],
       ),
     );
   }
 
+  Widget _buildLandingState() {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: const Icon(
+                  Icons.psychology_rounded,
+                  size: 46,
+                  color: Color(0xFF16A34A),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'diag_sheet_title'.tr(),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 21,
+                  color: AppTheme.textPrimary,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'diag_sheet_subtitle'.tr(),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 13.5,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Action 1: Camera
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton.icon(
+                  onPressed: () => _localPickImage(ImageSource.camera),
+                  icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 20),
+                  label: Text(
+                    'diag_sheet_camera'.tr(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF16A34A),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Action 2: Gallery
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: () => _localPickImage(ImageSource.gallery),
+                  icon: const Icon(Icons.photo_library_rounded, color: Color(0xFF16A34A), size: 20),
+                  label: Text(
+                    'diag_sheet_gallery'.tr(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Color(0xFF16A34A),
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF16A34A), width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Action 3: Saved Diagnoses
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SavedAdvisoriesScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.bookmark_outline_rounded, color: Color(0xFF64748B), size: 19),
+                  label: Text(
+                    'diag_sheet_saved'.tr(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+              // Tips Banner
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.lightbulb_outline_rounded, size: 15, color: Color(0xFFD97706)),
+                        const SizedBox(width: 6),
+                        Text(
+                          'diag_tips_title'.tr(),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _buildLandingTip(Icons.wb_sunny_outlined, 'diag_tip_light'.tr()),
+                    const SizedBox(height: 6),
+                    _buildLandingTip(Icons.center_focus_strong_outlined, 'diag_tip_focus'.tr()),
+                    const SizedBox(height: 6),
+                    _buildLandingTip(Icons.vibration_rounded, 'diag_tip_steady'.tr()),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+              _buildCreditQuotaWidget(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLandingTip(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF64748B)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF475569),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   /// Reusable Speech Button for Diagnosis Sections
-  /// Reads out text in user's active app language (Telugu, Hindi, or English)
   Widget _buildSpeechButton({
     required String sectionKey,
     required String text,
@@ -730,7 +838,7 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
       builder: (context, currentKey, _) {
         final isSpeaking = currentKey == sectionKey;
         return Tooltip(
-          message: isSpeaking ? 'Stop reading' : 'Read aloud',
+          message: isSpeaking ? 'diag_stop_audio'.tr() : 'diag_listen_advisory'.tr(),
           child: InkWell(
             onTap: () {
               _ttsService.toggleSpeakSection(
@@ -742,12 +850,12 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
             borderRadius: BorderRadius.circular(20),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: isSpeaking
                     ? effectiveColor.withValues(alpha: 0.18)
                     : effectiveColor.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: isSpeaking
                       ? effectiveColor
@@ -755,12 +863,24 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
                   width: isSpeaking ? 1.5 : 1.0,
                 ),
               ),
-              child: Icon(
-                isSpeaking ? Icons.stop_rounded : Icons.volume_up_rounded,
-                size: 18,
-                color: isSpeaking
-                    ? effectiveColor
-                    : effectiveColor.withValues(alpha: 0.85),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isSpeaking ? Icons.stop_rounded : Icons.volume_up_rounded,
+                    size: 15,
+                    color: effectiveColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    isSpeaking ? 'diag_stop_audio'.tr() : 'diag_listen_advisory'.tr(),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: effectiveColor,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -775,9 +895,9 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
 
     if (!isPlant) {
       final reason =
-          result['reason']?.toString() ?? "This does not appear to be a plant.";
+          result['reason']?.toString() ?? 'diag_not_plant'.tr();
       return Container(
-        margin: const EdgeInsets.all(20),
+        margin: const EdgeInsets.all(16),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: const Color(0xFFFFFBEB),
@@ -790,7 +910,7 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(Icons.warning_amber_rounded,
-                    size: 32, color: Color(0xFFD97706)),
+                    size: 28, color: Color(0xFFD97706)),
                 const SizedBox(width: 8),
                 Text(
                   'diag_not_plant'.tr(),
@@ -798,12 +918,6 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: Color(0xFF92400E)),
-                ),
-                const SizedBox(width: 8),
-                _buildSpeechButton(
-                  sectionKey: 'not_plant',
-                  text: "${'diag_not_plant'.tr()}. $reason",
-                  color: const Color(0xFFD97706),
                 ),
               ],
             ),
@@ -813,20 +927,37 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(color: Color(0xFF92400E), height: 1.4),
             ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () => _localPickImage(ImageSource.camera),
+              icon: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+              label: Text(
+                'diag_scan_again'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD97706),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
           ],
         ),
       );
     }
 
     final matchedId = SafeParser.toNullableInt(result['matched_problem_id']);
-    final problemName = result['matched_problem_name']?.toString() ?? "Unknown";
-    final confidence = ((result['confidence'] as num? ?? 0.88) * 100).round();
-    final rawAnalysis = result['ai_analysis']?.toString() ?? "";
+    final problemName =
+        result['matched_problem_name']?.toString() ?? 'Unknown';
+    final confidence =
+        ((result['confidence'] as num? ?? 0.88) * 100).round();
+    final rawAnalysis = result['ai_analysis']?.toString() ?? '';
     String analysis = rawAnalysis;
     if (analysis.trim().startsWith('{') ||
         analysis.contains('"is_plant"') ||
         analysis.contains('"detected_crop_name"')) {
-      analysis = "${result['detected_crop_name'] ?? 'Crop'} exhibits symptoms of $problemName. "
+      analysis =
+          "${result['detected_crop_name'] ?? 'Crop'} exhibits symptoms of $problemName. "
           "Follow the weather spray advisory and control measures below.";
     }
     final controls = result['ai_control_measures'] as Map<String, dynamic>?;
@@ -887,13 +1018,14 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Hero Diagnosis Card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
@@ -902,99 +1034,119 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Top Badges Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(statusIcon, color: statusColor, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          statusTextKey.tr(),
-                          style: TextStyle(
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(statusIcon, color: statusColor, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            statusTextKey.tr(),
+                            style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: statusColor,
-                              fontSize: 14),
-                        ),
-                      ],
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    _buildSpeechButton(
-                      sectionKey: 'diagnosis_overview',
-                      text: [
-                        if (detectedCropName != null && detectedCropName.isNotEmpty) detectedCropName,
-                        problemName,
-                        statusTextKey.tr(),
-                        analysis,
-                      ].join('. '),
-                      color: statusColor,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        'diag_accuracy_match'.tr(args: ['$confidence']),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            problemName,
-                            style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimary),
-                          ),
-                          if (detectedCropName != null && detectedCropName.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              "Crop: $detectedCropName",
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primary),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        "$confidence% Match",
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            color: statusColor),
-                      ),
-                    ),
-                  ],
+
+                // Issue Title
+                Text(
+                  problemName,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                    letterSpacing: -0.3,
+                  ),
                 ),
-                const SizedBox(height: 10),
+
+                if (detectedCropName != null && detectedCropName.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFDCFCE7)),
+                    ),
+                    child: Text(
+                      'diag_crop_label'.tr(args: [detectedCropName]),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF16A34A),
+                      ),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 12),
                 Text(
                   analysis,
                   style: const TextStyle(
-                      fontSize: 14, color: AppTheme.textSecondary, height: 1.4),
+                    fontSize: 13.5,
+                    color: AppTheme.textSecondary,
+                    height: 1.45,
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+                // Audio Readout Pill
+                _buildSpeechButton(
+                  sectionKey: 'diagnosis_overview',
+                  text: [
+                    if (detectedCropName != null && detectedCropName.isNotEmpty)
+                      detectedCropName,
+                    problemName,
+                    statusTextKey.tr(),
+                    analysis,
+                  ].join('. '),
+                  color: statusColor,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+
+          // Weather Spray Advisory Card
           if (result['weather_impact'] != null &&
               result['weather_impact'].toString().trim().isNotEmpty) ...[
             Container(
               width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: const Color(0xFFF0F9FF),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: const Color(0xFFBAE6FD)),
               ),
               child: Column(
@@ -1005,19 +1157,20 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
                       const Icon(Icons.cloud_sync_rounded,
                           color: Color(0xFF0284C7), size: 20),
                       const SizedBox(width: 8),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          "Agro-Weather Correlation & Spray Advice",
-                          style: TextStyle(
+                          'diag_weather_spray_title'.tr(),
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 15,
+                            fontSize: 14.5,
                             color: Color(0xFF0369A1),
                           ),
                         ),
                       ),
                       _buildSpeechButton(
                         sectionKey: 'weather_advice',
-                        text: "Agro-Weather Correlation & Spray Advice. ${result['weather_impact']}",
+                        text:
+                            "${'diag_weather_spray_title'.tr()}. ${result['weather_impact']}",
                         color: const Color(0xFF0284C7),
                       ),
                     ],
@@ -1026,7 +1179,7 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
                   Text(
                     result['weather_impact'].toString(),
                     style: const TextStyle(
-                      fontSize: 13.5,
+                      fontSize: 13,
                       color: Color(0xFF0C4A6E),
                       height: 1.45,
                     ),
@@ -1034,63 +1187,97 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 14),
           ],
-          if (observedSymptoms.isNotEmpty)
-            _buildControlList(
-              'diag_observed_symptoms'.tr(),
-              observedSymptoms,
-              const Color(0xFF475569),
-              Icons.search_rounded,
-              speechSectionKey: 'symptoms',
-            ),
-          if (recoveryTips.isNotEmpty)
-            _buildControlList(
-              'diag_recovery_tips'.tr(),
-              recoveryTips,
-              const Color(0xFF0D9488),
-              Icons.tips_and_updates_rounded,
-              speechSectionKey: 'recovery',
-            ),
+
+          // Prescribed Treatment Sections
           if (controls != null && healthStatus != 'healthy') ...[
-            Text(
-              'diag_ai_controls'.tr(),
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                'diag_ai_controls'.tr(),
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                  letterSpacing: -0.3,
+                ),
+              ),
             ),
-            const SizedBox(height: 12),
-            _buildControlList(
-              'diag_chemical'.tr(),
-              controls['chemical'],
-              const Color(0xFFDC2626),
-              Icons.science_rounded,
-              subtitle: "Per Acre • Water Mix",
-              speechSectionKey: 'chemical',
-            ),
-            const SizedBox(height: 12),
-            _buildControlList(
-              'diag_biological'.tr(),
-              controls['biological'],
-              const Color(0xFF16A34A),
-              Icons.eco_rounded,
-              subtitle: "Per Acre • Water Mix",
+            const SizedBox(height: 8),
+
+            // 1. Biological & Organic
+            _buildTreatmentCard(
+              title: 'diag_biological'.tr(),
+              items: controls['biological'],
+              color: const Color(0xFF16A34A),
+              bgColor: const Color(0xFFF0FDF4),
+              borderColor: const Color(0xFFBBF7D0),
+              icon: Icons.eco_rounded,
+              subtitle: 'diag_dosage_hint'.tr(),
               speechSectionKey: 'biological',
             ),
-            const SizedBox(height: 12),
-            _buildControlList(
-              'diag_preventative'.tr(),
-              controls['preventative'],
-              const Color(0xFF0F766E),
-              Icons.verified_user_rounded,
+            const SizedBox(height: 10),
+
+            // 2. Chemical Spray
+            _buildTreatmentCard(
+              title: 'diag_chemical'.tr(),
+              items: controls['chemical'],
+              color: const Color(0xFFDC2626),
+              bgColor: const Color(0xFFFEF2F2),
+              borderColor: const Color(0xFFFECACA),
+              icon: Icons.science_rounded,
+              subtitle: 'diag_dosage_hint'.tr(),
+              speechSectionKey: 'chemical',
+            ),
+            const SizedBox(height: 10),
+
+            // 3. Preventative Practices
+            _buildTreatmentCard(
+              title: 'diag_preventative'.tr(),
+              items: controls['preventative'],
+              color: const Color(0xFF0D9488),
+              bgColor: const Color(0xFFF0FDFA),
+              borderColor: const Color(0xFF99F6E4),
+              icon: Icons.verified_user_rounded,
               speechSectionKey: 'preventative',
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
           ],
+
+          // Observed Symptoms
+          if (observedSymptoms.isNotEmpty) ...[
+            _buildTreatmentCard(
+              title: 'diag_observed_symptoms'.tr(),
+              items: observedSymptoms,
+              color: const Color(0xFF475569),
+              bgColor: const Color(0xFFF8FAFC),
+              borderColor: const Color(0xFFE2E8F0),
+              icon: Icons.search_rounded,
+              speechSectionKey: 'symptoms',
+            ),
+            const SizedBox(height: 10),
+          ],
+
+          // Recovery Tips
+          if (recoveryTips.isNotEmpty) ...[
+            _buildTreatmentCard(
+              title: 'diag_recovery_tips'.tr(),
+              items: recoveryTips,
+              color: const Color(0xFF0284C7),
+              bgColor: const Color(0xFFF0F9FF),
+              borderColor: const Color(0xFFBAE6FD),
+              icon: Icons.tips_and_updates_rounded,
+              speechSectionKey: 'recovery',
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // Verified Advisory Navigation Button
           if (matchedId != null && _hasVerifiedAdvisory) ...[
             SizedBox(
               width: double.infinity,
-              height: 54,
+              height: 50,
               child: ElevatedButton.icon(
                 onPressed: () {
                   Navigator.push(
@@ -1112,37 +1299,125 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
                     ),
                   );
                 },
-                icon: const Icon(Icons.verified_rounded, color: Colors.white),
+                icon: const Icon(Icons.verified_rounded, color: Colors.white, size: 20),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF16A34A),
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 label: Text(
                   'diag_view_verified'.tr(),
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontSize: 15),
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 14),
           ],
+
+          // Bottom Quick Actions Bar (Save, Share, Scan Again)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              children: [
+                // Save Button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _toggleSaveAdvisory,
+                    icon: Icon(
+                      _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                      size: 18,
+                      color: _isSaved ? const Color(0xFF16A34A) : AppTheme.textPrimary,
+                    ),
+                    label: Text(
+                      _isSaved ? 'diag_saved'.tr() : 'diag_save'.tr(),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: _isSaved ? const Color(0xFF16A34A) : AppTheme.textPrimary,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      side: BorderSide(
+                        color: _isSaved ? const Color(0xFF16A34A) : const Color(0xFFCBD5E1),
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Share Button
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _shareAdvisory,
+                    icon: const Icon(Icons.share_rounded, size: 18, color: Colors.white),
+                    label: Text(
+                      'diag_share'.tr(),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A34A),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Scan Again Button
+                IconButton(
+                  onPressed: () => _localPickImage(ImageSource.camera),
+                  icon: const Icon(Icons.camera_alt_rounded, color: AppTheme.primary),
+                  tooltip: 'diag_scan_again'.tr(),
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFFF0FDF4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Color(0xFFBBF7D0)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
         ],
       ),
     );
   }
 
-  Widget _buildControlList(
-      String title, dynamic items, Color color, IconData icon,
-      {String? subtitle, String? speechSectionKey}) {
+  Widget _buildTreatmentCard({
+    required String title,
+    required dynamic items,
+    required Color color,
+    required Color bgColor,
+    required Color borderColor,
+    required IconData icon,
+    String? subtitle,
+    String? speechSectionKey,
+  }) {
     final list = items is List ? List<String>.from(items) : <String>[];
     if (list.isEmpty) return const SizedBox.shrink();
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1154,35 +1429,40 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const SizedBox(width: 10),
               Expanded(
-                child: Text(title,
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 15, color: color)),
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.5,
+                    color: color,
+                  ),
+                ),
               ),
               if (subtitle != null) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: color.withValues(alpha: 0.2)),
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.water_drop_rounded, size: 11, color: color),
-                      const SizedBox(width: 3),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: color,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1195,31 +1475,84 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
-          ...list.map((tip) => Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6.0),
-                      child: Icon(Icons.circle,
-                          size: 6, color: color.withValues(alpha: 0.6)),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        tip,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            color: AppTheme.textPrimary,
-                            height: 1.4),
+          const SizedBox(height: 12),
+          ...list.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 5.0),
+                    child: Icon(Icons.circle, size: 5.5, color: color),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.textPrimary,
+                        height: 1.45,
                       ),
                     ),
-                  ],
-                ),
-              )),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCreditQuotaWidget() {
+    final status = _creditStatus;
+    final remaining = status?.totalAvailable ?? 10;
+    final hasCredits = remaining > 0;
+    final isUsingPurchased = status?.isUsingPurchasedCredits ?? false;
+
+    return InkWell(
+      onTap: () => _showPurchaseCreditsModal(),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: hasCredits ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: hasCredits ? const Color(0xFFBBF7D0) : const Color(0xFFFCA5A5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasCredits ? Icons.eco_rounded : Icons.bolt_rounded,
+              size: 16,
+              color: hasCredits ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              hasCredits
+                  ? (isUsingPurchased
+                      ? "$remaining scans available (${status!.purchasedCredits} purchased)"
+                      : "${status?.dailyRemaining ?? 10}/10 free scans today")
+                  : "Daily limit reached (0/10) • Add 10 scans for ₹1",
+              style: TextStyle(
+                fontSize: 12.5,
+                color: hasCredits ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 11,
+              color: hasCredits ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1255,8 +1588,8 @@ class _PlantAnalysisScreenState extends State<PlantAnalysisScreen> {
                 const SizedBox(width: 4),
                 Text(
                   _creditStatus!.isUsingPurchasedCredits
-                      ? "$remaining Credits"
-                      : "${_creditStatus!.dailyRemaining}/10 Free",
+                      ? "$remaining"
+                      : "${_creditStatus!.dailyRemaining}/10",
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -1613,13 +1946,11 @@ class _LaserScannerOverlayState extends State<LaserScannerOverlay>
       builder: (context, child) {
         return Stack(
           children: [
-            // Soft scanning green gradient overlay
             Positioned.fill(
               child: Container(
                 color: Colors.green.withValues(alpha: 0.08),
               ),
             ),
-            // Moving laser line
             Align(
               alignment: Alignment(0, (_animation.value * 2.0) - 1.0),
               child: Container(
@@ -1651,5 +1982,3 @@ class _LaserScannerOverlayState extends State<LaserScannerOverlay>
     );
   }
 }
-
-

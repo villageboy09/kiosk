@@ -12,7 +12,6 @@ import 'package:cropsync/screens/reels_screen.dart';
 import 'package:cropsync/screens/news/news_feed_screen.dart';
 import 'package:cropsync/screens/creator/creator_studio_screen.dart';
 import 'package:cropsync/screens/creator/upload_reel_screen.dart';
-import 'package:cropsync/screens/creator/upload_news_screen.dart';
 import 'package:cropsync/screens/notifications_screen.dart';
 
 /// Dedicated Main Home Screen for Agricultural Content Creators
@@ -130,164 +129,15 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
     _fetchCreatorDetails();
   }
 
-  void _showCreateActionSheet() {
+  Future<void> _openUploadReel() async {
     HapticFeedback.mediumImpact();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E9),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF1B5E20), size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Create New Content',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _buildCreationTile(
-                icon: Icons.videocam_rounded,
-                iconColor: const Color(0xFF10B981),
-                bgColor: const Color(0xFFECFDF5),
-                title: 'creator_upload_reel'.tr(),
-                subtitle: 'Record or upload a short farming reel for farmers',
-                onTap: () async {
-                  Navigator.of(ctx).pop();
-                  final created = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(
-                      builder: (_) => const UploadReelScreen(),
-                      fullscreenDialog: true,
-                    ),
-                  );
-                  if (created == true) _fetchCreatorDetails();
-                },
-              ),
-              const SizedBox(height: 12),
-              _buildCreationTile(
-                icon: Icons.article_rounded,
-                iconColor: const Color(0xFF2563EB),
-                bgColor: const Color(0xFFEFF6FF),
-                title: 'creator_upload_news'.tr(),
-                subtitle: 'Write an agricultural update, scheme info, or guide',
-                onTap: () async {
-                  Navigator.of(ctx).pop();
-                  final created = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(builder: (_) => const UploadNewsScreen()),
-                  );
-                  if (created == true) _fetchCreatorDetails();
-                },
-              ),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const UploadReelScreen(),
+        fullscreenDialog: true,
       ),
     );
-  }
-
-  Widget _buildCreationTile({
-    required IconData icon,
-    required Color iconColor,
-    required Color bgColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border.withValues(alpha: 0.7)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: bgColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: iconColor, size: 24),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          color: AppTheme.textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textHint),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    if (created == true) _fetchCreatorDetails();
   }
 
   PreferredSizeWidget _buildCreatorAppBar() {
@@ -500,7 +350,7 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
                 Expanded(
                   child: _AnimatedCreateActionTab(
                     animationController: _pulseController,
-                    onTap: _showCreateActionSheet,
+                    onTap: _openUploadReel,
                   ),
                 ),
                 // Tab 2: News Feed

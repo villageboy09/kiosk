@@ -995,7 +995,16 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem>
       if (seconds >= 1) {
         final duration = widget.controller?.value.duration.inSeconds ?? 0;
         final isCompleted = duration > 0 && seconds >= duration;
-        ReelsService.logWatch(_currentReel.id, seconds, isCompleted);
+        final cPhone = _currentReel.creator.phoneNumber.isNotEmpty
+            ? _currentReel.creator.phoneNumber
+            : _currentReel.phoneNumber;
+        ReelsService.logWatch(
+          _currentReel.id,
+          seconds,
+          isCompleted,
+          creatorPhone: cPhone,
+          creatorUsername: _currentReel.creator.username,
+        );
       }
       _playStartTime = null;
     }

@@ -322,12 +322,34 @@ class ReelsService {
   }
 
   /// Log watch duration analytics
-  static Future<void> logWatch(int reelId, int durationSeconds, bool isCompleted) async {
+  static Future<void> logWatch(
+    int reelId,
+    int durationSeconds,
+    bool isCompleted, {
+    String? creatorPhone,
+    String? creatorUsername,
+  }) async {
     final user = await _getUserDetails();
+
+    // Do not count the creator's view into analytics data
+    final userPhone = user['phone'] ?? '';
+    final username = user['username'] ?? '';
+    if (userPhone.isNotEmpty && creatorPhone != null && creatorPhone.isNotEmpty && userPhone == creatorPhone) {
+      return;
+    }
+    if (username.isNotEmpty &&
+        creatorUsername != null &&
+        creatorUsername.isNotEmpty &&
+        username.toLowerCase() == creatorUsername.toLowerCase()) {
+      return;
+    }
+
     await FarmerAnalyticsService.logReelView(
       reelId: reelId,
       watchDurationSeconds: durationSeconds,
       isCompleted: isCompleted,
+      creatorUsername: creatorUsername,
+      creatorPhone: creatorPhone,
     );
 
     try {

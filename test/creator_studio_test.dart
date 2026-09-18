@@ -221,7 +221,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('My Reels'), findsOneWidget);
-      expect(find.text('My Articles'), findsOneWidget);
+      expect(find.text('My Articles'), findsNothing);
       expect(find.text('Analytics'), findsOneWidget);
       expect(find.text('Total Views'), findsOneWidget);
       expect(find.text('Total Likes'), findsOneWidget);
@@ -353,6 +353,88 @@ void main() {
         find.text('Reel cannot be activated until inspected and approved by a moderator.'),
         findsOneWidget,
       );
+    });
+
+    testWidgets('CreatorStudioScreen delete button shows modal bottom sheet instead of AlertDialog', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final cachedData = {
+        'success': true,
+        'creator': {
+          'id': 1,
+          'username': 'dr_kalyan',
+          'display_name': 'Dr. Kalyan Kumar',
+          'profile_image_url': '',
+          'is_verified': 1,
+          'phone_number': '9876543210',
+          'bio': 'Agronomist',
+        },
+        'stats': {
+          'totalViews': 100,
+          'totalLikes': 10,
+          'totalComments': 2,
+          'totalSaves': 1,
+          'totalCalls': 0,
+          'totalShares': 0,
+          'engagementRate': 1.0,
+          'avgWatchDurationSeconds': 10.0,
+          'totalReels': 1,
+          'totalArticles': 0,
+        },
+        'reels': [
+          {
+            'id': 777,
+            'video_url': 'https://example.com/demo.mp4',
+            'caption': 'Delete test reel',
+            'music_title': 'Original Audio',
+            'phone_number': '9876543210',
+            'tags': '#test',
+            'views_count': 10,
+            'likes_count': 1,
+            'saves_count': 0,
+            'comments_count': 0,
+            'is_active': 1,
+            'status': 'active',
+            'thumbnail_url': 'https://example.com/thumb.jpg',
+            'creator': {
+              'id': 1,
+              'username': 'dr_kalyan',
+              'displayName': 'Dr. Kalyan Kumar',
+              'profileImageUrl': '',
+            }
+          }
+        ],
+        'articles': [],
+        'trends': []
+      };
+
+      SharedPreferences.setMockInitialValues({
+        'user_phone': '9876543210',
+        'user_name': 'Dr. Kalyan',
+        'cropsync_creator_studio_cache_v1': jsonEncode(cachedData),
+      });
+
+      await tester.pumpWidget(createTestApp(const CreatorStudioScreen()));
+      await tester.pumpAndSettle();
+
+      // Reel thumbnail widget is rendered
+      expect(find.byType(ReelThumbnailWidget), findsOneWidget);
+
+      // Find and tap delete button
+      final deleteBtnFinder = find.byIcon(Icons.delete_outline_rounded);
+      expect(deleteBtnFinder, findsOneWidget);
+      await tester.tap(deleteBtnFinder);
+      await tester.pumpAndSettle();
+
+      // Ensure NO AlertDialog is shown
+      expect(find.byType(AlertDialog), findsNothing);
+
+      // Ensure ModalBottomSheet is shown with delete description & confirm button
+      expect(find.text('Delete Content?'), findsOneWidget);
+      expect(find.text('Delete'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
     });
   });
 }

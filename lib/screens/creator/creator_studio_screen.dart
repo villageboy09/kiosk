@@ -3,15 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:video_player/video_player.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/models/creator_studio_model.dart';
 import 'package:cropsync/models/reel_model.dart';
-import 'package:cropsync/models/news_article.dart';
 import 'package:cropsync/services/creator_service.dart';
 import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:cropsync/screens/creator/upload_reel_screen.dart';
-import 'package:cropsync/screens/creator/upload_news_screen.dart';
-import 'package:cropsync/screens/news/news_detail_screen.dart';
 import 'package:cropsync/widgets/modern_pill_toast.dart';
 
 class CreatorStudioScreen extends StatefulWidget {
@@ -30,7 +28,7 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _loadStudioData(forceRefresh: true);
     CreatorHomeScreen.tabNotifier.addListener(_onCreatorTabChanged);
 
@@ -140,26 +138,114 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
   }
 
   Future<void> _deleteReel(ReelModel reel) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('creator_delete_confirm_title'.tr()),
-        content: Text('creator_delete_confirm_desc'.tr()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('creator_cancel_btn'.tr()),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4.5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Warning Icon badge
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.delete_forever_rounded,
+                    color: Colors.red.shade600,
+                    size: 34,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'creator_delete_confirm_title'.tr(),
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textDark,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'creator_delete_confirm_desc'.tr(),
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: Colors.grey.shade600,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              // Action buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: Text(
+                        'creator_cancel_btn'.tr(),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade600,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                      label: Text(
+                        'creator_delete_btn'.tr(),
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('creator_delete_btn'.tr()),
-          ),
-        ],
+        ),
       ),
     );
 
@@ -177,109 +263,14 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
     }
   }
 
-  Future<void> _deleteArticle(NewsArticle article) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('creator_delete_confirm_title'.tr()),
-        content: Text('creator_delete_confirm_desc'.tr()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('creator_cancel_btn'.tr()),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('creator_delete_btn'.tr()),
-          ),
-        ],
+  Future<void> _openUploadReel() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const UploadReelScreen(),
+        fullscreenDialog: true,
       ),
     );
-
-    if (confirm == true) {
-      final success = await CreatorService.deleteNewsArticle(article.id);
-      if (success && mounted) {
-        showModernPillToast(
-          context,
-          message: 'Article deleted successfully',
-          icon: Icons.delete_sweep_rounded,
-          isSuccess: true,
-        );
-        _loadStudioData(forceRefresh: true);
-      }
-    }
-  }
-
-  void _showCreateActionSheet() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Create & Share with Farmers',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppTheme.textDark),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppTheme.accentGreen.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.videocam_rounded, color: AppTheme.accentGreen),
-              ),
-              title: Text('creator_upload_reel'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: const Text('Record or upload a short farming reel'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () async {
-                Navigator.of(ctx).pop();
-                final created = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(
-                    builder: (_) => const UploadReelScreen(),
-                    fullscreenDialog: true,
-                  ),
-                );
-                if (created == true) _loadStudioData(forceRefresh: true);
-              },
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryDark.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.article_rounded, color: AppTheme.primaryDark),
-              ),
-              title: Text('creator_upload_news'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: const Text('Write an agricultural update or farming advisory'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () async {
-                Navigator.of(ctx).pop();
-                final created = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(builder: (_) => const UploadNewsScreen()),
-                );
-                if (created == true) _loadStudioData(forceRefresh: true);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
+    if (created == true) _loadStudioData(forceRefresh: true);
   }
 
   @override
@@ -297,10 +288,9 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
           unselectedLabelColor: Colors.grey.shade600,
           indicatorColor: AppTheme.accentGreen,
           indicatorWeight: 3,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           tabs: [
             Tab(text: 'creator_tab_reels'.tr()),
-            Tab(text: 'creator_tab_news'.tr()),
             Tab(text: 'creator_tab_analytics'.tr()),
           ],
         ),
@@ -315,17 +305,16 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
                 controller: _tabController,
                 children: [
                   _buildReelsTab(),
-                  _buildArticlesTab(),
                   _buildAnalyticsTab(),
                 ],
               ),
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showCreateActionSheet,
+        onPressed: _openUploadReel,
         backgroundColor: AppTheme.accentGreen,
         foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Create Content', style: TextStyle(fontWeight: FontWeight.bold)),
+        icon: const Icon(Icons.videocam_rounded),
+        label: Text('creator_upload_reel'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -423,17 +412,7 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 72,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: Colors.black87,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Center(
-                  child: Icon(Icons.play_circle_fill_rounded, color: Colors.white70, size: 36),
-                ),
-              ),
+              ReelThumbnailWidget(reel: reel),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -799,171 +778,6 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
     );
   }
 
-  // --- ARTICLES TAB ---
-  Widget _buildArticlesTab() {
-    final articles = _studioData?.articles ?? [];
-
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildKPIHeader(),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${'creator_tab_news'.tr()} (${articles.length})',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textDark),
-                  ),
-                  TextButton.icon(
-                    onPressed: () async {
-                      final res = await Navigator.of(context).push<bool>(
-                        MaterialPageRoute(builder: (_) => const UploadNewsScreen()),
-                      );
-                      if (res == true) _loadStudioData(forceRefresh: true);
-                    },
-                    icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
-                    label: Text('creator_upload_news'.tr(), style: const TextStyle(fontSize: 12)),
-                    style: TextButton.styleFrom(foregroundColor: AppTheme.primaryDark),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (articles.isEmpty)
-                _buildEmptyState(
-                  icon: Icons.article_outlined,
-                  title: 'creator_no_articles'.tr(),
-                  subtitle: 'creator_no_articles_sub'.tr(),
-                  buttonLabel: 'creator_upload_news'.tr(),
-                  onPressed: () async {
-                    final res = await Navigator.of(context).push<bool>(
-                      MaterialPageRoute(builder: (_) => const UploadNewsScreen()),
-                    );
-                    if (res == true) _loadStudioData(forceRefresh: true);
-                  },
-                )
-              else
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: articles.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (ctx, idx) => _buildArticleManageCard(articles[idx]),
-                ),
-              const SizedBox(height: 80),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildArticleManageCard(NewsArticle article) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (article.imageUrl != null && article.imageUrl!.isNotEmpty)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: CachedNetworkImage(
-                    imageUrl: article.imageUrl!,
-                    width: 80,
-                    height: 80,
-                    fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) => Container(
-                      width: 80,
-                      height: 80,
-                      color: Colors.grey.shade200,
-                      child: const Icon(Icons.newspaper_rounded, color: Colors.grey),
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryDark.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        article.category,
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.primaryDark),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      article.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textDark),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        _buildBadge(Icons.remove_red_eye_outlined, '${article.viewsCount} reads'),
-                        _buildBadge(Icons.thumb_up_alt_outlined, '${article.likesCount}'),
-                        _buildBadge(Icons.chat_bubble_outline, '${article.commentsCount}'),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => NewsDetailScreen(article: article)),
-                  );
-                },
-                icon: const Icon(Icons.visibility_outlined, size: 16),
-                label: const Text('Preview Article', style: TextStyle(fontSize: 12)),
-                style: TextButton.styleFrom(foregroundColor: AppTheme.primaryDark),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                onPressed: () => _deleteArticle(article),
-                tooltip: 'creator_delete_btn'.tr(),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   // --- ANALYTICS TAB ---
   Widget _buildAnalyticsTab() {
     final stats = _studioData?.stats ?? const CreatorStats();
@@ -1093,6 +907,11 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
   }
 
   Widget _buildTrendChart(List<DailyTrendItem> trends) {
+    final maxVal = trends.isEmpty
+        ? 0.0
+        : trends.map((e) => e.views.toDouble()).fold<double>(0.0, (prev, curr) => curr > prev ? curr : prev);
+    final bool allZeros = maxVal == 0;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1135,54 +954,120 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
             height: 180,
             child: trends.isEmpty
                 ? const Center(child: Text('No trend data yet'))
-                : BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      maxY: (() {
-                        final maxVal = trends.map((e) => e.views.toDouble()).reduce((a, b) => a > b ? a : b);
-                        return maxVal == 0 ? 10.0 : maxVal * 1.2;
-                      })(),
-                      barTouchData: const BarTouchData(enabled: true),
-                      titlesData: FlTitlesData(
-                        show: true,
-                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (val, meta) {
-                              final idx = val.toInt();
-                              if (idx >= 0 && idx < trends.length) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    trends[idx].day,
-                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                                  ),
+                : Stack(
+                    children: [
+                      BarChart(
+                        BarChartData(
+                          alignment: BarChartAlignment.spaceAround,
+                          maxY: allZeros ? 10.0 : maxVal * 1.25,
+                          barTouchData: BarTouchData(
+                            enabled: true,
+                            touchTooltipData: BarTouchTooltipData(
+                              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                final item = trends[groupIndex];
+                                return BarTooltipItem(
+                                  '${item.day}\n',
+                                  const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                  children: [
+                                    TextSpan(
+                                      text: '${item.views} views',
+                                      style: const TextStyle(color: Color(0xFF34D399), fontWeight: FontWeight.w600, fontSize: 11),
+                                    ),
+                                  ],
                                 );
-                              }
-                              return const SizedBox();
-                            },
+                              },
+                            ),
                           ),
+                          titlesData: FlTitlesData(
+                            show: true,
+                            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 32,
+                                getTitlesWidget: (val, meta) {
+                                  if (val == 0) return const SizedBox();
+                                  if (val >= 1000) {
+                                    return Text('${(val / 1000).toStringAsFixed(0)}K', style: TextStyle(fontSize: 9, color: Colors.grey.shade500));
+                                  }
+                                  return Text('${val.toInt()}', style: TextStyle(fontSize: 9, color: Colors.grey.shade500));
+                                },
+                              ),
+                            ),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (val, meta) {
+                                  final idx = val.toInt();
+                                  if (idx >= 0 && idx < trends.length) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Text(
+                                        trends[idx].day,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  return const SizedBox();
+                                },
+                              ),
+                            ),
+                          ),
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: false,
+                            horizontalInterval: allZeros ? 5.0 : (maxVal / 3).clamp(1.0, double.infinity),
+                            getDrawingHorizontalLine: (_) => FlLine(
+                              color: Colors.grey.shade100,
+                              strokeWidth: 1,
+                            ),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          barGroups: trends.asMap().entries.map((entry) {
+                            final viewsVal = entry.value.views.toDouble();
+                            return BarChartGroupData(
+                              x: entry.key,
+                              barRods: [
+                                BarChartRodData(
+                                  toY: allZeros ? 0.3 : viewsVal,
+                                  color: allZeros ? Colors.grey.shade300 : AppTheme.accentGreen,
+                                  width: 16,
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+                                ),
+                              ],
+                            );
+                          }).toList(),
                         ),
                       ),
-                      gridData: const FlGridData(show: false),
-                      borderData: FlBorderData(show: false),
-                      barGroups: trends.asMap().entries.map((entry) {
-                        return BarChartGroupData(
-                          x: entry.key,
-                          barRods: [
-                            BarChartRodData(
-                              toY: entry.value.views.toDouble(),
-                              color: AppTheme.accentGreen,
-                              width: 14,
-                              borderRadius: BorderRadius.circular(4),
+                      if (allZeros)
+                        Positioned.fill(
+                          child: Container(
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                'No views in the last 7 days yet.\nFarmer views will appear here.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
                             ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
+                          ),
+                        ),
+                    ],
                   ),
           ),
         ],
@@ -1319,6 +1204,213 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class ReelThumbnailWidget extends StatefulWidget {
+  final ReelModel reel;
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  const ReelThumbnailWidget({
+    super.key,
+    required this.reel,
+    this.width = 76,
+    this.height = 100,
+    this.borderRadius = 12,
+  });
+
+  @override
+  State<ReelThumbnailWidget> createState() => _ReelThumbnailWidgetState();
+}
+
+class _ReelThumbnailWidgetState extends State<ReelThumbnailWidget> {
+  VideoPlayerController? _videoController;
+  bool _isVideoInitialized = false;
+  bool _hasVideoError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveThumbnail();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReelThumbnailWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reel.thumbnailUrl != widget.reel.thumbnailUrl ||
+        oldWidget.reel.videoUrl != widget.reel.videoUrl) {
+      _videoController?.dispose();
+      _videoController = null;
+      _isVideoInitialized = false;
+      _hasVideoError = false;
+      _resolveThumbnail();
+    }
+  }
+
+  void _resolveThumbnail() {
+    final thumb = widget.reel.thumbnailUrl;
+    if (thumb != null && thumb.trim().isNotEmpty) return;
+    if (_extractYoutubeThumbnail(widget.reel.videoUrl) != null) return;
+
+    final vidUrl = widget.reel.videoUrl.trim();
+    if (vidUrl.isNotEmpty && (vidUrl.startsWith('http://') || vidUrl.startsWith('https://'))) {
+      try {
+        final uri = Uri.parse(vidUrl);
+        _videoController = VideoPlayerController.networkUrl(uri)
+          ..initialize().then((_) {
+            if (mounted) {
+              setState(() {
+                _isVideoInitialized = true;
+              });
+            }
+          }).catchError((_) {
+            if (mounted) {
+              setState(() {
+                _hasVideoError = true;
+              });
+            }
+          });
+      } catch (_) {
+        _hasVideoError = true;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  static String? _extractYoutubeThumbnail(String url) {
+    if (url.isEmpty) return null;
+    final regExp = RegExp(
+      r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})',
+      caseSensitive: false,
+    );
+    final match = regExp.firstMatch(url);
+    if (match != null && match.groupCount >= 1) {
+      final videoId = match.group(1);
+      return 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final thumb = widget.reel.thumbnailUrl;
+    final ytThumb = _extractYoutubeThumbnail(widget.reel.videoUrl);
+    final effectiveImageUrl = (thumb != null && thumb.trim().isNotEmpty)
+        ? thumb.trim()
+        : ytThumb;
+
+    Widget content;
+    if (effectiveImageUrl != null && effectiveImageUrl.isNotEmpty) {
+      content = CachedNetworkImage(
+        imageUrl: effectiveImageUrl,
+        width: widget.width,
+        height: widget.height,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => _buildPlaceholder(),
+        errorWidget: (_, __, ___) => _buildFallback(),
+      );
+    } else if (_isVideoInitialized && _videoController != null) {
+      content = SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: FittedBox(
+          fit: BoxFit.cover,
+          clipBehavior: Clip.hardEdge,
+          child: SizedBox(
+            width: _videoController!.value.size.width,
+            height: _videoController!.value.size.height,
+            child: VideoPlayer(_videoController!),
+          ),
+        ),
+      );
+    } else if (!_hasVideoError && _videoController != null) {
+      content = _buildPlaceholder();
+    } else {
+      content = _buildFallback();
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(widget.borderRadius),
+      child: Container(
+        width: widget.width,
+        height: widget.height,
+        color: Colors.black87,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned.fill(child: content),
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.35),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 20),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      width: widget.width,
+      height: widget.height,
+      color: const Color(0xFF1E293B),
+      child: Center(
+        child: Icon(
+          Icons.movie_creation_outlined,
+          color: Colors.white.withValues(alpha: 0.3),
+          size: 20,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFallback() {
+    return Container(
+      width: widget.width,
+      height: widget.height,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF064E3B),
+            Color(0xFF0F766E),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.video_library_rounded,
+          color: Colors.white.withValues(alpha: 0.7),
+          size: 26,
         ),
       ),
     );
