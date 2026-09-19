@@ -22,9 +22,11 @@ class AiCreditService {
 
     // Reset daily counter if a new calendar day has started
     if (lastDate != todayStr) {
-      dailyUsed = 0;
+      if (lastDate.isNotEmpty) {
+        dailyUsed = 0;
+        await prefs.setInt('ai_credit_daily_used_$uid', 0);
+      }
       await prefs.setString('ai_credit_date_$uid', todayStr);
-      await prefs.setInt('ai_credit_daily_used_$uid', 0);
     }
 
     final dailyRemaining = (defaultDailyLimit - dailyUsed).clamp(0, defaultDailyLimit);
@@ -46,10 +48,7 @@ class AiCreditService {
     return status.hasCredits;
   }
 
-  /// Deducts 1 credit for an AI analysis scan.
-  /// Free daily quota is consumed first. Once 10 free scans are exhausted,
-  /// extra purchased credits are consumed.
-  /// Returns true if credit was successfully consumed, false if insufficient credits.
+  /// Consume a credit (prioritizes free daily, then purchased)
   static Future<bool> consumeCredit({String? userId}) async {
     final prefs = await SharedPreferences.getInstance();
     final uid = _resolveUserId(userId, prefs);
@@ -61,9 +60,11 @@ class AiCreditService {
 
     // Reset daily if date changed
     if (lastDate != todayStr) {
-      dailyUsed = 0;
+      if (lastDate.isNotEmpty) {
+        dailyUsed = 0;
+        await prefs.setInt('ai_credit_daily_used_$uid', 0);
+      }
       await prefs.setString('ai_credit_date_$uid', todayStr);
-      await prefs.setInt('ai_credit_daily_used_$uid', 0);
     }
 
     if (dailyUsed < defaultDailyLimit) {

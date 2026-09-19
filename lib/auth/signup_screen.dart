@@ -10,6 +10,7 @@ import 'package:cropsync/screens/home_screen.dart';
 import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
 import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
 import 'package:cropsync/screens/creator/creator_home_screen.dart';
+import 'package:cropsync/screens/operator/operator_dashboard.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/auth/login_screen.dart';
@@ -388,6 +389,11 @@ class _SignupScreenState extends State<SignupScreen>
         Navigator.pushReplacement(
           context,
           AppRoutes.fade(const CreatorHomeScreen()),
+        );
+      } else if (user?.isOperator == true || user?.membershipType == 'CHC Operator' || _selectedRole == 'chc_operator') {
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const OperatorDashboard()),
         );
       } else {
         Navigator.pushReplacement(

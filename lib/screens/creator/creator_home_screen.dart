@@ -9,7 +9,6 @@ import 'package:cropsync/services/notification_service.dart';
 import 'package:cropsync/widgets/language_selector.dart';
 import 'package:cropsync/screens/profile_screen.dart';
 import 'package:cropsync/screens/reels_screen.dart';
-import 'package:cropsync/screens/news/news_feed_screen.dart';
 import 'package:cropsync/screens/creator/creator_studio_screen.dart';
 import 'package:cropsync/screens/creator/upload_reel_screen.dart';
 import 'package:cropsync/screens/notifications_screen.dart';
@@ -353,25 +352,14 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
                     onTap: _openUploadReel,
                   ),
                 ),
-                // Tab 2: News Feed
-                Expanded(
-                  child: _CreatorNavItem(
-                    icon: Icons.newspaper_outlined,
-                    activeIcon: Icons.newspaper_rounded,
-                    label: 'home_bottom_nav_news'.tr(),
-                    isActive: _selectedIndex == 2,
-                    onTap: () => _onNavTap(2),
-                    activeColor: const Color(0xFF059669),
-                  ),
-                ),
-                // Tab 3: Creator Profile
+                // Tab 2: Creator Profile
                 Expanded(
                   child: _CreatorNavItem(
                     icon: Icons.person_outline_rounded,
                     activeIcon: Icons.person_rounded,
                     label: 'operator_nav_profile'.tr(),
-                    isActive: _selectedIndex == 3,
-                    onTap: () => _onNavTap(3),
+                    isActive: _selectedIndex == 2,
+                    onTap: () => _onNavTap(2),
                     activeColor: const Color(0xFF059669),
                   ),
                 ),
@@ -391,12 +379,11 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
         key: const ValueKey('creator_reels_tab'),
         isTabVisible: _selectedIndex == 1,
       ),
-      const NewsFeedScreen(key: ValueKey('creator_news_tab')),
       const ProfileScreen(key: ValueKey('creator_profile_tab')),
     ];
 
-    // Hide app bar on full screen Reels tab (1) and Profile tab (3)
-    final bool hideAppBar = _selectedIndex == 1 || _selectedIndex == 3;
+    // Hide app bar on full screen Reels tab (1) and Profile tab (2)
+    final bool hideAppBar = _selectedIndex == 1 || _selectedIndex == 2;
 
     return PopScope(
       canPop: _selectedIndex == 0,

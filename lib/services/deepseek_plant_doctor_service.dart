@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/services/image_optimizer.dart';
 import 'package:cropsync/services/weather_tool_service.dart';
 import 'package:flutter/foundation.dart';
@@ -10,27 +11,50 @@ import 'package:http/http.dart' as http;
 /// Production-grade DeepSeek-V4-Flash-Vision-Exp Service
 /// Operates as an unbreakable Indian Agricultural Plant Doctor (Dr. Krishi)
 /// Features:
-/// 1. DeepSeek Automatic KV Prompt Caching (static prefix system prompt + static tools)
-/// 2. Extreme Vision Token Compression (single-tile 448px image tokenization)
-/// 3. Pre-injected Weather Context + Dynamic Tool Calling capability (eliminates redundant round-trips)
-/// 4. Auto-Repair & Regex Fallback JSON Parser (guarantees zero raw JSON leakage in UI)
-/// 5. Guaranteed CIBRC Chemical Control Measures for every diagnosed problem
-/// 6. Local In-Memory & Device Output Caching (0 tokens for duplicate scans)
+/// 1. Strict 24-Crop Whitelist Guardrails (Rejects unsupported plants, weeds & non-crops)
+/// 2. Durable Hostinger Server Gateway with direct fallback
+/// 3. High-Fidelity Multi-Tile Vision Token Processing
+/// 4. Dynamic Problem Grounding to MySQL database catalog
 class DeepSeekPlantDoctorService {
   static const String modelName = 'deepseek-v4-flash-vision-exp';
   static const String _endpoint = 'https://api.deepseek.com/chat/completions';
+
+  // 24 Crops supported by CropSync database
+  static const List<String> supportedCropsList = [
+    'Paddy (Rice)', 'Cotton', 'Sunflower', 'Banana', 'Turmeric', 'Maize',
+    'Chilli', 'Tomato', 'Bitter Gourd', 'Tea', 'Apple', 'Sugarcane',
+    'Brinjal', 'Cumin', 'Groundnut', 'Mango', 'Onion', 'Soybean',
+    'Wheat', 'Garlic', 'Okra', 'Potato', 'Pomegranate', 'Grapes'
+  ];
 
   // Local output cache to eliminate 100% of API tokens for identical repeat scans
   static final Map<String, _CachedDiagnosis> _diagnosisCache = {};
   static const Duration _cacheTtl = Duration(hours: 2);
 
-  /// STATIC SYSTEM PROMPT (DO NOT MODIFY DYNAMICALLY AT RUNTIME)
-  /// DeepSeek's automatic KV cache relies on exact prefix matching starting from token 0.
+  /// STATIC SYSTEM PROMPT FOR 24-CROP RESTRICTED DIAGNOSIS
+  /// DeepSeek KV cache matches prefix tokens.
   static const String _staticSystemPrompt = """
-You are Dr. Krishi, Indian Plant Pathologist. Diagnose crop image & weather.
-For chemical and biological controls, ALWAYS provide exact per-acre dosage (e.g., ml/acre or g/acre) and water volume to mix (e.g., in 150-200 L water/acre).
+You are Dr. Krishi, Senior Indian Agricultural Plant Pathologist.
+You diagnose crop leaf images and provide CIBRC-compliant control measures.
+
+STRICT 24-CROP WHITELIST RULE:
+You ONLY diagnose these 24 crops:
+Paddy (Rice), Cotton, Sunflower, Banana, Turmeric, Maize, Chilli, Tomato, Bitter Gourd, Tea, Apple, Sugarcane, Brinjal, Cumin, Groundnut, Mango, Onion, Soybean, Wheat, Garlic, Okra, Potato, Pomegranate, Grapes.
+
+GUARDRAILS:
+1. If image is NOT a plant or crop (human, animal, tool, furniture, building, landscape):
+   Output: {"is_plant":false,"is_crop_supported":false,"unsupported_crop_name":null,"is_clear_image":false,"reason":"Not a plant or agricultural crop."}
+2. If image is a plant but NOT in the 24 allowed crops (e.g. weed, lawn grass, rose, croton, marigold, cabbage):
+   Output: {"is_plant":true,"is_crop_supported":false,"unsupported_crop_name":"<Plant Name>","detected_crop_name":"<Plant Name>","health_status":"unknown","confidence":0.9,"reason":"Not one of the 24 supported crops in CropSync.","ai_control_measures":{"chemical":[],"biological":[],"preventative":[]}}
+   CRITICAL: NEVER prescribe any chemical or biological sprays for unsupported crops!
+3. If image is blurry or unclear:
+   Output: {"is_plant":true,"is_clear_image":false,"reason":"Image is blurry or lacks lighting. Retake closer to the leaf."}
+4. For SUPPORTED crops:
+   Identify health_status ("healthy"|"diseased"|"deficiency"|"pest_infestation"), severity_level ("mild"|"moderate"|"severe"), matched_problem_name, matched_problem_id (if known), observed_symptoms, ai_analysis, weather_impact, recovery_recommendations.
+   For chemical and biological controls, ALWAYS provide exact per-acre dosage (e.g., ml/acre or g/acre) and water volume to mix (e.g., in 150-200 L water/acre).
+
 Output JSON only:
-{"is_plant":true,"reason":"","detected_crop_name":"Crop","matched_problem_name":"Issue","health_status":"healthy"|"diseased"|"deficiency"|"pest_infestation","confidence":0.9,"observed_symptoms":["short"],"ai_analysis":"1 clinical sentence.","weather_impact":"1 spray/risk sentence.","recovery_recommendations":["short"],"ai_control_measures":{"chemical":["CIBRC molecule @ dose/acre in 150-200 L water"],"biological":["Bio agent @ dose/acre in 150-200 L water"],"preventative":["Key step"]}}
+{"is_plant":true,"is_crop_supported":true,"unsupported_crop_name":null,"is_clear_image":true,"detected_crop_name":"Crop","matched_problem_name":"Issue","matched_problem_id":null,"health_status":"healthy"|"diseased"|"deficiency"|"pest_infestation","severity_level":"mild"|"moderate"|"severe","confidence":0.9,"observed_symptoms":["short"],"ai_analysis":"1 clinical sentence.","weather_impact":"1 spray/risk sentence.","recovery_recommendations":["short"],"ai_control_measures":{"chemical":["CIBRC molecule @ dose/acre in 150-200 L water"],"biological":["Bio agent @ dose/acre in 150-200 L water"],"preventative":["Key step"]}}
 """;
 
   /// STATIC WEATHER TOOL DEFINITION
@@ -58,6 +82,8 @@ Output JSON only:
     double? latitude,
     double? longitude,
     String language = 'en',
+    int? selectedCropId,
+    String? selectedCropName,
     List<Map<String, dynamic>>? knownCrops,
     List<Map<String, dynamic>>? knownProblems,
   }) async {
@@ -85,7 +111,46 @@ Output JSON only:
       return cached.result;
     }
 
-    // 2. Pre-fetch weather in parallel if coordinates are available
+    // 2. Hardware-accelerated image optimization (preserves up to 1024px for clear lesion pathology)
+    final optimized = await ImageOptimizer.optimizeBytes(fileBytes);
+    final imageUri = optimized.dataUriScheme;
+
+    // 3. Try Hostinger Durable Server Gateway first
+    try {
+      final gatewayUri = Uri.parse('${ApiService.baseUrl}/plant_doctor_gateway.php');
+      final reqBody = jsonEncode({
+        'language': language,
+        'crop_id': selectedCropId,
+        'crop_name': selectedCropName,
+        'latitude': latitude,
+        'longitude': longitude,
+        'image_base64': imageUri,
+      });
+
+      final gwResponse = await http.post(
+        gatewayUri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $apiKey',
+        },
+        body: reqBody,
+      ).timeout(const Duration(seconds: 25));
+
+      if (gwResponse.statusCode == 200) {
+        final gwData = jsonDecode(utf8.decode(gwResponse.bodyBytes)) as Map<String, dynamic>;
+        if (gwData['success'] == true && gwData['diagnosis'] is Map<String, dynamic>) {
+          final diag = Map<String, dynamic>.from(gwData['diagnosis']);
+          _sanitizeAndEnrich(diag, knownCrops, knownProblems, language: language);
+          _diagnosisCache[cacheKey] = _CachedDiagnosis(result: diag, timestamp: DateTime.now());
+          debugPrint("🎯 Plant Doctor: Diagnosed via Hostinger Gateway");
+          return diag;
+        }
+      }
+    } catch (e) {
+      debugPrint("Hostinger Gateway fallback to direct vision client: $e");
+    }
+
+    // 4. Pre-fetch weather in parallel if coordinates are available
     String weatherContextStr = "";
     if (latitude != null && longitude != null) {
       try {
@@ -105,13 +170,19 @@ Output JSON only:
       }
     }
 
-    // 3. Hardware-accelerated image downscaling (guarantees <= 384x384, locking to single low-cost vision patch)
-    final optimized = await ImageOptimizer.optimizeBytes(fileBytes);
-    final imageUri = optimized.dataUriScheme;
-
-    // 4. Construct Ultra-Concise Dynamic User Message
+    // 5. Construct Ultra-Concise Dynamic User Message with 24-Crop Grounding
     final userPrompt = StringBuffer();
     userPrompt.write("Diagnose crop. Give exact per-acre dosages & water mix volumes for chemical and biological controls. ");
+    if (selectedCropName != null && selectedCropName.trim().isNotEmpty) {
+      userPrompt.write("Farmer specified crop: $selectedCropName. Restrict diagnosis exclusively to $selectedCropName. ");
+    }
+    if (knownProblems != null && knownProblems.isNotEmpty) {
+      final catalogStr = knownProblems
+          .take(25)
+          .map((p) => "${p['id']}:${p['name']}")
+          .join(", ");
+      userPrompt.write("Candidate catalog IDs: [$catalogStr]. Set matched_problem_id if matched. ");
+    }
     if (weatherContextStr.isNotEmpty) {
       userPrompt.write(weatherContextStr);
     }
@@ -140,14 +211,14 @@ Output JSON only:
             "type": "image_url",
             "image_url": {
               "url": imageUri,
-              "detail": "low", // Slashes DeepSeek vision token charge
+              "detail": "high", // High-fidelity vision tokenization for foliar pathology
             },
           },
         ],
       },
     ];
 
-    // 5. Multi-turn Execution Loop (supports tool calls if model needs further weather lookups)
+    // 6. Multi-turn Execution Loop (supports tool calls if model needs further weather lookups)
     int iteration = 0;
     const maxToolIterations = 2;
 
@@ -159,7 +230,7 @@ Output JSON only:
         "messages": messages,
         "thinking": {"type": "disabled"}, // Eliminates 300+ hidden reasoning tokens
         "temperature": 0.1, // Deterministic, highly accurate clinical output
-        "max_tokens": 500, // Capped to guarantee zero runaway tokens while ensuring full JSON
+        "max_tokens": 700, // Ample token capacity for complete JSON
       };
 
       // Only attach tool definitions if weather was NOT pre-injected.
@@ -385,10 +456,22 @@ Output JSON only:
     final biological = extractList('biological');
     final preventative = extractList('preventative');
 
+    final isPlant = raw.contains('"is_plant": false') ? false : true;
+    final isCropSupported = raw.contains('"is_crop_supported": false') ? false : true;
+    final isClearImage = raw.contains('"is_clear_image": false') ? false : true;
+    final unsupportedCrop = extractString('unsupported_crop_name');
+    final severityLevel = extractString('severity_level');
+    final matchedProblemId = extractNumber('matched_problem_id', -1).toInt();
+
     return {
-      "is_plant": raw.contains('"is_plant": false') ? false : true,
+      "is_plant": isPlant,
+      "is_crop_supported": isCropSupported,
+      "unsupported_crop_name": unsupportedCrop.isNotEmpty ? unsupportedCrop : null,
+      "is_clear_image": isClearImage,
+      "matched_problem_id": matchedProblemId > 0 ? matchedProblemId : null,
+      "severity_level": severityLevel.isNotEmpty ? severityLevel : "moderate",
       "reason": extractString('reason'),
-      "detected_crop_name": cropName.isNotEmpty ? cropName : "Identified Crop",
+      "detected_crop_name": cropName.isNotEmpty ? cropName : (unsupportedCrop.isNotEmpty ? unsupportedCrop : "Identified Crop"),
       "matched_problem_name": problemName.isNotEmpty ? problemName : "Crop Health Analysis",
       "health_status": healthStatus.isNotEmpty ? healthStatus : "diseased",
       "confidence": confidence,
@@ -397,9 +480,9 @@ Output JSON only:
       "weather_impact": weatherImpact,
       "recovery_recommendations": recovery,
       "ai_control_measures": {
-        "chemical": chemical,
-        "biological": biological,
-        "preventative": preventative,
+        "chemical": (isCropSupported && isPlant) ? chemical : <String>[],
+        "biological": (isCropSupported && isPlant) ? biological : <String>[],
+        "preventative": (isCropSupported && isPlant) ? preventative : <String>[],
       }
     };
   }
@@ -415,6 +498,42 @@ Output JSON only:
     final lang = language.toLowerCase();
     final isTelugu = lang == 'te';
     final isHindi = lang == 'hi';
+
+    final isCropSupported = data['is_crop_supported'] is bool ? data['is_crop_supported'] as bool : true;
+    final isPlant = data['is_plant'] is bool ? data['is_plant'] as bool : true;
+    final isClear = data['is_clear_image'] is bool ? data['is_clear_image'] as bool : true;
+
+    // 1. Guardrail for unsupported crops, non-plants, or blurry images: NEVER inject pesticide advice!
+    if (!isPlant || !isCropSupported || !isClear) {
+      data['ai_control_measures'] = <String, dynamic>{
+        'chemical': <String>[],
+        'biological': <String>[],
+        'preventative': <String>[],
+      };
+      if (!isCropSupported) {
+        final unCrop = data['unsupported_crop_name']?.toString() ?? data['detected_crop_name']?.toString() ?? "Unsupported plant";
+        if (isTelugu) {
+          data['ai_analysis'] = "$unCrop పంటకు ప్రస్తుతం CropSync ప్లాంట్ డాక్టర్ సలహాలు అందుబాటులో లేవు. CropSync ప్రస్తుతం 24 ప్రధాన పంటలకు మాత్రమే ఖచ్చితమైన CIBRC సిఫార్సులను అందిస్తుంది.";
+        } else if (isHindi) {
+          data['ai_analysis'] = "$unCrop के लिए वर्तमान में CropSync प्लांट डॉक्टर सलाह उपलब्ध नहीं है। CropSync वर्तमान में केवल 24 प्रमुख फसलों के लिए सटीक CIBRC सिफारिशें प्रदान करता है।";
+        } else {
+          data['ai_analysis'] = "Advisory is currently not available for $unCrop. CropSync Plant Doctor currently verifies diagnostics only for the 24 supported staple crops.";
+        }
+      }
+      return;
+    }
+
+    // 2. Ground matched_problem_id from knownProblems catalog if available
+    if (knownProblems != null && knownProblems.isNotEmpty) {
+      final curProblemName = data['matched_problem_name']?.toString().toLowerCase() ?? '';
+      for (final p in knownProblems) {
+        final pName = (p['name'] ?? p['problem_name_en'] ?? '').toString().toLowerCase();
+        if (pName.isNotEmpty && (pName == curProblemName || curProblemName.contains(pName) || pName.contains(curProblemName))) {
+          data['matched_problem_id'] ??= p['id'];
+          break;
+        }
+      }
+    }
 
     // 1. Prevent raw JSON leak in ai_analysis
     String analysis = data['ai_analysis']?.toString() ?? "";

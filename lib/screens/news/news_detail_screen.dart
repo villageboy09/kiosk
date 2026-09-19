@@ -517,15 +517,17 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                               children: [
                                 const Icon(Icons.chat_bubble_outline_rounded, size: 20, color: Color(0xFF0F172A)),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'Comments (${_comments.length})',
-                                  style: const TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF0F172A),
+                                Expanded(
+                                  child: Text(
+                                    'Comments (${_comments.length})',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF0F172A),
+                                    ),
                                   ),
                                 ),
-                                const Spacer(),
                                 TextButton.icon(
                                   onPressed: _openCommentBottomSheet,
                                   icon: const Icon(Icons.add_comment_rounded, size: 16, color: Color(0xFF10B981)),
@@ -533,8 +535,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                                     'Write Comment',
                                     style: TextStyle(
                                       color: Color(0xFF10B981),
-                                      fontSize: 12.5,
                                       fontWeight: FontWeight.bold,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ),
@@ -658,7 +660,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             // 9. Clean Docked Action Bar at bottom
             Container(
               height: 58,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),

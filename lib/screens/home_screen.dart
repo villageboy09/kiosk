@@ -15,9 +15,8 @@ import 'package:cropsync/widgets/language_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:cropsync/screens/plant_analysis_screen.dart';
-import 'package:cropsync/screens/saved_advisories_screen.dart';
+
+import 'package:cropsync/screens/plant_doctor_screen.dart';
 import 'package:cropsync/screens/notifications_screen.dart';
 
 /// Main home screen - Zepto-inspired clean architecture
@@ -109,288 +108,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  Widget _buildSheetActionTile({
-    required VoidCallback onTap,
-    required IconData icon,
-    required Color iconColor,
-    Color? iconBgColor,
-    Gradient? iconBgGradient,
-    required String title,
-    required String subtitle,
-    String? trailingBadge,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: iconBgColor,
-                gradient: iconBgGradient,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (trailingBadge != null) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  trailingBadge,
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF475569),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-            ],
-            const Icon(Icons.arrow_forward_ios_rounded,
-                size: 13, color: Color(0xFF94A3B8)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTipItem(IconData icon, String text) {
-    return Expanded(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: const Color(0xFF64748B)),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                fontSize: 10.5,
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showImageSourceSheet() async {
+  void _openPlantDoctorScreen() {
     HapticFeedback.selectionClick();
-    final String? action = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const PlantDoctorScreen(),
       ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDF4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFBBF7D0)),
-                      ),
-                      child: const Icon(
-                        Icons.psychology_rounded,
-                        color: Color(0xFF16A34A),
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'diag_sheet_title'.tr(),
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.textPrimary,
-                              letterSpacing: -0.4,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'diag_sheet_subtitle'.tr(),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded,
-                          color: Color(0xFF94A3B8), size: 22),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                _buildSheetActionTile(
-                  onTap: () => Navigator.pop(context, 'camera'),
-                  icon: Icons.camera_alt_rounded,
-                  iconColor: Colors.white,
-                  iconBgGradient: const LinearGradient(
-                    colors: [Color(0xFF22C55E), Color(0xFF15803D)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  title: 'diag_sheet_camera'.tr(),
-                  subtitle: 'diag_sheet_camera_desc'.tr(),
-                ),
-                const SizedBox(height: 10),
-                _buildSheetActionTile(
-                  onTap: () => Navigator.pop(context, 'gallery'),
-                  icon: Icons.photo_library_rounded,
-                  iconColor: const Color(0xFF0F766E),
-                  iconBgColor: const Color(0xFFCCFBF1),
-                  title: 'diag_sheet_gallery'.tr(),
-                  subtitle: 'diag_sheet_gallery_desc'.tr(),
-                ),
-                const SizedBox(height: 10),
-                _buildSheetActionTile(
-                  onTap: () => Navigator.pop(context, 'saved'),
-                  icon: Icons.bookmark_outline_rounded,
-                  iconColor: const Color(0xFFB45309),
-                  iconBgColor: const Color(0xFFFEF3C7),
-                  title: 'diag_sheet_saved'.tr(),
-                  subtitle: 'diag_sheet_saved_desc'.tr(),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.lightbulb_outline_rounded,
-                              size: 14, color: Color(0xFFD97706)),
-                          const SizedBox(width: 6),
-                          Text(
-                            'diag_tips_title'.tr(),
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF92400E),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _buildTipItem(
-                              Icons.wb_sunny_outlined, 'diag_tip_light'.tr()),
-                          _buildTipItem(Icons.center_focus_strong_outlined,
-                              'diag_tip_focus'.tr()),
-                          _buildTipItem(
-                              Icons.vibration_rounded, 'diag_tip_steady'.tr()),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
-
-    if (action == null || !mounted) return;
-
-    if (action == 'camera') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              const PlantAnalysisScreen(initialSource: ImageSource.camera),
-        ),
-      );
-    } else if (action == 'gallery') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              const PlantAnalysisScreen(initialSource: ImageSource.gallery),
-        ),
-      );
-    } else if (action == 'saved') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const SavedAdvisoriesScreen(),
-        ),
-      );
-    }
   }
 
   void _onNavTap(int index) {
@@ -503,41 +227,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   PreferredSizeWidget _buildCurvedAppBar() {
     return AppBar(
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: Transform.scale(
-              scale: 1.3,
-              child: Image.asset(
-                'assets/images/logo_t.png',
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text.rich(
-            const TextSpan(
-              children: [
-                TextSpan(
-                    text: 'Crop',
-                    style: TextStyle(color: AppTheme.accentGreen)),
-                TextSpan(
-                    text: 'Sy', style: TextStyle(color: AppTheme.accentBlue)),
-                TextSpan(
-                    text: 'nc', style: TextStyle(color: AppTheme.warning)),
-              ],
-            ),
-            style: AppTheme.appBarTitle
-                .copyWith(fontWeight: FontWeight.w800, fontSize: 24),
-          ),
-        ],
+      title: Text(
+        'CropSync',
+        style: AppTheme.appBarTitle
+            .copyWith(fontWeight: FontWeight.w800, fontSize: 24, color: Colors.black),
       ),
       centerTitle: false,
       backgroundColor: AppTheme.appBarBg,
@@ -643,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Expanded(
                   child: _AnimatedCameraTab(
                     animationController: _pulseController,
-                    onTap: _showImageSourceSheet,
+                    onTap: _openPlantDoctorScreen,
                   ),
                 ),
                 Expanded(

@@ -55,8 +55,11 @@ class AgriShopScreen extends StatefulWidget {
 }
 
 class _AgriShopScreenState extends State<AgriShopScreen> {
-  late Future<List<Product>> _productsFuture;
-  late Future<List<String>> _categoriesFuture;
+  List<Product>? _products;
+  List<String>? _categories;
+  bool _isLoadingProducts = true;
+  bool _isLoadingCategories = true;
+  String? _errorMessage;
   String _searchQuery = '';
   String _selectedCategory = 'all_category';
   String _sortOrder = 'default'; // 'price_asc', 'price_desc'
@@ -76,19 +79,59 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     if (_lastLocale != currentLocale) {
       _lastLocale = currentLocale;
       _selectedCategory = 'all_category';
-      _categoriesFuture = _fetchCategories();
+      _loadCategories();
       _loadProducts();
     }
   }
 
-  void _loadProducts() {
+  Future<void> _loadCategories() async {
+    if (mounted) {
+      setState(() => _isLoadingCategories = true);
+    }
+    try {
+      final locale = _getLocaleField(context.locale.languageCode);
+      final categories = await ApiService.getProductCategories(lang: locale);
+      if (mounted) {
+        setState(() {
+          _categories = ['all_category', ...categories];
+          _isLoadingCategories = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _categories = ['all_category'];
+          _isLoadingCategories = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadProducts() async {
     if (mounted) {
       setState(() {
-        _productsFuture = _fetchProducts(
-            category: _selectedCategory,
-            search: _searchQuery,
-            sort: _sortOrder);
+        _isLoadingProducts = true;
+        _errorMessage = null;
       });
+    }
+    try {
+      final products = await _fetchProducts(
+          category: _selectedCategory,
+          search: _searchQuery,
+          sort: _sortOrder);
+      if (mounted) {
+        setState(() {
+          _products = products;
+          _isLoadingProducts = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoadingProducts = false;
+        });
+      }
     }
   }
 
@@ -103,18 +146,6 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     }
   }
 
-  Future<List<String>> _fetchCategories() async {
-    try {
-      final locale = _getLocaleField(context.locale.languageCode);
-      final categories = await ApiService.getProductCategories(lang: locale);
-      return [
-        'all_category',
-        ...categories
-      ];
-    } catch (e) {
-      return ['all_category'];
-    }
-  }
 
   Future<List<Product>> _fetchProducts(
       {String? category, String? search, String? sort}) async {
@@ -183,15 +214,15 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: NestedScrollView(
+      body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+        slivers: [
           _buildSliverAppBar(),
           _buildFeaturedHero(),
           _buildSearchAndFilters(),
           _buildCategorySliver(),
+          ..._buildProductsListSlivers(),
         ],
-        body: _buildProductsList(),
       ),
     );
   }
@@ -202,38 +233,25 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       pinned: true,
-      centerTitle: false,
+      centerTitle: true,
       leading: AppTheme.backButton(context),
-      titleSpacing: Navigator.canPop(context) ? 4 : 16,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.tr('crop_sync_market'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.googleSans(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF0F172A),
-              letterSpacing: -0.5,
-            ),
-          ),
-          Text(
-            'Verified Agricultural Products & Inputs',
-            style: GoogleFonts.googleSans(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF64748B),
-            ),
-          ),
-        ],
+      title: Text(
+        context.tr('crop_sync_market'),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.googleSans(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: const Color(0xFF0F172A),
+          letterSpacing: -0.3,
+        ),
       ),
+      actions: const [SizedBox(width: 48)],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(
-          color: const Color(0xFFE2E8F0),
-          height: 1,
+          color: const Color(0xFFF1F5F9),
+          height: 0.5,
         ),
       ),
     );
@@ -328,22 +346,16 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
           children: [
             Expanded(
               child: Container(
+                height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
                 ),
                 child: TextField(
                   controller: _searchController,
                   style: GoogleFonts.googleSans(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     fontSize: 14,
                     color: const Color(0xFF0F172A),
                   ),
@@ -354,23 +366,35 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                       fontWeight: FontWeight.w400,
                       fontSize: 14,
                     ),
-                    prefixIcon: const Icon(Icons.search_rounded,
-                        color: Color(0xFF64748B), size: 20),
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.only(left: 16, right: 8),
+                      child: Icon(Icons.search_rounded,
+                          color: Color(0xFF94A3B8), size: 20),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 20,
+                    ),
                     suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear_rounded,
-                                size: 16, color: Color(0xFF64748B)),
-                            onPressed: () {
-                              _searchController.clear();
-                              _searchQuery = '';
-                              _loadProducts();
-                            },
+                        ? Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: IconButton(
+                              icon: const Icon(Icons.clear_rounded,
+                                  size: 16, color: Color(0xFF64748B)),
+                              onPressed: () {
+                                _searchController.clear();
+                                _searchQuery = '';
+                                _loadProducts();
+                              },
+                            ),
                           )
                         : null,
                     filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                    fillColor: Colors.transparent,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
                   ),
                   onChanged: (value) {
                     if (value.length > 2 || value.isEmpty) {
@@ -383,19 +407,14 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
             ),
             const SizedBox(width: 10),
             Container(
+              height: 48,
+              width: 48,
               decoration: BoxDecoration(
                 color: _sortOrder != 'default'
                     ? const Color(0xFF0F172A)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+                    : const Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
               ),
               child: IconButton(
                 icon: Icon(
@@ -403,7 +422,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   size: 20,
                   color: _sortOrder != 'default'
                       ? Colors.white
-                      : const Color(0xFF0F172A),
+                      : const Color(0xFF64748B),
                 ),
                 onPressed: _showFilterBottomSheet,
               ),
@@ -415,34 +434,47 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   }
 
   Widget _buildCategorySliver() {
-    return SliverAppBar(
-      backgroundColor: const Color(0xFFF8FAFC),
-      surfaceTintColor: Colors.transparent,
-      pinned: true,
-      primary: false,
-      automaticallyImplyLeading: false,
-      toolbarHeight: 52,
-      elevation: 0,
-      flexibleSpace: _buildCategoryTabs(),
+    return SliverToBoxAdapter(
+      child: _buildCategoryTabs(),
     );
   }
 
   Widget _buildCategoryTabs() {
-    return FutureBuilder<List<String>>(
-      future: _categoriesFuture,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        final categories = snapshot.data!;
+    if (_isLoadingCategories) {
+      return Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Shimmer.fromColors(
+          baseColor: const Color(0xFFE2E8F0),
+          highlightColor: const Color(0xFFF8FAFC),
+          child: Row(
+            children: List.generate(4, (i) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Container(
+                width: 80,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+            )),
+          ),
+        ),
+      );
+    }
+    if (_categories == null || _categories!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final categories = _categories!;
         return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFF8FAFC),
+          height: 52,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
             border: Border(
-              bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+              bottom: BorderSide(color: const Color(0xFFE2E8F0).withValues(alpha: 0.6), width: 0.5),
             ),
           ),
-          height: 52,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
@@ -461,28 +493,29 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                       setState(() => _selectedCategory = category);
                       _loadProducts();
                     },
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(100),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 6),
+                          horizontal: 16, vertical: 7),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? const Color(0xFF0F172A)
                             : Colors.white,
-                        borderRadius: BorderRadius.circular(30),
+                        borderRadius: BorderRadius.circular(100),
                         border: Border.all(
                           color: isSelected
                               ? const Color(0xFF0F172A)
                               : const Color(0xFFE2E8F0),
+                          width: 1,
                         ),
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
                                   color: const Color(0xFF0F172A)
-                                      .withValues(alpha: 0.15),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 3),
+                                      .withValues(alpha: 0.12),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
                                 ),
                               ]
                             : null,
@@ -494,9 +527,9 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                               ? Colors.white
                               : const Color(0xFF475569),
                           fontWeight:
-                              isSelected ? FontWeight.w800 : FontWeight.w600,
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
                           fontSize: 12.5,
-                          letterSpacing: 0.2,
+                          letterSpacing: 0.1,
                         ),
                       ),
                     ),
@@ -506,54 +539,45 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
             },
           ),
         );
-      },
-    );
   }
 
-  Widget _buildProductsList() {
-    return FutureBuilder<List<Product>>(
-      future: _productsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildShimmerGrid();
-        }
-        if (snapshot.hasError || !snapshot.hasData) {
-          return _buildErrorState(snapshot.error.toString());
-        }
-        final products = snapshot.data!;
-        if (products.isEmpty) return _buildEmptyState();
+  List<Widget> _buildProductsListSlivers() {
+    if (_isLoadingProducts) {
+      return [_buildShimmerGridSliver()];
+    }
+    if (_errorMessage != null) {
+      return [SliverToBoxAdapter(child: _buildErrorState(_errorMessage!))];
+    }
+    if (_products == null || _products!.isEmpty) {
+      return [SliverToBoxAdapter(child: _buildEmptyState())];
+    }
 
-        return CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 280,
-                  childAspectRatio: 0.62,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => _ProductCardWidget(
-                    key: ValueKey(products[index].id),
-                    product: products[index],
-                  ),
-                  childCount: products.length,
-                ),
-              ),
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+        sliver: SliverGrid(
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 220,
+            childAspectRatio: 0.62,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 16,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => _ProductCardWidget(
+              key: ValueKey(_products![index].id),
+              product: _products![index],
             ),
-            SliverToBoxAdapter(
-              child: _buildTrustGuarantees(),
-            ),
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 40),
-            ),
-          ],
-        );
-      },
-    );
+            childCount: _products!.length,
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: _buildTrustGuarantees(),
+      ),
+      const SliverToBoxAdapter(
+        child: SizedBox(height: 40),
+      ),
+    ];
   }
 
   Widget _buildTrustGuarantees() {
@@ -587,25 +611,27 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                     color: Color(0xFF2563EB), size: 18),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'CropSync Input Assurance',
-                    style: GoogleFonts.googleSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0F172A),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'CropSync Input Assurance',
+                      style: GoogleFonts.googleSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0F172A),
+                      ),
                     ),
-                  ),
-                  Text(
-                    'Certified products directly from registered suppliers',
-                    style: GoogleFonts.googleSans(
-                      fontSize: 11.5,
-                      color: const Color(0xFF64748B),
+                    Text(
+                      'Certified products directly from registered suppliers',
+                      style: GoogleFonts.googleSans(
+                        fontSize: 11.5,
+                        color: const Color(0xFF64748B),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -669,24 +695,28 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     );
   }
 
-  Widget _buildShimmerGrid() {
-    return Shimmer.fromColors(
-      baseColor: const Color(0xFFE2E8F0),
-      highlightColor: const Color(0xFFF8FAFC),
-      child: GridView.builder(
-        padding: const EdgeInsets.all(16),
+  Widget _buildShimmerGridSliver() {
+    return SliverPadding(
+      padding: const EdgeInsets.all(14),
+      sliver: SliverGrid(
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 280,
+          maxCrossAxisExtent: 220,
           childAspectRatio: 0.62,
-          crossAxisSpacing: 14,
-          mainAxisSpacing: 14,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 16,
         ),
-        itemCount: 6,
-        itemBuilder: (context, index) => Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => Shimmer.fromColors(
+            baseColor: const Color(0xFFE2E8F0),
+            highlightColor: const Color(0xFFF8FAFC),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
           ),
+          childCount: 6,
         ),
       ),
     );
@@ -849,7 +879,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   }
 }
 
-/// iOS-Inspired Product Card with Continuous Squircles & Tactile Press
+/// E-Commerce Product Card with clean styling
 class _ProductCardWidget extends StatefulWidget {
   final Product product;
   const _ProductCardWidget({super.key, required this.product});
@@ -914,13 +944,18 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
+                color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+              BoxShadow(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.02),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
               ),
             ],
           ),
@@ -928,15 +963,15 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Product Image Studio Showcase
+              // Product Image
               Expanded(
                 flex: 12,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
                     Container(
-                      color: const Color(0xFFF8FAFC),
-                      padding: const EdgeInsets.all(12),
+                      color: const Color(0xFFFAFAFA),
+                      padding: const EdgeInsets.all(14),
                       child: Hero(
                         tag: 'product_image_${widget.product.id}',
                         child: SafeNetworkImage(
@@ -960,7 +995,7 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
                         ),
                       ),
                     ),
-                    // iOS Pill Badge (Hot / Category)
+                    // HOT badge
                     if (widget.product.isPopular)
                       Positioned(
                         top: 8,
@@ -991,7 +1026,7 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
                           ),
                         ),
                       ),
-                    // Floating Frosted Glass Share Button
+                    // Floating Share Button
                     Positioned(
                       top: 8,
                       right: 8,
@@ -1037,19 +1072,19 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
                   ],
                 ),
               ),
-              // Product Metadata & iOS Pricing
+              // Product Info & Pricing
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.product.advertiserName.toUpperCase(),
+                      widget.product.advertiserName,
                       style: GoogleFonts.googleSans(
                         fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF64748B),
-                        letterSpacing: 0.4,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF94A3B8),
+                        letterSpacing: 0.1,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1058,43 +1093,52 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
                     Text(
                       widget.product.name,
                       style: GoogleFonts.googleSans(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0F172A),
-                        letterSpacing: -0.2,
-                        height: 1.2,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1E293B),
+                        letterSpacing: -0.1,
+                        height: 1.25,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
+                    const Spacer(),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          '₹${widget.product.price}',
-                          style: GoogleFonts.googleSans(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0F172A),
-                            letterSpacing: -0.4,
+                        Flexible(
+                          child: Text(
+                            '₹${widget.product.price}',
+                            style: GoogleFonts.googleSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF0F172A),
+                              letterSpacing: -0.3,
+                            ),
                           ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                              horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(8),
+                            color: const Color(0xFF16A34A),
+                            borderRadius: BorderRadius.circular(100),
                           ),
-                          child: Text(
-                            'View',
-                            style: GoogleFonts.googleSans(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 12),
+                              const SizedBox(width: 3),
+                              Text(
+                                'View',
+                                style: GoogleFonts.googleSans(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

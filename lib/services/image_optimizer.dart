@@ -3,12 +3,11 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 
-/// Production-grade Image Optimizer for Multimodal Vision AI
-/// Clamps image resolution to maximum 448x448 bounding box while preserving aspect ratio.
-/// This guarantees DeepSeek's vision transformer processes the image in a single 256-token tile,
-/// slashing token usage by ~85% on camera shots and manual high-res gallery uploads.
+/// Production-grade Image Optimizer for Agricultural Multimodal Vision AI
+/// Preserves high-fidelity foliar pathology details (up to 1024x1024)
+/// while eliminating multi-megabyte payloads for low latency.
 class ImageOptimizer {
-  static const int maxBoundingDimension = 384;
+  static const int maxBoundingDimension = 1024;
 
   /// Optimizes an image file for AI Vision inference
   static Future<OptimizedImageData> optimizeImage(File file) async {

@@ -1645,17 +1645,9 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem>
                   CircleAvatar(
                     radius: 17,
                     backgroundColor: const Color(0xFF10B981),
-                    backgroundImage: _currentReel.creator.profileImageUrl.isNotEmpty
+                    backgroundImage: (_currentReel.creator.profileImageUrl.isNotEmpty && !_currentReel.creator.profileImageUrl.contains('unsplash.com'))
                         ? NetworkImage(_currentReel.creator.profileImageUrl)
-                        : null,
-                    child: _currentReel.creator.profileImageUrl.isEmpty
-                        ? Text(
-                            _currentReel.creator.displayName.isNotEmpty
-                                ? _currentReel.creator.displayName[0].toUpperCase()
-                                : 'F',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                          )
-                        : null,
+                        : const AssetImage('assets/icons/app_icon.png') as ImageProvider,
                   ),
                   const SizedBox(width: 8),
                   Flexible(

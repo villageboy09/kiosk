@@ -146,9 +146,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $cUName = $creator['username'];
 
             $rStmt = $pdo->prepare("
-                SELECT r.*, c.username AS creator_username, c.display_name AS creator_display_name, c.profile_image_url AS creator_profile_image_url, c.is_verified AS creator_is_verified 
+                SELECT r.*, c.username AS creator_username, 
+                COALESCE(u.name, c.display_name) AS creator_display_name, 
+                COALESCE(u.profile_image_url, c.profile_image_url) AS creator_profile_image_url, 
+                c.is_verified AS creator_is_verified 
                 FROM reels r 
                 LEFT JOIN creators c ON r.creator_id = c.id 
+                LEFT JOIN users u ON u.phone_number = c.phone_number OR (r.phone_number = u.phone_number AND r.phone_number != '')
                 WHERE r.creator_id = ? 
                    OR (r.phone_number = ? AND r.phone_number != '') 
                    OR (? != '' AND r.phone_number = ?)
@@ -347,13 +351,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt = $pdo->prepare("
             SELECT r.*, 
             c.username AS creator_username, 
-            c.display_name AS creator_display_name, 
-            c.profile_image_url AS creator_profile_image_url,
+            COALESCE(u.name, c.display_name) AS creator_display_name, 
+            COALESCE(u.profile_image_url, c.profile_image_url) AS creator_profile_image_url,
             c.is_verified AS creator_is_verified,
             c.phone_number AS creator_phone_number,
             c.bio AS creator_bio
             FROM reels r
             LEFT JOIN creators c ON r.creator_id = c.id
+            LEFT JOIN users u ON u.phone_number = c.phone_number OR (r.phone_number = u.phone_number AND r.phone_number != '')
             WHERE r.is_active = 1 AND (r.status = 'approved' OR r.status IS NULL)
             ORDER BY r.id DESC
         ");

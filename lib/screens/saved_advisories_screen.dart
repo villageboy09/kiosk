@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:cropsync/screens/plant_analysis_screen.dart';
+import 'package:cropsync/screens/plant_doctor_screen.dart';
 import 'package:cropsync/services/saved_advisories_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -242,7 +242,7 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const PlantAnalysisScreen(initialSource: ImageSource.camera),
+                    builder: (_) => const PlantDoctorScreen(initialSource: ImageSource.camera),
                   ),
                 );
               },
@@ -281,7 +281,7 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => PlantAnalysisScreen(
+              builder: (_) => PlantDoctorScreen(
                 imagePath: item.imagePath,
                 preloadedResult: {
                   'is_plant': true,

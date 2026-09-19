@@ -18,7 +18,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:cropsync/services/api_service.dart';
-import 'package:cropsync/screens/plant_analysis_screen.dart';
+import 'package:cropsync/screens/plant_doctor_screen.dart';
 import 'package:cropsync/services/ai_credit_service.dart';
 import 'package:cropsync/services/razorpay_payment_service.dart';
 import 'package:cropsync/widgets/modern_pill_toast.dart';
@@ -1291,17 +1291,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 14,
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1370,7 +1370,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // Free Daily Limit Tile
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(14),
@@ -1422,7 +1422,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // Purchased Credits Tile
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFFBEB),
                     borderRadius: BorderRadius.circular(14),
@@ -1479,7 +1479,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Expanded(
                 flex: 3,
                 child: SizedBox(
-                  height: 46,
+                  height: 48,
                   child: ElevatedButton.icon(
                     onPressed: _isPurchasingCredits ? null : () => _buyCredits(user),
                     icon: _isPurchasingCredits
@@ -1510,12 +1510,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Expanded(
                 flex: 2,
                 child: SizedBox(
-                  height: 46,
+                  height: 48,
                   child: OutlinedButton(
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const PlantAnalysisScreen()),
+                        MaterialPageRoute(builder: (_) => const PlantDoctorScreen()),
                       );
                     },
                     style: OutlinedButton.styleFrom(
@@ -1611,7 +1611,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required Color iconColor,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
           Container(
@@ -1630,7 +1630,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.textHint,
                     letterSpacing: 0.2,
@@ -1640,7 +1640,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: AppTheme.textPrimary,
                   ),
@@ -1739,7 +1739,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onTap: onTap,
           borderRadius: BorderRadius.circular(100),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1795,7 +1795,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onTap: _logout,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
                 Container(
