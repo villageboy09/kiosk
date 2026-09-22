@@ -1,0 +1,7 @@
+<Files "assetlinks.json">
+    <IfModule mod_headers.c>
+        Header set Content-Type "application/json"
+        Header set Access-Control-Allow-Origin "*"
+    </IfModule>
+    Require all granted
+</Files>

@@ -49,13 +49,19 @@
                 <data android:scheme="cropsync" />
             </intent-filter>
 
-            <!-- Deep linking: Web URLs for Universal Sharing -->
+            <!-- Deep linking: Web URLs for Universal Sharing (kiosk.cropsync.in) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="kiosk.cropsync.in" android:pathPrefix="/api/share.php" />
-                <data android:scheme="https" android:host="kiosk.cropsync.in" android:pathPrefix="/share" />
+            </intent-filter>
+
+            <!-- Deep linking: Web URLs for Universal Sharing (cropsync.in) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="cropsync.in" android:pathPrefix="/share" />
             </intent-filter>
         </activity>
