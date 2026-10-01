@@ -2502,16 +2502,22 @@ if (isset($pdo) && $pdo instanceof PDO) {
         </a>
 
         <div class="header-actions">
+            <!-- Central Ecosystem Monitor Link -->
+            <a href="monitor_dashboard.php" class="btn-header" title="Central Operations & Ecosystem Monitor">
+                <i class="ph-bold ph-chart-line-up"></i>
+                Live Monitor
+            </a>
+
             <!-- Studio Dashboard Link -->
-            <a href="dashboard.php" class="btn-header" title="Go to News & Agri Reels Studio">
+            <a href="news_reels_dashboard.php" class="btn-header" title="Go to News & Agri Reels Studio">
                 <i class="ph-bold ph-film-strip"></i>
                 News & Reels Studio
             </a>
 
-            <!-- Fake Farmers (Hyderabad) Dashboard Link -->
-            <a href="fake_farmers_dashboard.php" class="btn-header" title="Manage Fake Farmers (Hyderabad)">
+            <!-- Hyderabad Farmers Hub Link -->
+            <a href="monitor_dashboard.php?tab=farmers" class="btn-header" title="Manage Hyderabad Farmers">
                 <i class="ph-bold ph-users-three"></i>
-                Fake Farmers (Hyd)
+                Hyd Farmers
             </a>
 
             <!-- Quick Refresh -->

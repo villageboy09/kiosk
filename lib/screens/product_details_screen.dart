@@ -57,15 +57,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           autoPlay: false,
           looping: false,
           errorBuilder: (context, errorMessage) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.error_outline, color: Colors.red, size: 42),
-                  SizedBox(height: 8),
+                  const Icon(Icons.error_outline, color: Colors.red, size: 42),
+                  const SizedBox(height: 8),
                   Text(
-                    'Video unavailable',
-                    style: TextStyle(
+                    context.tr('video_unavailable'),
+                    style: const TextStyle(
                         color: AppTheme.textSecondary,
                         fontWeight: FontWeight.w700),
                   ),
@@ -313,7 +313,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     size: 14, color: Color(0xFF2563EB)),
                 const SizedBox(width: 4),
                 Text(
-                  'VERIFIED INPUT',
+                  context.tr('verified_input'),
                   style: GoogleFonts.googleSans(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w800,
@@ -492,7 +492,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 border: Border.all(color: const Color(0xFFBFDBFE)),
               ),
               child: Text(
-                widget.product.category.toUpperCase(),
+                getLocalizedCategory(context, widget.product.category).toUpperCase(),
                 style: GoogleFonts.googleSans(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
@@ -520,7 +520,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    'Available for Order',
+                    context.tr('available_for_order'),
                     style: GoogleFonts.googleSans(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -534,7 +534,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          widget.product.name,
+          getLocalizedProductName(context, widget.product.name),
           style: GoogleFonts.googleSans(
             fontSize: 25,
             fontWeight: FontWeight.w900,
@@ -607,7 +607,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 Row(
                   children: [
                     Text(
-                      'AUTHORIZED DEALER',
+                      context.tr('authorized_dealer'),
                       style: GoogleFonts.googleSans(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
@@ -706,7 +706,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'CropSync Genuine Product Guarantee',
+                  context.tr('genuine_guarantee'),
                   style: GoogleFonts.googleSans(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w800,
@@ -715,7 +715,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Supplied in sealed manufacturer packaging with official batch quality assurance.',
+                  context.tr('genuine_guarantee_desc'),
                   style: GoogleFonts.googleSans(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,

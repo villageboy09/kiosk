@@ -4688,9 +4688,10 @@ function getReels($pdo) {
 
         $sql = "SELECT r.*, 
                 c.username AS creator_username, 
-                c.display_name AS creator_display_name, 
-                c.profile_image_url AS creator_profile_image_url,
+                COALESCE(NULLIF(c.display_name, ''), NULLIF(u.name, '')) AS creator_display_name, 
+                COALESCE(NULLIF(c.profile_image_url, ''), NULLIF(u.profile_image_url, '')) AS creator_profile_image_url,
                 c.is_verified AS creator_is_verified,
+                c.phone_number AS creator_phone_number,
                 c.bio AS creator_bio";
 
         if ($hasUserFilter) {
@@ -4702,6 +4703,7 @@ function getReels($pdo) {
 
         $sql .= " FROM reels r
                 LEFT JOIN creators c ON r.creator_id = c.id
+                LEFT JOIN users u ON (c.user_id = u.user_id OR (c.phone_number = u.phone_number AND c.phone_number != '') OR (r.phone_number = u.phone_number AND r.phone_number != ''))
                 WHERE r.is_active = 1 AND (r.status = 'approved' OR r.status IS NULL)
                 ORDER BY r.id DESC
                 LIMIT :limit OFFSET :offset";
@@ -4716,6 +4718,23 @@ function getReels($pdo) {
         $stmt->execute();
         $reels = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // Helper to normalize URLs to full Hostinger CDN HTTPS URLs
+        $formatHostingerCdnUrl = function($url) {
+            if (empty($url)) return '';
+            $url = trim($url);
+            if (strpos($url, 'http://kiosk.cropsync.in') === 0) {
+                return 'https://kiosk.cropsync.in' . substr($url, strlen('http://kiosk.cropsync.in'));
+            } elseif (strpos($url, 'http://cdn.cropsync.in') === 0) {
+                return 'https://cdn.cropsync.in' . substr($url, strlen('http://cdn.cropsync.in'));
+            } elseif (strpos($url, 'http://') === 0) {
+                return 'https://' . substr($url, 7);
+            }
+            if (strpos($url, 'https://') !== 0 && strpos($url, 'http://') !== 0) {
+                return 'https://kiosk.cropsync.in/' . ltrim($url, '/');
+            }
+            return $url;
+        };
+
         $response = [];
         foreach ($reels as $reel) {
             $reelId = intval($reel['id']);
@@ -4727,11 +4746,20 @@ function getReels($pdo) {
 
             $creatorUsername = !empty($reel['creator_username']) ? $reel['creator_username'] : 'farmer_' . substr($reel['phone_number'] ?? '123456', -4);
             $creatorDisplayName = !empty($reel['creator_display_name']) ? $reel['creator_display_name'] : (!empty($reel['phone_number']) ? 'Farmer (' . substr($reel['phone_number'], -4) . ')' : 'Agri Creator');
-            $creatorProfileImage = !empty($reel['creator_profile_image_url']) ? $reel['creator_profile_image_url'] : 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80';
+            $creatorProfileImage = !empty($reel['creator_profile_image_url']) ? $formatHostingerCdnUrl($reel['creator_profile_image_url']) : '';
+
+            $thumbUrl = !empty($reel['thumbnail_url']) ? $formatHostingerCdnUrl($reel['thumbnail_url']) : null;
+            if (empty($thumbUrl) && !empty($reel['video_url'])) {
+                if (preg_match('/(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/', $reel['video_url'], $matches)) {
+                    $thumbUrl = "https://img.youtube.com/vi/{$matches[1]}/hqdefault.jpg";
+                }
+            }
 
             $response[] = [
                 'id' => $reelId,
-                'videoUrl' => $reel['video_url'],
+                'videoUrl' => $formatHostingerCdnUrl($reel['video_url']),
+                'thumbnailUrl' => $thumbUrl,
+                'thumbnail_url' => $thumbUrl,
                 'creator' => [
                     'id' => intval($reel['creator_id'] ?? 0),
                     'username' => $creatorUsername,

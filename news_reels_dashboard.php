@@ -1501,14 +1501,19 @@ $availableCategories = [
         </a>
 
         <div class="header-actions">
+            <!-- Central Ecosystem Monitor Link -->
+            <a href="monitor_dashboard.php" class="btn btn-secondary" title="Central Operations & Ecosystem Monitor" style="text-decoration: none;">
+                <i class="ph-bold ph-chart-line-up"></i> Live Monitor
+            </a>
+
             <!-- Catalog Dashboard Link -->
             <a href="shop_seeds_dashboard.php" class="btn btn-secondary" title="Agri Shop & Seeds Catalog Master" style="text-decoration: none;">
                 <i class="ph-bold ph-storefront"></i> Seeds & Shop Catalog
             </a>
 
-            <!-- Fake Farmers (Hyderabad) Link -->
-            <a href="fake_farmers_dashboard.php" class="btn btn-secondary" title="Manage Fake Farmers (Hyderabad)" style="text-decoration: none;">
-                <i class="ph-bold ph-users-three"></i> Fake Farmers (Hyd)
+            <!-- Hyderabad Farmers Hub Link -->
+            <a href="monitor_dashboard.php?tab=farmers" class="btn btn-secondary" title="Manage Hyderabad Farmers" style="text-decoration: none;">
+                <i class="ph-bold ph-users-three"></i> Hyd Farmers
             </a>
 
             <?php if ($activeTab === 'news'): ?>
@@ -1527,11 +1532,14 @@ $availableCategories = [
                     <i class="ph ph-dots-three-vertical"></i> Menu
                 </button>
                 <div class="dropdown-panel right-align" x-show="open" x-cloak x-transition>
+                    <a href="monitor_dashboard.php" class="dropdown-option" style="text-decoration:none;">
+                        <span><i class="ph ph-chart-line-up"></i> Central Operations Monitor</span>
+                    </a>
+                    <a href="monitor_dashboard.php?tab=farmers" class="dropdown-option" style="text-decoration:none;">
+                        <span><i class="ph ph-users-three"></i> Hyderabad Farmers Hub</span>
+                    </a>
                     <a href="shop_seeds_dashboard.php" class="dropdown-option" style="text-decoration:none;">
                         <span><i class="ph ph-storefront"></i> Seeds & Shop Catalog</span>
-                    </a>
-                    <a href="fake_farmers_dashboard.php" class="dropdown-option" style="text-decoration:none;">
-                        <span><i class="ph ph-users-three"></i> Fake Farmers (Hyderabad)</span>
                     </a>
                     <a href="user.php" class="dropdown-option" style="text-decoration:none;">
                         <span><i class="ph ph-arrow-left"></i> Kiosk Core Admin</span>

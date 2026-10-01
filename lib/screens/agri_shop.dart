@@ -47,6 +47,38 @@ class Product {
   });
 }
 
+/// Localizes category names (e.g. 'మెషీన్', 'Machinery', 'Tools', 'పనిముట్లు')
+String getLocalizedCategory(BuildContext context, String category) {
+  if (category == 'all_category') return context.tr('all_category');
+
+  // 1. Direct translation
+  final direct = context.tr(category);
+  if (direct != category) return direct;
+
+  // 2. Normalized snake_case
+  final key = category.toLowerCase().trim().replaceAll(' ', '_').replaceAll('/', '_');
+  final normTr = context.tr(key);
+  if (normTr != key) return normTr;
+
+  return category;
+}
+
+/// Localizes product names (e.g. 'Chaff Cutter', 'ఛాఫ్ కట్టర్', 'Sprayer')
+String getLocalizedProductName(BuildContext context, String name) {
+  if (name.trim().isEmpty) return name;
+
+  // 1. Direct translation
+  final direct = context.tr(name);
+  if (direct != name) return direct;
+
+  // 2. Normalized snake_case
+  final key = name.toLowerCase().trim().replaceAll(' ', '_');
+  final normTr = context.tr(key);
+  if (normTr != key) return normTr;
+
+  return name;
+}
+
 class AgriShopScreen extends StatefulWidget {
   const AgriShopScreen({super.key});
 
@@ -298,7 +330,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   const SizedBox(width: 4),
                   Flexible(
                     child: Text(
-                      'AUTHORIZED AGRI DEALERS',
+                      context.tr('authorized_dealers'),
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.googleSans(
                         color: Colors.white,
@@ -313,7 +345,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Genuine Farm Inputs & Tools',
+              context.tr('genuine_inputs_tools'),
               style: GoogleFonts.googleSans(
                 color: Colors.white,
                 fontSize: 20,
@@ -324,7 +356,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
             ),
             const SizedBox(height: 5),
             Text(
-              'Direct ordering of genuine fertilizers, seed treatments, crop protection & farm machinery.',
+              context.tr('genuine_inputs_desc'),
               style: GoogleFonts.googleSans(
                 color: Colors.white.withValues(alpha: 0.8),
                 fontSize: 12.5,
@@ -447,18 +479,22 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
         child: Shimmer.fromColors(
           baseColor: const Color(0xFFE2E8F0),
           highlightColor: const Color(0xFFF8FAFC),
-          child: Row(
-            children: List.generate(4, (i) => Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Container(
-                width: 80,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(100),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            child: Row(
+              children: List.generate(4, (i) => Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Container(
+                  width: 80,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
                 ),
-              ),
-            )),
+              )),
+            ),
           ),
         ),
       );
@@ -521,7 +557,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                             : null,
                       ),
                       child: Text(
-                        context.tr(category),
+                        getLocalizedCategory(context, category),
                         style: GoogleFonts.googleSans(
                           color: isSelected
                               ? Colors.white
@@ -616,7 +652,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'CropSync Input Assurance',
+                      context.tr('input_assurance'),
                       style: GoogleFonts.googleSans(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -624,7 +660,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                       ),
                     ),
                     Text(
-                      'Certified products directly from registered suppliers',
+                      context.tr('certified_products_from_suppliers'),
                       style: GoogleFonts.googleSans(
                         fontSize: 11.5,
                         color: const Color(0xFF64748B),
@@ -640,20 +676,20 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
           const SizedBox(height: 12),
           _buildAssuranceRow(
             Icons.local_shipping_outlined,
-            'Direct Farm Delivery',
-            'Orders coordinated with local Custom Hiring Centers and dealers.',
+            context.tr('direct_farm_delivery'),
+            context.tr('direct_farm_delivery_desc'),
           ),
           const SizedBox(height: 10),
           _buildAssuranceRow(
             Icons.shield_outlined,
-            'Sealed Manufacturer Packaging',
-            'Tamper-evident bags and bottles with official batch certificates.',
+            context.tr('sealed_manufacturer_packaging'),
+            context.tr('sealed_packaging_desc'),
           ),
           const SizedBox(height: 10),
           _buildAssuranceRow(
             Icons.support_agent_outlined,
-            'Direct Dealer Assistance',
-            'Call or send direct enquiries to verified agricultural dealers.',
+            context.tr('direct_dealer_assistance'),
+            context.tr('direct_dealer_desc'),
           ),
         ],
       ),
@@ -1091,7 +1127,7 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      widget.product.name,
+                      getLocalizedProductName(context, widget.product.name),
                       style: GoogleFonts.googleSans(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -1131,7 +1167,7 @@ class _ProductCardWidgetState extends State<_ProductCardWidget>
                               const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 12),
                               const SizedBox(width: 3),
                               Text(
-                                'View',
+                                context.tr('view'),
                                 style: GoogleFonts.googleSans(
                                   color: Colors.white,
                                   fontSize: 11,

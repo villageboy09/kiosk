@@ -479,9 +479,35 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       leadingWidth: 72,
       leading: Center(child: AppTheme.backButton(context, color: Colors.white)),
       actions: [
+        if (images.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: IconButton(
+              tooltip: context.tr('zoom'),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.black.withValues(alpha: 0.35),
+                shape: const CircleBorder(),
+              ),
+              icon: const Icon(Icons.zoom_in_rounded, color: Colors.white, size: 20),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => FullScreenImageViewer(
+                      imageUrls: images.whereType<String>().toList(),
+                      initialIndex: _currentPage,
+                      tagPrefix: 'problem_image_${widget.problem.id}',
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: IconButton(
+            tooltip: context.tr('share_button'),
             style: IconButton.styleFrom(
               backgroundColor: Colors.black.withValues(alpha: 0.35),
               shape: const CircleBorder(),
@@ -614,49 +640,6 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
           },
         ),
 
-        // Visual indicator that image can be tapped to zoom
-        Positioned(
-          top: 60,
-          right: 16,
-          child: GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => FullScreenImageViewer(
-                    imageUrls: images.whereType<String>().toList(),
-                    initialIndex: _currentPage,
-                    tagPrefix: 'problem_image_${widget.problem.id}',
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
-                  SizedBox(width: 4),
-                  Text(
-                    'Zoom',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
 
         if (images.length > 1)
           Positioned(

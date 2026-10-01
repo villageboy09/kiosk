@@ -23,6 +23,166 @@ function ensureMarketPricesTable($pdo) {
     } catch (Throwable $e) {}
 }
 
+function resolveCommodityImageUrl($commodity) {
+    if (empty($commodity)) return '';
+    $raw = trim((string)$commodity);
+    $lower = strtolower($raw);
+
+    // 1. High-priority exact and alias matches
+    if (strpos($lower, 'paddy') !== false || strpos($lower, 'rice') !== false || strpos($lower, 'dhan') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Rice.png';
+    }
+    if (strpos($lower, 'bhindi') !== false || strpos($lower, 'ladies finger') !== false || strpos($lower, 'okra') !== false || strpos($lower, 'lady') !== false) {
+        return 'https://kiosk.cropsync.in/crops/okra.jpg';
+    }
+    if (strpos($lower, 'chilli') !== false || strpos($lower, 'chili') !== false || strpos($lower, 'mirchi') !== false) {
+        return 'https://kiosk.cropsync.in/crops/chilli.jpg';
+    }
+    if (strpos($lower, 'bitter gourd') !== false || strpos($lower, 'karela') !== false) {
+        return 'https://kiosk.cropsync.in/crops/bitter_gourd.jpg';
+    }
+    if (strpos($lower, 'ridgeguard') !== false || strpos($lower, 'ridge gourd') !== false || strpos($lower, 'tori') !== false || strpos($lower, 'kundru') !== false || strpos($lower, 'little gourd') !== false || strpos($lower, 'bottle gourd') !== false || strpos($lower, 'lauki') !== false) {
+        return 'https://kiosk.cropsync.in/crops/bitter_gourd.jpg';
+    }
+    if (strpos($lower, 'gur') !== false || strpos($lower, 'jaggery') !== false || strpos($lower, 'sugarcane') !== false || strpos($lower, 'ganna') !== false) {
+        return 'https://kiosk.cropsync.in/crops/sugarcane.jpg';
+    }
+    if (strpos($lower, 'sunflower') !== false) {
+        return 'https://kiosk.cropsync.in/crops/sunflower.jpg';
+    }
+    if (strpos($lower, 'cumin') !== false || strpos($lower, 'jeera') !== false) {
+        return 'https://kiosk.cropsync.in/crops/cumin.jpg';
+    }
+    if (strpos($lower, 'tea') !== false || strpos($lower, 'chai') !== false) {
+        return 'https://kiosk.cropsync.in/crops/tea.jpg';
+    }
+    if (strpos($lower, 'cotton') !== false || strpos($lower, 'kapas') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Cotton.png';
+    }
+    if (strpos($lower, 'maize') !== false || strpos($lower, 'corn') !== false || strpos($lower, 'jowar') !== false || strpos($lower, 'sorghum') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Maize.png';
+    }
+    if (strpos($lower, 'wheat') !== false || strpos($lower, 'gehun') !== false || strpos($lower, 'bajra') !== false || strpos($lower, 'ragi') !== false || strpos($lower, 'barley') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Wheat.png';
+    }
+    if (strpos($lower, 'groundnut') !== false || strpos($lower, 'peanut') !== false || strpos($lower, 'moongphali') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Groundnut.png';
+    }
+    if (strpos($lower, 'turmeric') !== false || strpos($lower, 'haldi') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Turmeric.png';
+    }
+    // Pulses & Legumes (Bengal gram, red gram, green gram, urd, cowpea, etc.)
+    if (strpos($lower, 'soyabean') !== false || strpos($lower, 'soybean') !== false || strpos($lower, 'gram') !== false || strpos($lower, 'chana') !== false || strpos($lower, 'arhar') !== false || preg_match('/\btur\b/', $lower) || strpos($lower, 'moong') !== false || strpos($lower, 'urd') !== false || strpos($lower, 'bean') !== false || strpos($lower, 'pulse') !== false || strpos($lower, 'lobia') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Soyabean.png';
+    }
+    if (strpos($lower, 'mousambi') !== false || strpos($lower, 'sweet lime') !== false || strpos($lower, 'lime') !== false || strpos($lower, 'mosambi') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Lime.png';
+    }
+    if (strpos($lower, 'lemon') !== false || strpos($lower, 'nimbu') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Lemon.png';
+    }
+    if (strpos($lower, 'sesamum') !== false || strpos($lower, 'sesame') !== false || strpos($lower, 'til') !== false || strpos($lower, 'linseed') !== false || strpos($lower, 'alsi') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Linseed.png';
+    }
+    if (strpos($lower, 'mustard') !== false || strpos($lower, 'sarson') !== false || strpos($lower, 'rai') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Mustard.png';
+    }
+    if (strpos($lower, 'safflower') !== false || strpos($lower, 'kusuma') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Safflower.png';
+    }
+    if (strpos($lower, 'tobacco') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Tobacco.png';
+    }
+    if (strpos($lower, 'tomato') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Tomato.png';
+    }
+    if (strpos($lower, 'onion') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Onion.png';
+    }
+    if (strpos($lower, 'potato') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Potato.png';
+    }
+    if (strpos($lower, 'brinjal') !== false || strpos($lower, 'eggplant') !== false || strpos($lower, 'baingan') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Brinjal.png';
+    }
+    if (strpos($lower, 'cabbage') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Cabbage.png';
+    }
+    if (strpos($lower, 'cauliflower') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Cauliflower.png';
+    }
+    if (strpos($lower, 'carrot') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Carrot.png';
+    }
+    if (strpos($lower, 'capsicum') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Capsicum.png';
+    }
+    if (strpos($lower, 'banana') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Banana.png';
+    }
+    if (strpos($lower, 'mango') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Mango.png';
+    }
+    if (strpos($lower, 'apple') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Apple.png';
+    }
+    if (strpos($lower, 'orange') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Orange.png';
+    }
+    if (strpos($lower, 'guava') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Guava.png';
+    }
+    if (strpos($lower, 'grapes') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Grapes.png';
+    }
+    if (strpos($lower, 'papaya') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Papaya.png';
+    }
+    if (strpos($lower, 'pomegranate') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Pomegranate.png';
+    }
+    if (strpos($lower, 'pineapple') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Pineapple.png';
+    }
+    if (strpos($lower, 'drumstick') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Drumstick.png';
+    }
+    if (strpos($lower, 'garlic') !== false || strpos($lower, 'ginger') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Garlic.png';
+    }
+    if (strpos($lower, 'beetroot') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Beetroot.png';
+    }
+    if (strpos($lower, 'avocado') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Avocado.png';
+    }
+    if (strpos($lower, 'pumpkin') !== false || strpos($lower, 'watermelon') !== false || strpos($lower, 'melon') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Pumpkin.png';
+    }
+    if (strpos($lower, 'spinach') !== false || strpos($lower, 'coriander') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Spinach.png';
+    }
+    if (strpos($lower, 'wood') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Wood.png';
+    }
+    if (strpos($lower, 'fish') !== false) {
+        return 'https://kiosk.cropsync.in/api/commodity/Fish.png';
+    }
+
+    // Default clean
+    $cleaned = preg_replace('/\s*\(.*?\)\s*/', ' ', $raw);
+    $cleaned = preg_replace('/[^a-zA-Z0-9\s]/', '', $cleaned);
+    $words = array_filter(explode(' ', trim($cleaned)));
+    $pascal = '';
+    foreach ($words as $w) {
+        $pascal .= ucfirst(strtolower($w));
+    }
+    if (!empty($pascal)) {
+        return "https://kiosk.cropsync.in/api/commodity/{$pascal}.png";
+    }
+    return '';
+}
+
 function getRealisticSeedMarketPrices($state = 'Telangana') {
     $today = date('d/m/Y');
     $stateName = !empty($state) ? ucfirst(trim($state)) : 'Telangana';
@@ -74,6 +234,7 @@ function getRealisticSeedMarketPrices($state = 'Telangana') {
                 'min_price' => strval($minP),
                 'max_price' => strval($maxP),
                 'modal_price' => strval($modalP),
+                'image_url' => resolveCommodityImageUrl($c['name']),
             ];
         }
     }
@@ -198,13 +359,16 @@ function getLiveStateMarketPrices($pdo) {
     } catch (Throwable $e) {}
 
     $latestDate = date('d/m/Y');
-    foreach ($records as $record) {
+    foreach ($records as &$record) {
+        if (empty($record['image_url'])) {
+            $record['image_url'] = resolveCommodityImageUrl($record['commodity'] ?? '');
+        }
         $dateValue = $record['arrival_date'] ?? '';
-        if ($dateValue !== '') {
+        if ($dateValue !== '' && $latestDate === date('d/m/Y')) {
             $latestDate = $dateValue;
-            break;
         }
     }
+    unset($record);
 
     echo json_encode([
         'success' => true,
@@ -247,6 +411,13 @@ function getStateMarketPrices($pdo) {
 
     if (empty($records)) {
         $records = getRealisticSeedMarketPrices($state);
+    } else {
+        foreach ($records as &$record) {
+            if (empty($record['image_url'])) {
+                $record['image_url'] = resolveCommodityImageUrl($record['commodity'] ?? '');
+            }
+        }
+        unset($record);
     }
 
     echo json_encode([

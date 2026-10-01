@@ -18,14 +18,51 @@ class ReelCreator {
   });
 
   factory ReelCreator.fromJson(Map<String, dynamic> json) {
+    const imageKeys = [
+      'profileImageUrl',
+      'profile_image_url',
+      'creator_profile_image_url',
+      'creator_profile_image',
+      'creator_avatar',
+      'avatar_url',
+      'avatar',
+      'image_url',
+      'image',
+      'photo_url',
+      'photoUrl',
+    ];
+    String rawAvatar = '';
+    for (final k in imageKeys) {
+      final v = json[k]?.toString().trim();
+      if (v != null &&
+          v.isNotEmpty &&
+          v.toLowerCase() != 'null' &&
+          v.toLowerCase() != 'undefined') {
+        rawAvatar = v;
+        break;
+      }
+    }
+
     return ReelCreator(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
-      username: json['username']?.toString() ?? '',
-      displayName: json['displayName']?.toString() ?? json['display_name']?.toString() ?? 'Farmer',
-      profileImageUrl: json['profileImageUrl']?.toString() ?? json['profile_image_url']?.toString() ?? '',
-      isVerified: json['isVerified'] == true || json['is_verified'] == 1 || json['is_verified'] == '1',
-      phoneNumber: json['phoneNumber']?.toString() ?? json['phone_number']?.toString() ?? '',
-      bio: json['bio']?.toString() ?? '',
+      username: json['username']?.toString() ?? json['creator_username']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ??
+          json['display_name']?.toString() ??
+          json['creator_display_name']?.toString() ??
+          json['username']?.toString() ??
+          'Farmer',
+      profileImageUrl: Reel.normalizeMediaUrl(rawAvatar),
+      isVerified: json['isVerified'] == true ||
+          json['is_verified'] == 1 ||
+          json['is_verified'] == '1' ||
+          json['creator_is_verified'] == 1 ||
+          json['creator_is_verified'] == '1' ||
+          json['creator_is_verified'] == true,
+      phoneNumber: json['phoneNumber']?.toString() ??
+          json['phone_number']?.toString() ??
+          json['creator_phone_number']?.toString() ??
+          '',
+      bio: json['bio']?.toString() ?? json['creator_bio']?.toString() ?? '',
     );
   }
 
@@ -190,13 +227,36 @@ class Reel {
 
     Map<String, dynamic> creatorData = {};
     if (json['creator'] is Map<String, dynamic>) {
-      creatorData = json['creator'] as Map<String, dynamic>;
-    } else {
-      creatorData = {
-        'username': json['username']?.toString() ?? 'farmer',
-        'displayName': json['display_name']?.toString() ?? json['username']?.toString() ?? 'Farmer',
-        'profileImageUrl': json['profile_image_url']?.toString() ?? '',
-      };
+      creatorData = Map<String, dynamic>.from(json['creator'] as Map);
+    }
+
+    // Pull creator info from top-level fields if missing in nested object
+    final topLevelImage = json['creator_profile_image_url'] ??
+        json['creator_profile_image'] ??
+        json['creator_avatar'] ??
+        json['profile_image_url'] ??
+        json['profile_image'] ??
+        json['avatar_url'] ??
+        json['avatar'];
+    if ((creatorData['profileImageUrl'] == null ||
+            creatorData['profileImageUrl'].toString().trim().isEmpty) &&
+        (creatorData['profile_image_url'] == null ||
+            creatorData['profile_image_url'].toString().trim().isEmpty) &&
+        topLevelImage != null) {
+      creatorData['profile_image_url'] = topLevelImage;
+    }
+
+    if (creatorData['username'] == null || creatorData['username'].toString().trim().isEmpty) {
+      creatorData['username'] = json['creator_username'] ?? json['username'] ?? 'farmer';
+    }
+    if (creatorData['displayName'] == null || creatorData['displayName'].toString().trim().isEmpty) {
+      creatorData['displayName'] = json['creator_display_name'] ??
+          json['display_name'] ??
+          json['username'] ??
+          'Farmer';
+    }
+    if (creatorData['phone_number'] == null && json['creator_phone_number'] != null) {
+      creatorData['phone_number'] = json['creator_phone_number'];
     }
 
     final likeStr = json['likes']?.toString() ?? _formatCount(rawLikes);
@@ -204,7 +264,7 @@ class Reel {
 
     return Reel(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
-      videoUrl: json['videoUrl']?.toString() ?? json['video_url']?.toString() ?? '',
+      videoUrl: Reel.normalizeMediaUrl(json['videoUrl']?.toString() ?? json['video_url']?.toString() ?? ''),
       creator: ReelCreator.fromJson(creatorData),
       caption: json['caption']?.toString() ?? '',
       musicTitle: json['musicTitle']?.toString() ?? json['music_title']?.toString() ?? 'Original Audio',
@@ -228,12 +288,43 @@ class Reel {
       category: json['category']?.toString(),
       language: json['language']?.toString(),
       sourceUrl: json['sourceUrl']?.toString() ?? json['source_url']?.toString(),
-      thumbnailUrl: json['thumbnailUrl']?.toString() ?? json['thumbnail_url']?.toString(),
+      thumbnailUrl: Reel.normalizeMediaUrl(json['thumbnailUrl']?.toString() ?? json['thumbnail_url']?.toString()),
       payoutEligible: json['payoutEligible'] == true || json['payout_eligible'] == 1 || json['payout_eligible'] == '1' || json['payout_eligible'] == null,
       isDuplicate: json['isDuplicate'] == true || json['is_duplicate'] == 1 || json['is_duplicate'] == '1',
       rejectionReasonCode: json['rejectionReasonCode']?.toString() ?? json['rejection_reason_code']?.toString(),
       reviewerFeedback: json['reviewerFeedback']?.toString() ?? json['reviewer_feedback']?.toString(),
     );
+  }
+
+  /// Normalize media URLs with CDN capabilities enabled in Hostinger
+  static String normalizeMediaUrl(dynamic rawUrl) {
+    if (rawUrl == null) return '';
+    var url = rawUrl.toString().trim();
+    if (url.isEmpty || url.toLowerCase() == 'null' || url.toLowerCase() == 'undefined') {
+      return '';
+    }
+
+    // Convert insecure http to secure https
+    if (url.startsWith('http://kiosk.cropsync.in')) {
+      url = url.replaceFirst('http://', 'https://');
+    } else if (url.startsWith('http://cdn.cropsync.in')) {
+      url = url.replaceFirst('http://', 'https://');
+    } else if (url.startsWith('http://')) {
+      url = url.replaceFirst('http://', 'https://');
+    }
+
+    // Convert relative file paths to full Hostinger CDN URLs
+    if (url.startsWith('/uploads/')) {
+      url = 'https://kiosk.cropsync.in$url';
+    } else if (url.startsWith('uploads/')) {
+      url = 'https://kiosk.cropsync.in/$url';
+    } else if (url.startsWith('/api/uploads/')) {
+      url = 'https://kiosk.cropsync.in$url';
+    } else if (url.startsWith('api/uploads/')) {
+      url = 'https://kiosk.cropsync.in/$url';
+    }
+
+    return url;
   }
 
   static String _formatCount(int count) {

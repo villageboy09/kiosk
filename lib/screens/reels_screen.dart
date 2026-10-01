@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/reel_model.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/reels_service.dart';
@@ -302,9 +303,6 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
             controller.dispose();
           } catch (_) {}
         }
-      }
-      if (mounted) {
-        setState(() {});
       }
     }
   }
@@ -616,7 +614,11 @@ class _ReelsScreenState extends State<ReelsScreen> with WidgetsBindingObserver {
                   child: PageView.builder(
                     controller: _pageController,
                     scrollDirection: Axis.vertical,
-                    physics: const AlwaysScrollableScrollPhysics(),
+                    physics: const PageScrollPhysics(
+                      parent: BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                    ),
                     findChildIndexCallback: (Key key) {
                       if (key is ValueKey<String>) {
                         final str = key.value;
@@ -919,6 +921,12 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem>
 
     if (widget.isActive != oldWidget.isActive || widget.controller != oldWidget.controller) {
       updateKeepAlive();
+      if (!widget.isActive) {
+        if (_discRotateController.isAnimating) {
+          _discRotateController.stop();
+        }
+        _isPlaying = false;
+      }
     }
 
     if (oldWidget.controller != widget.controller) {
@@ -1534,12 +1542,15 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Dark Background / Thumbnail placeholder
+              // Dark Background / Cached CDN Thumbnail placeholder
               if (_currentReel.thumbnailUrl != null && _currentReel.thumbnailUrl!.isNotEmpty)
-                Image.network(
-                  _currentReel.thumbnailUrl!,
+                CachedNetworkImage(
+                  imageUrl: _currentReel.thumbnailUrl!,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(color: Colors.black),
+                  memCacheWidth: 720,
+                  fadeInDuration: const Duration(milliseconds: 150),
+                  placeholder: (_, __) => Container(color: Colors.black),
+                  errorWidget: (_, __, ___) => Container(color: Colors.black),
                 )
               else
                 Container(color: Colors.black),
@@ -1642,12 +1653,81 @@ class _AuthenticReelItemState extends State<_AuthenticReelItem>
               // Creator Row + Call Chip
               Row(
                 children: [
-                  CircleAvatar(
-                    radius: 17,
-                    backgroundColor: const Color(0xFF10B981),
-                    backgroundImage: (_currentReel.creator.profileImageUrl.isNotEmpty && !_currentReel.creator.profileImageUrl.contains('unsplash.com'))
-                        ? NetworkImage(_currentReel.creator.profileImageUrl)
-                        : const AssetImage('assets/icons/app_icon.png') as ImageProvider,
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black45,
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: _currentReel.creator.profileImageUrl.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: _currentReel.creator.profileImageUrl,
+                              fit: BoxFit.cover,
+                              memCacheWidth: 108,
+                              memCacheHeight: 108,
+                              fadeInDuration: const Duration(milliseconds: 150),
+                              placeholder: (context, url) => Container(
+                                color: const Color(0xFF10B981),
+                                child: Center(
+                                  child: Text(
+                                    _currentReel.creator.displayName.isNotEmpty
+                                        ? _currentReel.creator.displayName[0].toUpperCase()
+                                        : (_currentReel.creator.username.isNotEmpty
+                                            ? _currentReel.creator.username[0].toUpperCase()
+                                            : 'F'),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: const Color(0xFF10B981),
+                                child: Center(
+                                  child: Text(
+                                    _currentReel.creator.displayName.isNotEmpty
+                                        ? _currentReel.creator.displayName[0].toUpperCase()
+                                        : (_currentReel.creator.username.isNotEmpty
+                                            ? _currentReel.creator.username[0].toUpperCase()
+                                            : 'F'),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: const Color(0xFF10B981),
+                              child: Center(
+                                child: Text(
+                                  _currentReel.creator.displayName.isNotEmpty
+                                      ? _currentReel.creator.displayName[0].toUpperCase()
+                                      : (_currentReel.creator.username.isNotEmpty
+                                          ? _currentReel.creator.username[0].toUpperCase()
+                                          : 'F'),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Flexible(

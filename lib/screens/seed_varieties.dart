@@ -16,9 +16,51 @@ import 'package:cropsync/services/share_service.dart';
 import 'package:cropsync/utils/commodity_translator.dart';
 
 String _getTranslatedCropName(BuildContext context, String cropName) {
-  final key = cropName.toLowerCase();
+  if (cropName.trim().isEmpty) return cropName;
+  final langCode = context.locale.languageCode;
+
+  // 1. CommodityTranslator provides accurate bi-directional translations
+  final fromCommodity = CommodityTranslator.getLocalizedName(cropName, langCode);
+  if (fromCommodity != cropName) return fromCommodity;
+
+  // 2. Direct exact translation
+  final directTr = context.tr(cropName);
+  if (directTr != cropName) return directTr;
+
+  // 3. Snake_case normalized lookup
+  final key = cropName.toLowerCase().trim().replaceAll(' ', '_');
   final translated = context.tr(key);
-  return translated == key ? cropName : translated;
+  if (translated != key) return translated;
+
+  final rawKey = cropName.toLowerCase().trim();
+  final rawTranslated = context.tr(rawKey);
+  if (rawTranslated != rawKey) return rawTranslated;
+
+  return cropName;
+}
+
+String _getTranslatedRegion(BuildContext context, String region) {
+  if (region.trim().isEmpty) return region;
+  final direct = context.tr(region);
+  if (direct != region) return direct;
+
+  final key = region.toLowerCase().trim().replaceAll(' ', '_');
+  final trKey = context.tr(key);
+  if (trKey != key) return trKey;
+
+  return region;
+}
+
+String _getTranslatedSowingPeriod(BuildContext context, String period) {
+  if (period.trim().isEmpty) return period;
+  final direct = context.tr(period);
+  if (direct != period) return direct;
+
+  final key = period.toLowerCase().trim().replaceAll(' ', '_').replaceAll('-', '_');
+  final trKey = context.tr(key);
+  if (trKey != key) return trKey;
+
+  return period;
 }
 
 /// Seed variety data model
@@ -60,7 +102,16 @@ class SeedVariety {
       id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       cropName: json['crop_name']?.toString() ?? 'Unknown',
       varietyName: json['variety_name']?.toString() ?? 'Unknown',
-      varietyNameSecondary: json['variety_name_secondary']?.toString(),
+      varietyNameSecondary: json['variety_name_secondary']?.toString() ??
+          (json['variety_name_en'] != null &&
+                  json['variety_name_en'].toString().trim().isNotEmpty &&
+                  json['variety_name_en'] != json['variety_name']
+              ? json['variety_name_en']?.toString()
+              : (json['variety_name_te'] != null &&
+                      json['variety_name_te'].toString().trim().isNotEmpty &&
+                      json['variety_name_te'] != json['variety_name']
+                  ? json['variety_name_te']?.toString()
+                  : null)),
       imageUrl: json['image_url']?.toString(),
       details: json['details']?.toString(),
       region: json['region']?.toString(),
@@ -263,7 +314,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                   const SizedBox(width: 5),
                   Flexible(
                     child: Text(
-                      'ICAR & Research Certified',
+                      context.tr('icar_research_certified'),
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.googleSans(
                         color: Colors.white,
@@ -278,7 +329,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'High-Yielding Breeder Seeds',
+              context.tr('breeder_seeds_title'),
               style: GoogleFonts.googleSans(
                 color: Colors.white,
                 fontSize: 22,
@@ -289,7 +340,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Direct access to pure, high-germination hybrid seeds with regional maturity & yield assurance.',
+              context.tr('breeder_seeds_subtitle'),
               style: GoogleFonts.googleSans(
                 color: Colors.white.withValues(alpha: 0.85),
                 fontSize: 13,
@@ -302,9 +353,9 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _buildHeroFeatureChip(Icons.shield_outlined, '100% Genuine'),
-                _buildHeroFeatureChip(Icons.trending_up, 'Yield Tested'),
-                _buildHeroFeatureChip(Icons.local_shipping_outlined, 'Farm Delivery'),
+                _buildHeroFeatureChip(Icons.shield_outlined, context.tr('genuine_100')),
+                _buildHeroFeatureChip(Icons.trending_up, context.tr('yield_tested')),
+                _buildHeroFeatureChip(Icons.local_shipping_outlined, context.tr('farm_delivery')),
               ],
             ),
           ],
@@ -325,12 +376,15 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
         children: [
           Icon(icon, color: Colors.white, size: 13),
           const SizedBox(width: 5),
-          Text(
-            text,
-            style: GoogleFonts.googleSans(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              text,
+              style: GoogleFonts.googleSans(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -363,7 +417,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
               color: const Color(0xFF0F172A),
             ),
             decoration: InputDecoration(
-              hintText: 'Search crops or seed varieties...',
+              hintText: context.tr('search_seeds_hint'),
               hintStyle: GoogleFonts.googleSans(
                 fontSize: 14,
                 color: const Color(0xFF94A3B8),
@@ -440,7 +494,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                         size: 48, color: Colors.grey[400]),
                     const SizedBox(height: 12),
                     Text(
-                      'No matching crops found',
+                      context.tr('no_matching_crops'),
                       style: GoogleFonts.googleSans(
                         color: const Color(0xFF64748B),
                         fontSize: 15,
@@ -521,7 +575,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'CropSync Seed Guarantee',
+                      context.tr('crop_sync_seed_guarantee'),
                       style: GoogleFonts.googleSans(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -529,7 +583,7 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
                       ),
                     ),
                     Text(
-                      'Why farmers order through CropSync',
+                      context.tr('why_order_seeds'),
                       style: GoogleFonts.googleSans(
                         fontSize: 12,
                         color: const Color(0xFF64748B),
@@ -544,20 +598,20 @@ class _SeedVarietiesScreenState extends State<SeedVarietiesScreen> {
             const SizedBox(height: 14),
             _buildTrustRow(
               Icons.biotech_outlined,
-              'Breeder Authenticity',
-              'Pure genetic seed stock sourced directly from accredited research stations.',
+              context.tr('breeder_authenticity'),
+              context.tr('breeder_authenticity_desc'),
             ),
             const SizedBox(height: 12),
             _buildTrustRow(
               Icons.analytics_outlined,
-              'Multi-Region Field Trials',
-              'Tested yield numbers and growth duration verified in your state agro-climate.',
+              context.tr('multi_region_trials'),
+              context.tr('multi_region_trials_desc'),
             ),
             const SizedBox(height: 12),
             _buildTrustRow(
               Icons.local_shipping_outlined,
-              'Sealed Bag Delivery',
-              'Tamper-proof official packaging delivered to your nearest CHC / Farm Center.',
+              context.tr('sealed_bag_delivery'),
+              context.tr('sealed_bag_delivery_desc'),
             ),
           ],
         ),
@@ -845,7 +899,7 @@ class CropVarietiesListScreen extends StatelessWidget {
               ),
             ),
             Text(
-              '${varieties.length} varieties verified',
+              '${varieties.length} ${context.tr("varieties_verified")}',
               style: GoogleFonts.googleSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
@@ -991,7 +1045,7 @@ class _SeedCard extends StatelessWidget {
                                   color: Colors.white, size: 13),
                               const SizedBox(width: 2),
                               Text(
-                                'Video',
+                                context.tr('video_badge'),
                                 style: GoogleFonts.googleSans(
                                   color: Colors.white,
                                   fontSize: 9.5,
@@ -1116,7 +1170,7 @@ class _SeedCard extends StatelessWidget {
                           )
                         else
                           Text(
-                            'Enquire',
+                            context.tr('enquire'),
                             style: GoogleFonts.googleSans(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -1131,7 +1185,7 @@ class _SeedCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            'View',
+                            context.tr('view_details'),
                             style: GoogleFonts.googleSans(
                               color: Colors.white,
                               fontSize: 11,
@@ -1387,7 +1441,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
                     size: 14, color: Color(0xFF059669)),
                 const SizedBox(width: 4),
                 Text(
-                  'CERTIFIED SEED',
+                  context.tr('certified_seed'),
                   style: GoogleFonts.googleSans(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w800,
@@ -1552,7 +1606,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Loading Video...',
+                                  context.tr('loading_video'),
                                   style: GoogleFonts.googleSans(
                                     color: Colors.white,
                                     fontSize: 12,
@@ -1575,7 +1629,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Watch Field Video & Advisory',
+                                  context.tr('watch_video_advisory'),
                                   style: GoogleFonts.googleSans(
                                     color: Colors.white,
                                     fontSize: 12.5,
@@ -1610,7 +1664,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
                 border: Border.all(color: const Color(0xFFA7F3D0)),
               ),
               child: Text(
-                '${_getTranslatedCropName(context, variety.cropName).toUpperCase()} HYBRID',
+                '${_getTranslatedCropName(context, variety.cropName).toUpperCase()} ${context.tr("hybrid")}',
                 style: GoogleFonts.googleSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -1638,7 +1692,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    'Available for Order',
+                    context.tr('available_for_order'),
                     style: GoogleFonts.googleSans(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -1717,9 +1771,9 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
           icon: Icons.schedule_rounded,
           iconColor: const Color(0xFF2563EB),
           bgColor: const Color(0xFFEFF6FF),
-          label: 'GROWTH DURATION',
-          value: '${variety.growthDuration} Days',
-          subtext: 'Sowing to Maturity',
+          label: context.tr('growth_duration'),
+          value: '${variety.growthDuration} ${context.tr('days')}',
+          subtext: context.tr('sowing_to_maturity'),
         ),
       );
     }
@@ -1730,9 +1784,9 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
           icon: Icons.trending_up_rounded,
           iconColor: const Color(0xFF059669),
           bgColor: const Color(0xFFECFDF5),
-          label: 'AVERAGE YIELD',
-          value: '${variety.averageYield} Q/Acre',
-          subtext: 'Quintals per acre',
+          label: context.tr('average_yield'),
+          value: '${variety.averageYield} ${context.tr('quintals_per_acre_short')}',
+          subtext: context.tr('quintals_per_acre'),
         ),
       );
     }
@@ -1745,9 +1799,9 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
           icon: Icons.calendar_month_rounded,
           iconColor: const Color(0xFFD97706),
           bgColor: const Color(0xFFFFFBEB),
-          label: 'SOWING PERIOD',
-          value: variety.sowingPeriod!.trim(),
-          subtext: 'Ideal Season Window',
+          label: context.tr('sowing_period'),
+          value: _getTranslatedSowingPeriod(context, variety.sowingPeriod!.trim()),
+          subtext: context.tr('ideal_season_window'),
         ),
       );
     }
@@ -1758,7 +1812,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Key Agronomic Metrics',
+          context.tr('key_agronomic_metrics'),
           style: GoogleFonts.googleSans(
             fontSize: 16,
             fontWeight: FontWeight.w800,
@@ -1868,7 +1922,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
                   size: 18, color: Color(0xFF059669)),
               const SizedBox(width: 8),
               Text(
-                'Recommended Agro-Climatic Regions',
+                context.tr('recommended_regions'),
                 style: GoogleFonts.googleSans(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
@@ -1909,7 +1963,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      state,
+                      _getTranslatedRegion(context, state),
                       style: GoogleFonts.googleSans(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -1983,7 +2037,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
                   size: 18, color: Color(0xFF0F172A)),
               const SizedBox(width: 8),
               Text(
-                'Variety Specifications & Traits',
+                context.tr('variety_specifications'),
                 style: GoogleFonts.googleSans(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
@@ -2060,7 +2114,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '100% Breeder Authenticity Guarantee',
+                  context.tr('breeder_guarantee'),
                   style: GoogleFonts.googleSans(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w800,
@@ -2069,7 +2123,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Supplied in certified breeder packaging with lot number & germination certificate.',
+                  context.tr('breeder_guarantee_desc'),
                   style: GoogleFonts.googleSans(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
@@ -2115,7 +2169,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'TOTAL ESTIMATED PRICE',
+                    context.tr('total_estimated_price'),
                     style: GoogleFonts.googleSans(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w800,

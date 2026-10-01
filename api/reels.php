@@ -51,20 +51,24 @@ try {
     }
 } catch (Throwable $e) {}
 
-// CDN Configuration (Enable for faster asset delivery)
-define('CDN_ENABLED', false);
-define('CDN_BASE_URL', 'https://cdn.cropsync.in/'); // CDN endpoint
-define('ORIGINAL_BASE_URL', 'http://kiosk.cropsync.in/'); // Base domain of your main files
+// Hostinger CDN Configuration (Enabled for faster asset and edge delivery)
+define('CDN_ENABLED', true);
+define('CDN_BASE_URL', 'https://kiosk.cropsync.in/'); // Hostinger CDN endpoint
+define('ORIGINAL_BASE_URL', 'https://kiosk.cropsync.in/');
 
-// Helper to rewrite media urls using the CDN
+// Helper to rewrite media urls using Hostinger CDN
 function rewriteToCDN($url) {
-    if (CDN_ENABLED && !empty($url)) {
-        if (strpos($url, ORIGINAL_BASE_URL) === 0) {
-            return str_replace(ORIGINAL_BASE_URL, CDN_BASE_URL, $url);
-        }
-        if (strpos($url, 'http://') !== 0 && strpos($url, 'https://') !== 0) {
-            return CDN_BASE_URL . ltrim($url, '/');
-        }
+    if (empty($url)) return '';
+    $url = trim($url);
+    if (strpos($url, 'http://kiosk.cropsync.in') === 0) {
+        return 'https://kiosk.cropsync.in' . substr($url, strlen('http://kiosk.cropsync.in'));
+    } elseif (strpos($url, 'http://cdn.cropsync.in') === 0) {
+        return 'https://cdn.cropsync.in' . substr($url, strlen('http://cdn.cropsync.in'));
+    } elseif (strpos($url, 'http://') === 0) {
+        return 'https://' . substr($url, 7);
+    }
+    if (strpos($url, 'https://') !== 0 && strpos($url, 'http://') !== 0) {
+        return 'https://kiosk.cropsync.in/' . ltrim($url, '/');
     }
     return $url;
 }
@@ -399,7 +403,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
             $creatorUsername = !empty($reel['creator_username']) ? $reel['creator_username'] : 'farmer_' . substr($reel['phone_number'] ?? '123456', -4);
             $creatorDisplayName = !empty($reel['creator_display_name']) ? $reel['creator_display_name'] : (!empty($reel['phone_number']) ? 'Farmer (' . substr($reel['phone_number'], -4) . ')' : 'Agri Creator');
-            $creatorProfileImage = !empty($reel['creator_profile_image_url']) ? $reel['creator_profile_image_url'] : 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80';
+            $creatorProfileImage = !empty($reel['creator_profile_image_url']) ? $reel['creator_profile_image_url'] : '';
 
             $thumbUrl = !empty($reel['thumbnail_url']) ? $reel['thumbnail_url'] : null;
             if (empty($thumbUrl) && !empty($reel['video_url'])) {
@@ -411,8 +415,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $response[] = [
                 "id" => $reelId,
                 "videoUrl" => rewriteToCDN($reel['video_url']),
-                "thumbnailUrl" => $thumbUrl,
-                "thumbnail_url" => $thumbUrl,
+                "thumbnailUrl" => rewriteToCDN($thumbUrl),
+                "thumbnail_url" => rewriteToCDN($thumbUrl),
                 "creator" => [
                     "id" => intval($reel['creator_id']),
                     "username" => $creatorUsername,

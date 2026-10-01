@@ -1058,7 +1058,6 @@ class _MyFieldsViewState extends State<MyFieldsView>
         builder: (context, child) {
           return ListView.builder(
               padding: const EdgeInsets.all(20),
-              cacheExtent: 300,
               itemCount: selections.length,
               itemBuilder: (context, index) {
                 final selection = selections[index];

@@ -778,10 +778,14 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                     ),
                   ),
                 ),
-                errorWidget: (context, url, error) => const Icon(
-                  Icons.eco_rounded,
-                  size: 40,
-                  color: Color(0xFF2E6930),
+                errorWidget: (context, url, error) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -862,11 +866,13 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
           children: [
             // Clean isolated commodity photograph blended with soft card stage
             Expanded(
-              child: SizedBox(
+              child: Container(
                 width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                color: const Color(0xFFF9FAF9),
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                   memCacheWidth: 250,
                   placeholder: (context, url) => Shimmer.fromColors(
                     baseColor: const Color(0xFFDCE8DF),
@@ -1403,6 +1409,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                       width: 140,
                       height: 140,
                       clipBehavior: Clip.antiAlias,
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(24),
@@ -1416,7 +1423,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                       ),
                       child: CachedNetworkImage(
                         imageUrl: widget.imagePath,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
                         placeholder: (context, url) => Shimmer.fromColors(
                           baseColor: const Color(0xFFDCE8DF),
                           highlightColor: const Color(0xFFEDF5EF),

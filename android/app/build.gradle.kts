@@ -43,19 +43,29 @@ android {
         }
     }
 
+    val hasReleaseKeystore = keystorePropertiesFile.exists() &&
+        !keystoreProperties.getProperty("storeFile").isNullOrEmpty() &&
+        !keystoreProperties.getProperty("storePassword").isNullOrEmpty()
+
     signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it) }
-            storePassword = keystoreProperties["storePassword"] as String?
+        if (hasReleaseKeystore) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String?
+                keyPassword = keystoreProperties["keyPassword"] as String?
+                storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+                storePassword = keystoreProperties["storePassword"] as String?
+            }
         }
     }
 
     buildTypes {
         getByName("release") {
-            // Sign the release build
-            signingConfig = signingConfigs.getByName("release")
+            // Sign the release build with release keystore if present, else debug
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
 
             // Enable code shrinking & obfuscation
             isMinifyEnabled = true
