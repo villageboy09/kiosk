@@ -48,7 +48,7 @@ class NotificationService {
         targetLang = 'en';
       }
 
-      // Unsubscribe from other languages first
+      // Unsubscribe from other languages and legacy general district topic
       final languages = ['en', 'hi', 'te'];
       for (final l in languages) {
         if (l != targetLang) {
@@ -56,11 +56,11 @@ class NotificationService {
         }
       }
 
-      // Subscribe to targeted language topic
+      // Unsubscribe from legacy general topic to avoid duplicate notifications
+      await FirebaseMessaging.instance.unsubscribeFromTopic('district_$safeDistrict');
+
+      // Subscribe to targeted language topic only
       await FirebaseMessaging.instance.subscribeToTopic('district_${safeDistrict}_$targetLang');
-      
-      // Also keep the general legacy topic subscribed
-      await FirebaseMessaging.instance.subscribeToTopic('district_$safeDistrict');
     }
   }
 
@@ -83,7 +83,7 @@ class NotificationService {
           .where((name) => name.isNotEmpty)
           .map((name) => name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9-_.~%]'), '_'))
           .where((name) => name.isNotEmpty)
-          .toSet();
+          .toList();
 
       final allCropsData = await ApiService.getCrops(lang: 'en');
       final allCrops = allCropsData
@@ -103,11 +103,15 @@ class NotificationService {
           await FirebaseMessaging.instance.unsubscribeFromTopic(topic);
         }
       } else {
-        // Unsubscribe from general market topic and synchronize crop topics
+        // User has crop selections: Subscribe to ONLY ONE primary crop topic to prevent receiving multiple notifications at a time
         await FirebaseMessaging.instance.unsubscribeFromTopic(generalMarketTopic);
-        for (final crop in allCrops) {
+        
+        final primaryCrop = activeCrops.first;
+        final allKnownCrops = {...allCrops, ...activeCrops};
+
+        for (final crop in allKnownCrops) {
           final topic = 'district_${safeDistrict}_crop_$crop';
-          if (activeCrops.contains(crop)) {
+          if (crop == primaryCrop) {
             await FirebaseMessaging.instance.subscribeToTopic(topic);
           } else {
             await FirebaseMessaging.instance.unsubscribeFromTopic(topic);

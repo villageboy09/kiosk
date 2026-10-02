@@ -173,16 +173,10 @@ foreach ($districts as $district) {
             $alertImage = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=600";
         }
 
-        // Send to language-specific topic
+        // Send to language-specific topic only (ensures only 1 notification in user's selected language)
         $langTopic = $safeTopic . '_' . $lang;
         sendFcmNotification($projectId, $langTopic, $alertTitle, $alertBody, $alertImage);
         echo "Notification sent to topic: $langTopic ($district - $lang)\n";
-        
-        // Also send to the legacy district general topic (defaults to English content)
-        if ($lang === 'en') {
-            sendFcmNotification($projectId, $safeTopic, $alertTitle, $alertBody, $alertImage);
-            echo "Notification sent to legacy topic: $safeTopic ($district)\n";
-        }
     }
 }
 

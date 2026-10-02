@@ -12,6 +12,7 @@
  */
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/market_prices_api.php';
 
 // Prevent unauthorized execution via public web requests
 $secretToken = "cropsync_market_cron_secret_8833"; // Secure secret token
@@ -142,16 +143,13 @@ foreach ($districts as $district) {
             $alertTitle = "📈 Market Price: $cropName";
             $alertBody = "Latest price for $commodity at $market ($loc) is ₹$price/Quintal (as of $date). Click to view details.";
             
-            // Image mapping based on crop
-            $alertImage = "https://images.unsplash.com/photo-1595974482597-4b8da8879bc5?w=600"; // Default marketplace image
-            if (strtolower($cropName) === 'paddy') {
-                $alertImage = "https://images.unsplash.com/photo-1536657464919-8925412403c1?w=600";
-            } else if (strtolower($cropName) === 'cotton') {
-                $alertImage = "https://images.unsplash.com/photo-1594489993991-4529b768a341?w=600";
-            } else if (strtolower($cropName) === 'chilli') {
-                $alertImage = "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600";
-            } else if (strtolower($cropName) === 'maize') {
-                $alertImage = "https://images.unsplash.com/photo-1551754626-787bde9d5653?w=600";
+            // Actual mapped commodity image based on mapped commodity assets
+            $alertImage = resolveCommodityImageUrl($commodity);
+            if (empty($alertImage) || $alertImage === 'https://kiosk.cropsync.in/assets/images/logo.png') {
+                $alertImage = resolveCommodityImageUrl($cropName);
+            }
+            if (empty($alertImage)) {
+                $alertImage = "https://kiosk.cropsync.in/assets/images/logo.png";
             }
 
             sendFcmNotification($projectId, $topic, $alertTitle, $alertBody, $alertImage);
@@ -199,7 +197,10 @@ foreach ($districts as $district) {
 
         $fallbackTitle = "📊 Daily Market Price Update: $district";
         $fallbackBody = "Today's top commodity in $loc: $commodity at $market is trading at ₹$price/Quintal ($date).";
-        $fallbackImage = "https://images.unsplash.com/photo-1542838132-92c53300491e?w=600"; // Premium marketplace/veg stall image
+        $fallbackImage = resolveCommodityImageUrl($commodity);
+        if (empty($fallbackImage)) {
+            $fallbackImage = "https://kiosk.cropsync.in/assets/images/logo.png";
+        }
 
         $districtTopic = "district_{$safeDistrict}_market_general";
         sendFcmNotification($projectId, $districtTopic, $fallbackTitle, $fallbackBody, $fallbackImage);

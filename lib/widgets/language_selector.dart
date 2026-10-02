@@ -1,8 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/notification_service.dart';
 
 class LanguageSelector {
   static void show(BuildContext context) {
@@ -72,6 +75,12 @@ class LanguageSelector {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('language_selected', true);
     
+    // Immediately update push notification topic to the newly selected language
+    final user = AuthService.currentUser;
+    if (user != null) {
+      NotificationService.subscribeToDistrictTopic(user, lang: locale.languageCode);
+    }
+
     if (context.mounted) {
       Navigator.pop(context);
     }

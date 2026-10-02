@@ -1,4 +1,4 @@
-﻿import 'package:cropsync/services/notification_service.dart';
+import 'package:cropsync/services/notification_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -119,6 +119,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 final title = item.notification?.title ?? 'Notification';
                 final body = item.notification?.body ?? '';
                 final screen = item.data['screen']?.toString();
+                final imageUrl = item.notification?.android?.imageUrl ?? item.data['image']?.toString();
                 final categoryColor = _getColorForScreen(screen);
                 final categoryIcon = _getIconForScreen(screen);
 
@@ -138,15 +139,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(16),
-                    leading: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: categoryColor.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(categoryIcon, color: categoryColor, size: 24),
-                    ),
+                    leading: (imageUrl != null && imageUrl.isNotEmpty)
+                        ? Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: categoryColor.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.all(4),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.network(
+                                imageUrl,
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => Icon(categoryIcon, color: categoryColor, size: 24),
+                              ),
+                            ),
+                          )
+                        : Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: categoryColor.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(categoryIcon, color: categoryColor, size: 24),
+                          ),
                     title: Text(
                       title,
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textPrimary),

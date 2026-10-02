@@ -26,146 +26,191 @@ function ensureMarketPricesTable($pdo) {
 function resolveCommodityImageUrl($commodity) {
     if (empty($commodity)) return '';
     $raw = trim((string)$commodity);
-    $lower = strtolower($raw);
+    $lower = mb_strtolower($raw, 'UTF-8');
 
-    // 1. High-priority exact and alias matches
-    if (strpos($lower, 'paddy') !== false || strpos($lower, 'rice') !== false || strpos($lower, 'dhan') !== false) {
+    // 1. High-priority exact and alias matches (English, Hindi transliteration, Telugu script)
+    // Paddy / Rice
+    if (strpos($lower, 'paddy') !== false || strpos($lower, 'rice') !== false || strpos($lower, 'dhan') !== false || strpos($lower, 'వరి') !== false || strpos($lower, 'ధాన్యం') !== false || strpos($lower, 'బియ్యం') !== false || strpos($lower, 'धान') !== false || strpos($lower, 'चावल') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Rice.png';
     }
-    if (strpos($lower, 'bhindi') !== false || strpos($lower, 'ladies finger') !== false || strpos($lower, 'okra') !== false || strpos($lower, 'lady') !== false) {
+    // Bhindi / Ladies Finger / Okra
+    if (strpos($lower, 'bhindi') !== false || strpos($lower, 'ladies finger') !== false || strpos($lower, 'okra') !== false || strpos($lower, 'lady') !== false || strpos($lower, 'బెండకాయ') !== false || strpos($lower, 'भिंडी') !== false) {
         return 'https://kiosk.cropsync.in/crops/okra.jpg';
     }
-    if (strpos($lower, 'chilli') !== false || strpos($lower, 'chili') !== false || strpos($lower, 'mirchi') !== false) {
+    // Chilli
+    if (strpos($lower, 'chilli') !== false || strpos($lower, 'chili') !== false || strpos($lower, 'mirchi') !== false || strpos($lower, 'మిర్చి') !== false || strpos($lower, 'మిరప') !== false || strpos($lower, 'मिर्च') !== false) {
         return 'https://kiosk.cropsync.in/crops/chilli.jpg';
     }
-    if (strpos($lower, 'bitter gourd') !== false || strpos($lower, 'karela') !== false) {
+    // Bitter Gourd
+    if (strpos($lower, 'bitter gourd') !== false || strpos($lower, 'karela') !== false || strpos($lower, 'కాకరకాయ') !== false || strpos($lower, 'करेला') !== false) {
         return 'https://kiosk.cropsync.in/crops/bitter_gourd.jpg';
     }
-    if (strpos($lower, 'ridgeguard') !== false || strpos($lower, 'ridge gourd') !== false || strpos($lower, 'tori') !== false || strpos($lower, 'kundru') !== false || strpos($lower, 'little gourd') !== false || strpos($lower, 'bottle gourd') !== false || strpos($lower, 'lauki') !== false) {
+    // Other Gourds
+    if (strpos($lower, 'ridgeguard') !== false || strpos($lower, 'ridge gourd') !== false || strpos($lower, 'tori') !== false || strpos($lower, 'kundru') !== false || strpos($lower, 'little gourd') !== false || strpos($lower, 'bottle gourd') !== false || strpos($lower, 'lauki') !== false || strpos($lower, 'బీరకాయ') !== false || strpos($lower, 'సొరకాయ') !== false || strpos($lower, 'लौकी') !== false || strpos($lower, 'तोरई') !== false) {
         return 'https://kiosk.cropsync.in/crops/bitter_gourd.jpg';
     }
-    if (strpos($lower, 'gur') !== false || strpos($lower, 'jaggery') !== false || strpos($lower, 'sugarcane') !== false || strpos($lower, 'ganna') !== false) {
+    // Sugarcane / Jaggery
+    if (strpos($lower, 'gur') !== false || strpos($lower, 'jaggery') !== false || strpos($lower, 'sugarcane') !== false || strpos($lower, 'ganna') !== false || strpos($lower, 'చెరకు') !== false || strpos($lower, 'బెల్లం') !== false || strpos($lower, 'गन्ना') !== false) {
         return 'https://kiosk.cropsync.in/crops/sugarcane.jpg';
     }
-    if (strpos($lower, 'sunflower') !== false) {
+    // Sunflower
+    if (strpos($lower, 'sunflower') !== false || strpos($lower, 'surajmukhi') !== false || strpos($lower, 'పొద్దుతిరుగుడు') !== false || strpos($lower, 'सूरजमुखी') !== false) {
         return 'https://kiosk.cropsync.in/crops/sunflower.jpg';
     }
-    if (strpos($lower, 'cumin') !== false || strpos($lower, 'jeera') !== false) {
+    // Cumin / Jeera
+    if (strpos($lower, 'cumin') !== false || strpos($lower, 'jeera') !== false || strpos($lower, 'జీలకర్ర') !== false || strpos($lower, 'जीरा') !== false) {
         return 'https://kiosk.cropsync.in/crops/cumin.jpg';
     }
-    if (strpos($lower, 'tea') !== false || strpos($lower, 'chai') !== false) {
+    // Tea
+    if (strpos($lower, 'tea') !== false || strpos($lower, 'chai') !== false || strpos($lower, 'టీ') !== false || strpos($lower, 'చాయ్') !== false || strpos($lower, 'चाय') !== false) {
         return 'https://kiosk.cropsync.in/crops/tea.jpg';
     }
-    if (strpos($lower, 'cotton') !== false || strpos($lower, 'kapas') !== false) {
+    // Cotton
+    if (strpos($lower, 'cotton') !== false || strpos($lower, 'kapas') !== false || strpos($lower, 'పత్తి') !== false || strpos($lower, 'కపాస్') !== false || strpos($lower, 'कपास') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Cotton.png';
     }
-    if (strpos($lower, 'maize') !== false || strpos($lower, 'corn') !== false || strpos($lower, 'jowar') !== false || strpos($lower, 'sorghum') !== false) {
+    // Maize / Corn / Jowar / Sorghum
+    if (strpos($lower, 'maize') !== false || strpos($lower, 'corn') !== false || strpos($lower, 'jowar') !== false || strpos($lower, 'sorghum') !== false || strpos($lower, 'మొక్కజొన్న') !== false || strpos($lower, 'జొన్నలు') !== false || strpos($lower, 'మక్క') !== false || strpos($lower, 'मक्का') !== false || strpos($lower, 'ज्वार') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Maize.png';
     }
-    if (strpos($lower, 'wheat') !== false || strpos($lower, 'gehun') !== false || strpos($lower, 'bajra') !== false || strpos($lower, 'ragi') !== false || strpos($lower, 'barley') !== false) {
+    // Wheat / Millets
+    if (strpos($lower, 'wheat') !== false || strpos($lower, 'gehun') !== false || strpos($lower, 'bajra') !== false || strpos($lower, 'ragi') !== false || strpos($lower, 'barley') !== false || strpos($lower, 'గోధుమలు') !== false || strpos($lower, 'సజ్జలు') !== false || strpos($lower, 'రాగులు') !== false || strpos($lower, 'గేహూ') !== false || strpos($lower, 'गेहूं') !== false || strpos($lower, 'बाजरा') !== false || strpos($lower, 'रागी') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Wheat.png';
     }
-    if (strpos($lower, 'groundnut') !== false || strpos($lower, 'peanut') !== false || strpos($lower, 'moongphali') !== false) {
+    // Groundnut / Peanut
+    if (strpos($lower, 'groundnut') !== false || strpos($lower, 'peanut') !== false || strpos($lower, 'moongphali') !== false || strpos($lower, 'వేరుశనగ') !== false || strpos($lower, 'పల్లీ') !== false || strpos($lower, 'मूंगफली') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Groundnut.png';
     }
-    if (strpos($lower, 'turmeric') !== false || strpos($lower, 'haldi') !== false) {
+    // Turmeric
+    if (strpos($lower, 'turmeric') !== false || strpos($lower, 'haldi') !== false || strpos($lower, 'పసుపు') !== false || strpos($lower, 'हल्दी') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Turmeric.png';
     }
-    // Pulses & Legumes (Bengal gram, red gram, green gram, urd, cowpea, etc.)
-    if (strpos($lower, 'soyabean') !== false || strpos($lower, 'soybean') !== false || strpos($lower, 'gram') !== false || strpos($lower, 'chana') !== false || strpos($lower, 'arhar') !== false || preg_match('/\btur\b/', $lower) || strpos($lower, 'moong') !== false || strpos($lower, 'urd') !== false || strpos($lower, 'bean') !== false || strpos($lower, 'pulse') !== false || strpos($lower, 'lobia') !== false) {
+    // Pulses & Legumes (Bengal gram, red gram, green gram, urd, soyabean, cowpea, etc.)
+    if (strpos($lower, 'soyabean') !== false || strpos($lower, 'soybean') !== false || strpos($lower, 'gram') !== false || strpos($lower, 'chana') !== false || strpos($lower, 'arhar') !== false || preg_match('/\btur\b/u', $lower) || strpos($lower, 'moong') !== false || strpos($lower, 'urd') !== false || strpos($lower, 'bean') !== false || strpos($lower, 'pulse') !== false || strpos($lower, 'lobia') !== false || strpos($lower, 'శనగలు') !== false || strpos($lower, 'కందులు') !== false || strpos($lower, 'పెసలు') !== false || strpos($lower, 'మినుములు') !== false || strpos($lower, 'సోయాబీన్') !== false || strpos($lower, 'అలసందలు') !== false || strpos($lower, 'ఉలవలు') !== false || strpos($lower, 'चना') !== false || strpos($lower, 'अरहर') !== false || strpos($lower, 'तूर') !== false || strpos($lower, 'मूंग') !== false || strpos($lower, 'उड़द') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Soyabean.png';
     }
-    if (strpos($lower, 'mousambi') !== false || strpos($lower, 'sweet lime') !== false || strpos($lower, 'lime') !== false || strpos($lower, 'mosambi') !== false) {
+    // Lime / Mousambi / Sweet Lime
+    if (strpos($lower, 'mousambi') !== false || strpos($lower, 'sweet lime') !== false || strpos($lower, 'lime') !== false || strpos($lower, 'mosambi') !== false || strpos($lower, 'బత్తాయి') !== false || strpos($lower, 'मौसमी') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Lime.png';
     }
-    if (strpos($lower, 'lemon') !== false || strpos($lower, 'nimbu') !== false) {
+    // Lemon
+    if (strpos($lower, 'lemon') !== false || strpos($lower, 'nimbu') !== false || strpos($lower, 'నిమ్మకాయ') !== false || strpos($lower, 'నీంబూ') !== false || strpos($lower, 'नींबू') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Lemon.png';
     }
-    if (strpos($lower, 'sesamum') !== false || strpos($lower, 'sesame') !== false || strpos($lower, 'til') !== false || strpos($lower, 'linseed') !== false || strpos($lower, 'alsi') !== false) {
+    // Sesame / Linseed
+    if (strpos($lower, 'sesamum') !== false || strpos($lower, 'sesame') !== false || strpos($lower, 'til') !== false || strpos($lower, 'linseed') !== false || strpos($lower, 'alsi') !== false || strpos($lower, 'నువ్వులు') !== false || strpos($lower, 'ఆముదం') !== false || strpos($lower, 'तिल') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Linseed.png';
     }
-    if (strpos($lower, 'mustard') !== false || strpos($lower, 'sarson') !== false || strpos($lower, 'rai') !== false) {
+    // Mustard
+    if (strpos($lower, 'mustard') !== false || strpos($lower, 'sarson') !== false || strpos($lower, 'rai') !== false || strpos($lower, 'ఆవాలు') !== false || strpos($lower, 'सरसों') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Mustard.png';
     }
-    if (strpos($lower, 'safflower') !== false || strpos($lower, 'kusuma') !== false) {
+    // Safflower
+    if (strpos($lower, 'safflower') !== false || strpos($lower, 'kusuma') !== false || strpos($lower, 'కుసుమ') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Safflower.png';
     }
-    if (strpos($lower, 'tobacco') !== false) {
+    // Tobacco
+    if (strpos($lower, 'tobacco') !== false || strpos($lower, 'పొగాకు') !== false || strpos($lower, 'तंबाकू') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Tobacco.png';
     }
-    if (strpos($lower, 'tomato') !== false) {
+    // Tomato
+    if (strpos($lower, 'tomato') !== false || strpos($lower, 'టమోటా') !== false || strpos($lower, 'టమాట') !== false || strpos($lower, 'टमाटर') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Tomato.png';
     }
-    if (strpos($lower, 'onion') !== false) {
+    // Onion
+    if (strpos($lower, 'onion') !== false || strpos($lower, 'pyaj') !== false || strpos($lower, 'ఉల్లిపాయ') !== false || strpos($lower, 'ఉల్లి') !== false || strpos($lower, 'प्याज') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Onion.png';
     }
-    if (strpos($lower, 'potato') !== false) {
+    // Potato
+    if (strpos($lower, 'potato') !== false || strpos($lower, 'aloo') !== false || strpos($lower, 'బంగాళాదుంప') !== false || strpos($lower, 'ఆలూ') !== false || strpos($lower, 'आलू') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Potato.png';
     }
-    if (strpos($lower, 'brinjal') !== false || strpos($lower, 'eggplant') !== false || strpos($lower, 'baingan') !== false) {
+    // Brinjal
+    if (strpos($lower, 'brinjal') !== false || strpos($lower, 'eggplant') !== false || strpos($lower, 'baingan') !== false || strpos($lower, 'వంకాయ') !== false || strpos($lower, 'बैंगन') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Brinjal.png';
     }
-    if (strpos($lower, 'cabbage') !== false) {
+    // Cabbage
+    if (strpos($lower, 'cabbage') !== false || strpos($lower, 'క్యాబేజీ') !== false || strpos($lower, 'पत्तागोभी') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Cabbage.png';
     }
-    if (strpos($lower, 'cauliflower') !== false) {
+    // Cauliflower
+    if (strpos($lower, 'cauliflower') !== false || strpos($lower, 'కాలీఫ్లవర్') !== false || strpos($lower, 'फूलगोभी') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Cauliflower.png';
     }
-    if (strpos($lower, 'carrot') !== false) {
+    // Carrot
+    if (strpos($lower, 'carrot') !== false || strpos($lower, 'క్యారెట్') !== false || strpos($lower, 'गाजर') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Carrot.png';
     }
-    if (strpos($lower, 'capsicum') !== false) {
+    // Capsicum
+    if (strpos($lower, 'capsicum') !== false || strpos($lower, 'క్యాప్సికమ్') !== false || strpos($lower, 'शिमला मिर्च') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Capsicum.png';
     }
-    if (strpos($lower, 'banana') !== false) {
+    // Banana
+    if (strpos($lower, 'banana') !== false || strpos($lower, 'అరటి') !== false || strpos($lower, 'केला') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Banana.png';
     }
-    if (strpos($lower, 'mango') !== false) {
+    // Mango
+    if (strpos($lower, 'mango') !== false || strpos($lower, 'మామిడి') !== false || strpos($lower, 'आम') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Mango.png';
     }
-    if (strpos($lower, 'apple') !== false) {
+    // Apple
+    if (strpos($lower, 'apple') !== false || strpos($lower, 'ఆపిల్') !== false || strpos($lower, 'సేబు') !== false || strpos($lower, 'सेब') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Apple.png';
     }
-    if (strpos($lower, 'orange') !== false) {
+    // Orange
+    if (strpos($lower, 'orange') !== false || strpos($lower, 'నారింజ') !== false || strpos($lower, 'संतरा') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Orange.png';
     }
-    if (strpos($lower, 'guava') !== false) {
+    // Guava
+    if (strpos($lower, 'guava') !== false || strpos($lower, 'జామకాయ') !== false || strpos($lower, 'अमरूद') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Guava.png';
     }
-    if (strpos($lower, 'grapes') !== false) {
+    // Grapes
+    if (strpos($lower, 'grapes') !== false || strpos($lower, 'ద్రాక్ష') !== false || strpos($lower, 'अंगूर') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Grapes.png';
     }
-    if (strpos($lower, 'papaya') !== false) {
+    // Papaya
+    if (strpos($lower, 'papaya') !== false || strpos($lower, 'బొప్పాయి') !== false || strpos($lower, 'पपीता') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Papaya.png';
     }
-    if (strpos($lower, 'pomegranate') !== false) {
+    // Pomegranate
+    if (strpos($lower, 'pomegranate') !== false || strpos($lower, 'దానిమ్మ') !== false || strpos($lower, 'अनार') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Pomegranate.png';
     }
-    if (strpos($lower, 'pineapple') !== false) {
+    // Pineapple
+    if (strpos($lower, 'pineapple') !== false || strpos($lower, 'అనానస్') !== false || strpos($lower, 'अनानास') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Pineapple.png';
     }
-    if (strpos($lower, 'drumstick') !== false) {
+    // Drumstick
+    if (strpos($lower, 'drumstick') !== false || strpos($lower, 'మునగకాయ') !== false || strpos($lower, 'सहजन') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Drumstick.png';
     }
-    if (strpos($lower, 'garlic') !== false || strpos($lower, 'ginger') !== false) {
+    // Garlic / Ginger
+    if (strpos($lower, 'garlic') !== false || strpos($lower, 'ginger') !== false || strpos($lower, 'వెల్లుల్లి') !== false || strpos($lower, 'అల్లం') !== false || strpos($lower, 'लहसुन') !== false || strpos($lower, 'अदरक') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Garlic.png';
     }
-    if (strpos($lower, 'beetroot') !== false) {
+    // Beetroot
+    if (strpos($lower, 'beetroot') !== false || strpos($lower, 'బీట్‌రూట్') !== false || strpos($lower, 'चुकंदर') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Beetroot.png';
     }
-    if (strpos($lower, 'avocado') !== false) {
+    // Avocado
+    if (strpos($lower, 'avocado') !== false || strpos($lower, 'వెన్నపండు') !== false || strpos($lower, 'एवोकैडो') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Avocado.png';
     }
-    if (strpos($lower, 'pumpkin') !== false || strpos($lower, 'watermelon') !== false || strpos($lower, 'melon') !== false) {
+    // Pumpkin / Watermelon
+    if (strpos($lower, 'pumpkin') !== false || strpos($lower, 'watermelon') !== false || strpos($lower, 'melon') !== false || strpos($lower, 'పుచ్చకాయ') !== false || strpos($lower, 'గుమ్మడికాయ') !== false || strpos($lower, 'तरबूज') !== false || strpos($lower, 'कद्दू') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Pumpkin.png';
     }
-    if (strpos($lower, 'spinach') !== false || strpos($lower, 'coriander') !== false) {
+    // Spinach / Coriander
+    if (strpos($lower, 'spinach') !== false || strpos($lower, 'coriander') !== false || strpos($lower, 'కొత్తిమీర') !== false || strpos($lower, 'పాలకూర') !== false || strpos($lower, 'धनिया') !== false || strpos($lower, 'पालक') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Spinach.png';
     }
+    // Wood
     if (strpos($lower, 'wood') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Wood.png';
     }
-    if (strpos($lower, 'fish') !== false) {
+    // Fish
+    if (strpos($lower, 'fish') !== false || strpos($lower, 'చేప') !== false || strpos($lower, 'मछली') !== false) {
         return 'https://kiosk.cropsync.in/api/commodity/Fish.png';
     }
 
@@ -180,7 +225,7 @@ function resolveCommodityImageUrl($commodity) {
     if (!empty($pascal)) {
         return "https://kiosk.cropsync.in/api/commodity/{$pascal}.png";
     }
-    return '';
+    return 'https://kiosk.cropsync.in/assets/images/logo.png';
 }
 
 function getRealisticSeedMarketPrices($state = 'Telangana') {
