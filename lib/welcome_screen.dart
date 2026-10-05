@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cropsync/auth/login_screen.dart';
 import 'package:cropsync/screens/retailer/retailer_dashboard.dart';
 import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
+import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 
@@ -87,13 +88,17 @@ class _SplashScreenState extends State<SplashScreen>
       await AuthService.loadUserSession();
       if (!currentContext.mounted) return;
       final user = AuthService.currentUser;
-      if (user?.membershipType == 'Retailer') {
+      if (user?.isRetailer == true || user?.membershipType == 'Retailer') {
         Navigator.of(currentContext).pushReplacement(
           MaterialPageRoute(builder: (context) => const RetailerDashboard()),
         );
-      } else if (user?.membershipType == 'Officer') {
+      } else if (user?.isOfficer == true || user?.membershipType == 'Officer') {
         Navigator.of(currentContext).pushReplacement(
           MaterialPageRoute(builder: (context) => const ExtensionOfficerDashboard()),
+        );
+      } else if (user?.isCreator == true || user?.membershipType == 'Creator') {
+        Navigator.of(currentContext).pushReplacement(
+          MaterialPageRoute(builder: (context) => const CreatorHomeScreen()),
         );
       } else {
         Navigator.of(currentContext).pushReplacement(

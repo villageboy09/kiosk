@@ -103,6 +103,23 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userKey);
     await prefs.setBool(_isLoggedInKey, false);
+
+    // Clear creator studio caches and legacy user keys to prevent cross-account contamination
+    try {
+      final keys = prefs.getKeys().where((k) => k.startsWith('cropsync_creator_studio_cache_') || k == 'cropsync_creator_studio_cache_v1');
+      for (final k in keys.toList()) {
+        await prefs.remove(k);
+      }
+      await prefs.remove('user_phone');
+      await prefs.remove('phone_number');
+      await prefs.remove('phoneNumber');
+      await prefs.remove('user_name');
+      await prefs.remove('username');
+      await prefs.remove('farmer_name');
+      await prefs.remove('user_id');
+      await prefs.remove('userId');
+    } catch (_) {}
+
     currentUser = null;
   }
 

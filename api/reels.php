@@ -119,37 +119,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
     if ($action === 'studio' || $action === 'get_creator_studio_data') {
         try {
-            $phoneNumber = trim($_GET['phone_number'] ?? $_GET['phone'] ?? '');
-            $username = trim($_GET['username'] ?? '');
-            $userName = trim($_GET['user_name'] ?? $_GET['name'] ?? '');
+            $creatorIdParam = intval($data['creator_id'] ?? $_GET['creator_id'] ?? 0);
+            $userId = trim($data['user_id'] ?? $_GET['user_id'] ?? '');
+            $phoneNumber = trim($data['phone_number'] ?? $_GET['phone_number'] ?? $_GET['phone'] ?? '');
+            $username = trim($data['username'] ?? $_GET['username'] ?? '');
+            $userName = trim($data['user_name'] ?? $_GET['user_name'] ?? $_GET['name'] ?? '');
 
-            // Find or create creator
+            // 1. Direct creator lookup
             $creator = null;
-            if (!empty($phoneNumber)) {
-                $cStmt = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? LIMIT 1");
-                $cStmt->execute([$phoneNumber]);
+            if ($creatorIdParam > 0) {
+                $cStmt = $pdo->prepare("SELECT * FROM creators WHERE id = ? LIMIT 1");
+                $cStmt->execute([$creatorIdParam]);
                 $creator = $cStmt->fetch(PDO::FETCH_ASSOC);
             }
-            if (!$creator && !empty($userName)) {
-                $cStmt = $pdo->prepare("SELECT * FROM creators WHERE display_name = ? OR username = ? LIMIT 1");
-                $cStmt->execute([$userName, $username]);
+
+            $rawPhone = !empty($phoneNumber) ? $phoneNumber : $userId;
+            $cleanPhone = preg_replace('/[^0-9]/', '', (string)$rawPhone);
+            $last10 = strlen($cleanPhone) >= 10 ? substr($cleanPhone, -10) : $cleanPhone;
+            $phone91 = $last10 ? '91' . $last10 : '';
+            $phonePlus91 = $last10 ? '+91' . $last10 : '';
+            $phoneCandidates = array_values(array_filter(array_unique([$last10, $phone91, $phonePlus91, $phoneNumber])));
+            $userCandidates = array_values(array_filter(array_unique([$userId, $last10, $phoneNumber])));
+
+            if (!$creator && (!empty($phoneCandidates) || !empty($userCandidates))) {
+                $pIn = !empty($phoneCandidates) ? implode(',', array_fill(0, count($phoneCandidates), '?')) : 'NULL';
+                $uIn = !empty($userCandidates) ? implode(',', array_fill(0, count($userCandidates), '?')) : 'NULL';
+                $sql = "SELECT * FROM creators WHERE ";
+                $conds = [];
+                $params = [];
+                if (!empty($phoneCandidates)) {
+                    $conds[] = "phone_number IN ($pIn)";
+                    $params = array_merge($params, $phoneCandidates);
+                }
+                if (!empty($userCandidates)) {
+                    $conds[] = "user_id IN ($uIn)";
+                    $params = array_merge($params, $userCandidates);
+                }
+                $sql .= "(" . implode(" OR ", $conds) . ") LIMIT 1";
+                $cStmt = $pdo->prepare($sql);
+                $cStmt->execute($params);
                 $creator = $cStmt->fetch(PDO::FETCH_ASSOC);
             }
+
             if (!$creator) {
-                $sanitizedUsername = !empty($username) ? $username : (!empty($phoneNumber) ? 'creator_' . substr($phoneNumber, -6) : 'creator_' . rand(1000, 9999));
-                $dName = !empty($userName) ? $userName : 'Agri Creator';
+                $resolvedName = (!empty($userName) && strtolower($userName) !== 'agri creator') ? $userName : '';
+                $sanitizedUsername = !empty($username) ? $username : (!empty($last10) ? 'creator_' . substr($last10, -6) : 'creator_' . rand(1000, 9999));
+                $dName = !empty($resolvedName) ? $resolvedName : 'Agri Creator';
                 $pImg = 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80';
-                $pdo->prepare("INSERT INTO creators (username, display_name, profile_image_url, is_verified, phone_number, bio) VALUES (?, ?, ?, 1, ?, 'Progressive Farmer & Agricultural Contributor')")->execute([$sanitizedUsername, $dName, $pImg, $phoneNumber]);
+                $insPhone = !empty($last10) ? $last10 : $phoneNumber;
+                $insUserId = !empty($userId) ? $userId : $insPhone;
+                $pdo->prepare("INSERT INTO creators (user_id, username, display_name, profile_image_url, is_verified, phone_number, bio) VALUES (?, ?, ?, ?, 1, ?, 'Progressive Farmer & Agricultural Contributor')")->execute([$insUserId, $sanitizedUsername, $dName, $pImg, $insPhone]);
                 $cId = $pdo->lastInsertId();
-                $creator = ['id' => intval($cId), 'username' => $sanitizedUsername, 'display_name' => $dName, 'profile_image_url' => $pImg, 'is_verified' => 1, 'phone_number' => $phoneNumber, 'bio' => 'Progressive Farmer'];
+                $creator = ['id' => intval($cId), 'user_id' => $insUserId, 'username' => $sanitizedUsername, 'display_name' => $dName, 'profile_image_url' => $pImg, 'is_verified' => 1, 'phone_number' => $insPhone, 'bio' => 'Progressive Farmer'];
             }
             $creatorId = intval($creator['id']);
-
             $creatorPhone = trim($creator['phone_number'] ?? $phoneNumber);
-            $cName = $creator['display_name'];
-            $cUName = $creator['username'];
 
-            $rStmt = $pdo->prepare("
+            $cleanCP = preg_replace('/[^0-9]/', '', $creatorPhone ?: $phoneNumber);
+            $last10CP = strlen($cleanCP) >= 10 ? substr($cleanCP, -10) : $cleanCP;
+            $phoneList = array_values(array_filter(array_unique([$last10CP, $last10CP ? '91' . $last10CP : '', $last10CP ? '+91' . $last10CP : '', $creatorPhone, $phoneNumber])));
+
+            // Backfill any legacy reels with creator_id = 0 for this creator
+            if (!empty($phoneList) && $creatorId > 0) {
+                $inClause = implode(',', array_fill(0, count($phoneList), '?'));
+                try {
+                    $pdo->prepare("UPDATE reels SET creator_id = ? WHERE (creator_id = 0 OR creator_id IS NULL) AND phone_number IN ($inClause)")->execute(array_merge([$creatorId], $phoneList));
+                } catch (Throwable $e) {}
+            }
+
+            // Strictly fetch only reels belonging to this creator
+            $sql = "
                 SELECT r.*, c.username AS creator_username, 
                 COALESCE(u.name, c.display_name) AS creator_display_name, 
                 COALESCE(u.profile_image_url, c.profile_image_url) AS creator_profile_image_url, 
@@ -157,13 +196,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 FROM reels r 
                 LEFT JOIN creators c ON r.creator_id = c.id 
                 LEFT JOIN users u ON u.phone_number = c.phone_number OR (r.phone_number = u.phone_number AND r.phone_number != '')
-                WHERE r.creator_id = ? 
-                   OR (r.phone_number = ? AND r.phone_number != '') 
-                   OR (? != '' AND r.phone_number = ?)
-                   OR r.creator_id IN (SELECT id FROM creators WHERE username = ? OR display_name = ?)
-                ORDER BY r.id DESC
-            ");
-            $rStmt->execute([$creatorId, $creatorPhone, $phoneNumber, $phoneNumber, $cUName, $cName]);
+                WHERE r.creator_id = ?
+            ";
+            $rParams = [$creatorId];
+            if (!empty($phoneList)) {
+                $inClause = implode(',', array_fill(0, count($phoneList), '?'));
+                $sql .= " OR ((r.creator_id = 0 OR r.creator_id IS NULL) AND r.phone_number IN ($inClause))";
+                $rParams = array_merge($rParams, $phoneList);
+            }
+            $sql .= " ORDER BY r.id DESC";
+
+            $rStmt = $pdo->prepare($sql);
+            $rStmt->execute($rParams);
             $rawReels = $rStmt->fetchAll(PDO::FETCH_ASSOC);
 
             $reels = [];
@@ -363,7 +407,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             FROM reels r
             LEFT JOIN creators c ON r.creator_id = c.id
             LEFT JOIN users u ON u.phone_number = c.phone_number OR (r.phone_number = u.phone_number AND r.phone_number != '')
-            WHERE r.is_active = 1 AND (r.status = 'approved' OR r.status IS NULL)
+            WHERE r.is_active = 1 AND (r.status = 'approved' OR r.status IS NULL) AND c.id IS NOT NULL
             ORDER BY r.id DESC
         ");
         $stmt->execute();
@@ -712,6 +756,7 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $phoneNumber = trim($data['phone_number'] ?? $data['phoneNumber'] ?? $_POST['phone_number'] ?? $_POST['phoneNumber'] ?? '');
         $creatorName = trim($data['creator_name'] ?? $data['displayName'] ?? $_POST['creator_name'] ?? $_POST['displayName'] ?? '');
         $creatorId = intval($data['creator_id'] ?? $_POST['creator_id'] ?? 0);
+        $userId = trim($data['user_id'] ?? $_POST['user_id'] ?? '');
         $tags = trim($data['tags'] ?? $_POST['tags'] ?? '');
 
         // Handle direct multipart video file upload to /Reels/ folder
@@ -757,16 +802,45 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             if ($creatorId <= 0) {
-                // Find or create creator
-                $cStmt = $pdo->prepare("SELECT id FROM creators WHERE phone_number = ? LIMIT 1");
-                $cStmt->execute([$phoneNumber]);
-                $cId = $cStmt->fetchColumn();
-                if ($cId) {
-                    $creatorId = intval($cId);
-                } else {
-                    $sanitizedUsername = !empty($creatorName) ? strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', str_replace(' ', '_', $creatorName))) : 'creator_' . substr($phoneNumber, -6);
-                    $dName = !empty($creatorName) ? $creatorName : 'Agri Creator';
-                    $pdo->prepare("INSERT INTO creators (username, display_name, profile_image_url, is_verified, phone_number, bio) VALUES (?, ?, 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80', 1, ?, 'Progressive Farmer')")->execute([$sanitizedUsername, $dName, $phoneNumber]);
+                $rawPhone = !empty($phoneNumber) ? $phoneNumber : $userId;
+                $cleanPhone = preg_replace('/[^0-9]/', '', (string)$rawPhone);
+                $last10 = strlen($cleanPhone) >= 10 ? substr($cleanPhone, -10) : $cleanPhone;
+                $phone91 = $last10 ? '91' . $last10 : '';
+                $phonePlus91 = $last10 ? '+91' . $last10 : '';
+                $phoneCandidates = array_values(array_filter(array_unique([$last10, $phone91, $phonePlus91, $phoneNumber])));
+                $userCandidates = array_values(array_filter(array_unique([$userId, $last10, $phoneNumber])));
+
+                $creatorRow = null;
+                if (!empty($phoneCandidates) || !empty($userCandidates)) {
+                    $pIn = !empty($phoneCandidates) ? implode(',', array_fill(0, count($phoneCandidates), '?')) : 'NULL';
+                    $uIn = !empty($userCandidates) ? implode(',', array_fill(0, count($userCandidates), '?')) : 'NULL';
+                    $sql = "SELECT id FROM creators WHERE ";
+                    $conds = [];
+                    $params = [];
+                    if (!empty($phoneCandidates)) {
+                        $conds[] = "phone_number IN ($pIn)";
+                        $params = array_merge($params, $phoneCandidates);
+                    }
+                    if (!empty($userCandidates)) {
+                        $conds[] = "user_id IN ($uIn)";
+                        $params = array_merge($params, $userCandidates);
+                    }
+                    $sql .= "(" . implode(" OR ", $conds) . ") LIMIT 1";
+                    $cStmt = $pdo->prepare($sql);
+                    $cStmt->execute($params);
+                    $cId = $cStmt->fetchColumn();
+                    if ($cId) {
+                        $creatorId = intval($cId);
+                    }
+                }
+
+                if ($creatorId <= 0) {
+                    $resolvedName = (!empty($creatorName) && strtolower($creatorName) !== 'agri creator') ? $creatorName : '';
+                    $sanitizedUsername = !empty($resolvedName) ? strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', str_replace(' ', '_', $resolvedName))) : (!empty($last10) ? 'creator_' . substr($last10, -6) : 'creator_' . rand(1000, 9999));
+                    $dName = !empty($resolvedName) ? $resolvedName : 'Agri Creator';
+                    $insPhone = !empty($last10) ? $last10 : $phoneNumber;
+                    $insUserId = !empty($userId) ? $userId : $insPhone;
+                    $pdo->prepare("INSERT INTO creators (user_id, username, display_name, profile_image_url, is_verified, phone_number, bio) VALUES (?, ?, ?, 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80', 1, ?, 'Progressive Farmer')")->execute([$insUserId, $sanitizedUsername, $dName, $insPhone]);
                     $creatorId = intval($pdo->lastInsertId());
                 }
             }
@@ -853,6 +927,98 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(["error" => $e->getMessage()]);
+        }
+    }
+
+    // 7b. Action: Delete Creator Account & Associated Reels
+    elseif ($action === 'delete_creator' || $action === 'delete_creator_account') {
+        $creatorId = intval($data['creator_id'] ?? $_POST['creator_id'] ?? $_GET['creator_id'] ?? 0);
+        $userId = trim($data['user_id'] ?? $_POST['user_id'] ?? $_GET['user_id'] ?? '');
+        $phoneNumber = trim($data['phone_number'] ?? $data['phone'] ?? $_POST['phone_number'] ?? $_GET['phone_number'] ?? '');
+
+        try {
+            $creator = null;
+            if ($creatorId > 0) {
+                $cStmt = $pdo->prepare("SELECT * FROM creators WHERE id = ? LIMIT 1");
+                $cStmt->execute([$creatorId]);
+                $creator = $cStmt->fetch(PDO::FETCH_ASSOC);
+            }
+
+            $rawPhone = !empty($phoneNumber) ? $phoneNumber : $userId;
+            $cleanPhone = preg_replace('/[^0-9]/', '', (string)$rawPhone);
+            $last10 = strlen($cleanPhone) >= 10 ? substr($cleanPhone, -10) : $cleanPhone;
+            $phone91 = $last10 ? '91' . $last10 : '';
+            $phonePlus91 = $last10 ? '+91' . $last10 : '';
+            $phones = array_values(array_filter(array_unique([$last10, $phone91, $phonePlus91, $phoneNumber, $userId])));
+
+            if (!$creator && !empty($phones)) {
+                $pIn = implode(',', array_fill(0, count($phones), '?'));
+                $stmt = $pdo->prepare("SELECT * FROM creators WHERE phone_number IN ($pIn) OR user_id IN ($pIn) LIMIT 1");
+                $stmt->execute(array_merge($phones, $phones));
+                $creator = $stmt->fetch(PDO::FETCH_ASSOC);
+            }
+
+            if (!$creator) {
+                http_response_code(404);
+                echo json_encode(["success" => false, "error" => "Creator account not found"]);
+                exit();
+            }
+
+            $cId = intval($creator['id']);
+            $cPhone = trim($creator['phone_number'] ?? '');
+            if (!empty($cPhone)) {
+                $cleanCP = preg_replace('/[^0-9]/', '', $cPhone);
+                $last10CP = strlen($cleanCP) >= 10 ? substr($cleanCP, -10) : $cleanCP;
+                $phones = array_values(array_filter(array_unique(array_merge($phones, [$cPhone, $last10CP, '91' . $last10CP, '+91' . $last10CP]))));
+            }
+
+            // Identify all reels belonging to this creator
+            $reelIds = [];
+            $rStmt = $pdo->prepare("SELECT id FROM reels WHERE creator_id = ?");
+            $rStmt->execute([$cId]);
+            $directIds = $rStmt->fetchAll(PDO::FETCH_COLUMN);
+            if (!empty($directIds)) $reelIds = array_merge($reelIds, array_map('intval', $directIds));
+
+            if (!empty($phones)) {
+                $pIn = implode(',', array_fill(0, count($phones), '?'));
+                $legStmt = $pdo->prepare("SELECT id FROM reels WHERE (creator_id = 0 OR creator_id IS NULL) AND phone_number IN ($pIn)");
+                $legStmt->execute($phones);
+                $legIds = $legStmt->fetchAll(PDO::FETCH_COLUMN);
+                if (!empty($legIds)) $reelIds = array_merge($reelIds, array_map('intval', $legIds));
+            }
+            $reelIds = array_values(array_unique($reelIds));
+
+            if (!empty($reelIds)) {
+                $rIn = implode(',', array_fill(0, count($reelIds), '?'));
+                try { $pdo->prepare("DELETE FROM reel_likes WHERE reel_id IN ($rIn)")->execute($reelIds); } catch (Throwable $e) {}
+                try { $pdo->prepare("DELETE FROM reel_comments WHERE reel_id IN ($rIn)")->execute($reelIds); } catch (Throwable $e) {}
+                try { $pdo->prepare("DELETE FROM reel_actions WHERE reel_id IN ($rIn)")->execute($reelIds); } catch (Throwable $e) {}
+                try { $pdo->prepare("DELETE FROM reel_watch_analytics WHERE reel_id IN ($rIn)")->execute($reelIds); } catch (Throwable $e) {}
+                $pdo->prepare("DELETE FROM reels WHERE id IN ($rIn)")->execute($reelIds);
+            }
+
+            try { $pdo->prepare("DELETE FROM creator_terms WHERE creator_id = ?")->execute([$cId]); } catch (Throwable $e) {}
+            try { $pdo->prepare("DELETE FROM creator_payouts WHERE creator_id = ?")->execute([$cId]); } catch (Throwable $e) {}
+            $pdo->prepare("DELETE FROM creators WHERE id = ?")->execute([$cId]);
+
+            $delUser = !empty($data['delete_user_account']) || !empty($_POST['delete_user_account']) || !empty($_GET['delete_user_account']);
+            if ($delUser && !empty($phones)) {
+                $pIn = implode(',', array_fill(0, count($phones), '?'));
+                try { $pdo->prepare("DELETE FROM users WHERE phone_number IN ($pIn) OR user_id IN ($pIn)")->execute(array_merge($phones, $phones)); } catch (Throwable $e) {}
+            }
+
+            http_response_code(200);
+            echo json_encode([
+                "success" => true,
+                "message" => "Creator account and all uploaded reels (" . count($reelIds) . ") deleted successfully",
+                "deleted_reels_count" => count($reelIds),
+                "creator_id" => $cId
+            ]);
+            exit();
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(["error" => $e->getMessage()]);
+            exit();
         }
     }
 

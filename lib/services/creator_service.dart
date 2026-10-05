@@ -24,9 +24,13 @@ class CreatorActionResult {
 }
 
 class CreatorService {
-  static const String _studioCacheKey = 'cropsync_creator_studio_cache_v1';
   static String get _apiEndpoint => '${ApiService.baseUrl}/api.php';
   static String get _reelsEndpoint => '${ApiService.baseUrl}/reels.php';
+
+  static String _getStudioCacheKey(String userKey) {
+    final sanitized = userKey.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '');
+    return 'cropsync_creator_studio_cache_${sanitized.isNotEmpty ? sanitized : "default"}';
+  }
 
   static Future<Map<String, String>> _getUserDetails() async {
     try {
@@ -35,7 +39,7 @@ class CreatorService {
         final phone = (user.phoneNumber != null && user.phoneNumber!.isNotEmpty)
             ? user.phoneNumber!
             : user.userId;
-        final name = user.name.isNotEmpty ? user.name : 'Agri Creator';
+        final name = user.name.isNotEmpty ? user.name : '';
         return {'phone': phone, 'name': name, 'userId': user.userId};
       }
       final prefs = await SharedPreferences.getInstance();
@@ -46,25 +50,25 @@ class CreatorService {
       final name = prefs.getString('user_name') ??
           prefs.getString('username') ??
           prefs.getString('farmer_name') ??
-          'Agri Creator';
+          '';
       final userId = prefs.getString('user_id') ??
           prefs.getString('userId') ??
           '';
       return {'phone': phone, 'name': name, 'userId': userId};
     } catch (_) {
-      return {'phone': '', 'name': 'Agri Creator', 'userId': ''};
+      return {'phone': '', 'name': '', 'userId': ''};
     }
   }
 
   /// Fetch creator studio dashboard data (KPIs, reels, articles, trends) in real time
   static Future<CreatorStudioData> getStudioData({bool forceRefresh = false}) async {
     final user = await _getUserDetails();
+    final userKey = user['phone']!.isNotEmpty ? user['phone']! : user['userId']!;
 
     final queryParams = {
       'action': 'get_creator_studio_data',
       if (user['phone']!.isNotEmpty) 'phone_number': user['phone']!,
       if (user['name']!.isNotEmpty) 'user_name': user['name']!,
-      if (user['name']!.isNotEmpty) 'username': user['name']!,
       if (user['userId']!.isNotEmpty) 'user_id': user['userId']!,
     };
 
@@ -76,7 +80,7 @@ class CreatorService {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         if (decoded is Map<String, dynamic> && decoded['success'] == true) {
           final studioData = CreatorStudioData.fromJson(decoded);
-          await _cacheStudioData(decoded);
+          await _cacheStudioData(decoded, userKey);
           return studioData;
         }
       }
@@ -90,7 +94,6 @@ class CreatorService {
         'action': 'studio',
         if (user['phone']!.isNotEmpty) 'phone_number': user['phone']!,
         if (user['name']!.isNotEmpty) 'user_name': user['name']!,
-        if (user['name']!.isNotEmpty) 'username': user['name']!,
         if (user['userId']!.isNotEmpty) 'user_id': user['userId']!,
       });
       final response = await http.get(secondaryUrl).timeout(const Duration(seconds: 6));
@@ -98,7 +101,7 @@ class CreatorService {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         if (decoded is Map<String, dynamic> && decoded['success'] == true) {
           final studioData = CreatorStudioData.fromJson(decoded);
-          await _cacheStudioData(decoded);
+          await _cacheStudioData(decoded, userKey);
           return studioData;
         }
       }
@@ -106,10 +109,10 @@ class CreatorService {
       debugPrint('CreatorService: secondary studio failed: $e');
     }
 
-    final cached = await _getCachedStudioData();
+    final cached = await _getCachedStudioData(userKey);
     if (cached != null) return cached;
 
-    return _getDefaultStudioData(user['name'] ?? 'Agri Creator', user['phone'] ?? '');
+    return _getDefaultStudioData(user['name']!.isNotEmpty ? user['name']! : 'Agri Creator', user['phone'] ?? '');
   }
 
   /// Upload and publish a new Reel with rich result
@@ -141,6 +144,7 @@ class CreatorService {
       'creator_name': creatorName,
       'tags': tags ?? '',
       if (creatorId != null && creatorId > 0) 'creator_id': creatorId,
+      if (user['userId'] != null && user['userId']!.isNotEmpty) 'user_id': user['userId']!,
       if (crop != null && crop.isNotEmpty) 'crop': crop,
       if (category != null && category.isNotEmpty) 'category': category,
       if (language != null && language.isNotEmpty) 'language': language,
@@ -163,6 +167,9 @@ class CreatorService {
         request.fields['tags'] = tags ?? '';
         if (creatorId != null && creatorId > 0) {
           request.fields['creator_id'] = creatorId.toString();
+        }
+        if (user['userId'] != null && user['userId']!.isNotEmpty) {
+          request.fields['user_id'] = user['userId']!;
         }
         if (crop != null && crop.isNotEmpty) request.fields['crop'] = crop;
         if (category != null && category.isNotEmpty) request.fields['category'] = category;
@@ -276,8 +283,8 @@ class CreatorService {
 
   static Future<void> _clearReelsCache() async {
     try {
+      await clearStudioCache();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_studioCacheKey);
       await prefs.remove('cropsync_cached_reels_v1');
     } catch (_) {}
   }
@@ -813,17 +820,17 @@ class CreatorService {
     }
   }
 
-  static Future<void> _cacheStudioData(Map<String, dynamic> data) async {
+  static Future<void> _cacheStudioData(Map<String, dynamic> data, String userKey) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_studioCacheKey, jsonEncode(data));
+      await prefs.setString(_getStudioCacheKey(userKey), jsonEncode(data));
     } catch (_) {}
   }
 
-  static Future<CreatorStudioData?> _getCachedStudioData() async {
+  static Future<CreatorStudioData?> _getCachedStudioData(String userKey) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final str = prefs.getString(_studioCacheKey);
+      final str = prefs.getString(_getStudioCacheKey(userKey));
       if (str != null) {
         final decoded = jsonDecode(str);
         if (decoded is Map<String, dynamic>) {
@@ -832,6 +839,17 @@ class CreatorService {
       }
     } catch (_) {}
     return null;
+  }
+
+  /// Clear all cached studio data
+  static Future<void> clearStudioCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((k) => k.startsWith('cropsync_creator_studio_cache_') || k == 'cropsync_creator_studio_cache_v1');
+      for (final k in keys.toList()) {
+        await prefs.remove(k);
+      }
+    } catch (_) {}
   }
 
   static CreatorStudioData _getDefaultStudioData(String name, String phone) {

@@ -286,7 +286,12 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (data['success'] == true && data['exists'] == true) {
-          return data['user'];
+          final res = (data['user'] is Map<String, dynamic>)
+              ? Map<String, dynamic>.from(data['user'] as Map)
+              : <String, dynamic>{};
+          res['role'] = data['role'] ?? res['role'];
+          res['role_matches'] = data['role_matches'] ?? true;
+          return res;
         }
       }
       return null;

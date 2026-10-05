@@ -12,6 +12,7 @@ import 'package:cropsync/screens/officer/extension_officer_dashboard.dart';
 import 'package:cropsync/screens/creator/creator_home_screen.dart';
 import 'package:cropsync/screens/operator/operator_dashboard.dart';
 import 'package:cropsync/services/auth_service.dart';
+import 'package:cropsync/services/operator_auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/auth/login_screen.dart';
 import 'package:cropsync/theme/app_theme.dart';
@@ -19,7 +20,8 @@ import 'package:smart_auth/smart_auth.dart';
 
 class SignupScreen extends StatefulWidget {
   final String? initialPhoneNumber;
-  const SignupScreen({super.key, this.initialPhoneNumber});
+  final String? initialRole;
+  const SignupScreen({super.key, this.initialPhoneNumber, this.initialRole});
 
   /// Exposes strict phone validation for direct testing and validation checks
   static String? validatePhoneNumber(String rawPhone) =>
@@ -31,12 +33,14 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen>
     with TickerProviderStateMixin {
+  final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _securityAnswerController = TextEditingController();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
 
+  final _nameFocusNode = FocusNode();
   final _phoneFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
   final _securityAnswerFocusNode = FocusNode();
@@ -67,6 +71,11 @@ class _SignupScreenState extends State<SignupScreen>
       _phoneController.text = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
     }
 
+    if (widget.initialRole != null && widget.initialRole!.isNotEmpty) {
+      _selectedRole = widget.initialRole!;
+    }
+
+    _nameFocusNode.addListener(_onFocusChange);
     _phoneFocusNode.addListener(_onFocusChange);
     _passwordFocusNode.addListener(_onFocusChange);
     _securityAnswerFocusNode.addListener(_onFocusChange);
@@ -106,16 +115,19 @@ class _SignupScreenState extends State<SignupScreen>
   void dispose() {
     _errorTimer?.cancel();
     _successTimer?.cancel();
+    _nameController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
     _securityAnswerController.dispose();
     _usernameController.dispose();
     _emailController.dispose();
+    _nameFocusNode.removeListener(_onFocusChange);
     _phoneFocusNode.removeListener(_onFocusChange);
     _passwordFocusNode.removeListener(_onFocusChange);
     _securityAnswerFocusNode.removeListener(_onFocusChange);
     _usernameFocusNode.removeListener(_onFocusChange);
     _emailFocusNode.removeListener(_onFocusChange);
+    _nameFocusNode.dispose();
     _phoneFocusNode.dispose();
     _passwordFocusNode.dispose();
     _securityAnswerFocusNode.dispose();
@@ -154,6 +166,34 @@ class _SignupScreenState extends State<SignupScreen>
     }
     if (!RegExp(r'^[6-9]').hasMatch(clean)) {
       return 'Mobile number must start with 6, 7, 8, or 9';
+    }
+    // Reject all identical repeating digits (e.g. 9999999999, 8888888888)
+    if (RegExp(r'^(\d)\1{9}$').hasMatch(clean)) {
+      return 'Please enter a valid mobile number';
+    }
+    // Reject repetitive 2-digit pairs (e.g. 9898989898, 9191919191, 7878787878)
+    if (RegExp(r'^(\d{2})\1{4}$').hasMatch(clean)) {
+      return 'Please enter a valid mobile number';
+    }
+    // Reject repetitive chunks (e.g. 9876598765)
+    if (RegExp(r'^(\d{5})\1$').hasMatch(clean)) {
+      return 'Please enter a valid mobile number';
+    }
+    // Reject sequential numbers
+    const sequential = ['9876543210', '8765432109', '9123456789'];
+    if (sequential.contains(clean)) {
+      return 'Please enter a valid mobile number';
+    }
+    // Reject low-entropy patterns where 8 or more digits are identical
+    final digitCounts = <String, int>{};
+    for (int i = 0; i < clean.length; i++) {
+      digitCounts[clean[i]] = (digitCounts[clean[i]] ?? 0) + 1;
+    }
+    if (digitCounts.values.any((count) => count >= 8)) {
+      return 'Please enter a valid mobile number';
+    }
+    if (clean == '9999988888' || clean == '9000000001') {
+      return 'Please enter a valid mobile number';
     }
     return null;
   }
@@ -306,21 +346,16 @@ class _SignupScreenState extends State<SignupScreen>
   }
 
   Future<void> _registerRole() async {
+    final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
     final password = _passwordController.text.trim();
     final securityAnswer = _securityAnswerController.text.trim();
     final username = _usernameController.text.trim();
     final email = _emailController.text.trim();
-    final name = (_selectedRole == 'content_creator' && username.isNotEmpty)
-        ? username
-        : _getRoleLabel(_selectedRole);
 
-    if (_selectedRole == 'content_creator') {
-      if (username.isEmpty) {
-        _showError('Username is required');
-        return;
-      }
-    }
+    final displayName = _selectedRole == 'content_creator'
+        ? username
+        : (name.isNotEmpty ? name : _getRoleLabel(_selectedRole));
 
     final phoneError = validatePhoneNumber(phone);
     if (phoneError != null) {
@@ -328,9 +363,16 @@ class _SignupScreenState extends State<SignupScreen>
       return;
     }
 
-    if (_selectedRole == 'chc_operator' || _selectedRole == 'content_creator') {
+    if (_selectedRole == 'content_creator') {
+      if (username.isEmpty) {
+        _showError('Username / Handle is required for Creators');
+        return;
+      }
+    }
+
+    if (_selectedRole == 'chc_operator') {
       if (password.isEmpty) {
-        _showError('Password is required');
+        _showError('Password is required for CHC Operator');
         return;
       }
       if (securityAnswer.isEmpty) {
@@ -342,58 +384,88 @@ class _SignupScreenState extends State<SignupScreen>
     setState(() => _isLoading = true);
 
     try {
-      final isRegistered = await ApiService.checkUser(phone);
-      if (isRegistered != null) {
-        _showError('signup_user_exists'.tr());
+      final checkRes = await ApiService.checkUser(phone, role: _selectedRole);
+      if (checkRes != null && checkRes['role_matches'] == true) {
+        final rTitle = _getRoleLabel(_selectedRole);
+        _showError('An account is already registered as $rTitle with this number. Redirecting to login...');
+        await Future.delayed(const Duration(milliseconds: 1400));
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          AppRoutes.slideFromLeft(const LoginScreen()),
+          AppRoutes.slideFromLeft(
+            LoginScreen(
+              initialPhoneNumber: phone,
+              initialRole: _selectedRole,
+            ),
+          ),
         );
         return;
       }
 
       final regRes = await ApiService.registerUser(
-        name,
+        displayName,
         phone,
-        'HYD001', // Standard default client code (FPO selection removed)
+        'HYD001', // Standard default client code
         role: _selectedRole,
-        password: (_selectedRole == 'chc_operator' || _selectedRole == 'content_creator') ? password : null,
-        securityQuestion: (_selectedRole == 'chc_operator' || _selectedRole == 'content_creator') ? _selectedSecurityQuestion : null,
-        securityAnswer: (_selectedRole == 'chc_operator' || _selectedRole == 'content_creator') ? securityAnswer : null,
+        password: (_selectedRole == 'chc_operator' || _selectedRole == 'content_creator') ? (password.isNotEmpty ? password : null) : null,
+        securityQuestion: (_selectedRole == 'chc_operator' || _selectedRole == 'content_creator') ? (securityAnswer.isNotEmpty ? _selectedSecurityQuestion : null) : null,
+        securityAnswer: (_selectedRole == 'chc_operator' || _selectedRole == 'content_creator') ? (securityAnswer.isNotEmpty ? securityAnswer : null) : null,
         username: _selectedRole == 'content_creator' ? username : null,
-        email: _selectedRole == 'content_creator' ? (email.isNotEmpty ? email : null) : null,
+        email: email.isNotEmpty ? email : null,
       );
       if (regRes['success'] != true) {
-        _showError(regRes['error'] ?? 'signup_registration_failed'.tr());
+        final err = regRes['error'] ?? regRes['message'] ?? 'signup_registration_failed'.tr();
+        _showError(err);
+        if (regRes['already_registered'] == true) {
+          await Future.delayed(const Duration(milliseconds: 1400));
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            AppRoutes.slideFromLeft(
+              LoginScreen(
+                initialPhoneNumber: phone,
+                initialRole: _selectedRole,
+              ),
+            ),
+          );
+        }
         if (mounted) setState(() => _isLoading = false);
         return;
       }
 
-      await AuthService.login(phone, role: _selectedRole);
-
-      if (!mounted) return;
       HapticFeedback.heavyImpact();
-      final user = AuthService.currentUser;
-      if (user?.isRetailer == true || user?.membershipType == 'Retailer' || _selectedRole == 'retailer') {
+
+      // If registered as CHC Operator, log in through OperatorAuthService
+      if (_selectedRole == 'chc_operator') {
+        try {
+          await OperatorAuthService.login(phone, password.isNotEmpty ? password : 'HYD001');
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            AppRoutes.fade(const OperatorDashboard()),
+          );
+          return;
+        } catch (_) {}
+      }
+
+      // Log in via AuthService
+      final user = await AuthService.login(phone, role: _selectedRole);
+      if (!mounted) return;
+
+      if (_selectedRole == 'retailer' || user.isRetailer) {
         Navigator.pushReplacement(
           context,
           AppRoutes.fade(const RetailerDashboard()),
         );
-      } else if (user?.isOfficer == true || user?.membershipType == 'Officer' || _selectedRole == 'officer') {
+      } else if (_selectedRole == 'officer' || user.isOfficer) {
         Navigator.pushReplacement(
           context,
           AppRoutes.fade(const ExtensionOfficerDashboard()),
         );
-      } else if (user?.isCreator == true || user?.membershipType == 'Creator' || _selectedRole == 'content_creator') {
+      } else if (_selectedRole == 'content_creator' || user.isCreator) {
         Navigator.pushReplacement(
           context,
           AppRoutes.fade(const CreatorHomeScreen()),
-        );
-      } else if (user?.isOperator == true || user?.membershipType == 'CHC Operator' || _selectedRole == 'chc_operator') {
-        Navigator.pushReplacement(
-          context,
-          AppRoutes.fade(const OperatorDashboard()),
         );
       } else {
         Navigator.pushReplacement(
@@ -402,7 +474,7 @@ class _SignupScreenState extends State<SignupScreen>
         );
       }
     } catch (e) {
-      _showError(e.toString());
+      _showError(e.toString().replaceFirst('Exception: ', ''));
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -1009,6 +1081,7 @@ class _SignupScreenState extends State<SignupScreen>
 
   Widget _buildMainFormFields({required bool isShortScreen}) {
     final showExtraFields = _selectedRole == 'chc_operator' || _selectedRole == 'content_creator';
+    final isFarmer = _selectedRole == 'farmer';
     final isCreator = _selectedRole == 'content_creator';
     final currentPhone = _phoneController.text.trim();
     final isPhone10Digits = currentPhone.length == 10;
@@ -1018,6 +1091,17 @@ class _SignupScreenState extends State<SignupScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (!isFarmer && !isCreator) ...[
+          _buildCustomTextField(
+            controller: _nameController,
+            focusNode: _nameFocusNode,
+            hintText: _selectedRole == 'retailer' ? 'Enter Shop / Owner Name' : 'Enter Officer Name',
+            icon: Icons.person_outline_rounded,
+            compact: isShortScreen,
+          ),
+          SizedBox(height: isShortScreen ? 10 : 14),
+        ],
+
         if (isCreator) ...[
           _buildCustomTextField(
             controller: _usernameController,
@@ -1475,7 +1559,8 @@ class _SignupScreenState extends State<SignupScreen>
   Widget _buildSubmitButton({bool compact = false}) {
     final phone = _phoneController.text.trim();
     final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
-    final bool isButtonDisabled = _isLoading || cleanPhone.length < 10;
+    final bool isPhoneValid = cleanPhone.length == 10 && validatePhoneNumber(cleanPhone) == null;
+    final bool isButtonDisabled = _isLoading || !isPhoneValid;
 
     return ElevatedButton(
       onPressed: isButtonDisabled
@@ -1516,7 +1601,14 @@ class _SignupScreenState extends State<SignupScreen>
         HapticFeedback.lightImpact();
         Navigator.pushReplacement(
           context,
-          AppRoutes.slideFromLeft(const LoginScreen()),
+          AppRoutes.slideFromLeft(
+            LoginScreen(
+              initialPhoneNumber: _phoneController.text.isNotEmpty
+                  ? _phoneController.text.trim()
+                  : null,
+              initialRole: _selectedRole,
+            ),
+          ),
         );
       },
       style: OutlinedButton.styleFrom(

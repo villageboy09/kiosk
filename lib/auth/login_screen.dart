@@ -20,8 +20,9 @@ import 'package:cropsync/widgets/auth/auth_logo_header.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? initialPhoneNumber;
+  final String? initialRole;
 
-  const LoginScreen({super.key, this.initialPhoneNumber});
+  const LoginScreen({super.key, this.initialPhoneNumber, this.initialRole});
 
   /// Exposes strict phone validation for login
   static String? validatePhoneNumber(String rawPhone) =>
@@ -82,6 +83,9 @@ class _LoginScreenState extends State<LoginScreen>
       _phoneController.text =
           digits.length > 10 ? digits.substring(digits.length - 10) : digits;
     }
+    if (widget.initialRole != null && widget.initialRole!.isNotEmpty) {
+      _selectedRole = widget.initialRole!;
+    }
   }
 
   void _onFocusChange() {
@@ -126,6 +130,34 @@ class _LoginScreenState extends State<LoginScreen>
     }
     if (!RegExp(r'^[6-9]').hasMatch(clean)) {
       return 'Mobile number must start with 6, 7, 8, or 9';
+    }
+    // Reject all identical repeating digits (e.g. 9999999999, 8888888888)
+    if (RegExp(r'^(\d)\1{9}$').hasMatch(clean)) {
+      return 'Please enter a valid mobile number';
+    }
+    // Reject repetitive 2-digit pairs (e.g. 9898989898, 9191919191, 7878787878)
+    if (RegExp(r'^(\d{2})\1{4}$').hasMatch(clean)) {
+      return 'Please enter a valid mobile number';
+    }
+    // Reject repetitive chunks (e.g. 9876598765)
+    if (RegExp(r'^(\d{5})\1$').hasMatch(clean)) {
+      return 'Please enter a valid mobile number';
+    }
+    // Reject sequential numbers
+    const sequential = ['9876543210', '8765432109', '9123456789'];
+    if (sequential.contains(clean)) {
+      return 'Please enter a valid mobile number';
+    }
+    // Reject low-entropy patterns where 8 or more digits are identical
+    final digitCounts = <String, int>{};
+    for (int i = 0; i < clean.length; i++) {
+      digitCounts[clean[i]] = (digitCounts[clean[i]] ?? 0) + 1;
+    }
+    if (digitCounts.values.any((count) => count >= 8)) {
+      return 'Please enter a valid mobile number';
+    }
+    if (clean == '9999988888' || clean == '9000000001') {
+      return 'Please enter a valid mobile number';
     }
     return null;
   }
@@ -356,24 +388,53 @@ class _LoginScreenState extends State<LoginScreen>
 
     setState(() => _isLoading = true);
     try {
-      await AuthService.login(phone, role: _selectedRole);
+      final loggedInUser = await AuthService.login(phone, role: _selectedRole);
       if (!mounted) return;
 
-      final loggedInUser = AuthService.currentUser;
-      if (loggedInUser?.isRetailer == true || loggedInUser?.membershipType == 'Retailer' || _selectedRole == 'retailer') {
+      // Strict role verification on client to guarantee no cross-role login
+      if (_selectedRole == 'farmer') {
+        if (!loggedInUser.isFarmer) {
+          await AuthService.logout();
+          final actualRoleTitle = _getRoleTitleFor(loggedInUser.role ?? loggedInUser.membershipType);
+          _showError('This account is registered as $actualRoleTitle. Please switch to $actualRoleTitle to login.');
+          return;
+        }
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const HomeScreen()),
+        );
+      } else if (_selectedRole == 'content_creator') {
+        if (!loggedInUser.isCreator) {
+          await AuthService.logout();
+          final actualRoleTitle = _getRoleTitleFor(loggedInUser.role ?? loggedInUser.membershipType);
+          _showError('This account is registered as $actualRoleTitle, not a Content Creator.');
+          return;
+        }
+        Navigator.pushReplacement(
+          context,
+          AppRoutes.fade(const CreatorHomeScreen()),
+        );
+      } else if (_selectedRole == 'retailer') {
+        if (!loggedInUser.isRetailer) {
+          await AuthService.logout();
+          final actualRoleTitle = _getRoleTitleFor(loggedInUser.role ?? loggedInUser.membershipType);
+          _showError('This account is registered as $actualRoleTitle, not a Retailer.');
+          return;
+        }
         Navigator.pushReplacement(
           context,
           AppRoutes.fade(const RetailerDashboard()),
         );
-      } else if (loggedInUser?.isOfficer == true || loggedInUser?.membershipType == 'Officer' || _selectedRole == 'officer') {
+      } else if (_selectedRole == 'officer') {
+        if (!loggedInUser.isOfficer) {
+          await AuthService.logout();
+          final actualRoleTitle = _getRoleTitleFor(loggedInUser.role ?? loggedInUser.membershipType);
+          _showError('This account is registered as $actualRoleTitle, not an Extension Officer.');
+          return;
+        }
         Navigator.pushReplacement(
           context,
           AppRoutes.fade(const ExtensionOfficerDashboard()),
-        );
-      } else if (loggedInUser?.isCreator == true || loggedInUser?.membershipType == 'Creator' || _selectedRole == 'content_creator') {
-        Navigator.pushReplacement(
-          context,
-          AppRoutes.fade(const CreatorHomeScreen()),
         );
       } else {
         Navigator.pushReplacement(
@@ -384,14 +445,17 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (error) {
       final errorStr = error.toString().toLowerCase();
       // If user is not registered, redirect to signup
-      if (errorStr.contains('not found') || errorStr.contains('register')) {
-        _showError('No account found with this number. Redirecting to registration...');
-        await Future.delayed(const Duration(milliseconds: 1200));
+      if (errorStr.contains('not found') || errorStr.contains('register') || errorStr.contains('no creator account') || errorStr.contains('no account')) {
+        _showError(error.toString().replaceFirst('Exception: ', ''));
+        await Future.delayed(const Duration(milliseconds: 1400));
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
           AppRoutes.slideFromRight(
-            SignupScreen(initialPhoneNumber: phone),
+            SignupScreen(
+              initialPhoneNumber: phone,
+              initialRole: _selectedRole,
+            ),
           ),
         );
       } else {
@@ -403,20 +467,23 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   String _getRoleTitle() {
-    switch (_selectedRole) {
-      case 'official':
-        return 'Government / CHC Official';
-      case 'retailer':
-        return 'role_retailer_title'.tr();
-      case 'officer':
-        return 'role_officer_title'.tr();
-      case 'chc_operator':
-        return 'role_chc_operator_title'.tr();
-      case 'content_creator':
-        return 'role_content_creator_title'.tr();
-      case 'farmer':
-      default:
-        return 'role_farmer_title'.tr();
+    return _getRoleTitleFor(_selectedRole);
+  }
+
+  String _getRoleTitleFor(String? roleKey) {
+    final r = (roleKey ?? '').toLowerCase().trim();
+    if (r == 'official') {
+      return 'Government / CHC Official';
+    } else if (r == 'retailer') {
+      return 'role_retailer_title'.tr();
+    } else if (r == 'officer') {
+      return 'role_officer_title'.tr();
+    } else if (r == 'chc_operator') {
+      return 'role_chc_operator_title'.tr();
+    } else if (r == 'content_creator' || r == 'creator') {
+      return 'role_content_creator_title'.tr();
+    } else {
+      return 'role_farmer_title'.tr();
     }
   }
 
@@ -1338,6 +1405,7 @@ class _LoginScreenState extends State<LoginScreen>
       final String phone = _phoneController.text.trim();
       final String cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
       canProceed = cleanPhone.length == 10 &&
+          validatePhoneNumber(cleanPhone) == null &&
           (_selectedRole != 'chc_operator' ||
               _passwordController.text.trim().isNotEmpty);
     }
@@ -1432,6 +1500,7 @@ class _LoginScreenState extends State<LoginScreen>
               initialPhoneNumber: _phoneController.text.isNotEmpty
                   ? _phoneController.text.trim()
                   : null,
+              initialRole: _selectedRole,
             ),
           ),
         );
