@@ -155,58 +155,80 @@ class CreatorService {
 
     // If local videoFile is provided and exists, perform multipart upload
     if (videoFile != null && videoFile.existsSync()) {
-      try {
-        final uri = Uri.parse('$_apiEndpoint?action=upload_reel');
-        final request = http.MultipartRequest('POST', uri);
-        request.fields['action'] = 'upload_reel';
-        request.fields['video_url'] = videoUrl;
-        request.fields['caption'] = caption;
-        request.fields['music_title'] = musicTitle;
-        request.fields['phone_number'] = phone;
-        request.fields['creator_name'] = creatorName;
-        request.fields['tags'] = tags ?? '';
-        if (creatorId != null && creatorId > 0) {
-          request.fields['creator_id'] = creatorId.toString();
-        }
-        if (user['userId'] != null && user['userId']!.isNotEmpty) {
-          request.fields['user_id'] = user['userId']!;
-        }
-        if (crop != null && crop.isNotEmpty) request.fields['crop'] = crop;
-        if (category != null && category.isNotEmpty) request.fields['category'] = category;
-        if (language != null && language.isNotEmpty) request.fields['language'] = language;
-        if (sourceUrl != null && sourceUrl.isNotEmpty) request.fields['source_url'] = sourceUrl;
-        if (originalContentDate != null && originalContentDate.isNotEmpty) {
-          request.fields['original_content_date'] = originalContentDate;
-        }
-        request.fields['rights_declared'] = rightsDeclared ? '1' : '0';
-
-        final fileName = videoFile.path.split(Platform.pathSeparator).last;
-        request.files.add(await http.MultipartFile.fromPath(
-          'video_file',
-          videoFile.path,
-          filename: fileName,
-        ));
-
-        final streamedResponse = await request.send().timeout(const Duration(seconds: 40));
-        final response = await http.Response.fromStream(streamedResponse);
-
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-          if (decoded is Map<String, dynamic> && decoded['success'] == true) {
-            await _clearReelsCache();
-            return CreatorActionResult(
-              success: true,
-              message: decoded['message']?.toString() ?? 'Reel published successfully',
-              data: decoded,
-            );
+      for (final targetUrl in [
+        '$_apiEndpoint?action=upload_reel',
+        '$_reelsEndpoint?action=upload',
+      ]) {
+        try {
+          final uri = Uri.parse(targetUrl);
+          final request = http.MultipartRequest('POST', uri);
+          request.fields['action'] = targetUrl.contains('upload_reel') ? 'upload_reel' : 'upload';
+          request.fields['video_url'] = videoUrl;
+          request.fields['caption'] = caption;
+          request.fields['music_title'] = musicTitle;
+          request.fields['phone_number'] = phone;
+          request.fields['creator_name'] = creatorName;
+          request.fields['tags'] = tags ?? '';
+          if (creatorId != null && creatorId > 0) {
+            request.fields['creator_id'] = creatorId.toString();
           }
+          if (user['userId'] != null && user['userId']!.isNotEmpty) {
+            request.fields['user_id'] = user['userId']!;
+          }
+          if (crop != null && crop.isNotEmpty) request.fields['crop'] = crop;
+          if (category != null && category.isNotEmpty) request.fields['category'] = category;
+          if (language != null && language.isNotEmpty) request.fields['language'] = language;
+          if (sourceUrl != null && sourceUrl.isNotEmpty) request.fields['source_url'] = sourceUrl;
+          if (originalContentDate != null && originalContentDate.isNotEmpty) {
+            request.fields['original_content_date'] = originalContentDate;
+          }
+          request.fields['rights_declared'] = rightsDeclared ? '1' : '0';
+
+          final fileName = videoFile.path.split(Platform.pathSeparator).last;
+          request.files.add(await http.MultipartFile.fromPath(
+            'video_file',
+            videoFile.path,
+            filename: fileName,
+          ));
+
+          final streamedResponse = await request.send().timeout(const Duration(seconds: 120));
+          final response = await http.Response.fromStream(streamedResponse);
+
+          if (response.body.isNotEmpty) {
+            try {
+              final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+              if (decoded is Map<String, dynamic>) {
+                if (decoded['success'] == true) {
+                  await _clearReelsCache();
+                  return CreatorActionResult(
+                    success: true,
+                    message: decoded['message']?.toString() ?? 'Reel published successfully',
+                    data: decoded,
+                  );
+                } else if (decoded['error'] != null) {
+                  return CreatorActionResult(
+                    success: false,
+                    error: decoded['error'].toString(),
+                  );
+                }
+              }
+            } catch (_) {}
+          }
+          if (response.statusCode >= 400) {
+            debugPrint('CreatorService: multipart error code ${response.statusCode}');
+          }
+        } catch (e) {
+          debugPrint('CreatorService: multipart upload to $targetUrl failed ($e)');
         }
-      } catch (e) {
-        debugPrint('CreatorService: multipart upload failed ($e), attempting JSON fallback');
       }
+
+      return const CreatorActionResult(
+        success: false,
+        error: 'Video upload timed out or failed. Please check your network and try again.',
+      );
     }
 
-    // 1. Primary endpoint: api.php?action=upload_reel
+    // 1. Primary endpoint (JSON only for remote URL reels): api.php?action=upload_reel
     try {
       final primaryUrl = Uri.parse('$_apiEndpoint?action=upload_reel');
       final response = await http
@@ -215,7 +237,7 @@ class CreatorService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(payload),
           )
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
@@ -251,7 +273,7 @@ class CreatorService {
               'action': 'upload',
             }),
           )
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
@@ -830,7 +852,8 @@ class CreatorService {
   static Future<CreatorStudioData?> _getCachedStudioData(String userKey) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final str = prefs.getString(_getStudioCacheKey(userKey));
+      String? str = prefs.getString(_getStudioCacheKey(userKey));
+      str ??= prefs.getString('cropsync_creator_studio_cache_v1');
       if (str != null) {
         final decoded = jsonDecode(str);
         if (decoded is Map<String, dynamic>) {

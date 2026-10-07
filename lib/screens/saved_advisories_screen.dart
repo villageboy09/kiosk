@@ -48,16 +48,19 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('diag_cancel'.tr(), style: const TextStyle(color: Colors.grey)),
+            child: Text('diag_cancel'.tr(),
+                style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFDC2626),
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
-            child: Text('diag_delete'.tr(), style: const TextStyle(color: Colors.white)),
+            child: Text('diag_delete'.tr(),
+                style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -140,7 +143,7 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
       case 'physical_damage':
         return const Color(0xFF475569);
       default:
-        return const Color(0xFF16A34A);
+        return const Color(0xFF6B7280);
     }
   }
 
@@ -157,7 +160,7 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
       case 'physical_damage':
         return 'diag_status_physical';
       default:
-        return 'diag_status_healthy';
+        return 'diag_status_diseased';
     }
   }
 
@@ -173,14 +176,16 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
         scrolledUnderElevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primary))
           : _advisories.isEmpty
               ? _buildEmptyState()
               : RefreshIndicator(
                   color: AppTheme.primary,
                   onRefresh: _loadSaved,
                   child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 16),
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
@@ -242,19 +247,25 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const PlantDoctorScreen(initialSource: ImageSource.camera),
+                    // Crop must be chosen first; the camera opens right after.
+                    builder: (_) => const PlantDoctorScreen(
+                        initialSource: ImageSource.camera),
                   ),
                 );
               },
-              icon: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+              icon: const Icon(Icons.camera_alt_rounded,
+                  size: 18, color: Colors.white),
               label: Text(
                 'diag_sheet_camera'.tr(),
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, color: Colors.white),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
                 elevation: 1,
               ),
             ),
@@ -268,7 +279,8 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
     final statusColor = _getStatusColor(item.healthStatus);
     final statusText = _getStatusKey(item.healthStatus).tr();
     final dateStr = DateFormat('dd MMM yyyy, hh:mm a').format(item.createdAt);
-    final hasImage = item.imagePath != null && File(item.imagePath!).existsSync();
+    final hasImage =
+        item.imagePath != null && File(item.imagePath!).existsSync();
 
     return Material(
       color: Colors.white,
@@ -283,23 +295,7 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
             MaterialPageRoute(
               builder: (_) => PlantDoctorScreen(
                 imagePath: item.imagePath,
-                preloadedResult: {
-                  'is_plant': true,
-                  'health_status': item.healthStatus,
-                  'detected_crop_name': item.cropName,
-                  'matched_problem_name': item.problemName,
-                  'confidence': item.confidence / 100.0,
-                  'ai_analysis': item.summary,
-                  'weather_impact': item.weatherImpact,
-                  'ai_control_measures': {
-                    'chemical': item.chemicalControls,
-                    'biological': item.biologicalControls,
-                    'preventative': item.preventativeControls,
-                  },
-                  'observed_symptoms': item.symptoms,
-                  'recovery_recommendations': item.recoveryTips,
-                  'matched_problem_id': item.matchedProblemId,
-                },
+                preloadedResult: item.toDiagnosisMap(),
               ),
             ),
           ).then((_) => _loadSaved());
@@ -346,7 +342,8 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: statusColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
@@ -396,7 +393,8 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(Icons.calendar_today_rounded, size: 11, color: Colors.grey.shade500),
+                        Icon(Icons.calendar_today_rounded,
+                            size: 11, color: Colors.grey.shade500),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
@@ -411,7 +409,8 @@ class _SavedAdvisoriesScreenState extends State<SavedAdvisoriesScreen> {
                         IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFF16A34A)),
+                          icon: const Icon(Icons.share_rounded,
+                              size: 18, color: Color(0xFF16A34A)),
                           onPressed: () => _shareAdvisory(item),
                           tooltip: 'diag_share'.tr(),
                         ),

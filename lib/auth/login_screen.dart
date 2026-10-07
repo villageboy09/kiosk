@@ -444,9 +444,24 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } catch (error) {
       final errorStr = error.toString().toLowerCase();
-      // If user is not registered, redirect to signup
-      if (errorStr.contains('not found') || errorStr.contains('register') || errorStr.contains('no creator account') || errorStr.contains('no account')) {
-        _showError(error.toString().replaceFirst('Exception: ', ''));
+      // Role mismatch errors must NOT redirect to signup! They must stay on Login screen so the user can switch roles.
+      final isRoleMismatch = errorStr.contains('registered as') ||
+          errorStr.contains('switch to') ||
+          errorStr.contains('select ') ||
+          errorStr.contains('deactivated') ||
+          errorStr.contains('deleted');
+
+      final isUnregistered = !isRoleMismatch && (
+          errorStr.contains('not found') ||
+          errorStr.contains('no creator account') ||
+          errorStr.contains('no account found') ||
+          errorStr.contains('not registered') ||
+          errorStr.contains('please register')
+      );
+
+      _showError(error.toString().replaceFirst('Exception: ', ''));
+
+      if (isUnregistered) {
         await Future.delayed(const Duration(milliseconds: 1400));
         if (!mounted) return;
         Navigator.pushReplacement(
@@ -458,8 +473,6 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         );
-      } else {
-        _showError(error.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

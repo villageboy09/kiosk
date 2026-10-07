@@ -9,6 +9,7 @@ class SavedAdvisory {
   final DateTime createdAt;
   final String? cropName;
   final String problemName;
+  final String? problemNameEn;
   final String healthStatus;
   final int confidence;
   final String? imagePath;
@@ -26,6 +27,7 @@ class SavedAdvisory {
     required this.createdAt,
     this.cropName,
     required this.problemName,
+    this.problemNameEn,
     required this.healthStatus,
     required this.confidence,
     this.imagePath,
@@ -39,11 +41,34 @@ class SavedAdvisory {
     this.matchedProblemId,
   });
 
+  /// Shape expected by PlantDoctorScreen's result view.
+  Map<String, dynamic> toDiagnosisMap() => {
+        'is_plant': true,
+        'is_crop_supported': true,
+        'is_clear_image': true,
+        'health_status': healthStatus,
+        'detected_crop_name': cropName,
+        'matched_problem_name': problemName,
+        'problem_name_en': problemNameEn,
+        'confidence': confidence / 100.0,
+        'ai_analysis': summary,
+        'weather_impact': weatherImpact,
+        'ai_control_measures': {
+          'chemical': chemicalControls,
+          'biological': biologicalControls,
+          'preventative': preventativeControls,
+        },
+        'observed_symptoms': symptoms,
+        'recovery_recommendations': recoveryTips,
+        'matched_problem_id': matchedProblemId,
+      };
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'createdAt': createdAt.toIso8601String(),
         'cropName': cropName,
         'problemName': problemName,
+        'problemNameEn': problemNameEn,
         'healthStatus': healthStatus,
         'confidence': confidence,
         'imagePath': imagePath,
@@ -59,12 +84,14 @@ class SavedAdvisory {
 
   factory SavedAdvisory.fromJson(Map<String, dynamic> json) {
     return SavedAdvisory(
-      id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      id: json['id']?.toString() ??
+          DateTime.now().millisecondsSinceEpoch.toString(),
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),
       cropName: json['cropName']?.toString(),
       problemName: json['problemName']?.toString() ?? 'Unknown Issue',
+      problemNameEn: json['problemNameEn']?.toString(),
       healthStatus: json['healthStatus']?.toString() ?? 'healthy',
       confidence: (json['confidence'] as num?)?.toInt() ?? 88,
       imagePath: json['imagePath']?.toString(),
@@ -124,6 +151,7 @@ class SavedAdvisoriesService {
   static Future<SavedAdvisory> saveAdvisory({
     String? cropName,
     required String problemName,
+    String? problemNameEn,
     required String healthStatus,
     required int confidence,
     String? sourceImagePath,
@@ -166,6 +194,7 @@ class SavedAdvisoriesService {
       createdAt: DateTime.now(),
       cropName: cropName,
       problemName: problemName,
+      problemNameEn: problemNameEn,
       healthStatus: healthStatus,
       confidence: confidence,
       imagePath: permanentImagePath,
@@ -192,12 +221,15 @@ class SavedAdvisoriesService {
   }
 
   /// Check if a problem is already saved
-  static Future<bool> isAdvisorySaved(String problemName, {String? cropName}) async {
+  static Future<bool> isAdvisorySaved(String problemName,
+      {String? cropName}) async {
     final list = await getSavedAdvisories();
     return list.any((item) =>
-        item.problemName.trim().toLowerCase() == problemName.trim().toLowerCase() &&
+        item.problemName.trim().toLowerCase() ==
+            problemName.trim().toLowerCase() &&
         (cropName == null ||
-            item.cropName?.trim().toLowerCase() == cropName.trim().toLowerCase()));
+            item.cropName?.trim().toLowerCase() ==
+                cropName.trim().toLowerCase()));
   }
 
   /// Delete a saved advisory by ID

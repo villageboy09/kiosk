@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:video_player/video_player.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/models/creator_studio_model.dart';
 import 'package:cropsync/models/reel_model.dart';
@@ -1210,7 +1209,7 @@ class _CreatorStudioScreenState extends State<CreatorStudioScreen> with SingleTi
   }
 }
 
-class ReelThumbnailWidget extends StatefulWidget {
+class ReelThumbnailWidget extends StatelessWidget {
   final ReelModel reel;
   final double width;
   final double height;
@@ -1225,66 +1224,63 @@ class ReelThumbnailWidget extends StatefulWidget {
   });
 
   @override
-  State<ReelThumbnailWidget> createState() => _ReelThumbnailWidgetState();
-}
+  Widget build(BuildContext context) {
+    final thumb = reel.thumbnailUrl;
+    final ytThumb = _extractYoutubeThumbnail(reel.videoUrl);
+    final effectiveImageUrl = (thumb != null && thumb.trim().isNotEmpty)
+        ? thumb.trim()
+        : ytThumb;
 
-class _ReelThumbnailWidgetState extends State<ReelThumbnailWidget> {
-  VideoPlayerController? _videoController;
-  bool _isVideoInitialized = false;
-  bool _hasVideoError = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _resolveThumbnail();
-  }
-
-  @override
-  void didUpdateWidget(covariant ReelThumbnailWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.reel.thumbnailUrl != widget.reel.thumbnailUrl ||
-        oldWidget.reel.videoUrl != widget.reel.videoUrl) {
-      _videoController?.dispose();
-      _videoController = null;
-      _isVideoInitialized = false;
-      _hasVideoError = false;
-      _resolveThumbnail();
+    Widget content;
+    if (effectiveImageUrl != null && effectiveImageUrl.isNotEmpty) {
+      content = CachedNetworkImage(
+        imageUrl: effectiveImageUrl,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => _buildPlaceholder(),
+        errorWidget: (_, __, ___) => _buildFallback(),
+      );
+    } else {
+      content = _buildFallback();
     }
-  }
 
-  void _resolveThumbnail() {
-    final thumb = widget.reel.thumbnailUrl;
-    if (thumb != null && thumb.trim().isNotEmpty) return;
-    if (_extractYoutubeThumbnail(widget.reel.videoUrl) != null) return;
-
-    final vidUrl = widget.reel.videoUrl.trim();
-    if (vidUrl.isNotEmpty && (vidUrl.startsWith('http://') || vidUrl.startsWith('https://'))) {
-      try {
-        final uri = Uri.parse(vidUrl);
-        _videoController = VideoPlayerController.networkUrl(uri)
-          ..initialize().then((_) {
-            if (mounted) {
-              setState(() {
-                _isVideoInitialized = true;
-              });
-            }
-          }).catchError((_) {
-            if (mounted) {
-              setState(() {
-                _hasVideoError = true;
-              });
-            }
-          });
-      } catch (_) {
-        _hasVideoError = true;
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _videoController?.dispose();
-    super.dispose();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: Container(
+        width: width,
+        height: height,
+        color: Colors.black87,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned.fill(child: content),
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.4),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 20),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   static String? _extractYoutubeThumbnail(String url) {
@@ -1301,86 +1297,10 @@ class _ReelThumbnailWidgetState extends State<ReelThumbnailWidget> {
     return null;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final thumb = widget.reel.thumbnailUrl;
-    final ytThumb = _extractYoutubeThumbnail(widget.reel.videoUrl);
-    final effectiveImageUrl = (thumb != null && thumb.trim().isNotEmpty)
-        ? thumb.trim()
-        : ytThumb;
-
-    Widget content;
-    if (effectiveImageUrl != null && effectiveImageUrl.isNotEmpty) {
-      content = CachedNetworkImage(
-        imageUrl: effectiveImageUrl,
-        width: widget.width,
-        height: widget.height,
-        fit: BoxFit.cover,
-        placeholder: (_, __) => _buildPlaceholder(),
-        errorWidget: (_, __, ___) => _buildFallback(),
-      );
-    } else if (_isVideoInitialized && _videoController != null) {
-      content = SizedBox(
-        width: widget.width,
-        height: widget.height,
-        child: FittedBox(
-          fit: BoxFit.cover,
-          clipBehavior: Clip.hardEdge,
-          child: SizedBox(
-            width: _videoController!.value.size.width,
-            height: _videoController!.value.size.height,
-            child: VideoPlayer(_videoController!),
-          ),
-        ),
-      );
-    } else if (!_hasVideoError && _videoController != null) {
-      content = _buildPlaceholder();
-    } else {
-      content = _buildFallback();
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(widget.borderRadius),
-      child: Container(
-        width: widget.width,
-        height: widget.height,
-        color: Colors.black87,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Positioned.fill(child: content),
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.35),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.45),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 20),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildPlaceholder() {
     return Container(
-      width: widget.width,
-      height: widget.height,
+      width: width,
+      height: height,
       color: const Color(0xFF1E293B),
       child: Center(
         child: Icon(
@@ -1394,8 +1314,8 @@ class _ReelThumbnailWidgetState extends State<ReelThumbnailWidget> {
 
   Widget _buildFallback() {
     return Container(
-      width: widget.width,
-      height: widget.height,
+      width: width,
+      height: height,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,

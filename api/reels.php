@@ -162,50 +162,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
 
             if (!$creator) {
-                $resolvedName = (!empty($userName) && strtolower($userName) !== 'agri creator') ? $userName : '';
-                $sanitizedUsername = !empty($username) ? $username : (!empty($last10) ? 'creator_' . substr($last10, -6) : 'creator_' . rand(1000, 9999));
-                $dName = !empty($resolvedName) ? $resolvedName : 'Agri Creator';
-                $pImg = 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80';
-                $insPhone = !empty($last10) ? $last10 : $phoneNumber;
-                $insUserId = !empty($userId) ? $userId : $insPhone;
-                $pdo->prepare("INSERT INTO creators (user_id, username, display_name, profile_image_url, is_verified, phone_number, bio) VALUES (?, ?, ?, ?, 1, ?, 'Progressive Farmer & Agricultural Contributor')")->execute([$insUserId, $sanitizedUsername, $dName, $pImg, $insPhone]);
-                $cId = $pdo->lastInsertId();
-                $creator = ['id' => intval($cId), 'user_id' => $insUserId, 'username' => $sanitizedUsername, 'display_name' => $dName, 'profile_image_url' => $pImg, 'is_verified' => 1, 'phone_number' => $insPhone, 'bio' => 'Progressive Farmer'];
+                http_response_code(404);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Creator profile not found. Please register as a Content Creator.',
+                    'is_creator' => false
+                ]);
+                exit();
             }
             $creatorId = intval($creator['id']);
             $creatorPhone = trim($creator['phone_number'] ?? $phoneNumber);
 
-            $cleanCP = preg_replace('/[^0-9]/', '', $creatorPhone ?: $phoneNumber);
-            $last10CP = strlen($cleanCP) >= 10 ? substr($cleanCP, -10) : $cleanCP;
-            $phoneList = array_values(array_filter(array_unique([$last10CP, $last10CP ? '91' . $last10CP : '', $last10CP ? '+91' . $last10CP : '', $creatorPhone, $phoneNumber])));
-
-            // Backfill any legacy reels with creator_id = 0 for this creator
-            if (!empty($phoneList) && $creatorId > 0) {
-                $inClause = implode(',', array_fill(0, count($phoneList), '?'));
-                try {
-                    $pdo->prepare("UPDATE reels SET creator_id = ? WHERE (creator_id = 0 OR creator_id IS NULL) AND phone_number IN ($inClause)")->execute(array_merge([$creatorId], $phoneList));
-                } catch (Throwable $e) {}
-            }
-
-            // Strictly fetch only reels belonging to this creator
+            // Strictly fetch only reels belonging to this creator (avoid collation mismatch join)
             $sql = "
-                SELECT r.*, c.username AS creator_username, 
-                COALESCE(u.name, c.display_name) AS creator_display_name, 
-                COALESCE(u.profile_image_url, c.profile_image_url) AS creator_profile_image_url, 
+                SELECT r.*, 
+                c.username AS creator_username, 
+                c.display_name AS creator_display_name, 
+                c.profile_image_url AS creator_profile_image_url, 
                 c.is_verified AS creator_is_verified 
                 FROM reels r 
-                LEFT JOIN creators c ON r.creator_id = c.id 
-                LEFT JOIN users u ON u.phone_number = c.phone_number OR (r.phone_number = u.phone_number AND r.phone_number != '')
+                INNER JOIN creators c ON r.creator_id = c.id 
                 WHERE r.creator_id = ?
+                ORDER BY r.id DESC
             ";
             $rParams = [$creatorId];
-            if (!empty($phoneList)) {
-                $inClause = implode(',', array_fill(0, count($phoneList), '?'));
-                $sql .= " OR ((r.creator_id = 0 OR r.creator_id IS NULL) AND r.phone_number IN ($inClause))";
-                $rParams = array_merge($rParams, $phoneList);
-            }
-            $sql .= " ORDER BY r.id DESC";
-
             $rStmt = $pdo->prepare($sql);
             $rStmt->execute($rParams);
             $rawReels = $rStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -399,15 +379,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt = $pdo->prepare("
             SELECT r.*, 
             c.username AS creator_username, 
-            COALESCE(u.name, c.display_name) AS creator_display_name, 
-            COALESCE(u.profile_image_url, c.profile_image_url) AS creator_profile_image_url,
+            c.display_name AS creator_display_name, 
+            c.profile_image_url AS creator_profile_image_url,
             c.is_verified AS creator_is_verified,
             c.phone_number AS creator_phone_number,
-            c.bio AS creator_bio
+            c.bio AS creator_bio,
+            c.status AS creator_status
             FROM reels r
-            LEFT JOIN creators c ON r.creator_id = c.id
-            LEFT JOIN users u ON u.phone_number = c.phone_number OR (r.phone_number = u.phone_number AND r.phone_number != '')
-            WHERE r.is_active = 1 AND (r.status = 'approved' OR r.status IS NULL) AND c.id IS NOT NULL
+            INNER JOIN creators c ON r.creator_id = c.id
+            WHERE r.is_active = 1 
+              AND (r.status = 'approved' OR r.status IS NULL)
+              AND (c.status IS NULL OR c.status != 'suspended')
             ORDER BY r.id DESC
         ");
         $stmt->execute();
@@ -765,6 +747,18 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
             @mkdir($uploadDir, 0777, true);
         }
 
+        // Handle file size limits gracefully
+        if (isset($_FILES['video_file']) && in_array($_FILES['video_file']['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE])) {
+            http_response_code(413);
+            echo json_encode(["status" => false, "success" => false, "error" => "The video file is too large for the server upload limit. Please choose a smaller video clip."]);
+            exit();
+        }
+        if (isset($_FILES['video']) && in_array($_FILES['video']['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE])) {
+            http_response_code(413);
+            echo json_encode(["status" => false, "success" => false, "error" => "The video file is too large for the server upload limit. Please choose a smaller video clip."]);
+            exit();
+        }
+
         $fileUploaded = false;
         if (isset($_FILES['video_file']) && $_FILES['video_file']['error'] === UPLOAD_ERR_OK) {
             $ext = strtolower(pathinfo($_FILES['video_file']['name'], PATHINFO_EXTENSION));
@@ -796,9 +790,16 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($videoUrl) || empty($caption)) {
             http_response_code(400);
-            echo json_encode(["error" => "Missing video_url or caption"]);
+            echo json_encode(["status" => false, "success" => false, "error" => "Missing video_url or caption"]);
             exit();
         }
+
+        $crop = trim($data['crop'] ?? $_POST['crop'] ?? 'Paddy');
+        $category = trim($data['category'] ?? $_POST['category'] ?? 'Crop Care');
+        $language = trim($data['language'] ?? $_POST['language'] ?? 'te');
+        $sourceUrl = trim($data['source_url'] ?? $data['sourceUrl'] ?? $_POST['source_url'] ?? $_POST['sourceUrl'] ?? '');
+        $originalContentDate = trim($data['original_content_date'] ?? $data['originalContentDate'] ?? $_POST['original_content_date'] ?? date('Y-m-d'));
+        $rightsDeclared = (!empty($data['rights_declared']) || !empty($data['rightsDeclared']) || !empty($_POST['rights_declared'])) ? 1 : 1;
 
         try {
             if ($creatorId <= 0) {
@@ -839,16 +840,36 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sanitizedUsername = !empty($resolvedName) ? strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', str_replace(' ', '_', $resolvedName))) : (!empty($last10) ? 'creator_' . substr($last10, -6) : 'creator_' . rand(1000, 9999));
                     $dName = !empty($resolvedName) ? $resolvedName : 'Agri Creator';
                     $insPhone = !empty($last10) ? $last10 : $phoneNumber;
-                    $insUserId = !empty($userId) ? $userId : $insPhone;
+                    $insUserId = !empty($userId) ? $userId : (!empty($last10) ? 'user_' . $last10 : null);
                     $pdo->prepare("INSERT INTO creators (user_id, username, display_name, profile_image_url, is_verified, phone_number, bio) VALUES (?, ?, ?, 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80', 1, ?, 'Progressive Farmer')")->execute([$insUserId, $sanitizedUsername, $dName, $insPhone]);
                     $creatorId = intval($pdo->lastInsertId());
                 }
             }
 
+            if ($creatorId > 0) {
+                $cChk = $pdo->prepare("SELECT status FROM creators WHERE id = ?");
+                $cChk->execute([$creatorId]);
+                $cStatusVal = $cChk->fetchColumn();
+                if ($cStatusVal === 'suspended') {
+                    http_response_code(403);
+                    echo json_encode([
+                        "status" => false, 
+                        "success" => false, 
+                        "error" => "This creator account is currently suspended. You cannot publish new reels."
+                    ]);
+                    exit();
+                }
+            }
+
             try {
+                $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, crop, category, language, source_url, original_content_date, rights_declared, views_count, likes_count, saves_count, comments_count, is_active, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 'under_review', NOW())");
+                $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags, $crop, $category, $language, $sourceUrl, $originalContentDate, $rightsDeclared]);
+                $reelId = intval($pdo->lastInsertId());
+            } catch (Throwable $detailErr) {
                 $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active, status) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 'under_review')");
                 $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags]);
                 $reelId = intval($pdo->lastInsertId());
+            }
             } catch (Throwable $dbErr) {
                 // Auto repair reels schema and columns if missing
                 try {
@@ -1033,11 +1054,26 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         try {
             if ($isActive == 1) {
-                // Enforce approval check
-                $chk = $pdo->prepare("SELECT status FROM reels WHERE id = ?");
+                // Enforce approval and non-suspended creator check
+                $chk = $pdo->prepare("
+                    SELECT r.status, c.status AS creator_status 
+                    FROM reels r 
+                    LEFT JOIN creators c ON r.creator_id = c.id 
+                    WHERE r.id = ?
+                ");
                 $chk->execute([$reelId]);
-                $curStatus = $chk->fetchColumn();
-                if ($curStatus !== 'approved') {
+                $row = $chk->fetch(PDO::FETCH_ASSOC);
+                if (!$row) {
+                    http_response_code(404);
+                    echo json_encode(["status" => false, "success" => false, "error" => "Reel not found."]);
+                    exit();
+                }
+                if (($row['creator_status'] ?? '') === 'suspended') {
+                    http_response_code(403);
+                    echo json_encode(["status" => false, "success" => false, "error" => "Cannot activate reel: Creator is suspended."]);
+                    exit();
+                }
+                if ($row['status'] !== 'approved') {
                     http_response_code(400);
                     echo json_encode(["status" => false, "success" => false, "error" => "Reel cannot be activated until approved by a moderator."]);
                     exit();
@@ -1049,8 +1085,8 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($stmt->rowCount() === 0) {
                     $chk2 = $pdo->prepare("SELECT status, is_active FROM reels WHERE id = ?");
                     $chk2->execute([$reelId]);
-                    $row = $chk2->fetch(PDO::FETCH_ASSOC);
-                    if (!$row || $row['status'] !== 'approved') {
+                    $row2 = $chk2->fetch(PDO::FETCH_ASSOC);
+                    if (!$row2 || $row2['status'] !== 'approved') {
                         http_response_code(400);
                         echo json_encode(["status" => false, "success" => false, "error" => "Reel cannot be activated until approved by a moderator."]);
                         exit();

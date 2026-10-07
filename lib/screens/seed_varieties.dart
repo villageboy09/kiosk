@@ -2566,30 +2566,34 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen> {
     setState(() => _isVideoLoading = true);
 
     try {
-      _videoController = VideoPlayerController.networkUrl(
+      final controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.variety.testimonialVideoUrl!),
       );
-      await _videoController!.initialize();
+      await controller.initialize();
 
-      if (mounted) {
-        _chewieController = ChewieController(
-          videoPlayerController: _videoController!,
-          autoPlay: true,
-          looping: false,
-          aspectRatio: _videoController!.value.aspectRatio,
-          showControls: true,
-          materialProgressColors: ChewieProgressColors(
-            playedColor: const Color(0xFF047857),
-            handleColor: const Color(0xFF047857),
-            bufferedColor: Colors.grey[300]!,
-            backgroundColor: Colors.grey[200]!,
-          ),
-        );
-        setState(() {
-          _showVideo = true;
-          _isVideoLoading = false;
-        });
+      if (!mounted) {
+        await controller.dispose();
+        return;
       }
+
+      _videoController = controller;
+      _chewieController = ChewieController(
+        videoPlayerController: controller,
+        autoPlay: true,
+        looping: false,
+        aspectRatio: controller.value.aspectRatio > 0 ? controller.value.aspectRatio : 16 / 9,
+        showControls: true,
+        materialProgressColors: ChewieProgressColors(
+          playedColor: const Color(0xFF047857),
+          handleColor: const Color(0xFF047857),
+          bufferedColor: Colors.grey[300]!,
+          backgroundColor: Colors.grey[200]!,
+        ),
+      );
+      setState(() {
+        _showVideo = true;
+        _isVideoLoading = false;
+      });
     } catch (e) {
       if (mounted) {
         setState(() => _isVideoLoading = false);

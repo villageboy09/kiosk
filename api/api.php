@@ -663,6 +663,60 @@ try {
     // Do not block API execution if any DB setup fails
 }
 
+// Helper for automatic daytime approvals for moderation SLA
+if (!function_exists('processReelAutoApprovals')) {
+    function processReelAutoApprovals($pdo) {
+        try {
+            if (!$pdo instanceof PDO) return 0;
+            $istTz = new DateTimeZone('Asia/Kolkata');
+            $now = new DateTime('now', $istTz);
+            $currentHour = intval($now->format('G'));
+            if ($currentHour >= 21 || $currentHour < 6) return 0;
+
+            $stmt = $pdo->prepare("
+                SELECT id, creator_id, created_at, source_url, is_duplicate 
+                FROM reels 
+                WHERE (status IN ('submitted', 'under_review') OR (is_active = 0 AND (status IS NULL OR status = '')))
+                  AND is_active = 0
+                  AND (is_duplicate = 0 OR is_duplicate IS NULL)
+                  AND created_at <= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+            ");
+            $stmt->execute();
+            $candidates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if (empty($candidates)) return 0;
+
+            $approvedCount = 0;
+            $upStmt = $pdo->prepare("
+                UPDATE reels 
+                SET status = 'approved', is_active = 1, payout_eligible = 1, 
+                    reviewed_by = 'Auto Approval Engine (10-min SLA)', reviewed_at = NOW() 
+                WHERE id = ? AND is_active = 0
+            ");
+            $revStmt = $pdo->prepare("
+                INSERT INTO reel_reviews (reel_id, reviewer_id, decision, reason_code, comments, reviewed_at)
+                VALUES (?, 'System Auto-Approval', 'approved', 'auto_approved_10min', 'Auto-approved after 10-minute moderator SLA elapsed (Daytime)', NOW())
+            ");
+
+            foreach ($candidates as $cand) {
+                $createdDate = new DateTime($cand['created_at'], $istTz);
+                $uploadHour = intval($createdDate->format('G'));
+                $uploadMinute = intval($createdDate->format('i'));
+                if ($uploadHour >= 21 || $uploadHour < 6) continue;
+                if ($uploadHour === 20 && $uploadMinute > 50) continue;
+
+                $reelId = intval($cand['id']);
+                $upStmt->execute([$reelId]);
+                try { $revStmt->execute([$reelId]); } catch (Throwable $e) {}
+                $approvedCount++;
+            }
+            return $approvedCount;
+        } catch (Throwable $e) {
+            error_log("Error in processReelAutoApprovals: " . $e->getMessage());
+            return 0;
+        }
+    }
+}
+
 $rawInput = file_get_contents('php://input');
 $jsonParsed = !empty($rawInput) ? json_decode($rawInput, true) : null;
 $action = $_GET['action'] ?? $_POST['action'] ?? ($jsonParsed['action'] ?? '');
@@ -1443,10 +1497,12 @@ function registerUser($pdo) {
         $existingUser = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($existingUser) {
+            $isDeleted = !empty($existingUser['is_deleted']);
             $existingRole = strtolower($existingUser['role'] ?? 'farmer');
-            // If already registered with the same role, prevent duplicate and notify
-            if ($existingRole === strtolower($role)) {
-                $roleTitle = ucfirst(str_replace('_', ' ', $existingRole));
+            $roleTitle = ucfirst(str_replace('_', ' ', $existingRole));
+
+            // If account is currently active, DO NOT allow overwriting or hijacking!
+            if (!$isDeleted) {
                 echo json_encode([
                     'success' => false,
                     'error' => "An account is already registered as {$roleTitle} with this mobile number. Please login.",
@@ -1456,9 +1512,9 @@ function registerUser($pdo) {
                 return;
             }
 
-            // Update existing user record with the new selected role and profile data
+            // Account was previously soft-deleted ($isDeleted = 1): reactivate and update with new details!
             $passHash = !empty($password) ? password_hash($password, PASSWORD_DEFAULT) : null;
-            $updateSql = "UPDATE users SET name = ?, role = ?, membership_type = ?, client_code = COALESCE(?, client_code)";
+            $updateSql = "UPDATE users SET name = ?, role = ?, membership_type = ?, is_deleted = 0, client_code = COALESCE(?, client_code)";
             $params = [$name, $role, $membershipType, $clientCode];
 
             if (!empty($email)) {
@@ -1635,7 +1691,7 @@ function checkUser($pdo) {
         $last10 = strlen($cleanPhone) > 10 ? substr($cleanPhone, -10) : $cleanPhone;
         $phone91 = '91' . $last10;
 
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ? OR phone_number = ? OR phone_number = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE (user_id = ? OR phone_number = ? OR phone_number = ?) AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
         $stmt->execute([$userId, $last10, $phone91]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -1705,14 +1761,53 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
     $stmtU->execute([$userId, $last10, $userId, $last10, $phone91]);
     $userRow = $stmtU->fetch(PDO::FETCH_ASSOC);
 
+    // Reject soft-deleted accounts immediately
+    if ($userRow && !empty($userRow['is_deleted'])) {
+        return [
+            'success' => false,
+            'message' => 'This account has been deactivated or deleted. Please contact support or register a new account.'
+        ];
+    }
+
     // Pre-fetch creator if exists
     $stmtC = $pdo->prepare("SELECT * FROM creators WHERE phone_number = ? OR phone_number = ? OR phone_number = ? OR user_id = ? OR username = ? LIMIT 1");
     $stmtC->execute([$userId, $last10, $phone91, $last10, $userId]);
     $creatorRow = $stmtC->fetch(PDO::FETCH_ASSOC);
 
-    // 1. If role is explicitly specified, enforce strict role checking
-    if ($role === 'content_creator' || $role === 'creator') {
-        if ($creatorRow) {
+    // Determine actual registered role in system
+    $userRole = null;
+    if ($userRow) {
+        $existingRole = strtolower($userRow['role'] ?? 'farmer');
+        $existingMem = strtolower($userRow['membership_type'] ?? '');
+        if ($existingRole === 'content_creator' || $existingRole === 'creator' || $existingMem === 'creator') {
+            $userRole = 'content_creator';
+        } elseif ($existingRole === 'retailer' || $existingMem === 'retailer') {
+            $userRole = 'retailer';
+        } elseif ($existingRole === 'officer' || $existingMem === 'officer') {
+            $userRole = 'officer';
+        } elseif ($existingRole === 'chc_operator' || $existingMem === 'chc operator' || $existingMem === 'chc_operator') {
+            $userRole = 'chc_operator';
+        } else {
+            $userRole = 'farmer';
+        }
+    } elseif ($creatorRow) {
+        $userRole = 'content_creator';
+    }
+
+    $reqRole = $role ? strtolower(trim((string)$role)) : null;
+    if ($reqRole === 'creator') $reqRole = 'content_creator';
+
+    // 1. Strict Creator Login Check
+    if ($reqRole === 'content_creator') {
+        if ($userRole !== null && $userRole !== 'content_creator') {
+            $title = $getRoleTitle($userRole);
+            return [
+                'success' => false,
+                'message' => "This account is registered as a {$title}, not a Content Creator. Please select {$title} to login."
+            ];
+        }
+
+        if ($userRole === 'content_creator' || $creatorRow) {
             $cImg = !empty($creatorRow['profile_image_url']) ? $creatorRow['profile_image_url'] : ($userRow['profile_image_url'] ?? null);
             if (!empty($cImg) && strpos($cImg, 'http://kiosk.cropsync.in') === 0) {
                 $cImg = str_replace('http://', 'https://', $cImg);
@@ -1720,11 +1815,11 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
             return [
                 'success' => true,
                 'role' => 'content_creator',
-                'creator_id' => (int)$creatorRow['id'],
+                'creator_id' => $creatorRow ? (int)$creatorRow['id'] : 0,
                 'user' => [
-                    'user_id' => $creatorRow['phone_number'] ?: $last10,
-                    'name' => $creatorRow['display_name'] ?: ($userRow['name'] ?? $creatorRow['username']),
-                    'phone_number' => $creatorRow['phone_number'] ?: $last10,
+                    'user_id' => ($creatorRow['phone_number'] ?? null) ?: $last10,
+                    'name' => ($creatorRow['display_name'] ?? null) ?: (($userRow['name'] ?? null) ?: ($creatorRow['username'] ?? 'Agri Creator')),
+                    'phone_number' => ($creatorRow['phone_number'] ?? null) ?: $last10,
                     'profile_image_url' => $cImg,
                     'role' => 'content_creator',
                     'membership_type' => 'Creator'
@@ -1732,71 +1827,21 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
             ];
         }
 
-        // If not in creators table, check if users table explicitly marks them as a creator
-        if ($userRow) {
-            $existingRole = strtolower($userRow['role'] ?? '');
-            $existingMem = strtolower($userRow['membership_type'] ?? '');
-            if ($existingRole === 'content_creator' || $existingRole === 'creator' || $existingMem === 'creator') {
-                return [
-                    'success' => true,
-                    'role' => 'content_creator',
-                    'user' => array_merge($userRow, [
-                        'role' => 'content_creator',
-                        'membership_type' => 'Creator'
-                    ])
-                ];
-            }
-
-            // User is registered under a DIFFERENT role (e.g. Farmer)
-            $title = $getRoleTitle($existingRole ?: 'farmer');
-            return [
-                'success' => false,
-                'message' => "This account is registered as a {$title}, not a Content Creator. Please select {$title} to login."
-            ];
-        }
-
         return [
             'success' => false,
             'message' => 'No Content Creator account found for this mobile number. Please register.'
         ];
-    } elseif ($role === 'farmer') {
-        // If account belongs to a Creator, reject login into Farmer section!
-        if ($creatorRow) {
+    } elseif ($reqRole === 'farmer') {
+        // 2. Strict Farmer Login Check
+        if ($userRole !== null && $userRole !== 'farmer') {
+            $title = $getRoleTitle($userRole);
             return [
                 'success' => false,
-                'message' => 'This account is registered as a Content Creator, not a Farmer. Please select Content Creator to login.'
+                'message' => "This account is registered as a {$title}, not a Farmer. Please select {$title} to login."
             ];
         }
 
-        if ($userRow) {
-            $existingRole = strtolower($userRow['role'] ?? 'farmer');
-            $existingMem = strtolower($userRow['membership_type'] ?? '');
-            if ($existingRole === 'content_creator' || $existingRole === 'creator' || $existingMem === 'creator') {
-                return [
-                    'success' => false,
-                    'message' => 'This account is registered as a Content Creator, not a Farmer. Please select Content Creator to login.'
-                ];
-            }
-            if ($existingRole === 'retailer' || $existingMem === 'retailer') {
-                return [
-                    'success' => false,
-                    'message' => 'This account is registered as a Retailer, not a Farmer. Please select Retailer to login.'
-                ];
-            }
-            if ($existingRole === 'officer' || $existingMem === 'officer') {
-                return [
-                    'success' => false,
-                    'message' => 'This account is registered as an Extension Officer, not a Farmer. Please select Agricultural Extension Officer to login.'
-                ];
-            }
-            if ($existingRole === 'chc_operator' || $existingMem === 'chc operator' || $existingMem === 'chc_operator') {
-                return [
-                    'success' => false,
-                    'message' => 'This account is registered as a CHC Operator, not a Farmer. Please select CHC Operator to login.'
-                ];
-            }
-
-            // Genuine farmer user
+        if ($userRole === 'farmer') {
             return [
                 'success' => true,
                 'role' => 'farmer',
@@ -1807,7 +1852,7 @@ function loginWithRoleChecking($pdo, $userId, $role = null) {
             ];
         }
 
-        // Not in users table - check if in specialized tables
+        // Not in users table - check specialized tables
         $stmtRet = $pdo->prepare("SELECT id FROM retailer_partners WHERE contact_number = ? OR contact_number = ? OR contact_number = ? LIMIT 1");
         $stmtRet->execute([$userId, $last10, $phone91]);
         if ($stmtRet->fetch()) {
@@ -2108,7 +2153,7 @@ function getUser($pdo) {
         return;
     }
     
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
     $stmt->execute([$userId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -5300,22 +5345,35 @@ function resolveOrCreateCreator($pdo, $phoneNumber = '', $name = '', $creatorId 
         }
     }
 
-    // 3. Check users table to adopt verified user's registered name
+    // 3. Check users table: ONLY create a creator record if user is actually registered as a creator!
+    $uRow = null;
     $resolvedName = $name;
     if (!empty($last10) || !empty($userId)) {
         try {
-            $uStmt = $pdo->prepare("SELECT name, phone_number FROM users WHERE phone_number IN (?, ?, ?) OR user_id IN (?, ?) LIMIT 1");
+            $uStmt = $pdo->prepare("SELECT * FROM users WHERE (phone_number IN (?, ?, ?) OR user_id IN (?, ?)) AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
             $uStmt->execute([$last10, $phone91, $phoneNumber, $userId, $last10]);
             $uRow = $uStmt->fetch(PDO::FETCH_ASSOC);
-            if ($uRow && !empty($uRow['name'])) {
-                if (empty($resolvedName) || strtolower($resolvedName) === 'agri creator') {
-                    $resolvedName = $uRow['name'];
-                }
-            }
         } catch (Throwable $e) {}
     }
 
-    // 4. Auto-create creator specifically for THIS unique user/phone (NEVER reuse someone else's creator record by display name)
+    $isRegisteredCreator = false;
+    if ($uRow) {
+        $uRole = strtolower($uRow['role'] ?? '');
+        $uMem = strtolower($uRow['membership_type'] ?? '');
+        if ($uRole === 'content_creator' || $uRole === 'creator' || $uMem === 'creator') {
+            $isRegisteredCreator = true;
+            if (empty($resolvedName) || strtolower($resolvedName) === 'agri creator') {
+                $resolvedName = $uRow['name'] ?? '';
+            }
+        }
+    }
+
+    // NEVER auto-create creator rows for farmers or unregistered accounts!
+    if (!$isRegisteredCreator) {
+        return null;
+    }
+
+    // 4. Auto-create creator specifically for THIS registered creator
     $sanitizedBase = (!empty($resolvedName) && strtolower($resolvedName) !== 'agri creator')
         ? strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', str_replace(' ', '_', $resolvedName)))
         : '';
@@ -5373,6 +5431,18 @@ function uploadReel($pdo) {
             @mkdir($uploadDir, 0777, true);
         }
 
+        // Handle file size limits gracefully
+        if (isset($_FILES['video_file']) && in_array($_FILES['video_file']['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE])) {
+            http_response_code(413);
+            echo json_encode(['success' => false, 'error' => 'The video file is too large for the server upload limit. Please choose a smaller video clip.']);
+            return;
+        }
+        if (isset($_FILES['video']) && in_array($_FILES['video']['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE])) {
+            http_response_code(413);
+            echo json_encode(['success' => false, 'error' => 'The video file is too large for the server upload limit. Please choose a smaller video clip.']);
+            return;
+        }
+
         $fileUploaded = false;
         if (isset($_FILES['video_file']) && $_FILES['video_file']['error'] === UPLOAD_ERR_OK) {
             $ext = strtolower(pathinfo($_FILES['video_file']['name'], PATHINFO_EXTENSION));
@@ -5416,6 +5486,15 @@ function uploadReel($pdo) {
 
         $creator = resolveOrCreateCreator($pdo, $phoneNumber, $creatorName, $creatorId, $userId);
         $creatorId = intval($creator['id']);
+
+        if (isset($creator['status']) && $creator['status'] === 'suspended') {
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'error' => 'This creator account is currently suspended. You cannot publish new reels.'
+            ]);
+            return;
+        }
 
         // Duplicate URL detection
         $isDuplicate = 0;
@@ -6007,26 +6086,19 @@ function getCreatorStudioData($pdo) {
         $userName = trim($_GET['user_name'] ?? $_GET['name'] ?? '');
 
         $creator = resolveOrCreateCreator($pdo, $phoneNumber, !empty($userName) ? $userName : $username, $creatorIdParam, $userId);
+        if (!$creator) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'No Creator profile found for this account. Please register as a Content Creator.',
+                'is_creator' => false
+            ]);
+            return;
+        }
         $creatorId = intval($creator['id']);
         $creatorPhone = trim($creator['phone_number'] ?? $phoneNumber);
 
-        $cleanPhone = preg_replace('/[^0-9]/', '', $creatorPhone ?: $phoneNumber);
-        $last10 = strlen($cleanPhone) >= 10 ? substr($cleanPhone, -10) : $cleanPhone;
-        $phone91 = $last10 ? '91' . $last10 : '';
-        $phonePlus91 = $last10 ? '+91' . $last10 : '';
-        $phoneList = array_values(array_filter(array_unique([$last10, $phone91, $phonePlus91, $creatorPhone, $phoneNumber])));
-
-        // Backfill any legacy reels that had creator_id = 0 but belonged to this creator's phone
-        if (!empty($phoneList) && $creatorId > 0) {
-            $inClause = implode(',', array_fill(0, count($phoneList), '?'));
-            $params = array_merge([$creatorId], $phoneList);
-            try {
-                $pdo->prepare("UPDATE reels SET creator_id = ? WHERE (creator_id = 0 OR creator_id IS NULL) AND phone_number IN ($inClause)")->execute($params);
-            } catch (Throwable $e) {}
-        }
-
         // Strictly fetch only reels belonging to this creator!
-        // No loose matching by display_name or username across multiple creators!
+        // No loose matching by phone or username across creators!
         $sql = "
             SELECT r.*,
             c.username AS creator_username,
@@ -6034,17 +6106,11 @@ function getCreatorStudioData($pdo) {
             c.profile_image_url AS creator_profile_image_url,
             c.is_verified AS creator_is_verified
               FROM reels r
-            LEFT JOIN creators c ON r.creator_id = c.id
+            INNER JOIN creators c ON r.creator_id = c.id
             WHERE r.creator_id = ?
+            ORDER BY r.id DESC
         ";
         $params = [$creatorId];
-
-        if (!empty($phoneList)) {
-            $inClause = implode(',', array_fill(0, count($phoneList), '?'));
-            $sql .= " OR ((r.creator_id = 0 OR r.creator_id IS NULL) AND r.phone_number IN ($inClause))";
-            $params = array_merge($params, $phoneList);
-        }
-        $sql .= " ORDER BY r.id DESC";
 
         $reelsStmt = $pdo->prepare($sql);
         $reelsStmt->execute($params);

@@ -385,21 +385,40 @@ class _SignupScreenState extends State<SignupScreen>
 
     try {
       final checkRes = await ApiService.checkUser(phone, role: _selectedRole);
-      if (checkRes != null && checkRes['role_matches'] == true) {
-        final rTitle = _getRoleLabel(_selectedRole);
-        _showError('An account is already registered as $rTitle with this number. Redirecting to login...');
-        await Future.delayed(const Duration(milliseconds: 1400));
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          AppRoutes.slideFromLeft(
-            LoginScreen(
-              initialPhoneNumber: phone,
-              initialRole: _selectedRole,
+      if (checkRes != null) {
+        final existingRole = (checkRes['role'] ?? '').toString();
+        final existingRoleTitle = _getRoleLabel(existingRole.isNotEmpty ? existingRole : _selectedRole);
+        
+        if (checkRes['role_matches'] == true) {
+          _showError('An account is already registered as $existingRoleTitle with this mobile number. Redirecting to login...');
+          await Future.delayed(const Duration(milliseconds: 1400));
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            AppRoutes.slideFromLeft(
+              LoginScreen(
+                initialPhoneNumber: phone,
+                initialRole: _selectedRole,
+              ),
             ),
-          ),
-        );
-        return;
+          );
+          return;
+        } else {
+          // Account is registered under a DIFFERENT role! Prevent cross-role conflict.
+          _showError('This mobile number is already registered as $existingRoleTitle. Please login as $existingRoleTitle.');
+          await Future.delayed(const Duration(milliseconds: 1600));
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            AppRoutes.slideFromLeft(
+              LoginScreen(
+                initialPhoneNumber: phone,
+                initialRole: existingRole.isNotEmpty ? existingRole : 'farmer',
+              ),
+            ),
+          );
+          return;
+        }
       }
 
       final regRes = await ApiService.registerUser(
@@ -417,6 +436,7 @@ class _SignupScreenState extends State<SignupScreen>
         final err = regRes['error'] ?? regRes['message'] ?? 'signup_registration_failed'.tr();
         _showError(err);
         if (regRes['already_registered'] == true) {
+          final regRole = regRes['role']?.toString() ?? _selectedRole;
           await Future.delayed(const Duration(milliseconds: 1400));
           if (!mounted) return;
           Navigator.pushReplacement(
@@ -424,7 +444,7 @@ class _SignupScreenState extends State<SignupScreen>
             AppRoutes.slideFromLeft(
               LoginScreen(
                 initialPhoneNumber: phone,
-                initialRole: _selectedRole,
+                initialRole: regRole,
               ),
             ),
           );

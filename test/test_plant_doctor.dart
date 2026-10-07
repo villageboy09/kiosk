@@ -10,7 +10,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('DeepSeek Plant Doctor & Weather Tool Integration Tests', () {
-    test('WeatherToolService fetches Realtime, Historical, and Forecast data', () async {
+    test('WeatherToolService fetches Realtime, Historical, and Forecast data',
+        () async {
       // Test with Hyderabad/Telangana coordinates (major Indian agricultural region)
       const lat = 17.385;
       const lon = 78.486;
@@ -69,10 +70,12 @@ void main() {
     });
 
     test('DeepSeekPlantDoctorService config and model name check', () {
-      expect(DeepSeekPlantDoctorService.modelName, equals('deepseek-v4-flash-vision-exp'));
+      expect(DeepSeekPlantDoctorService.modelName,
+          equals('deepseek-v4-flash-vision-exp'));
     });
 
-    test('DeepSeekPlantDoctorService throws if API key is not configured', () async {
+    test('DeepSeekPlantDoctorService throws if API key is not configured',
+        () async {
       // Test without API key throws clear actionable exception
       expect(
         () => DeepSeekPlantDoctorService.diagnoseCrop(
@@ -82,7 +85,9 @@ void main() {
       );
     });
 
-    test('Truncated JSON recovery handles mid-sentence truncation and enriches chemical controls', () {
+    test(
+        'Truncated JSON recovery handles mid-sentence truncation and enriches chemical controls',
+        () {
       // Exact truncated JSON from the user screenshot
       const truncatedJson = '''
 {
@@ -118,23 +123,124 @@ void main() {
       expect(chemicalList.first.toString(), contains('water'));
     });
 
-    test('ImageOptimizer detects mime type and formats dataUriScheme correctly', () async {
+    test('Detects advisories that are not in the target language script', () {
+      final english = {
+        'matched_problem_name': 'Early Blight',
+        'ai_analysis': 'Alternaria lesions on lower leaves.',
+      };
+      final telugu = {
+        'matched_problem_name': 'ఆకుమచ్చ తెగులు',
+        'ai_analysis': 'కింది ఆకులపై మచ్చలు ఉన్నాయి.',
+      };
+      expect(
+          DeepSeekPlantDoctorService.needsTranslation(english, 'te'), isTrue);
+      expect(
+          DeepSeekPlantDoctorService.needsTranslation(english, 'hi'), isTrue);
+      expect(
+          DeepSeekPlantDoctorService.needsTranslation(english, 'en'), isFalse);
+      expect(
+          DeepSeekPlantDoctorService.needsTranslation(telugu, 'te'), isFalse);
+      expect(DeepSeekPlantDoctorService.needsTranslation(telugu, 'en'), isTrue);
+    });
+
+    test(
+        'Grounds problem to crop catalog via English name and drops invalid ids',
+        () {
+      const json =
+          '{"is_plant":true,"is_crop_supported":true,"is_clear_image":true,'
+          '"problem_name_en":"Rice Blast","matched_problem_name":"అగ్గి తెగులు",'
+          '"matched_problem_id":9999,"health_status":"diseased","confidence":88}';
+      final result = DeepSeekPlantDoctorService.parseCleanJson(json,
+          knownProblems: [
+            {
+              'id': 4,
+              'name': 'గోధుమ రంగు ఆకుమచ్చ తెగులు',
+              'name_en': 'Brown Spot'
+            },
+            {'id': 5, 'name': 'అగ్గి తెగులు', 'name_en': 'Blast'},
+          ],
+          language: 'te');
+      expect(result['matched_problem_id'], equals(5));
+      expect(result['confidence'], equals(0.88));
+    });
+
+    test('ImageOptimizer detects mime type and formats dataUriScheme correctly',
+        () async {
       // 1x1 transparent PNG bytes
       final pngBytes = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+        0x00,
+        0x00,
+        0x00,
+        0x0D,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x08,
+        0x06,
+        0x00,
+        0x00,
+        0x00,
+        0x1F,
+        0x15,
+        0xC4,
+        0x89,
+        0x00,
+        0x00,
+        0x00,
+        0x0A,
+        0x49,
+        0x44,
+        0x41,
+        0x54,
+        0x78,
+        0x9C,
+        0x63,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x01,
+        0x0D,
+        0x0A,
+        0x2D,
+        0xB4,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x49,
+        0x45,
+        0x4E,
+        0x44,
+        0xAE,
+        0x42,
+        0x60,
+        0x82
       ]);
 
       final optimized = await ImageOptimizer.optimizeBytes(pngBytes);
       expect(optimized.mimeType, equals('image/png'));
-      expect(optimized.dataUriScheme.startsWith('data:image/png;base64,'), isTrue);
+      expect(
+          optimized.dataUriScheme.startsWith('data:image/png;base64,'), isTrue);
     });
   });
 }

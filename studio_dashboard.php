@@ -107,6 +107,8 @@ if (isset($pdo) && $pdo instanceof PDO) {
 
         // Migrate any missing columns in creators
         $creatorCols = [
+            'user_id' => "ALTER TABLE `creators` ADD COLUMN `user_id` INT NULL",
+            'email' => "ALTER TABLE `creators` ADD COLUMN `email` VARCHAR(150) NULL",
             'status' => "ALTER TABLE `creators` ADD COLUMN `status` ENUM('applied', 'pending_review', 'active', 'rejected', 'suspended') DEFAULT 'active'",
             'partnership_tier' => "ALTER TABLE `creators` ADD COLUMN `partnership_tier` ENUM('trial', 'active_partner', 'verified', 'strategic') DEFAULT 'trial'",
             'agriculture_niches' => "ALTER TABLE `creators` ADD COLUMN `agriculture_niches` TEXT NULL",
@@ -741,6 +743,166 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['ajax_translate'])) {
 }
 
 // -------------------------------------------------------------
+// AJAX: Fetch Reel Comments (For Inline Reel Moderation Drawer)
+// -------------------------------------------------------------
+if (isset($_GET['ajax_get_reel_comments']) && isset($pdo) && $pdo instanceof PDO) {
+    header('Content-Type: application/json');
+    $reelId = intval($_GET['reel_id'] ?? 0);
+    if ($reelId <= 0) {
+        echo json_encode(['success' => false, 'error' => 'Invalid Reel ID']);
+        exit();
+    }
+    try {
+        $cStmt = $pdo->prepare("
+            SELECT id, reel_id, farmer_username, phone_number, user_id, comment_text, created_at 
+            FROM reel_comments 
+            WHERE reel_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT 150
+        ");
+        $cStmt->execute([$reelId]);
+        $comments = $cStmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success' => true, 'comments' => $comments]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+    exit();
+}
+
+// -------------------------------------------------------------
+// AJAX: Fetch Reel Watch & Audience Dropoff Analytics
+// -------------------------------------------------------------
+if (isset($_GET['ajax_get_reel_analytics']) && isset($pdo) && $pdo instanceof PDO) {
+    header('Content-Type: application/json');
+    $reelId = intval($_GET['reel_id'] ?? 0);
+    if ($reelId <= 0) {
+        echo json_encode(['success' => false, 'error' => 'Invalid Reel ID']);
+        exit();
+    }
+    try {
+        // 1. Reel metadata
+        $rStmt = $pdo->prepare("
+            SELECT r.*, c.display_name AS creator_name, c.username AS creator_username 
+            FROM reels r 
+            LEFT JOIN creators c ON r.creator_id = c.id 
+            WHERE r.id = ?
+        ");
+        $rStmt->execute([$reelId]);
+        $reel = $rStmt->fetch(PDO::FETCH_ASSOC);
+
+        // 2. Watch metrics from reel_watch_analytics
+        $wStmt = $pdo->prepare("
+            SELECT 
+                COUNT(*) AS total_watches,
+                COUNT(DISTINCT COALESCE(NULLIF(phone_number, ''), NULLIF(farmer_username, ''), user_id)) AS unique_viewers,
+                SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) AS completed_watches,
+                COALESCE(AVG(watch_duration_seconds), 0) AS avg_watch_seconds,
+                COALESCE(SUM(watch_duration_seconds), 0) AS total_watch_seconds
+            FROM reel_watch_analytics 
+            WHERE reel_id = ?
+        ");
+        $wStmt->execute([$reelId]);
+        $watchStats = $wStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        // 3. User actions breakdown from reel_actions
+        $aStmt = $pdo->prepare("
+            SELECT action_type, COUNT(*) AS cnt 
+            FROM reel_actions 
+            WHERE reel_id = ? 
+            GROUP BY action_type
+        ");
+        $aStmt->execute([$reelId]);
+        $actionRows = $aStmt->fetchAll(PDO::FETCH_ASSOC);
+        $actionMap = [];
+        foreach ($actionRows as $ar) {
+            $actionMap[$ar['action_type']] = intval($ar['cnt']);
+        }
+
+        // 4. Past review history from reel_reviews
+        $revStmt = $pdo->prepare("
+            SELECT * FROM reel_reviews 
+            WHERE reel_id = ? 
+            ORDER BY id DESC 
+            LIMIT 10
+        ");
+        $revStmt->execute([$reelId]);
+        $reviews = $revStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'reel' => $reel,
+            'watch_stats' => $watchStats,
+            'actions' => $actionMap,
+            'reviews' => $reviews
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+    exit();
+}
+
+// -------------------------------------------------------------
+// AJAX: Live Sync Reel Statuses, Moderation State & Global Counters
+// -------------------------------------------------------------
+if (isset($_GET['ajax_reels_live_sync']) && isset($pdo) && $pdo instanceof PDO) {
+    header('Content-Type: application/json');
+    try {
+        $rStmt = $pdo->query("
+            SELECT r.id, r.is_active, r.status, r.payout_eligible, r.is_duplicate, 
+                   r.views_count, r.likes_count, r.comments_count,
+                   c.id AS creator_id, c.display_name AS creator_name, c.status AS creator_status
+            FROM reels r
+            LEFT JOIN creators c ON r.creator_id = c.id
+            ORDER BY r.id DESC
+            LIMIT 100
+        ");
+        $reels = $rStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $totalAll = intval($pdo->query("SELECT COUNT(*) FROM reels")->fetchColumn() ?: 0);
+        $totalActive = intval($pdo->query("SELECT COUNT(*) FROM reels WHERE is_active = 1")->fetchColumn() ?: 0);
+        $totalSuspendedCreators = intval($pdo->query("
+            SELECT COUNT(*) FROM reels r 
+            INNER JOIN creators c ON r.creator_id = c.id 
+            WHERE c.status = 'suspended'
+        ")->fetchColumn() ?: 0);
+
+        $pendingCnt = 0; $approvedCnt = 0; $changesCnt = 0; $rejectedCnt = 0;
+        $chkRStatus = $pdo->query("SHOW COLUMNS FROM `reels` LIKE 'status'");
+        if ($chkRStatus && $chkRStatus->fetch()) {
+            $rmStats = $pdo->query("SELECT 
+                SUM(CASE WHEN (r.status IN ('under_review', 'submitted') OR (r.is_active = 0 AND (r.status IS NULL OR r.status = ''))) AND (c.status IS NULL OR c.status != 'suspended') THEN 1 ELSE 0 END) as pending_cnt,
+                SUM(CASE WHEN (r.status = 'approved' OR (r.is_active = 1 AND (r.status IS NULL OR r.status = 'approved'))) AND (c.status IS NULL OR c.status != 'suspended') THEN 1 ELSE 0 END) as approved_cnt,
+                SUM(CASE WHEN r.status = 'changes_requested' AND (c.status IS NULL OR c.status != 'suspended') THEN 1 ELSE 0 END) as changes_cnt,
+                SUM(CASE WHEN r.status = 'rejected' AND (c.status IS NULL OR c.status != 'suspended') THEN 1 ELSE 0 END) as rejected_cnt
+            FROM reels r LEFT JOIN creators c ON r.creator_id = c.id")->fetch();
+            if ($rmStats) {
+                $pendingCnt = intval($rmStats['pending_cnt'] ?? 0);
+                $approvedCnt = intval($rmStats['approved_cnt'] ?? 0);
+                $changesCnt = intval($rmStats['changes_cnt'] ?? 0);
+                $rejectedCnt = intval($rmStats['rejected_cnt'] ?? 0);
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'timestamp' => time(),
+            'counts' => [
+                'total' => $totalAll,
+                'pending' => $pendingCnt,
+                'approved' => $approvedCnt,
+                'changes_requested' => $changesCnt,
+                'rejected' => $rejectedCnt,
+                'suspended_creator_reels' => $totalSuspendedCreators
+            ],
+            'reels' => $reels
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+    exit();
+}
+
+// -------------------------------------------------------------
 // 4. POST Handlers (Create, Edit, Delete, Bulk Delete, Status)
 // -------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO) {
@@ -859,8 +1021,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO)
         $tags = trim($_POST['tags'] ?? '');
         $creator_name = trim($_POST['creator_name'] ?? 'CropSync Creator');
         $phone_number = trim($_POST['phone_number'] ?? '9182867655');
-        $is_active = isset($_POST['is_active']) ? 1 : 0;
+        $is_active = isset($_POST['is_active']) ? intval($_POST['is_active']) : 1;
         $video_url = trim($_POST['video_url'] ?? '');
+
+        $crop = trim($_POST['crop'] ?? 'General');
+        $category = trim($_POST['category'] ?? 'Crop Care');
+        $language = trim($_POST['language'] ?? 'te');
+        $source_url = trim($_POST['source_url'] ?? '');
+        $payout_eligible = isset($_POST['payout_eligible']) ? intval($_POST['payout_eligible']) : 1;
+        $is_duplicate = isset($_POST['is_duplicate']) ? intval($_POST['is_duplicate']) : 0;
+        $rights_declared = isset($_POST['rights_declared']) ? intval($_POST['rights_declared']) : 1;
+        $creator_id = intval($_POST['creator_id'] ?? 0);
 
         $uploadedVideo = uploadReelVideo('video_file');
         if (!empty($uploadedVideo)) {
@@ -871,25 +1042,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO)
             setFlash('Caption and Video URL or upload are required.', 'danger');
         } else {
             try {
-                $cStmt = $pdo->prepare("SELECT id FROM creators WHERE phone_number = ? OR display_name = ? LIMIT 1");
-                $cStmt->execute([$phone_number, $creator_name]);
-                $creator_id = $cStmt->fetchColumn();
+                if ($creator_id > 0) {
+                    $cStmt = $pdo->prepare("SELECT id, display_name, phone_number FROM creators WHERE id = ? LIMIT 1");
+                    $cStmt->execute([$creator_id]);
+                    $cRow = $cStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($cRow) {
+                        $creator_name = $cRow['display_name'];
+                        if (!empty($cRow['phone_number'])) {
+                            $phone_number = $cRow['phone_number'];
+                        }
+                    }
+                } else {
+                    $cStmt = $pdo->prepare("SELECT id FROM creators WHERE phone_number = ? OR display_name = ? LIMIT 1");
+                    $cStmt->execute([$phone_number, $creator_name]);
+                    $creator_id = $cStmt->fetchColumn();
 
-                if (!$creator_id) {
-                    $uName = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', str_replace(' ', '_', $creator_name)));
-                    if (empty($uName)) $uName = 'creator_' . substr($phone_number, -4);
-                    $cIns = $pdo->prepare("INSERT INTO creators (username, display_name, profile_image_url, is_verified, phone_number, bio) VALUES (?, ?, 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80', 1, ?, 'Agricultural Expert & Farmer')");
-                    $cIns->execute([$uName, $creator_name, $phone_number]);
-                    $creator_id = $pdo->lastInsertId();
+                    if (!$creator_id) {
+                        $uName = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', str_replace(' ', '_', $creator_name)));
+                        if (empty($uName)) $uName = 'creator_' . substr($phone_number, -4);
+                        $cIns = $pdo->prepare("INSERT INTO creators (username, display_name, profile_image_url, is_verified, phone_number, bio) VALUES (?, ?, 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80', 1, ?, 'Agricultural Expert & Farmer')");
+                        $cIns->execute([$uName, $creator_name, $phone_number]);
+                        $creator_id = $pdo->lastInsertId();
+                    }
                 }
 
                 if ($id > 0) {
-                    $stmt = $pdo->prepare("UPDATE reels SET caption = ?, video_url = ?, music_title = ?, tags = ?, phone_number = ?, is_active = ?, creator_id = ? WHERE id = ?");
-                    $stmt->execute([$caption, $video_url, $music_title, $tags, $phone_number, $is_active, $creator_id, $id]);
+                    $stmt = $pdo->prepare("UPDATE reels SET caption = ?, video_url = ?, music_title = ?, tags = ?, phone_number = ?, is_active = ?, creator_id = ?, crop = ?, category = ?, language = ?, source_url = ?, payout_eligible = ?, is_duplicate = ?, rights_declared = ? WHERE id = ?");
+                    $stmt->execute([$caption, $video_url, $music_title, $tags, $phone_number, $is_active, $creator_id, $crop, $category, $language, $source_url, $payout_eligible, $is_duplicate, $rights_declared, $id]);
                     setFlash("Reel #$id updated successfully.");
                 } else {
-                    $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?, NOW())");
-                    $stmt->execute([$creator_id, $video_url, $caption, $music_title, $phone_number, $tags, $is_active]);
+                    $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, views_count, likes_count, saves_count, comments_count, is_active, crop, category, language, source_url, payout_eligible, is_duplicate, rights_declared, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', NOW())");
+                    $stmt->execute([$creator_id, $video_url, $caption, $music_title, $phone_number, $tags, $is_active, $crop, $category, $language, $source_url, $payout_eligible, $is_duplicate, $rights_declared]);
                     setFlash("New Agri Reel published.");
                 }
             } catch (Throwable $e) {
@@ -943,23 +1126,138 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO)
         exit();
     }
 
+    // G.1 BULK APPROVE REELS
+    if ($action === 'bulk_approve_reels') {
+        $ids = $_POST['selected_reels'] ?? [];
+        if (!empty($ids) && is_array($ids)) {
+            $sanitizedIds = array_map('intval', $ids);
+            $sanitizedIds = array_filter($sanitizedIds, function($v) { return $v > 0; });
+            if (!empty($sanitizedIds)) {
+                $placeholders = implode(',', array_fill(0, count($sanitizedIds), '?'));
+                try {
+                    $pdo->prepare("UPDATE reels SET status = 'approved', is_active = 1, reviewed_at = NOW(), reviewed_by = 'Admin' WHERE id IN ($placeholders)")->execute($sanitizedIds);
+                    setFlash(count($sanitizedIds) . " reels approved and made live successfully.");
+                } catch (Throwable $e) {
+                    setFlash("Bulk approval error: " . $e->getMessage(), 'danger');
+                }
+            }
+        }
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=reels");
+        exit();
+    }
+
     // H. TOGGLE REEL STATUS
     if ($action === 'toggle_reel_status') {
         $id = intval($_POST['reel_id'] ?? 0);
-        $new_status = intval($_POST['is_active']) === 1 ? 0 : 1;
+        $new_status = intval($_POST['is_active'] ?? 0) === 1 ? 0 : 1;
+        $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || isset($_POST['ajax']) || isset($_GET['ajax']);
+
         if ($id > 0) {
+            $chk = $pdo->prepare("SELECT r.status, c.status AS creator_status, c.display_name AS creator_name FROM reels r LEFT JOIN creators c ON r.creator_id = c.id WHERE r.id = ?");
+            $chk->execute([$id]);
+            $rRow = $chk->fetch(PDO::FETCH_ASSOC);
+
             if ($new_status === 1) {
-                $chk = $pdo->prepare("SELECT status FROM reels WHERE id = ?");
-                $chk->execute([$id]);
-                $rStatus = $chk->fetchColumn();
+                if ($rRow && ($rRow['creator_status'] ?? '') === 'suspended') {
+                    $cName = $rRow['creator_name'] ?: 'Creator';
+                    if ($isAjax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['success' => false, 'error' => "Cannot activate reel: Creator ($cName) is suspended. Unsuspend creator first."]);
+                        exit();
+                    }
+                    setFlash("Cannot activate reel: Creator ($cName) is suspended.", "danger");
+                    header("Location: " . $_SERVER['PHP_SELF'] . "?tab=reels");
+                    exit();
+                }
+
+                $rStatus = $rRow['status'] ?? '';
                 if ($rStatus !== 'approved') {
+                    if ($isAjax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['success' => false, 'error' => "Reel cannot be activated until approved by a moderator."]);
+                        exit();
+                    }
                     setFlash("Reel cannot be activated until approved by a moderator.", "danger");
                     header("Location: " . $_SERVER['PHP_SELF'] . "?tab=reels");
                     exit();
                 }
             }
             $pdo->prepare("UPDATE reels SET is_active = ? WHERE id = ?")->execute([$new_status, $id]);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'reel_id' => $id,
+                    'is_active' => $new_status,
+                    'message' => "Reel #$id visibility updated to " . ($new_status === 1 ? 'Visible' : 'Hidden') . "."
+                ]);
+                exit();
+            }
             setFlash("Reel visibility updated.");
+        }
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=reels");
+        exit();
+    }
+
+    // H.1 TOGGLE REEL PAYOUT ELIGIBILITY
+    if ($action === 'toggle_reel_payout_eligible') {
+        $id = intval($_POST['reel_id'] ?? 0);
+        $newEligible = intval($_POST['payout_eligible'] ?? 0) === 1 ? 0 : 1;
+        $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || isset($_POST['ajax']) || isset($_GET['ajax']);
+
+        if ($id > 0) {
+            $chk = $pdo->prepare("SELECT c.status AS creator_status FROM reels r LEFT JOIN creators c ON r.creator_id = c.id WHERE r.id = ?");
+            $chk->execute([$id]);
+            $cStatus = $chk->fetchColumn();
+            if ($newEligible === 1 && $cStatus === 'suspended') {
+                if ($isAjax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'error' => "Cannot make reel payout eligible: Creator is currently suspended."]);
+                    exit();
+                }
+                setFlash("Cannot make reel payout eligible: Creator is suspended.", "danger");
+                header("Location: " . $_SERVER['PHP_SELF'] . "?tab=reels");
+                exit();
+            }
+
+            $pdo->prepare("UPDATE reels SET payout_eligible = ? WHERE id = ?")->execute([$newEligible, $id]);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'reel_id' => $id,
+                    'payout_eligible' => $newEligible,
+                    'message' => "Reel #$id payout status set to " . ($newEligible === 1 ? 'Eligible' : 'Ineligible') . "."
+                ]);
+                exit();
+            }
+            setFlash("Reel #$id payout status set to " . ($newEligible === 1 ? 'Eligible' : 'Ineligible') . ".");
+        }
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=reels");
+        exit();
+    }
+
+    // H.2 TOGGLE REEL DUPLICATE FLAG
+    if ($action === 'toggle_reel_duplicate') {
+        $id = intval($_POST['reel_id'] ?? 0);
+        $newDuplicate = intval($_POST['is_duplicate'] ?? 0) === 1 ? 0 : 1;
+        $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || isset($_POST['ajax']) || isset($_GET['ajax']);
+
+        if ($id > 0) {
+            $payoutVal = $newDuplicate === 1 ? 0 : 1; // Duplicates automatically forfeit payout
+            $pdo->prepare("UPDATE reels SET is_duplicate = ?, payout_eligible = ? WHERE id = ?")->execute([$newDuplicate, $payoutVal, $id]);
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'reel_id' => $id,
+                    'is_duplicate' => $newDuplicate,
+                    'payout_eligible' => $payoutVal,
+                    'message' => "Reel #$id duplicate flag updated to " . ($newDuplicate === 1 ? 'Duplicate' : 'Original') . "."
+                ]);
+                exit();
+            }
+            setFlash("Reel #$id duplicate flag updated.");
         }
         header("Location: " . $_SERVER['PHP_SELF'] . "?tab=reels");
         exit();
@@ -970,18 +1268,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO)
         $type = $_POST['comment_type'] ?? '';
         $cid = intval($_POST['comment_id'] ?? 0);
         $parent_id = intval($_POST['parent_id'] ?? 0);
+        $redirectTab = $_POST['redirect_tab'] ?? 'comments';
 
         if ($type === 'news' && $cid > 0) {
             $pdo->prepare("DELETE FROM news_article_comments WHERE id = ?")->execute([$cid]);
             $pdo->prepare("UPDATE news_articles SET comments_count = GREATEST(0, comments_count - 1) WHERE id = ?")->execute([$parent_id]);
             setFlash("Comment deleted.");
-            header("Location: " . $_SERVER['PHP_SELF'] . "?tab=comments");
+            header("Location: " . $_SERVER['PHP_SELF'] . "?tab=" . urlencode($redirectTab));
             exit();
         } elseif ($type === 'reel' && $cid > 0) {
             $pdo->prepare("DELETE FROM reel_comments WHERE id = ?")->execute([$cid]);
             $pdo->prepare("UPDATE reels SET comments_count = GREATEST(0, comments_count - 1) WHERE id = ?")->execute([$parent_id]);
+            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true]);
+                exit();
+            }
             setFlash("Comment deleted.");
-            header("Location: " . $_SERVER['PHP_SELF'] . "?tab=comments");
+            header("Location: " . $_SERVER['PHP_SELF'] . "?tab=" . urlencode($redirectTab));
             exit();
         }
     }
@@ -990,12 +1294,219 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO)
     // J. AGRI CREATOR PARTNER PROGRAM ACTIONS
     // =========================================================
 
-    // 1. APPROVE / REJECT / SUSPEND CREATOR WITH 25-CAP ENFORCEMENT
+    // 1. SAVE CREATOR (CREATE / EDIT WITH VALIDATION & USER SYNC)
+    if ($action === 'save_creator') {
+        $creatorId = intval($_POST['creator_id'] ?? 0);
+        $displayName = trim($_POST['display_name'] ?? '');
+        $username = trim($_POST['username'] ?? '');
+        $phoneNumber = trim($_POST['phone_number'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $bio = trim($_POST['bio'] ?? '');
+        $profileImageUrl = trim($_POST['profile_image_url'] ?? '');
+        $niches = trim($_POST['agriculture_niches'] ?? '');
+        $languages = trim($_POST['languages'] ?? 'te');
+        $socialHandles = trim($_POST['social_handles'] ?? '');
+        $upiId = trim($_POST['upi_id'] ?? '');
+        $partnershipTier = trim($_POST['partnership_tier'] ?? 'trial');
+        $status = trim($_POST['status'] ?? 'active');
+        $isVerified = (isset($_POST['is_verified']) && ($_POST['is_verified'] === '1' || $_POST['is_verified'] === 'on')) ? 1 : 0;
+        $termsAccepted = (isset($_POST['terms_accepted']) && ($_POST['terms_accepted'] === '1' || $_POST['terms_accepted'] === 'on')) ? 1 : 0;
+
+        if (empty($displayName)) {
+            setFlash("Creator display name is required.", "danger");
+        } else {
+            try {
+                // Auto-generate or sanitize username
+                if (empty($username)) {
+                    $username = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', str_replace(' ', '_', $displayName)));
+                    if (empty($username)) {
+                        $username = 'creator_' . (!empty($phoneNumber) ? substr($phoneNumber, -4) : rand(1000, 9999));
+                    }
+                } else {
+                    $username = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', $username));
+                }
+
+                // Check username uniqueness
+                $uStmt = $pdo->prepare("SELECT id FROM creators WHERE username = ? AND id != ? LIMIT 1");
+                $uStmt->execute([$username, $creatorId]);
+                if ($uStmt->fetchColumn()) {
+                    $username = $username . '_' . rand(10, 99);
+                }
+
+                if (empty($profileImageUrl)) {
+                    $profileImageUrl = 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80';
+                }
+
+                // Check pilot cap if activating
+                if ($status === 'active') {
+                    $capStmt = $pdo->prepare("SELECT COUNT(*) FROM creators WHERE status = 'active' AND id != ?");
+                    $capStmt->execute([$creatorId]);
+                    $activeCount = intval($capStmt->fetchColumn() ?: 0);
+                    if ($activeCount >= 25) {
+                        setFlash("Pilot cap of 25 active creators is currently full. Saved with 'pending_review' status instead.", "warning");
+                        $status = 'pending_review';
+                    }
+                }
+
+                // Sync with existing user account if phone matches
+                $userId = null;
+                if (!empty($phoneNumber)) {
+                    try {
+                        $usrStmt = $pdo->prepare("SELECT user_id FROM users WHERE phone_number = ? LIMIT 1");
+                        $usrStmt->execute([$phoneNumber]);
+                        $foundUserId = $usrStmt->fetchColumn();
+                        if ($foundUserId) {
+                            $userId = $foundUserId;
+                            if ($status === 'active') {
+                                $pdo->prepare("UPDATE users SET role = 'creator' WHERE user_id = ?")->execute([$foundUserId]);
+                            }
+                        }
+                    } catch (Throwable $e) {}
+                }
+
+                if ($creatorId > 0) {
+                    $stmt = $pdo->prepare("
+                        UPDATE creators 
+                        SET display_name = ?, username = ?, phone_number = ?, email = ?, bio = ?, 
+                            profile_image_url = ?, agriculture_niches = ?, languages = ?, social_handles = ?, 
+                            upi_id = ?, partnership_tier = ?, status = ?, is_verified = ?, terms_accepted = ?,
+                            user_id = COALESCE(?, user_id)
+                        WHERE id = ?
+                    ");
+                    $stmt->execute([
+                        $displayName, $username, $phoneNumber, $email, $bio, 
+                        $profileImageUrl, $niches, $languages, $socialHandles, 
+                        $upiId, $partnershipTier, $status, $isVerified, $termsAccepted,
+                        $userId, $creatorId
+                    ]);
+                    // Cascade reel status if creator is suspended or activated
+                    if ($status === 'suspended') {
+                        $pdo->prepare("UPDATE reels SET is_active = 0, payout_eligible = 0 WHERE creator_id = ?")->execute([$creatorId]);
+                    } elseif ($status === 'active') {
+                        $pdo->prepare("UPDATE reels SET is_active = 1, payout_eligible = 1 WHERE creator_id = ? AND status = 'approved' AND (is_duplicate IS NULL OR is_duplicate = 0)")->execute([$creatorId]);
+                    }
+                    setFlash("Creator partner #$creatorId ($displayName) updated successfully.", "success");
+                } else {
+                    $stmt = $pdo->prepare("
+                        INSERT INTO creators 
+                        (display_name, username, phone_number, email, bio, profile_image_url, agriculture_niches, languages, social_handles, upi_id, partnership_tier, status, is_verified, terms_accepted, user_id, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    ");
+                    $stmt->execute([
+                        $displayName, $username, $phoneNumber, $email, $bio, 
+                        $profileImageUrl, $niches, $languages, $socialHandles, 
+                        $upiId, $partnershipTier, $status, $isVerified, $termsAccepted, $userId
+                    ]);
+                    $creatorId = $pdo->lastInsertId();
+                    setFlash("New creator partner $displayName (#$creatorId) enrolled successfully.", "success");
+                }
+            } catch (Throwable $e) {
+                setFlash("Error saving creator: " . $e->getMessage(), "danger");
+            }
+        }
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=creators");
+        exit();
+    }
+
+    // 2. DELETE CREATOR WITH FULL INTEGRITY CLEANUP
+    if ($action === 'delete_creator') {
+        $creatorId = intval($_POST['creator_id'] ?? 0);
+        $deleteReels = intval($_POST['delete_reels'] ?? 1);
+
+        if ($creatorId > 0) {
+            try {
+                // Fetch info
+                $cStmt = $pdo->prepare("SELECT display_name, user_id, phone_number FROM creators WHERE id = ?");
+                $cStmt->execute([$creatorId]);
+                $cData = $cStmt->fetch(PDO::FETCH_ASSOC);
+                $displayName = $cData['display_name'] ?? "ID #$creatorId";
+                $userId = $cData['user_id'] ?? null;
+                $phone = $cData['phone_number'] ?? null;
+
+                // 1. Delete associated reels & interactions if requested
+                $rStmt = $pdo->prepare("SELECT id FROM reels WHERE creator_id = ?");
+                $rStmt->execute([$creatorId]);
+                $reelIds = $rStmt->fetchAll(PDO::FETCH_COLUMN);
+
+                if (!empty($reelIds) && $deleteReels === 1) {
+                    $placeholders = implode(',', array_fill(0, count($reelIds), '?'));
+                    try { $pdo->prepare("DELETE FROM reel_likes WHERE reel_id IN ($placeholders)")->execute($reelIds); } catch (Throwable $e) {}
+                    try { $pdo->prepare("DELETE FROM reel_comments WHERE reel_id IN ($placeholders)")->execute($reelIds); } catch (Throwable $e) {}
+                    try { $pdo->prepare("DELETE FROM reel_actions WHERE reel_id IN ($placeholders)")->execute($reelIds); } catch (Throwable $e) {}
+                    try { $pdo->prepare("DELETE FROM reel_watch_analytics WHERE reel_id IN ($placeholders)")->execute($reelIds); } catch (Throwable $e) {}
+                    try { $pdo->prepare("DELETE FROM reel_reviews WHERE reel_id IN ($placeholders)")->execute($reelIds); } catch (Throwable $e) {}
+                    try { $pdo->prepare("DELETE FROM reel_events WHERE reel_id IN ($placeholders)")->execute($reelIds); } catch (Throwable $e) {}
+                    $pdo->prepare("DELETE FROM reels WHERE creator_id = ?")->execute([$creatorId]);
+                }
+
+                // 2. Delete campaign deliverables & assignments
+                try { $pdo->prepare("DELETE FROM campaign_creator_assignments WHERE creator_id = ?")->execute([$creatorId]); } catch (Throwable $e) {}
+
+                // 3. Delete payout line items & payouts
+                try {
+                    $poStmt = $pdo->prepare("SELECT id FROM monthly_creator_payouts WHERE creator_id = ?");
+                    $poStmt->execute([$creatorId]);
+                    $payoutIds = $poStmt->fetchAll(PDO::FETCH_COLUMN);
+                    if (!empty($payoutIds)) {
+                        $pPlaceholders = implode(',', array_fill(0, count($payoutIds), '?'));
+                        $pdo->prepare("DELETE FROM payout_line_items WHERE payout_id IN ($pPlaceholders)")->execute($payoutIds);
+                    }
+                    $pdo->prepare("DELETE FROM monthly_creator_payouts WHERE creator_id = ?")->execute([$creatorId]);
+                } catch (Throwable $e) {}
+
+                // 4. Delete payment profiles & terms
+                try { $pdo->prepare("DELETE FROM creator_payment_profiles WHERE creator_id = ?")->execute([$creatorId]); } catch (Throwable $e) {}
+                try { $pdo->prepare("DELETE FROM creator_terms WHERE creator_id = ?")->execute([$creatorId]); } catch (Throwable $e) {}
+
+                // 5. Restore user account role back to farmer if no other creator profiles
+                if (!empty($userId)) {
+                    try {
+                        $chkOther = $pdo->prepare("SELECT COUNT(*) FROM creators WHERE user_id = ? AND id != ?");
+                        $chkOther->execute([$userId, $creatorId]);
+                        if (intval($chkOther->fetchColumn() ?: 0) === 0) {
+                            $pdo->prepare("UPDATE users SET role = 'farmer' WHERE user_id = ? AND role = 'creator'")->execute([$userId]);
+                        }
+                    } catch (Throwable $e) {}
+                } elseif (!empty($phone)) {
+                    try {
+                        $pdo->prepare("UPDATE users SET role = 'farmer' WHERE phone_number = ? AND role = 'creator'")->execute([$phone]);
+                    } catch (Throwable $e) {}
+                }
+
+                // 6. Delete creator record
+                $pdo->prepare("DELETE FROM creators WHERE id = ?")->execute([$creatorId]);
+
+                setFlash("Creator partner $displayName (#$creatorId) and all associated assets have been permanently removed.", "success");
+            } catch (Throwable $e) {
+                setFlash("Error deleting creator: " . $e->getMessage(), "danger");
+            }
+        }
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=creators");
+        exit();
+    }
+
+    // 3. TOGGLE CREATOR VERIFIED STATUS
+    if ($action === 'toggle_creator_verified') {
+        $creatorId = intval($_POST['creator_id'] ?? 0);
+        if ($creatorId > 0) {
+            try {
+                $pdo->prepare("UPDATE creators SET is_verified = IF(is_verified = 1, 0, 1) WHERE id = ?")->execute([$creatorId]);
+                setFlash("Verification badge for Creator #$creatorId updated.", "success");
+            } catch (Throwable $e) {
+                setFlash("Error: " . $e->getMessage(), "danger");
+            }
+        }
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=creators");
+        exit();
+    }
+
+    // 4. APPROVE / REJECT / SUSPEND CREATOR WITH 25-CAP ENFORCEMENT & REEL CASCADE
     if ($action === 'admin_approve_creator') {
         $creatorId = intval($_POST['creator_id'] ?? 0);
         $approvalAction = trim($_POST['approval_action'] ?? 'approve');
         $tier = trim($_POST['tier'] ?? 'trial');
         $reason = trim($_POST['reason'] ?? '');
+        $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || isset($_POST['ajax']) || isset($_GET['ajax']);
 
         if ($creatorId > 0) {
             try {
@@ -1003,22 +1514,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO)
                     $capStmt = $pdo->query("SELECT COUNT(*) FROM creators WHERE status = 'active'");
                     $activeCount = intval($capStmt->fetchColumn() ?: 0);
                     if ($activeCount >= 25) {
-                        setFlash("Cannot approve creator: 25-creator pilot cap reached (Active: $activeCount / 25).", "danger");
+                        $msg = "Cannot approve creator: 25-creator pilot cap reached (Active: $activeCount / 25).";
+                        if ($isAjax) {
+                            header('Content-Type: application/json');
+                            echo json_encode(['success' => false, 'error' => $msg]);
+                            exit();
+                        }
+                        setFlash($msg, "danger");
                     } else {
                         $pdo->prepare("UPDATE creators SET status = 'active', partnership_tier = ?, is_verified = 1, reviewed_by = 'Admin', reviewed_at = NOW(), approved_at = NOW() WHERE id = ?")
                             ->execute([$tier, $creatorId]);
-                        setFlash("Creator #$creatorId approved as $tier partner ($activeCount / 25 active).", "success");
+                        // Reactivate approved non-duplicate reels
+                        $pdo->prepare("UPDATE reels SET is_active = 1, payout_eligible = 1 WHERE creator_id = ? AND status = 'approved' AND (is_duplicate IS NULL OR is_duplicate = 0)")
+                            ->execute([$creatorId]);
+                        $msg = "Creator #$creatorId approved as $tier partner ($activeCount / 25 active). Approved reels restored to live feed.";
+                        if ($isAjax) {
+                            header('Content-Type: application/json');
+                            echo json_encode(['success' => true, 'creator_id' => $creatorId, 'status' => 'active', 'message' => $msg]);
+                            exit();
+                        }
+                        setFlash($msg, "success");
                     }
                 } elseif ($approvalAction === 'reject') {
                     $pdo->prepare("UPDATE creators SET status = 'rejected', rejection_reason = ?, reviewed_by = 'Admin', reviewed_at = NOW() WHERE id = ?")
                         ->execute([$reason, $creatorId]);
-                    setFlash("Creator #$creatorId application rejected.", "warning");
+                    $pdo->prepare("UPDATE reels SET is_active = 0, payout_eligible = 0 WHERE creator_id = ?")->execute([$creatorId]);
+                    $msg = "Creator #$creatorId application rejected. All reels suppressed.";
+                    if ($isAjax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['success' => true, 'creator_id' => $creatorId, 'status' => 'rejected', 'message' => $msg]);
+                        exit();
+                    }
+                    setFlash($msg, "warning");
                 } elseif ($approvalAction === 'suspend') {
                     $pdo->prepare("UPDATE creators SET status = 'suspended', rejection_reason = ?, reviewed_by = 'Admin', reviewed_at = NOW() WHERE id = ?")
                         ->execute([$reason, $creatorId]);
-                    setFlash("Creator #$creatorId suspended.", "danger");
+                    // CASCADE REEL DEACTIVATION: All reels immediately deactivated & payout eligibility revoked
+                    $pdo->prepare("UPDATE reels SET is_active = 0, payout_eligible = 0 WHERE creator_id = ?")->execute([$creatorId]);
+                    $msg = "Creator #$creatorId suspended. All associated videos are suppressed and deactivated from public feeds.";
+                    if ($isAjax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['success' => true, 'creator_id' => $creatorId, 'status' => 'suspended', 'message' => $msg]);
+                        exit();
+                    }
+                    setFlash($msg, "danger");
                 }
             } catch (Throwable $e) {
+                if ($isAjax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+                    exit();
+                }
                 setFlash("Error: " . $e->getMessage(), "danger");
             }
         }
@@ -1032,9 +1578,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO)
         $decision = trim($_POST['decision'] ?? 'approved');
         $reasonCode = trim($_POST['reason_code'] ?? '');
         $comments = trim($_POST['comments'] ?? '');
+        $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || isset($_POST['ajax']) || isset($_GET['ajax']);
 
         if ($reelId > 0) {
             try {
+                if ($decision === 'approved') {
+                    $cChk = $pdo->prepare("SELECT c.status AS creator_status, c.display_name FROM reels r LEFT JOIN creators c ON r.creator_id = c.id WHERE r.id = ?");
+                    $cChk->execute([$reelId]);
+                    $cRow = $cChk->fetch(PDO::FETCH_ASSOC);
+                    if ($cRow && ($cRow['creator_status'] ?? '') === 'suspended') {
+                        $err = "Cannot approve reel: Creator " . ($cRow['display_name'] ?: '') . " is currently suspended.";
+                        if ($isAjax) {
+                            header('Content-Type: application/json');
+                            echo json_encode(['success' => false, 'error' => $err]);
+                            exit();
+                        }
+                        setFlash($err, 'danger');
+                        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=reels");
+                        exit();
+                    }
+                }
+
                 $rStmt = $pdo->prepare("SELECT is_duplicate FROM reels WHERE id = ?");
                 $rStmt->execute([$reelId]);
                 $rRow = $rStmt->fetch(PDO::FETCH_ASSOC);
@@ -1050,8 +1614,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO)
                 $pdo->prepare("INSERT INTO reel_reviews (reel_id, reviewer_id, decision, reason_code, comments, reviewed_at) VALUES (?, 'Admin', ?, ?, ?, NOW())")
                     ->execute([$reelId, $decision, $reasonCode, $comments]);
 
-                setFlash("Reel #$reelId marked as $decision.");
+                $msg = "Reel #$reelId marked as $decision.";
+                if ($isAjax) {
+                    header('Content-Type: application/json');
+                    echo json_encode([
+                        'success' => true,
+                        'reel_id' => $reelId,
+                        'status' => $decision,
+                        'is_active' => $isActive,
+                        'payout_eligible' => $payoutEligible,
+                        'message' => $msg
+                    ]);
+                    exit();
+                }
+                setFlash($msg);
             } catch (Throwable $e) {
+                if ($isAjax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+                    exit();
+                }
                 setFlash("Error: " . $e->getMessage(), "danger");
             }
         }
@@ -1255,12 +1837,23 @@ $changesReqCount = 0;
 $rejectedReelsCount = 0;
 $activeCreatorsCount = 0;
 $pendingCreatorsCount = 0;
+$suspendedCreatorReelsCount = 0;
 $totalCreators = 0;
+$totalCreatorsCount = 0;
+$verifiedCreatorsCount = 0;
+$totalCreatorReels = 0;
+$totalCreatorViews = 0;
+
+$creatorStatusFilter = trim($_GET['creator_status'] ?? 'all');
+$creatorTierFilter = trim($_GET['creator_tier'] ?? 'all');
+$creatorVerifiedFilter = trim($_GET['creator_verified'] ?? 'all');
+$creatorSort = trim($_GET['creator_sort'] ?? 'newest');
 
 $articlesList = [];
 $reelsList = [];
 $commentsList = [];
 $creatorsList = [];
+$allCreators = [];
 $payoutsList = [];
 $campaignsList = [];
 $auditLogsList = [];
@@ -1298,14 +1891,20 @@ if (isset($pdo) && $pdo instanceof PDO) {
             $activeReels = intval($rStats['active']);
         }
 
+        $suspendedCreatorReelsCount = 0;
+        try {
+            $scStmt = $pdo->query("SELECT COUNT(*) FROM reels r INNER JOIN creators c ON r.creator_id = c.id WHERE c.status = 'suspended'");
+            $suspendedCreatorReelsCount = intval($scStmt->fetchColumn() ?: 0);
+        } catch (Throwable $e) {}
+
         $chkRStatus = $pdo->query("SHOW COLUMNS FROM `reels` LIKE 'status'");
         if ($chkRStatus && $chkRStatus->fetch()) {
             $rmStats = $pdo->query("SELECT 
-                SUM(CASE WHEN status IN ('under_review', 'submitted') OR (is_active = 0 AND (status IS NULL OR status = '')) THEN 1 ELSE 0 END) as pending_cnt,
-                SUM(CASE WHEN status = 'approved' OR (is_active = 1 AND (status IS NULL OR status = 'approved')) THEN 1 ELSE 0 END) as approved_cnt,
-                SUM(CASE WHEN status = 'changes_requested' THEN 1 ELSE 0 END) as changes_cnt,
-                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_cnt
-            FROM reels")->fetch();
+                SUM(CASE WHEN (r.status IN ('under_review', 'submitted') OR (r.is_active = 0 AND (r.status IS NULL OR r.status = ''))) AND (c.status IS NULL OR c.status != 'suspended') THEN 1 ELSE 0 END) as pending_cnt,
+                SUM(CASE WHEN (r.status = 'approved' OR (r.is_active = 1 AND (r.status IS NULL OR r.status = 'approved'))) AND (c.status IS NULL OR c.status != 'suspended') THEN 1 ELSE 0 END) as approved_cnt,
+                SUM(CASE WHEN r.status = 'changes_requested' AND (c.status IS NULL OR c.status != 'suspended') THEN 1 ELSE 0 END) as changes_cnt,
+                SUM(CASE WHEN r.status = 'rejected' AND (c.status IS NULL OR c.status != 'suspended') THEN 1 ELSE 0 END) as rejected_cnt
+            FROM reels r LEFT JOIN creators c ON r.creator_id = c.id")->fetch();
             if ($rmStats) {
                 $pendingReelsCount = intval($rmStats['pending_cnt'] ?? 0);
                 $approvedReelsCount = intval($rmStats['approved_cnt'] ?? 0);
@@ -1367,7 +1966,7 @@ if (isset($pdo) && $pdo instanceof PDO) {
             $hasReelStatus = ($chkRStatus && $chkRStatus->fetch());
         } catch (Throwable $e) {}
 
-        $reelSql = "SELECT r.*, c.display_name AS creator_name, c.username AS creator_username 
+        $reelSql = "SELECT r.*, c.display_name AS creator_name, c.username AS creator_username, c.status AS creator_status 
                     FROM reels r 
                     LEFT JOIN creators c ON r.creator_id = c.id 
                     WHERE 1=1";
@@ -1380,19 +1979,21 @@ if (isset($pdo) && $pdo instanceof PDO) {
             $reelParams[] = "%$searchQuery%";
         }
         if ($moderationFilter !== 'all' && !empty($moderationFilter)) {
-            if ($hasReelStatus) {
+            if ($moderationFilter === 'suspended_creator') {
+                $reelSql .= " AND c.status = 'suspended'";
+            } elseif ($hasReelStatus) {
                 if ($moderationFilter === 'pending' || $moderationFilter === 'under_review') {
-                    $reelSql .= " AND (r.status IN ('under_review', 'submitted') OR (r.is_active = 0 AND (r.status IS NULL OR r.status = '')))";
+                    $reelSql .= " AND (r.status IN ('under_review', 'submitted') OR (r.is_active = 0 AND (r.status IS NULL OR r.status = ''))) AND (c.status IS NULL OR c.status != 'suspended')";
                 } elseif ($moderationFilter === 'approved') {
-                    $reelSql .= " AND (r.status = 'approved' OR (r.is_active = 1 AND (r.status IS NULL OR r.status = 'approved')))";
+                    $reelSql .= " AND (r.status = 'approved' OR (r.is_active = 1 AND (r.status IS NULL OR r.status = 'approved'))) AND (c.status IS NULL OR c.status != 'suspended')";
                 } else {
-                    $reelSql .= " AND r.status = ?";
+                    $reelSql .= " AND r.status = ? AND (c.status IS NULL OR c.status != 'suspended')";
                     $reelParams[] = $moderationFilter;
                 }
             } elseif ($moderationFilter === 'approved') {
-                $reelSql .= " AND r.is_active = 1";
+                $reelSql .= " AND r.is_active = 1 AND (c.status IS NULL OR c.status != 'suspended')";
             } elseif ($moderationFilter === 'pending' || $moderationFilter === 'under_review') {
-                $reelSql .= " AND r.is_active = 0";
+                $reelSql .= " AND r.is_active = 0 AND (c.status IS NULL OR c.status != 'suspended')";
             }
         }
         $reelSql .= " ORDER BY r.id DESC LIMIT 100";
@@ -1401,7 +2002,7 @@ if (isset($pdo) && $pdo instanceof PDO) {
         $reelsList = $rStmt->fetchAll();
     } catch (Throwable $e) {}
 
-    // 6. Creators fetch
+    // 6. Creators fetch & partner analytics
     try {
         $hasReelStatus = false;
         try {
@@ -1413,16 +2014,92 @@ if (isset($pdo) && $pdo instanceof PDO) {
             ? "SUM(CASE WHEN r.status = 'approved' THEN 1 ELSE 0 END)" 
             : "SUM(CASE WHEN r.is_active = 1 THEN 1 ELSE 0 END)";
 
-        $crStmt = $pdo->query("
+        // Summary KPI statistics
+        try {
+            $cStatsStmt = $pdo->query("
+                SELECT 
+                    COUNT(*) as total_c,
+                    SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_c,
+                    SUM(CASE WHEN status IN ('applied', 'pending_review') THEN 1 ELSE 0 END) as pending_c,
+                    SUM(CASE WHEN is_verified = 1 THEN 1 ELSE 0 END) as verified_c
+                FROM creators
+            ");
+            if ($cStatsStmt && ($cs = $cStatsStmt->fetch(PDO::FETCH_ASSOC))) {
+                $totalCreatorsCount = intval($cs['total_c'] ?? 0);
+                $totalCreators = $totalCreatorsCount;
+                $activeCreatorsCount = intval($cs['active_c'] ?? 0);
+                $pendingCreatorsCount = intval($cs['pending_c'] ?? 0);
+                $verifiedCreatorsCount = intval($cs['verified_c'] ?? 0);
+            }
+
+            $crTotStmt = $pdo->query("SELECT COUNT(*) as r_count, COALESCE(SUM(views_count), 0) as r_views FROM reels");
+            if ($crTotStmt && ($crs = $crTotStmt->fetch(PDO::FETCH_ASSOC))) {
+                $totalCreatorReels = intval($crs['r_count'] ?? 0);
+                $totalCreatorViews = intval($crs['r_views'] ?? 0);
+            }
+        } catch (Throwable $e) {}
+
+        // Full creators list for modal/campaign dropdowns
+        $acStmt = $pdo->query("SELECT id, display_name, username, phone_number, partnership_tier, status FROM creators ORDER BY display_name ASC");
+        $allCreators = $acStmt ? $acStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+        // Filter-aware query for Creators Directory
+        $crWhere = [];
+        $crParams = [];
+
+        if ($activeTab === 'creators' && !empty($searchQuery)) {
+            $crWhere[] = "(c.display_name LIKE ? OR c.username LIKE ? OR c.phone_number LIKE ? OR c.email LIKE ? OR c.agriculture_niches LIKE ?)";
+            $sqTerm = "%$searchQuery%";
+            $crParams[] = $sqTerm;
+            $crParams[] = $sqTerm;
+            $crParams[] = $sqTerm;
+            $crParams[] = $sqTerm;
+            $crParams[] = $sqTerm;
+        }
+
+        if ($activeTab === 'creators' && $creatorStatusFilter !== 'all') {
+            $crWhere[] = "c.status = ?";
+            $crParams[] = $creatorStatusFilter;
+        }
+
+        if ($activeTab === 'creators' && $creatorTierFilter !== 'all') {
+            $crWhere[] = "c.partnership_tier = ?";
+            $crParams[] = $creatorTierFilter;
+        }
+
+        if ($activeTab === 'creators' && $creatorVerifiedFilter === 'verified') {
+            $crWhere[] = "c.is_verified = 1";
+        } elseif ($activeTab === 'creators' && $creatorVerifiedFilter === 'unverified') {
+            $crWhere[] = "c.is_verified = 0";
+        }
+
+        $crWhereSql = !empty($crWhere) ? "WHERE " . implode(" AND ", $crWhere) : "";
+
+        // Sort order
+        $crOrderSql = "ORDER BY c.id DESC";
+        if ($creatorSort === 'most_views') {
+            $crOrderSql = "ORDER BY total_views DESC, c.id DESC";
+        } elseif ($creatorSort === 'most_reels') {
+            $crOrderSql = "ORDER BY total_reels DESC, c.id DESC";
+        } elseif ($creatorSort === 'name_asc') {
+            $crOrderSql = "ORDER BY c.display_name ASC";
+        } elseif ($creatorSort === 'oldest') {
+            $crOrderSql = "ORDER BY c.id ASC";
+        }
+
+        $crSql = "
             SELECT c.*, 
                    COUNT(r.id) AS total_reels,
                    $approvedExpr AS approved_reels,
                    COALESCE(SUM(r.views_count), 0) AS total_views
             FROM creators c
             LEFT JOIN reels r ON c.id = r.creator_id
+            $crWhereSql
             GROUP BY c.id
-            ORDER BY c.id DESC
-        ");
+            $crOrderSql
+        ";
+        $crStmt = $pdo->prepare($crSql);
+        $crStmt->execute($crParams);
         $creatorsList = $crStmt ? $crStmt->fetchAll(PDO::FETCH_ASSOC) : [];
     } catch (Throwable $e) {}
 
@@ -1570,7 +2247,7 @@ $availableCategories = [
 
         body {
             font-family: var(--font-family);
-            background: var(--bg);
+            background: radial-gradient(at 10% 10%, rgba(16, 185, 129, 0.035) 0px, transparent 50%), radial-gradient(at 90% 0%, rgba(14, 165, 233, 0.035) 0px, transparent 50%), #f8fafc;
             color: var(--text-primary);
             line-height: 1.5;
             -webkit-font-smoothing: antialiased;
@@ -1631,12 +2308,13 @@ $availableCategories = [
             border-bottom: 1px solid var(--border);
             padding: 0 24px;
             display: flex;
-            gap: 20px;
+            gap: 22px;
             overflow-x: auto;
+            position: relative;
         }
 
         .tab-link {
-            padding: 12px 0;
+            padding: 13px 2px;
             font-size: 0.88rem;
             font-weight: 500;
             color: var(--text-secondary);
@@ -1644,26 +2322,35 @@ $availableCategories = [
             border-bottom: 2px solid transparent;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 7px;
             white-space: nowrap;
+            transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
         }
 
         .tab-link:hover {
             color: var(--text-primary);
+            transform: translateY(-1px);
         }
 
         .tab-link.active {
             color: var(--text-primary);
             font-weight: 700;
-            border-bottom-color: var(--text-primary);
+            border-bottom-color: var(--accent);
         }
 
         .tab-counter {
-            font-size: 0.75rem;
-            padding: 1px 6px;
+            font-size: 0.73rem;
+            padding: 2px 7px;
             background: var(--surface-subtle);
             border-radius: var(--radius-pill);
             color: var(--text-muted);
+            font-weight: 600;
+            transition: transform 0.15s ease;
+        }
+
+        .tab-link:hover .tab-counter {
+            transform: scale(1.05);
         }
 
         /* CONTAINER */
@@ -1722,13 +2409,17 @@ $availableCategories = [
             font-size: 14px;
         }
 
-        /* ALPINE CUSTOM DROPDOWN SYSTEM */
-        .alpine-dropdown {
+        /* ALPINE CUSTOM DROPDOWN & SELECT SYSTEM (ZERO NATIVE SELECTS) */
+        .alpine-dropdown, .alpine-select-wrapper {
             position: relative;
             display: inline-block;
         }
 
-        .dropdown-trigger {
+        .alpine-select-wrapper.full-width {
+            width: 100%;
+        }
+
+        .dropdown-trigger, .alpine-select-trigger {
             padding: 7px 12px;
             border: 1px solid var(--border);
             border-radius: var(--radius);
@@ -1742,57 +2433,311 @@ $availableCategories = [
             justify-content: space-between;
             gap: 8px;
             min-width: 150px;
-            transition: border-color 0.15s ease;
+            user-select: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
         }
 
-        .dropdown-trigger:hover, .dropdown-trigger:focus {
-            border-color: var(--text-primary);
+        .alpine-select-trigger.sm {
+            padding: 4px 8px;
+            font-size: 0.76rem;
+            min-width: 110px;
+            border-radius: 4px;
         }
 
-        .dropdown-panel {
+        .alpine-select-wrapper.full-width .alpine-select-trigger {
+            width: 100%;
+        }
+
+        .dropdown-trigger:hover, .dropdown-trigger:focus,
+        .alpine-select-trigger:hover {
+            border-color: #94a3b8;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .dropdown-trigger.active,
+        .alpine-select-trigger.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.15);
+        }
+
+        .alpine-select-trigger i.ph-caret-down,
+        .dropdown-trigger i.ph-caret-down {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .alpine-select-trigger.active i.ph-caret-down,
+        .dropdown-trigger.active i.ph-caret-down {
+            transform: rotate(180deg);
+        }
+
+        .dropdown-panel, .alpine-select-menu {
             position: absolute;
-            top: calc(100% + 4px);
+            top: calc(100% + 5px);
             left: 0;
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: var(--radius);
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-            z-index: 100;
+            border-radius: 10px;
+            box-shadow: 0 16px 36px -4px rgba(15, 23, 42, 0.16), 0 6px 14px -3px rgba(15, 23, 42, 0.08);
+            z-index: 250 !important;
             min-width: 100%;
-            max-height: 240px;
+            max-height: 270px;
             overflow-y: auto;
-            padding: 4px;
+            padding: 5px;
+            animation: dropdownSpring 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+            transform-origin: top left;
         }
 
-        .dropdown-panel.right-align {
+        .dropdown-panel.right-align, .alpine-select-menu.right-align {
             left: auto;
             right: 0;
+            transform-origin: top right;
         }
 
-        .dropdown-option {
-            padding: 7px 10px;
-            font-size: 0.84rem;
+        /* Smart Viewport-Aware Dropup Position */
+        .dropdown-panel.dropup-menu, .alpine-select-menu.dropup-menu {
+            top: auto !important;
+            bottom: calc(100% + 5px) !important;
+            transform-origin: bottom right !important;
+            box-shadow: 0 -14px 34px -4px rgba(15, 23, 42, 0.16), 0 -6px 14px -3px rgba(15, 23, 42, 0.08) !important;
+            animation: dropdownSpringUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+
+        @keyframes dropdownSpring {
+            from { opacity: 0; transform: translateY(-5px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes dropdownSpringUp {
+            from { opacity: 0; transform: translateY(5px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .dropdown-option, .alpine-select-option {
+            padding: 8px 11px;
+            font-size: 0.83rem;
             color: var(--text-secondary);
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            transition: background 0.1s ease;
+            gap: 10px;
+            transition: all 0.12s ease;
+            white-space: nowrap;
         }
 
-        .dropdown-option:hover {
+        .dropdown-option:hover, .alpine-select-option:hover {
             background: var(--surface-subtle);
             color: var(--text-primary);
+            transform: translateX(2px);
         }
 
-        .dropdown-option.selected {
-            background: var(--surface-subtle);
-            color: var(--text-primary);
+        .dropdown-option.selected, .alpine-select-option.selected {
+            background: #dcfce7;
+            color: #15803d;
             font-weight: 600;
         }
 
-        /* BUTTONS */
+        .alpine-select-option i.check-icon {
+            font-size: 0.85rem;
+            color: #15803d;
+        }
+
+        /* CREATOR MANAGEMENT STATS & STYLING */
+        .creator-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+            gap: 16px;
+            margin-bottom: 22px;
+        }
+
+        .creator-stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+            overflow: hidden;
+        }
+        .creator-stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.09), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
+            border-color: #cbd5e1;
+        }
+
+        /* Distinct Contextual Color Themes for Stat Cards */
+        .creator-stat-card.card-pilot {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, #ffffff 100%);
+            border-top: 3px solid #10b981;
+        }
+        .creator-stat-card.card-queue {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, #ffffff 100%);
+            border-top: 3px solid #f59e0b;
+        }
+        .creator-stat-card.card-verified {
+            background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, #ffffff 100%);
+            border-top: 3px solid #0284c7;
+        }
+        .creator-stat-card.card-impact {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, #ffffff 100%);
+            border-top: 3px solid #8b5cf6;
+        }
+
+        .stat-icon-circle {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.05rem;
+            flex-shrink: 0;
+            transition: transform 0.2s ease;
+        }
+        .creator-stat-card:hover .stat-icon-circle {
+            transform: scale(1.1);
+        }
+        .stat-icon-circle.emerald { background: rgba(16, 185, 129, 0.12); color: #059669; }
+        .stat-icon-circle.amber { background: rgba(245, 158, 11, 0.12); color: #d97706; }
+        .stat-icon-circle.sky { background: rgba(2, 132, 199, 0.12); color: #0284c7; }
+        .stat-icon-circle.violet { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
+
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+            background: #10b981;
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            animation: pulseRing 1.8s infinite;
+        }
+        @keyframes pulseRing {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+            70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .pulse-dot.warning {
+            background: #f59e0b;
+            box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+            animation: pulseRingWarn 1.8s infinite;
+        }
+        @keyframes pulseRingWarn {
+            0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); }
+            70% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+
+        .stat-card-label {
+            font-size: 0.74rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .stat-card-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            line-height: 1.2;
+            letter-spacing: -0.02em;
+        }
+
+        .stat-card-meta {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        .pilot-bar-track {
+            height: 7px;
+            background: #e2e8f0;
+            border-radius: 999px;
+            overflow: hidden;
+            margin-top: 6px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
+        }
+
+        .pilot-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #059669);
+            border-radius: 999px;
+            transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .pilot-bar-fill::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
+            animation: barShimmer 2.4s infinite;
+        }
+        @keyframes barShimmer {
+            0% { left: -100%; }
+            50%, 100% { left: 100%; }
+        }
+        .pilot-bar-fill.warning { background: linear-gradient(90deg, #f59e0b, #d97706); }
+        .pilot-bar-fill.danger { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+        .tier-pill {
+            font-size: 0.70rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: transform 0.15s ease;
+        }
+        .tier-pill:hover {
+            transform: scale(1.04);
+        }
+        .tier-pill.tier-trial { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+        .tier-pill.tier-active_partner { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        .tier-pill.tier-verified { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
+        .tier-pill.tier-strategic { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+
+        .creator-avatar-wrap {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            overflow: hidden;
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #334155;
+            flex-shrink: 0;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            position: relative;
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+        }
+        .creator-avatar-wrap:hover {
+            transform: scale(1.08);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.14);
+        }
+        .creator-avatar-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* BUTTONS WITH MICRO-INTERACTIONS */
         .btn {
             font-family: inherit;
             font-size: 0.84rem;
@@ -1807,15 +2752,24 @@ $availableCategories = [
             text-decoration: none;
             background: transparent;
             color: var(--text-primary);
-            transition: background-color 0.15s ease, border-color 0.15s ease;
+            transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+        }
+        .btn:active {
+            transform: translateY(0) scale(0.98);
         }
 
         .btn-primary {
-            background: var(--text-primary);
+            background: linear-gradient(135deg, #18181b 0%, #27272a 100%);
             color: #fff;
+            border-color: #27272a;
         }
         .btn-primary:hover {
-            background: #27272a;
+            background: linear-gradient(135deg, #27272a 0%, #3f3f46 100%);
+            box-shadow: 0 4px 14px rgba(24, 24, 27, 0.25);
         }
 
         .btn-secondary {
@@ -1826,14 +2780,16 @@ $availableCategories = [
         .btn-secondary:hover {
             background: var(--surface-subtle);
             color: var(--text-primary);
+            border-color: #cbd5e1;
         }
 
         .btn-danger {
-            background: var(--danger);
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
             color: #fff;
         }
         .btn-danger:hover {
-            background: var(--danger-hover);
+            background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
         }
 
         .btn-danger-outline {
@@ -1851,17 +2807,24 @@ $availableCategories = [
             font-size: 0.78rem;
         }
 
-        /* DATA TABLE */
+        /* DATA TABLE (OVERFLOW & Z-INDEX CLIPPING SAFEGUARD) */
         .table-card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: var(--radius);
-            overflow: hidden;
+            border-radius: 12px;
+            overflow: visible; /* Safeguard: ensures action dropdowns never get clipped */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+            transition: box-shadow 0.2s ease;
+        }
+        .table-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.05);
         }
 
         .table-responsive {
             width: 100%;
             overflow-x: auto;
+            min-height: 250px; /* Ample vertical space for single-row tables so menus never get clipped */
+            padding-bottom: 70px;
         }
 
         table.data-table {
@@ -1887,14 +2850,19 @@ $availableCategories = [
             padding: 12px 14px;
             border-bottom: 1px solid var(--border);
             vertical-align: middle;
+            position: relative;
         }
 
         table.data-table tr:last-child td {
             border-bottom: none;
         }
 
-        table.data-table tr:hover td {
-            background: #fdfdfd;
+        table.data-table tbody tr {
+            transition: background 0.15s ease;
+        }
+
+        table.data-table tbody tr:hover td {
+            background: #f8fafc;
         }
 
         .col-checkbox {
@@ -1955,6 +2923,163 @@ $availableCategories = [
             background: rgba(0,0,0,0.6);
             border-radius: 50%;
             padding: 2px;
+        }
+
+        /* REELS AGRONOMY BADGES & ENGAGEMENT METRIC TOKENS */
+        .reel-crop-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            white-space: nowrap;
+        }
+        .reel-cat-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+            white-space: nowrap;
+        }
+        .reel-lang-badge {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.65rem;
+            font-weight: 800;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: #f5f3ff;
+            color: #6d28d9;
+            border: 1px solid #ddd6fe;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .reel-source-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: var(--surface-subtle);
+            border: 1px solid var(--border);
+            transition: all 0.15s ease;
+        }
+        .reel-source-link:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+        .stat-metric-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            white-space: nowrap;
+            transition: all 0.15s ease;
+        }
+        .stat-metric-pill.clickable {
+            cursor: pointer;
+            background: #ffffff;
+        }
+        .stat-metric-pill.clickable:hover {
+            border-color: #3b82f6;
+            color: #1d4ed8;
+            background: #eff6ff;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(59, 130, 246, 0.12);
+        }
+        .payout-status-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.70rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            background: none;
+        }
+        .payout-status-btn.eligible {
+            background: #dcfce7;
+            color: #15803d;
+            border-color: #bbf7d0;
+        }
+        .payout-status-btn.ineligible {
+            background: #f1f5f9;
+            color: #64748b;
+            border-color: #cbd5e1;
+        }
+        .payout-status-btn:hover {
+            transform: scale(1.03);
+        }
+        .dup-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+        .analytics-kpi-card {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+        .analytics-kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #10b981, #06b6d4);
+        }
+        .comment-item-card {
+            padding: 12px 14px;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            transition: border-color 0.15s ease;
+        }
+        .comment-item-card:hover {
+            border-color: #cbd5e1;
         }
 
         .bulk-bar {
@@ -2287,13 +3412,59 @@ $availableCategories = [
             .search-input {
                 width: 100%;
             }
-            .grid-2 {
-                grid-template-columns: 1fr;
-            }
+        @keyframes livePulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
+        .pulse-dot {
+            animation: livePulse 2s infinite ease-in-out;
+        }
+        .toast-item {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(228, 228, 231, 0.9);
+            border-radius: 10px;
+            padding: 12px 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.06);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 290px;
+            max-width: 440px;
+            pointer-events: auto;
+            font-size: 0.84rem;
+            color: var(--text-primary);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transform: translateX(110%);
+            opacity: 0;
+        }
+        .toast-item.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        .toast-item.hide {
+            transform: translateX(110%);
+            opacity: 0;
+        }
+        .toast-item.success { border-left: 4px solid #16a34a; }
+        .toast-item.danger { border-left: 4px solid #dc2626; }
+        .toast-item.warning { border-left: 4px solid #f59e0b; }
+        .toast-item.info { border-left: 4px solid #0284c7; }
+        .toast-icon { font-size: 1.2rem; flex-shrink: 0; }
+        .toast-item.success .toast-icon { color: #16a34a; }
+        .toast-item.danger .toast-icon { color: #dc2626; }
+        .toast-item.warning .toast-icon { color: #f59e0b; }
+        .toast-item.info .toast-icon { color: #0284c7; }
+        .toast-content { flex: 1; line-height: 1.4; }
+        .toast-close { border: none; background: transparent; cursor: pointer; color: #a1a1aa; font-size: 1rem; line-height: 1; }
+        .toast-close:hover { color: #18181b; }
+        .row-suppressed { background: rgba(254, 242, 242, 0.45) !important; }
     </style>
 </head>
 <body>
+    <!-- Real-time Toast Notification Container -->
+    <div id="toastContainer" style="position: fixed; top: 24px; right: 24px; z-index: 99999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
 
     <!-- 1. MINIMAL HEADER -->
     <header class="app-header">
@@ -2311,6 +3482,10 @@ $availableCategories = [
                 <button class="btn btn-primary" onclick="openReelModal()">
                     <i class="ph ph-plus"></i> Upload Reel
                 </button>
+            <?php elseif ($activeTab === 'creators'): ?>
+                <button class="btn btn-primary" onclick="openCreateCreatorModal()">
+                    <i class="ph ph-user-plus"></i> New Creator
+                </button>
             <?php endif; ?>
 
             <!-- Alpine Header Dropdown: Navigation & Quick Jump -->
@@ -2327,6 +3502,9 @@ $availableCategories = [
                     </div>
                     <div class="dropdown-option" @click="openReelModal(); open = false;">
                         <span><i class="ph ph-video-camera"></i> + Upload Reel</span>
+                    </div>
+                    <div class="dropdown-option" @click="openCreateCreatorModal(); open = false;">
+                        <span><i class="ph ph-user-plus"></i> + Add Creator Partner</span>
                     </div>
                 </div>
             </div>
@@ -2546,8 +3724,8 @@ $availableCategories = [
                 </form>
             </div>
 
-            <!-- Moderation Filter Tabs -->
-            <div style="display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px;">
+            <!-- Moderation Filter Tabs & Real-Time Sync Indicator -->
+            <div style="display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; align-items: center;">
                 <a href="?tab=reels&moderation_status=all<?= !empty($searchQuery) ? '&q='.urlencode($searchQuery) : '' ?>" 
                    class="btn btn-sm <?= $moderationFilter === 'all' ? 'btn-primary' : 'btn-secondary' ?>" style="text-decoration: none; border-radius: 20px; font-size: 0.78rem;">
                    All Reels (<?= $totalReels ?>)
@@ -2568,14 +3746,26 @@ $availableCategories = [
                    class="btn btn-sm <?= $moderationFilter === 'rejected' ? 'btn-primary' : 'btn-secondary' ?>" style="text-decoration: none; border-radius: 20px; font-size: 0.78rem;">
                    ✕ Rejected (<?= $rejectedReelsCount ?>)
                 </a>
+                <a href="?tab=reels&moderation_status=suspended_creator<?= !empty($searchQuery) ? '&q='.urlencode($searchQuery) : '' ?>" 
+                   class="btn btn-sm <?= $moderationFilter === 'suspended_creator' ? 'btn-primary' : 'btn-secondary' ?>" style="text-decoration: none; border-radius: 20px; font-size: 0.78rem; <?= $suspendedCreatorReelsCount > 0 ? 'border-color: #ef4444; color: #b91c1c; background: #fef2f2;' : '' ?>" title="Reels automatically deactivated because their creator is suspended">
+                   🚫 Suspended Creator Reels (<?= $suspendedCreatorReelsCount ?>)
+                </a>
+
+                <div id="reelsRealtimeIndicator" style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #10b981; font-weight: 500; background: rgba(16, 185, 129, 0.08); padding: 5px 12px; border-radius: 9999px; border: 1px solid rgba(16, 185, 129, 0.25); white-space: nowrap;">
+                    <span class="pulse-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                    <span id="reelsRealtimeText">Real-Time Sync Active</span>
+                </div>
             </div>
 
             <form id="bulkReelsForm" method="POST">
-                <input type="hidden" name="action" value="bulk_delete_reels">
+                <input type="hidden" name="action" id="bulkReelsAction" value="bulk_delete_reels">
 
                 <div class="bulk-bar" id="reelsBulkBar">
                     <span id="reelsSelectedCount">0 reels selected</span>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="confirmBulkDelete('bulkReelsForm', 'selected reels')">
+                    <button type="submit" class="btn btn-sm" style="background:#15803d; color:#fff; border-color:#15803d;" onclick="document.getElementById('bulkReelsAction').value='bulk_approve_reels';">
+                        <i class="ph ph-check-circle"></i> Approve Selected
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById('bulkReelsAction').value='bulk_delete_reels'; confirmBulkDelete('bulkReelsForm', 'selected reels')">
                         <i class="ph ph-trash"></i> Delete Selected
                     </button>
                     <button type="button" class="btn btn-secondary btn-sm" style="color:#fff; border-color:#52525b;" onclick="clearSelection('reelsCheck', 'reelsBulkBar', 'reelsSelectAll')">
@@ -2606,10 +3796,10 @@ $availableCategories = [
                                     </th>
                                     <th>ID</th>
                                     <th>Video</th>
-                                    <th>Caption & Tags</th>
+                                    <th>Caption & Taxonomy</th>
                                     <th>Creator</th>
                                     <th>Audio</th>
-                                    <th>Moderation & SLA Status</th>
+                                    <th>Status & Eligibility</th>
                                     <th>Engagement</th>
                                     <th>Date</th>
                                     <th style="text-align: right;">Review & Actions</th>
@@ -2639,8 +3829,15 @@ $availableCategories = [
                                         $minsRemaining = max(0, 10 - $minsPassed);
                                         
                                         $rStatus = $rel['status'] ?? (intval($rel['is_active']) === 1 ? 'approved' : 'under_review');
+                                        $cropVal = $rel['crop'] ?: 'General';
+                                        $catVal = $rel['category'] ?: 'Crop Care';
+                                        $langVal = $rel['language'] ?: 'te';
+                                        $isDup = intval($rel['is_duplicate'] ?? 0);
+                                        $isPayout = intval($rel['payout_eligible'] ?? 1);
+                                        $rightsVal = intval($rel['rights_declared'] ?? 1);
+                                        $isCreatorSuspended = (($rel['creator_status'] ?? '') === 'suspended');
                                 ?>
-                                    <tr>
+                                    <tr id="reel-row-<?= $rel['id'] ?>" data-reel-id="<?= $rel['id'] ?>" data-creator-id="<?= $rel['creator_id'] ?? '' ?>" data-creator-status="<?= htmlspecialchars($rel['creator_status'] ?? '') ?>" class="<?= $isCreatorSuspended ? 'row-suppressed' : '' ?>">
                                         <td class="col-checkbox">
                                             <input type="checkbox" name="selected_reels[]" value="<?= $rel['id'] ?>" class="reelsCheck" onchange="updateBulkBar('reelsCheck', 'reelsBulkBar', 'reelsSelectedCount')">
                                         </td>
@@ -2651,31 +3848,58 @@ $availableCategories = [
                                                 <i class="ph-fill ph-play"></i>
                                             </div>
                                         </td>
-                                        <td style="max-width: 300px;">
-                                            <div style="font-weight: 600; color: var(--text-primary); line-height: 1.3;">
+                                        <td style="max-width: 320px;">
+                                            <div style="font-weight: 600; color: var(--text-primary); line-height: 1.35; margin-bottom: 4px;">
                                                 <?= htmlspecialchars($rel['caption']) ?>
                                             </div>
+                                            <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-bottom: 4px;">
+                                                <span class="reel-crop-badge"><i class="ph ph-plant"></i> <?= htmlspecialchars($cropVal) ?></span>
+                                                <span class="reel-cat-badge"><i class="ph ph-tag"></i> <?= htmlspecialchars($catVal) ?></span>
+                                                <span class="reel-lang-badge"><?= strtoupper(htmlspecialchars($langVal)) ?></span>
+                                                <?php if (!empty($rel['source_url'])): ?>
+                                                    <a href="<?= htmlspecialchars($rel['source_url']) ?>" target="_blank" class="reel-source-link" title="<?= htmlspecialchars($rel['source_url']) ?>">
+                                                        <i class="ph ph-arrow-square-out"></i> Source
+                                                    </a>
+                                                <?php endif; ?>
+                                                <?php if ($rightsVal === 1): ?>
+                                                    <span style="font-size: 0.65rem; color: #16a34a; font-weight: 600; display: inline-flex; align-items: center; gap: 2px;" title="Original rights declared by creator">
+                                                        <i class="ph ph-shield-check"></i> Rights OK
+                                                    </span>
+                                                <?php endif; ?>
+                                                <span id="reel-dup-badge-<?= $rel['id'] ?>" class="dup-badge" style="<?= $isDup === 1 ? '' : 'display: none;' ?>" title="Flagged as duplicate content">
+                                                    <i class="ph ph-warning"></i> Duplicate
+                                                </span>
+                                            </div>
                                             <?php if (!empty($rel['tags'])): ?>
-                                                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">
+                                                <div style="font-size: 0.72rem; color: var(--text-muted);">
                                                     <?= htmlspecialchars($rel['tags']) ?>
                                                 </div>
                                             <?php endif; ?>
                                         </td>
-                                        <td>
-                                            <div style="font-size: 0.82rem; font-weight: 600;"><?= htmlspecialchars($rel['creator_name'] ?: 'CropSync Creator') ?></div>
+                                        <td id="reel-creator-cell-<?= $rel['id'] ?>">
+                                            <div style="font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                                                <span><?= htmlspecialchars($rel['creator_name'] ?: 'CropSync Creator') ?></span>
+                                                <?php if ($isCreatorSuspended): ?>
+                                                    <span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:0.65rem; padding:1px 6px; border-radius:4px; font-weight:700; display:inline-flex; align-items:center; gap:3px;" title="Creator account is currently suspended">
+                                                        <i class="ph ph-prohibit"></i> Suspended
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
                                             <div style="font-size: 0.72rem; color: var(--text-muted);"><?= htmlspecialchars($rel['phone_number'] ?: '') ?></div>
                                         </td>
                                         <td style="font-size: 0.78rem; color: var(--text-muted); white-space: nowrap;">
                                             <i class="ph ph-music-note"></i> <?= htmlspecialchars($rel['music_title'] ?: 'Original Audio') ?>
                                         </td>
-                                        <td>
-                                            <?php if ($rStatus === 'approved'): ?>
+                                        <td id="reel-status-cell-<?= $rel['id'] ?>">
+                                            <?php if ($isCreatorSuspended): ?>
+                                                <span class="status-tag hidden" style="background:#fef2f2; color:#991b1b; border: 1px solid #fecaca; font-weight:700; display:inline-flex; align-items:center; gap:4px;" title="Creator account is suspended. This reel is forcibly deactivated and hidden from all public feeds.">
+                                                    <i class="ph ph-prohibit"></i> Suppressed (Creator Suspended)
+                                                </span>
+                                                <div style="font-size:0.7rem; color:#b91c1c; margin-top:2px; font-weight:500;">Feed Hidden & Ineligible</div>
+                                            <?php elseif ($rStatus === 'approved'): ?>
                                                 <span class="status-tag active" style="background:#dcfce7; color:#15803d; font-weight:600; display:inline-flex; align-items:center; gap:4px;">
                                                     <i class="ph ph-check-circle"></i> Live & Approved
                                                 </span>
-                                                <?php if (!empty($rel['payout_eligible'])): ?>
-                                                    <div style="font-size:0.7rem; color:#15803d; margin-top:2px;">💰 Payout Eligible</div>
-                                                <?php endif; ?>
                                             <?php elseif ($rStatus === 'changes_requested'): ?>
                                                 <span class="status-tag" style="background:#fef3c7; color:#b45309; font-weight:600; display:inline-flex; align-items:center; gap:4px;">
                                                     <i class="ph ph-warning"></i> Changes Req.
@@ -2717,17 +3941,69 @@ $availableCategories = [
                                                     <div style="font-size:0.7rem; color:#1d4ed8; margin-top:2px;">Ready for Auto-Approve</div>
                                                 <?php endif; ?>
                                             <?php endif; ?>
+
+                                            <!-- Controls Cluster: Realtime Live Visibility, Payout Eligibility & Duplicate -->
+                                            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; align-items: center;">
+                                                <button type="button" 
+                                                        class="btn btn-sm reel-visibility-btn" 
+                                                        id="reel-vis-btn-<?= $rel['id'] ?>"
+                                                        data-reel-id="<?= $rel['id'] ?>" 
+                                                        data-active="<?= intval($rel['is_active']) ?>"
+                                                        data-creator-status="<?= htmlspecialchars($rel['creator_status'] ?? '') ?>"
+                                                        onclick="realtimeToggleReelVisibility(<?= $rel['id'] ?>, this)"
+                                                        style="padding: 1px 6px; font-size: 0.68rem; border-radius: 4px; <?= intval($rel['is_active']) === 1 ? 'background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0;' : 'background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1;' ?>" 
+                                                        title="Toggle Feed Visibility (Instant Realtime)">
+                                                    <?= intval($rel['is_active']) === 1 ? '🟢 Visible' : '⚫ Hidden' ?>
+                                                </button>
+
+                                                <button type="button" 
+                                                        class="payout-status-btn <?= $isPayout === 1 ? 'eligible' : 'ineligible' ?>" 
+                                                        id="reel-payout-btn-<?= $rel['id'] ?>"
+                                                        data-reel-id="<?= $rel['id'] ?>" 
+                                                        data-eligible="<?= $isPayout ?>"
+                                                        data-creator-status="<?= htmlspecialchars($rel['creator_status'] ?? '') ?>"
+                                                        onclick="realtimeToggleReelPayout(<?= $rel['id'] ?>, this)"
+                                                        title="Toggle Partner Program Payout Eligibility (Instant Realtime)">
+                                                    <i class="ph ph-currency-inr"></i> <?= $isPayout === 1 ? 'Payout OK' : 'No Payout' ?>
+                                                </button>
+
+                                                <button type="button" 
+                                                        class="btn btn-sm reel-dup-btn" 
+                                                        id="reel-dup-btn-<?= $rel['id'] ?>"
+                                                        data-reel-id="<?= $rel['id'] ?>" 
+                                                        data-duplicate="<?= $isDup ?>"
+                                                        onclick="realtimeToggleReelDuplicate(<?= $rel['id'] ?>, this)"
+                                                        style="padding: 1px 6px; font-size: 0.68rem; border-radius: 4px; <?= $isDup === 1 ? 'background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;' : 'background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0;' ?>" 
+                                                        title="Toggle Duplicate Flag (Instant Realtime)">
+                                                    <?= $isDup === 1 ? '⚠️ Dup Flag' : 'Mark Dup' ?>
+                                                </button>
+                                            </div>
                                         </td>
-                                        <td style="font-size: 0.78rem; color: var(--text-secondary); white-space: nowrap;">
-                                            <?= number_format($rel['views_count']) ?> views &bull; <?= number_format($rel['likes_count']) ?> likes
+                                        <td>
+                                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                                    <span class="stat-metric-pill" title="Total Views"><i class="ph ph-eye"></i> <span id="reel-views-<?= $rel['id'] ?>"><?= number_format($rel['views_count']) ?></span></span>
+                                                    <span class="stat-metric-pill" title="Likes"><i class="ph ph-heart" style="color:#ef4444;"></i> <span id="reel-likes-<?= $rel['id'] ?>"><?= number_format($rel['likes_count']) ?></span></span>
+                                                </div>
+                                                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                                    <span class="stat-metric-pill" title="Saves / Bookmarks"><i class="ph ph-bookmark" style="color:#0284c7;"></i> <span id="reel-saves-<?= $rel['id'] ?>"><?= number_format($rel['saves_count'] ?? 0) ?></span></span>
+                                                    <span class="stat-metric-pill clickable" onclick="openReelCommentsModal(<?= $rel['id'] ?>, '<?= htmlspecialchars(addslashes(mb_strimwidth($rel['caption'], 0, 30, '...'))) ?>')" title="View and moderate <?= number_format($rel['comments_count'] ?? 0) ?> comments">
+                                                        <i class="ph ph-chat-circle" style="color:#10b981;"></i> <span id="reel-comments-<?= $rel['id'] ?>"><?= number_format($rel['comments_count'] ?? 0) ?></span>
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </td>
                                         <td style="font-size: 0.78rem; color: var(--text-muted); white-space: nowrap;">
                                             <?= date('M d, Y', strtotime($rel['created_at'])) ?>
                                         </td>
                                         <td style="text-align: right; white-space: nowrap;">
-                                            <?php if ($rStatus !== 'approved'): ?>
-                                                <button type="button" class="btn btn-sm" style="background:#15803d; color:white; border-color:#15803d; padding:4px 9px; font-size:0.75rem;" onclick="quickApproveReel(<?= $rel['id'] ?>, '<?= htmlspecialchars(addslashes(mb_strimwidth($rel['caption'], 0, 30, '...'))) ?>')" title="Quick Approve & Make Live">
+                                            <?php if ($rStatus !== 'approved' && !$isCreatorSuspended): ?>
+                                                <button type="button" class="btn btn-sm" id="quick-approve-btn-<?= $rel['id'] ?>" style="background:#15803d; color:white; border-color:#15803d; padding:4px 9px; font-size:0.75rem;" onclick="quickApproveReel(<?= $rel['id'] ?>, '<?= htmlspecialchars(addslashes(mb_strimwidth($rel['caption'], 0, 30, '...'))) ?>', '<?= htmlspecialchars($rel['creator_status'] ?? '') ?>')" title="Quick Approve & Make Live">
                                                     <i class="ph ph-check"></i> Approve
+                                                </button>
+                                            <?php elseif ($isCreatorSuspended): ?>
+                                                <button type="button" class="btn btn-sm" style="background:#fee2e2; color:#b91c1c; border-color:#fecaca; padding:4px 9px; font-size:0.75rem; cursor:not-allowed;" title="Cannot approve reel while creator is suspended" disabled>
+                                                    <i class="ph ph-prohibit"></i> Blocked
                                                 </button>
                                             <?php endif; ?>
                                             <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 9px; font-size:0.75rem;" onclick='openReelModerationModal(<?= json_encode([
@@ -2741,6 +4017,12 @@ $availableCategories = [
                                                 'feedback' => $rel['reviewer_feedback'] ?? ''
                                             ]) ?>)' title="Moderate / Review / Feedback">
                                                 <i class="ph ph-shield-check"></i> Review
+                                            </button>
+                                            <button type="button" class="btn btn-secondary btn-sm" onclick="openReelAnalyticsModal(<?= $rel['id'] ?>, '<?= htmlspecialchars(addslashes(mb_strimwidth($rel['caption'], 0, 30, '...'))) ?>')" title="Watch time, completion rate & audience actions">
+                                                <i class="ph ph-chart-line-up"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-secondary btn-sm" onclick="openReelCommentsModal(<?= $rel['id'] ?>, '<?= htmlspecialchars(addslashes(mb_strimwidth($rel['caption'], 0, 30, '...'))) ?>')" title="Comments moderation">
+                                                <i class="ph ph-chat-circle-dots"></i>
                                             </button>
                                             <button type="button" class="btn btn-secondary btn-sm" onclick="previewReelVideo('<?= htmlspecialchars($rel['video_url']) ?>', '<?= htmlspecialchars(addslashes($rel['caption'])) ?>', '<?= htmlspecialchars(addslashes($rel['creator_name'] ?? 'Creator')) ?>')" title="Play Reel">
                                                 <i class="ph ph-play"></i>
@@ -2817,22 +4099,109 @@ $availableCategories = [
         <!-- ============================================================== -->
         <!-- TAB: CREATOR APPLICATIONS & 25-CAP ONBOARDING QUEUE -->
         <!-- ============================================================== -->
+        <!-- ============================================================== -->
+        <!-- TAB: CREATOR PARTNER MANAGEMENT & ROSTER -->
+        <!-- ============================================================== -->
         <?php if ($activeTab === 'creators'): ?>
-            <div class="filter-header-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <!-- Header Bar -->
+            <div class="filter-header-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 14px;">
                 <div>
-                    <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
-                        Agri Creator Partner Program &bull; Onboarding Queue
+                    <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                        <i class="ph ph-users-three" style="color: var(--accent);"></i> Agri Creator Partner Network
                     </h2>
                     <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
-                        Pilot Scope: Maximum 25 approved creator partners. Enforced strictly at approval time.
+                        Manage verified agricultural creators, review applications, configure tiers, and monitor reels reach.
                     </p>
                 </div>
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    <div style="background: <?= $activeCreatorsCount >= 25 ? '#fee2e2' : '#dcfce7' ?>; border: 1px solid <?= $activeCreatorsCount >= 25 ? '#ef4444' : '#22c55e' ?>; border-radius: 8px; padding: 8px 16px; text-align: center;">
-                        <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: <?= $activeCreatorsCount >= 25 ? '#991b1b' : '#166534' ?>;">Pilot Capacity</span>
-                        <div style="font-size: 1.15rem; font-weight: 800; color: <?= $activeCreatorsCount >= 25 ? '#b91c1c' : '#15803d' ?>;">
-                            <?= $activeCreatorsCount ?> / 25 Active
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button type="button" class="btn btn-primary" onclick="openCreateCreatorModal()">
+                        <i class="ph ph-user-plus"></i> Enroll Creator
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats & Capacity Grid -->
+            <div class="creator-stats-grid">
+                <!-- Pilot Capacity Card -->
+                <?php 
+                    $capPct = min(100, round(($activeCreatorsCount / 25) * 100));
+                    $capBarClass = $activeCreatorsCount >= 25 ? 'danger' : ($activeCreatorsCount >= 20 ? 'warning' : '');
+                ?>
+                <div class="creator-stat-card card-pilot">
+                    <div class="stat-card-label">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="stat-icon-circle emerald"><i class="ph ph-shield-check"></i></span>
+                            <span>Pilot Partner Cap</span>
                         </div>
+                        <span class="status-tag <?= $activeCreatorsCount >= 25 ? 'danger' : 'active' ?>" style="font-size: 0.68rem;">
+                            <span class="pulse-dot <?= $activeCreatorsCount >= 25 ? 'warning' : '' ?>" style="margin-right: 4px;"></span>
+                            <?= $activeCreatorsCount >= 25 ? 'Capacity Full' : 'Enrolling' ?>
+                        </span>
+                    </div>
+                    <div class="stat-card-value" style="color: <?= $activeCreatorsCount >= 25 ? 'var(--danger)' : '#0f172a' ?>;">
+                        <?= $activeCreatorsCount ?> <span style="font-size: 1rem; font-weight: 500; color: var(--text-muted);">/ 25 Active</span>
+                    </div>
+                    <div class="pilot-bar-track">
+                        <div class="pilot-bar-fill <?= $capBarClass ?>" style="width: <?= $capPct ?>%;"></div>
+                    </div>
+                    <div class="stat-card-meta" style="margin-top: 4px;">
+                        <?= max(0, 25 - $activeCreatorsCount) ?> active partner slot<?= max(0, 25 - $activeCreatorsCount) === 1 ? '' : 's' ?> remaining
+                    </div>
+                </div>
+
+                <!-- Review Queue Card -->
+                <div class="creator-stat-card card-queue">
+                    <div class="stat-card-label">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="stat-icon-circle amber"><i class="ph ph-clock-countdown"></i></span>
+                            <span>Review Queue</span>
+                        </div>
+                        <?php if ($pendingCreatorsCount > 0): ?>
+                            <span class="status-tag warning" style="font-size: 0.68rem;">
+                                <span class="pulse-dot warning" style="margin-right: 4px;"></span>
+                                <?= $pendingCreatorsCount ?> Pending
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="stat-card-value" style="color: <?= $pendingCreatorsCount > 0 ? '#b45309' : '#0f172a' ?>;">
+                        <?= $pendingCreatorsCount ?>
+                    </div>
+                    <div class="stat-card-meta">
+                        <a href="?tab=creators&creator_status=pending_review" style="color: #b45309; text-decoration: none; font-weight: 600;">
+                            View pending applications &rarr;
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Verified Roster Card -->
+                <div class="creator-stat-card card-verified">
+                    <div class="stat-card-label">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="stat-icon-circle sky"><i class="ph-fill ph-check-circle"></i></span>
+                            <span>Verified Partners</span>
+                        </div>
+                    </div>
+                    <div class="stat-card-value" style="color: #0369a1;">
+                        <?= $verifiedCreatorsCount ?>
+                    </div>
+                    <div class="stat-card-meta">
+                        Out of <?= $totalCreatorsCount ?> total creator accounts
+                    </div>
+                </div>
+
+                <!-- Engagement Reach Card -->
+                <div class="creator-stat-card card-impact">
+                    <div class="stat-card-label">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="stat-icon-circle violet"><i class="ph ph-eye"></i></span>
+                            <span>Content Impact</span>
+                        </div>
+                    </div>
+                    <div class="stat-card-value" style="color: #6d28d9;">
+                        <?= number_format($totalCreatorViews) ?>
+                    </div>
+                    <div class="stat-card-meta">
+                        Generated by <?= number_format($totalCreatorReels) ?> published agri reels
                     </div>
                 </div>
             </div>
@@ -2840,69 +4209,247 @@ $availableCategories = [
             <?php if ($activeCreatorsCount >= 25): ?>
                 <div class="alert-banner warning" style="margin-bottom: 20px;">
                     <i class="ph ph-warning-circle" style="font-size: 1.2rem;"></i>
-                    <span><strong>Pilot Capacity Reached:</strong> 25 active creators are already enrolled. New approvals will be blocked until active slots open up or pilot capacity is increased.</span>
+                    <span><strong>Pilot Capacity Reached:</strong> 25 active creators are currently enrolled. New approvals are blocked until existing partners are suspended or the pilot cap is expanded.</span>
                 </div>
             <?php endif; ?>
 
+            <!-- Filter Toolbar (100% Alpine.js Custom Dropdowns) -->
+            <div class="section-toolbar">
+                <div class="filter-group">
+                    <!-- Search Input -->
+                    <div class="search-wrapper">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="text" class="search-input" id="creatorSearch" placeholder="Search name, phone, niches..." value="<?= htmlspecialchars($searchQuery) ?>" onkeydown="if(event.key==='Enter'){ applyCreatorFilter('q', this.value); }">
+                    </div>
+
+                    <!-- Alpine Dropdown: Status Filter -->
+                    <?php
+                        $statusMap = [
+                            'all' => 'All Statuses',
+                            'active' => 'Active Partners',
+                            'pending_review' => 'Pending Review',
+                            'applied' => 'New Applications',
+                            'suspended' => 'Suspended',
+                            'rejected' => 'Rejected'
+                        ];
+                        $curStatusLabel = $statusMap[$creatorStatusFilter] ?? 'All Statuses';
+                    ?>
+                    <div class="alpine-select-wrapper" x-data="{ open: false, label: '<?= htmlspecialchars(addslashes($curStatusLabel)) ?>', val: '<?= htmlspecialchars($creatorStatusFilter) ?>' }" @click.outside="open = false">
+                        <div class="alpine-select-trigger" :class="{ 'active': open }" @click="open = !open">
+                            <span x-text="label"></span>
+                            <i class="ph ph-caret-down"></i>
+                        </div>
+                        <div class="alpine-select-menu" x-show="open" x-cloak x-transition>
+                            <?php foreach ($statusMap as $sKey => $sName): ?>
+                                <div class="alpine-select-option" :class="{ 'selected': val === '<?= $sKey ?>' }" @click="label = '<?= htmlspecialchars(addslashes($sName)) ?>'; val = '<?= $sKey ?>'; open = false; applyCreatorFilter('creator_status', '<?= $sKey ?>');">
+                                    <span><?= htmlspecialchars($sName) ?></span>
+                                    <i class="ph ph-check check-icon" x-show="val === '<?= $sKey ?>'"></i>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Alpine Dropdown: Tier Filter -->
+                    <?php
+                        $tierMap = [
+                            'all' => 'All Tiers',
+                            'trial' => 'Trial (M1)',
+                            'active_partner' => 'Active Partner (M2-3)',
+                            'verified' => 'Verified Partner',
+                            'strategic' => 'Strategic Partner'
+                        ];
+                        $curTierLabel = $tierMap[$creatorTierFilter] ?? 'All Tiers';
+                    ?>
+                    <div class="alpine-select-wrapper" x-data="{ open: false, label: '<?= htmlspecialchars(addslashes($curTierLabel)) ?>', val: '<?= htmlspecialchars($creatorTierFilter) ?>' }" @click.outside="open = false">
+                        <div class="alpine-select-trigger" :class="{ 'active': open }" @click="open = !open">
+                            <span x-text="label"></span>
+                            <i class="ph ph-caret-down"></i>
+                        </div>
+                        <div class="alpine-select-menu" x-show="open" x-cloak x-transition>
+                            <?php foreach ($tierMap as $tKey => $tName): ?>
+                                <div class="alpine-select-option" :class="{ 'selected': val === '<?= $tKey ?>' }" @click="label = '<?= htmlspecialchars(addslashes($tName)) ?>'; val = '<?= $tKey ?>'; open = false; applyCreatorFilter('creator_tier', '<?= $tKey ?>');">
+                                    <span><?= htmlspecialchars($tName) ?></span>
+                                    <i class="ph ph-check check-icon" x-show="val === '<?= $tKey ?>'"></i>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Alpine Dropdown: Verification Filter -->
+                    <?php
+                        $verifMap = [
+                            'all' => 'All Verification',
+                            'verified' => 'Verified Only',
+                            'unverified' => 'Unverified'
+                        ];
+                        $curVerifLabel = $verifMap[$creatorVerifiedFilter] ?? 'All Verification';
+                    ?>
+                    <div class="alpine-select-wrapper" x-data="{ open: false, label: '<?= htmlspecialchars(addslashes($curVerifLabel)) ?>', val: '<?= htmlspecialchars($creatorVerifiedFilter) ?>' }" @click.outside="open = false">
+                        <div class="alpine-select-trigger" :class="{ 'active': open }" @click="open = !open">
+                            <span x-text="label"></span>
+                            <i class="ph ph-caret-down"></i>
+                        </div>
+                        <div class="alpine-select-menu" x-show="open" x-cloak x-transition>
+                            <?php foreach ($verifMap as $vKey => $vName): ?>
+                                <div class="alpine-select-option" :class="{ 'selected': val === '<?= $vKey ?>' }" @click="label = '<?= htmlspecialchars(addslashes($vName)) ?>'; val = '<?= $vKey ?>'; open = false; applyCreatorFilter('creator_verified', '<?= $vKey ?>');">
+                                    <span><?= htmlspecialchars($vName) ?></span>
+                                    <i class="ph ph-check check-icon" x-show="val === '<?= $vKey ?>'"></i>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Alpine Dropdown: Sort Order -->
+                    <?php
+                        $sortMap = [
+                            'newest' => 'Newest First',
+                            'most_views' => 'Most Views',
+                            'most_reels' => 'Most Reels',
+                            'name_asc' => 'Name (A-Z)',
+                            'oldest' => 'Oldest First'
+                        ];
+                        $curSortLabel = $sortMap[$creatorSort] ?? 'Newest First';
+                    ?>
+                    <div class="alpine-select-wrapper" x-data="{ open: false, label: '<?= htmlspecialchars(addslashes($curSortLabel)) ?>', val: '<?= htmlspecialchars($creatorSort) ?>' }" @click.outside="open = false">
+                        <div class="alpine-select-trigger" :class="{ 'active': open }" @click="open = !open">
+                            <span x-text="label"></span>
+                            <i class="ph ph-caret-down"></i>
+                        </div>
+                        <div class="alpine-select-menu" x-show="open" x-cloak x-transition>
+                            <?php foreach ($sortMap as $soKey => $soName): ?>
+                                <div class="alpine-select-option" :class="{ 'selected': val === '<?= $soKey ?>' }" @click="label = '<?= htmlspecialchars(addslashes($soName)) ?>'; val = '<?= $soKey ?>'; open = false; applyCreatorFilter('creator_sort', '<?= $soKey ?>');">
+                                    <span><?= htmlspecialchars($soName) ?></span>
+                                    <i class="ph ph-check check-icon" x-show="val === '<?= $soKey ?>'"></i>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Reset Filters Button -->
+                    <?php if ($creatorStatusFilter !== 'all' || $creatorTierFilter !== 'all' || $creatorVerifiedFilter !== 'all' || $creatorSort !== 'newest' || !empty($searchQuery)): ?>
+                        <a href="?tab=creators" class="btn btn-secondary btn-sm" style="color: var(--danger); border-color: #fca5a5;">
+                            <i class="ph ph-x"></i> Clear Filters
+                        </a>
+                    <?php endif; ?>
+                </div>
+
+                <div style="font-size: 0.82rem; color: var(--text-muted);">
+                    Showing <?= count($creatorsList) ?> of <?= $totalCreatorsCount ?> creators
+                </div>
+            </div>
+
+            <!-- Creators Directory Table Card -->
             <div class="table-card">
                 <div class="table-responsive">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Creator</th>
+                                <th>Creator Partner</th>
                                 <th>Contact & UPI</th>
-                                <th>Niches & Languages</th>
-                                <th>Terms Accepted</th>
-                                <th>Status</th>
+                                <th>Specialty & Languages</th>
                                 <th>Tier</th>
-                                <th>Activity</th>
-                                <th style="text-align: right;">Review & Actions</th>
+                                <th>Status</th>
+                                <th>Content Reach</th>
+                                <th style="text-align: right;">Manage & Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($creatorsList)): ?>
                                 <tr>
-                                    <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 36px;">
-                                        No creator applications or partners found.
+                                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 48px;">
+                                        <div style="font-size: 2.2rem; margin-bottom: 8px; color: #94a3b8;">
+                                            <i class="ph ph-user-focus"></i>
+                                        </div>
+                                        <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 4px;">
+                                            No Creator Partners Found
+                                        </div>
+                                        <div style="font-size: 0.82rem; margin-bottom: 16px;">
+                                            No creators matched the active filters. Try adjusting your search or enroll a new creator.
+                                        </div>
+                                        <button type="button" class="btn btn-primary btn-sm" onclick="openCreateCreatorModal()">
+                                            <i class="ph ph-user-plus"></i> Enroll Creator Partner
+                                        </button>
                                     </td>
                                 </tr>
                             <?php else: foreach ($creatorsList as $cr): ?>
                                 <tr>
+                                    <!-- Creator Partner Identity -->
                                     <td>
-                                        <div style="display: flex; align-items: center; gap: 10px;">
-                                            <div style="width: 36px; height: 36px; border-radius: 50%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #475569;">
-                                                <?= strtoupper(substr($cr['display_name'] ?: 'C', 0, 1)) ?>
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            <div class="creator-avatar-wrap">
+                                                <?php if (!empty($cr['profile_image_url'])): ?>
+                                                    <img src="<?= htmlspecialchars($cr['profile_image_url']) ?>" alt="Avatar" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                    <span style="display: none; width:100%; height:100%; align-items:center; justify-content:center;"><?= strtoupper(substr($cr['display_name'] ?: 'C', 0, 1)) ?></span>
+                                                <?php else: ?>
+                                                    <span><?= strtoupper(substr($cr['display_name'] ?: 'C', 0, 1)) ?></span>
+                                                <?php endif; ?>
                                             </div>
                                             <div>
-                                                <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary);">
+                                                <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary); display: flex; align-items: center; gap: 4px;">
                                                     <?= htmlspecialchars($cr['display_name']) ?>
                                                     <?php if (!empty($cr['is_verified'])): ?>
-                                                        <i class="ph-fill ph-check-circle" style="color: #0284c7;" title="Verified Creator"></i>
+                                                        <i class="ph-fill ph-check-circle" style="color: #0284c7; font-size: 1rem;" title="Verified Creator Partner"></i>
                                                     <?php endif; ?>
                                                 </div>
-                                                <div style="font-size: 0.72rem; color: var(--text-muted);">
-                                                    @<?= htmlspecialchars($cr['username']) ?> &bull; ID #<?= $cr['id'] ?>
+                                                <div style="font-size: 0.74rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                                                    <span>@<?= htmlspecialchars($cr['username']) ?></span>
+                                                    <span>&bull;</span>
+                                                    <span>ID #<?= $cr['id'] ?></span>
                                                 </div>
+                                                <?php if (!empty($cr['bio'])): ?>
+                                                    <div style="font-size: 0.72rem; color: var(--text-secondary); max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;" title="<?= htmlspecialchars($cr['bio']) ?>">
+                                                        <?= htmlspecialchars($cr['bio']) ?>
+                                                    </div>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
                                     </td>
+
+                                    <!-- Contact & UPI Payment -->
                                     <td>
-                                        <div style="font-size: 0.82rem; font-weight: 500;"><?= htmlspecialchars($cr['phone_number'] ?: '-') ?></div>
-                                        <div style="font-size: 0.72rem; color: var(--text-muted);"><?= htmlspecialchars($cr['upi_id'] ? 'UPI: ' . $cr['upi_id'] : ($cr['email'] ?: 'No payment info')) ?></div>
-                                    </td>
-                                    <td>
-                                        <div style="font-size: 0.78rem; color: var(--text-secondary);">
-                                            <?= htmlspecialchars($cr['agriculture_niches'] ?: 'General Agriculture') ?>
+                                        <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 4px;">
+                                            <i class="ph ph-phone" style="font-size: 0.8rem; color: var(--text-muted);"></i>
+                                            <?= htmlspecialchars($cr['phone_number'] ?: 'No phone') ?>
                                         </div>
-                                        <div style="font-size: 0.72rem; color: var(--text-muted);">
-                                            Lang: <?= htmlspecialchars($cr['languages'] ?: 'te') ?>
+                                        <?php if (!empty($cr['email'])): ?>
+                                            <div style="font-size: 0.72rem; color: var(--text-muted); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                <?= htmlspecialchars($cr['email']) ?>
+                                            </div>
+                                        <?php endif; ?>
+                                        <div style="margin-top: 3px;">
+                                            <?php if (!empty($cr['upi_id'])): ?>
+                                                <span style="font-size: 0.70rem; font-family: monospace; background: #f0fdf4; color: #166534; padding: 2px 6px; border-radius: 4px; border: 1px solid #bbf7d0;">
+                                                    UPI: <?= htmlspecialchars($cr['upi_id']) ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span style="font-size: 0.70rem; color: var(--text-muted);">No UPI set</span>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
+
+                                    <!-- Specialty & Languages -->
                                     <td>
-                                        <span class="status-tag" style="background: <?= !empty($cr['terms_accepted']) ? '#dcfce7' : '#fee2e2' ?>; color: <?= !empty($cr['terms_accepted']) ? '#166534' : '#991b1b' ?>;">
-                                            <?= !empty($cr['terms_accepted']) ? 'Accepted v1.0' : 'Pending' ?>
+                                        <div style="font-size: 0.78rem; font-weight: 500; color: var(--text-primary);">
+                                            <?= htmlspecialchars($cr['agriculture_niches'] ?: 'General Farming') ?>
+                                        </div>
+                                        <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">
+                                            Lang: <strong><?= strtoupper(htmlspecialchars($cr['languages'] ?: 'te')) ?></strong>
+                                        </div>
+                                    </td>
+
+                                    <!-- Partnership Tier -->
+                                    <td>
+                                        <?php 
+                                            $tier = $cr['partnership_tier'] ?? 'trial';
+                                            $tierClass = 'tier-' . $tier;
+                                            $tierTitle = str_replace('_', ' ', $tier);
+                                        ?>
+                                        <span class="tier-pill <?= $tierClass ?>">
+                                            <i class="ph ph-medal"></i> <?= htmlspecialchars($tierTitle) ?>
                                         </span>
                                     </td>
+
+                                    <!-- Status -->
                                     <td>
                                         <?php 
                                             $st = $cr['status'] ?? 'active';
@@ -2910,40 +4457,81 @@ $availableCategories = [
                                             if ($st === 'pending_review' || $st === 'applied') { $badgeColor = '#fef3c7'; $textColor = '#92400e'; }
                                             elseif ($st === 'rejected' || $st === 'suspended') { $badgeColor = '#fee2e2'; $textColor = '#991b1b'; }
                                         ?>
-                                        <span class="status-tag" style="background: <?= $badgeColor ?>; color: <?= $textColor ?>; text-transform: capitalize;">
+                                        <span class="status-tag" style="background: <?= $badgeColor ?>; color: <?= $textColor ?>; text-transform: capitalize; font-weight: 600;">
                                             <?= str_replace('_', ' ', $st) ?>
                                         </span>
+                                        <div style="font-size: 0.70rem; color: var(--text-muted); margin-top: 3px;">
+                                            <?= !empty($cr['terms_accepted']) ? 'Terms v1.0 ✓' : 'Terms Pending' ?>
+                                        </div>
                                     </td>
-                                    <td>
-                                        <span class="status-tag" style="background: #f1f5f9; color: #334155; font-weight: 600; text-transform: uppercase; font-size: 0.68rem;">
-                                            <?= htmlspecialchars($cr['partnership_tier'] ?? 'trial') ?>
-                                        </span>
-                                    </td>
-                                    <td style="font-size: 0.78rem; color: var(--text-secondary); white-space: nowrap;">
-                                        <strong><?= intval($cr['approved_reels']) ?></strong> approved reels<br>
-                                        <span style="color: var(--text-muted); font-size: 0.72rem;"><?= number_format(intval($cr['total_views'])) ?> views</span>
-                                    </td>
-                                    <td style="text-align: right; white-space: nowrap;">
-                                        <!-- Approve Form -->
-                                        <form method="POST" style="display: inline-block;">
-                                            <input type="hidden" name="action" value="admin_approve_creator">
-                                            <input type="hidden" name="creator_id" value="<?= $cr['id'] ?>">
-                                            <input type="hidden" name="approval_action" value="approve">
-                                            <select name="tier" style="font-size: 0.75rem; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); margin-right: 4px;">
-                                                <option value="trial" <?= ($cr['partnership_tier'] ?? '') === 'trial' ? 'selected' : '' ?>>Trial (M1)</option>
-                                                <option value="active_partner" <?= ($cr['partnership_tier'] ?? '') === 'active_partner' ? 'selected' : '' ?>>Active (M2-3)</option>
-                                                <option value="verified" <?= ($cr['partnership_tier'] ?? '') === 'verified' ? 'selected' : '' ?>>Verified</option>
-                                                <option value="strategic" <?= ($cr['partnership_tier'] ?? '') === 'strategic' ? 'selected' : '' ?>>Strategic</option>
-                                            </select>
-                                            <button type="submit" class="btn btn-primary btn-sm" <?= ($cr['status'] === 'active' || $activeCreatorsCount >= 25) ? '' : '' ?>>
-                                                <i class="ph ph-check"></i> Approve
-                                            </button>
-                                        </form>
 
-                                        <!-- Reject / Suspend Button -->
-                                        <button type="button" class="btn btn-danger-outline btn-sm" style="margin-left: 4px;" onclick="openRejectCreatorModal(<?= $cr['id'] ?>, '<?= htmlspecialchars(addslashes($cr['display_name'])) ?>', <?= $cr['status'] === 'active' ? 'true' : 'false' ?>)">
-                                            <i class="ph ph-x"></i> <?= $cr['status'] === 'active' ? 'Suspend' : 'Reject' ?>
+                                    <!-- Content Reach -->
+                                    <td style="font-size: 0.80rem; white-space: nowrap;">
+                                        <div>
+                                            <strong><?= intval($cr['approved_reels']) ?></strong> / <?= intval($cr['total_reels']) ?> approved
+                                        </div>
+                                        <div style="font-size: 0.73rem; color: var(--text-muted); margin-top: 2px;">
+                                            <i class="ph ph-eye"></i> <?= number_format(intval($cr['total_views'])) ?> views
+                                        </div>
+                                    </td>
+
+                                    <!-- Manage & Actions (100% Alpine.js Custom Dropdowns & Modals) -->
+                                    <td style="text-align: right; white-space: nowrap;">
+                                        <!-- Edit Profile Button -->
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick='openEditCreatorModal(<?= json_encode($cr, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' title="Edit Creator Profile">
+                                            <i class="ph ph-pencil"></i> Edit
                                         </button>
+
+                                        <!-- View Reels Filter -->
+                                        <a href="?tab=reels&q=<?= urlencode($cr['username']) ?>" class="btn btn-secondary btn-sm" title="View Reels by this Creator">
+                                            <i class="ph ph-film-strip"></i> Reels
+                                        </a>
+
+                                        <!-- Alpine Dropdown for Additional Actions (Zero Native Selects & Viewport-Aware) -->
+                                        <div class="alpine-select-wrapper" style="vertical-align: middle; margin-left: 2px;" x-data="{ open: false, dropUp: false }" :style="open ? 'z-index: 250; position: relative;' : ''" @click.outside="open = false">
+                                            <button type="button" class="btn btn-secondary btn-sm" @click="dropUp = ($el.getBoundingClientRect().bottom + 210 > window.innerHeight); open = !open" title="More Creator Options">
+                                                <i class="ph ph-dots-three-vertical"></i>
+                                            </button>
+                                            <div class="alpine-select-menu right-align" :class="{ 'dropup-menu': dropUp }" style="min-width: 185px; z-index: 250;" x-show="open" x-cloak x-transition>
+                                                <!-- Toggle Verified -->
+                                                <form method="POST" style="margin: 0;">
+                                                    <input type="hidden" name="action" value="toggle_creator_verified">
+                                                    <input type="hidden" name="creator_id" value="<?= $cr['id'] ?>">
+                                                    <div class="alpine-select-option" onclick="this.closest('form').submit()">
+                                                        <i class="ph ph-shield-check" style="color: #0284c7;"></i>
+                                                        <span><?= !empty($cr['is_verified']) ? 'Revoke Verified Badge' : 'Grant Verified Badge' ?></span>
+                                                    </div>
+                                                </form>
+
+                                                <!-- Quick Approve / Tier Promote -->
+                                                <?php if ($cr['status'] !== 'active'): ?>
+                                                    <form method="POST" style="margin: 0;">
+                                                        <input type="hidden" name="action" value="admin_approve_creator">
+                                                        <input type="hidden" name="creator_id" value="<?= $cr['id'] ?>">
+                                                        <input type="hidden" name="approval_action" value="approve">
+                                                        <input type="hidden" name="tier" value="active_partner">
+                                                        <div class="alpine-select-option" style="color: #15803d;" onclick="this.closest('form').submit()">
+                                                            <i class="ph ph-check-circle" style="color: #15803d;"></i>
+                                                            <span>Approve Partner</span>
+                                                        </div>
+                                                    </form>
+                                                <?php endif; ?>
+
+                                                <!-- Suspend / Reject -->
+                                                <div class="alpine-select-option" style="color: #b45309;" @click="open = false; openRejectCreatorModal(<?= $cr['id'] ?>, '<?= htmlspecialchars(addslashes($cr['display_name'])) ?>', <?= $cr['status'] === 'active' ? 'true' : 'false' ?>)">
+                                                    <i class="ph ph-prohibit" style="color: #b45309;"></i>
+                                                    <span><?= $cr['status'] === 'active' ? 'Suspend Creator' : 'Reject Application' ?></span>
+                                                </div>
+
+                                                <div style="height: 1px; background: var(--border); margin: 4px 0;"></div>
+
+                                                <!-- Delete Creator -->
+                                                <div class="alpine-select-option" style="color: #dc2626;" @click="open = false; openDeleteCreatorModal(<?= $cr['id'] ?>, '<?= htmlspecialchars(addslashes($cr['display_name'])) ?>', '<?= htmlspecialchars(addslashes($cr['username'])) ?>', <?= intval($cr['total_reels']) ?>)">
+                                                    <i class="ph ph-trash" style="color: #dc2626;"></i>
+                                                    <span>Delete Creator</span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; endif; ?>
@@ -3254,12 +4842,25 @@ $availableCategories = [
                                         <form method="POST" style="display: inline-block;">
                                             <input type="hidden" name="action" value="assign_campaign_creator">
                                             <input type="hidden" name="campaign_id" value="<?= $cmp['id'] ?>">
-                                            <select name="creator_id" style="font-size: 0.75rem; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px;" required>
-                                                <option value="">Select Creator</option>
-                                                <?php foreach ($creatorsList as $cOpt): ?>
-                                                    <option value="<?= $cOpt['id'] ?>"><?= htmlspecialchars($cOpt['display_name']) ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
+                                            <!-- Alpine Custom Creator Selector -->
+                                            <div class="alpine-select-wrapper" style="vertical-align: middle; margin-right: 4px;" x-data="{ open: false, label: 'Select Creator', val: '' }" @click.outside="open = false">
+                                                <input type="hidden" name="creator_id" :value="val" required>
+                                                <div class="alpine-select-trigger sm" :class="{ 'active': open }" @click="open = !open" style="min-width: 135px; font-size: 0.76rem;">
+                                                    <span x-text="label" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 105px;"></span>
+                                                    <i class="ph ph-caret-down"></i>
+                                                </div>
+                                                <div class="alpine-select-menu right-align" style="max-height: 190px; z-index: 130;" x-show="open" x-cloak x-transition>
+                                                    <div class="alpine-select-option" :class="{ 'selected': val === '' }" @click="label = 'Select Creator'; val = ''; open = false;">
+                                                        <span>Select Creator</span>
+                                                    </div>
+                                                    <?php foreach ($allCreators as $cOpt): ?>
+                                                        <div class="alpine-select-option" :class="{ 'selected': val == <?= $cOpt['id'] ?> }" @click="label = '<?= htmlspecialchars(addslashes($cOpt['display_name'])) ?>'; val = <?= $cOpt['id'] ?>; open = false;">
+                                                            <span><?= htmlspecialchars($cOpt['display_name']) ?></span>
+                                                            <i class="ph ph-check check-icon" x-show="val == <?= $cOpt['id'] ?>"></i>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            </div>
                                             <input type="number" name="negotiated_fee" placeholder="Fee ₹" style="width: 70px; font-size: 0.75rem; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px;" required>
                                             <button type="submit" class="btn btn-secondary btn-sm">
                                                 <i class="ph ph-user-plus"></i> Assign
@@ -3378,6 +4979,327 @@ $availableCategories = [
         <?php endif; ?>
 
     </main>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: CREATE / EDIT CREATOR PARTNER (WITH ALPINE DROPDOWNS & REAL-TIME PREVIEW) -->
+    <!-- ============================================================== -->
+    <div class="modal-overlay" id="creatorModal" x-data="{
+        isEdit: false,
+        creatorId: 0,
+        displayName: '',
+        username: '',
+        phoneNumber: '',
+        email: '',
+        bio: '',
+        profileImageUrl: '',
+        niches: '',
+        languages: 'te',
+        upiId: '',
+        socialHandles: '',
+        tier: 'trial',
+        tierLabel: 'Trial (M1)',
+        tierOpen: false,
+        status: 'active',
+        statusLabel: 'Active Partner',
+        statusOpen: false,
+        isVerified: 0,
+        termsAccepted: 1,
+        
+        tierOptions: [
+            { val: 'trial', label: 'Trial (M1)' },
+            { val: 'active_partner', label: 'Active Partner (M2-3)' },
+            { val: 'verified', label: 'Verified Partner' },
+            { val: 'strategic', label: 'Strategic Partner' }
+        ],
+        statusOptions: [
+            { val: 'active', label: 'Active Partner' },
+            { val: 'pending_review', label: 'Pending Review' },
+            { val: 'applied', label: 'New Application' },
+            { val: 'suspended', label: 'Suspended' },
+            { val: 'rejected', label: 'Rejected' }
+        ],
+        setTier(opt) {
+            this.tier = opt.val;
+            this.tierLabel = opt.label;
+            this.tierOpen = false;
+        },
+        setStatus(opt) {
+            this.status = opt.val;
+            this.statusLabel = opt.label;
+            this.statusOpen = false;
+        },
+        populate(data) {
+            this.isEdit = true;
+            this.creatorId = parseInt(data.id) || 0;
+            this.displayName = data.display_name || '';
+            this.username = data.username || '';
+            this.phoneNumber = data.phone_number || '';
+            this.email = data.email || '';
+            this.bio = data.bio || '';
+            this.profileImageUrl = data.profile_image_url || '';
+            this.niches = data.agriculture_niches || '';
+            this.languages = data.languages || 'te';
+            this.upiId = data.upi_id || '';
+            this.socialHandles = data.social_handles || '';
+            
+            const curTier = data.partnership_tier || 'trial';
+            this.tier = curTier;
+            const topt = this.tierOptions.find(o => o.val === curTier);
+            this.tierLabel = topt ? topt.label : curTier;
+
+            const curStatus = data.status || 'active';
+            this.status = curStatus;
+            const sopt = this.statusOptions.find(o => o.val === curStatus);
+            this.statusLabel = sopt ? sopt.label : curStatus;
+
+            this.isVerified = (parseInt(data.is_verified) === 1 || data.is_verified === true || data.is_verified === '1') ? 1 : 0;
+            this.termsAccepted = (parseInt(data.terms_accepted) === 1 || data.terms_accepted === true || data.terms_accepted === '1') ? 1 : 0;
+            this.tierOpen = false;
+            this.statusOpen = false;
+        },
+        reset() {
+            this.isEdit = false;
+            this.creatorId = 0;
+            this.displayName = '';
+            this.username = '';
+            this.phoneNumber = '';
+            this.email = '';
+            this.bio = '';
+            this.profileImageUrl = '';
+            this.niches = '';
+            this.languages = 'te';
+            this.upiId = '';
+            this.socialHandles = '';
+            this.tier = 'trial';
+            this.tierLabel = 'Trial (M1)';
+            this.status = 'active';
+            this.statusLabel = 'Active Partner';
+            this.isVerified = 0;
+            this.termsAccepted = 1;
+            this.tierOpen = false;
+            this.statusOpen = false;
+        }
+    }"
+    @populate-creator.window="populate($event.detail)"
+    @reset-creator.window="reset()"
+    >
+        <div class="modal-card" style="max-width: 680px;">
+            <div class="modal-head">
+                <h3 id="creatorModalHeading">
+                    <i class="ph ph-user-circle" style="color: var(--accent);"></i>
+                    <span x-text="isEdit ? 'Edit Creator Partner #' + creatorId : 'Enroll New Creator Partner'"></span>
+                </h3>
+                <button type="button" class="close-btn" onclick="closeModal('creatorModal')">&times;</button>
+            </div>
+            <form method="POST" id="creatorForm">
+                <input type="hidden" name="action" value="save_creator">
+                <input type="hidden" name="creator_id" id="form_creator_id" :value="creatorId" value="0">
+                <input type="hidden" name="partnership_tier" id="form_partnership_tier" :value="tier" value="trial">
+                <input type="hidden" name="status" id="form_status" :value="status" value="active">
+
+                <div class="modal-body">
+                    <!-- Avatar Preview Banner -->
+                    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding: 12px 16px; background: var(--surface-subtle); border-radius: 10px; border: 1px solid var(--border);">
+                        <div class="creator-avatar-wrap" style="width: 52px; height: 52px; font-size: 1.2rem;">
+                            <template x-if="profileImageUrl">
+                                <img :src="profileImageUrl" alt="Preview" @error="$el.style.display='none'">
+                            </template>
+                            <template x-if="!profileImageUrl">
+                                <span x-text="displayName ? displayName.charAt(0).toUpperCase() : 'C'"></span>
+                            </template>
+                        </div>
+                        <div style="flex-grow: 1;">
+                            <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                <span x-text="displayName || 'Creator Name'"></span>
+                                <i class="ph-fill ph-check-circle" style="color: #0284c7;" x-show="isVerified == 1"></i>
+                            </div>
+                            <div style="font-size: 0.78rem; color: var(--text-muted);">
+                                <span x-text="username ? '@' + username : '@username'"></span> &bull; 
+                                <span x-text="tierLabel"></span> &bull; 
+                                <span x-text="statusLabel" style="text-transform: capitalize;"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 1: Display Name & Username -->
+                    <div class="grid-2">
+                        <div class="form-row">
+                            <label>Display Name *</label>
+                            <input type="text" name="display_name" id="form_display_name" x-model="displayName" class="form-input" placeholder="e.g. Ramesh Kumar Patel" required>
+                        </div>
+                        <div class="form-row">
+                            <label>Username / Handle (@)</label>
+                            <input type="text" name="username" id="form_username" x-model="username" class="form-input" placeholder="e.g. ramesh_agri (auto-generated if empty)">
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Phone & Email -->
+                    <div class="grid-2">
+                        <div class="form-row">
+                            <label>Phone Number (Mobile App Sync) *</label>
+                            <input type="text" name="phone_number" id="form_phone_number" x-model="phoneNumber" class="form-input" placeholder="e.g. 9182867655" required>
+                        </div>
+                        <div class="form-row">
+                            <label>Email Address</label>
+                            <input type="email" name="email" id="form_email" x-model="email" class="form-input" placeholder="e.g. creator@example.com">
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Profile Image URL -->
+                    <div class="form-row">
+                        <label>Profile Image URL</label>
+                        <input type="url" name="profile_image_url" id="form_profile_image_url" x-model="profileImageUrl" class="form-input" placeholder="https://images.unsplash.com/... or direct image link">
+                    </div>
+
+                    <!-- Row 4: Niches & Languages -->
+                    <div class="grid-2">
+                        <div class="form-row">
+                            <label>Agricultural Niches & Specialization</label>
+                            <input type="text" name="agriculture_niches" id="form_agriculture_niches" x-model="niches" class="form-input" placeholder="e.g. Paddy, Cotton, Organic Farming">
+                        </div>
+                        <div class="form-row">
+                            <label>Languages (comma-separated)</label>
+                            <input type="text" name="languages" id="form_languages" x-model="languages" class="form-input" placeholder="e.g. te, hi, en">
+                        </div>
+                    </div>
+
+                    <!-- Row 5: UPI ID & Social Handles -->
+                    <div class="grid-2">
+                        <div class="form-row">
+                            <label>UPI ID (Direct Payout Settlement)</label>
+                            <input type="text" name="upi_id" id="form_upi_id" x-model="upiId" class="form-input" placeholder="e.g. 9182867655@ybl or ramesh@okaxis">
+                        </div>
+                        <div class="form-row">
+                            <label>Social Handles / Links</label>
+                            <input type="text" name="social_handles" id="form_social_handles" x-model="socialHandles" class="form-input" placeholder="e.g. YouTube: @KrishiTips, Instagram: @agri">
+                        </div>
+                    </div>
+
+                    <!-- Row 6: Tier & Status Dropdowns (100% Alpine.js Custom Dropdowns) -->
+                    <div class="grid-2">
+                        <!-- Partnership Tier Alpine Dropdown -->
+                        <div class="form-row">
+                            <label>Partnership Tier</label>
+                            <div class="alpine-select-wrapper full-width" @click.outside="tierOpen = false">
+                                <div class="alpine-select-trigger" :class="{ 'active': tierOpen }" @click="tierOpen = !tierOpen">
+                                    <span x-text="tierLabel"></span>
+                                    <i class="ph ph-caret-down"></i>
+                                </div>
+                                <div class="alpine-select-menu" x-show="tierOpen" x-cloak x-transition>
+                                    <template x-for="opt in tierOptions" :key="opt.val">
+                                        <div class="alpine-select-option" :class="{ 'selected': tier === opt.val }" @click="setTier(opt)">
+                                            <span x-text="opt.label"></span>
+                                            <i class="ph ph-check check-icon" x-show="tier === opt.val"></i>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Account Status Alpine Dropdown -->
+                        <div class="form-row">
+                            <label>Account Status</label>
+                            <div class="alpine-select-wrapper full-width" @click.outside="statusOpen = false">
+                                <div class="alpine-select-trigger" :class="{ 'active': statusOpen }" @click="statusOpen = !statusOpen">
+                                    <span x-text="statusLabel"></span>
+                                    <i class="ph ph-caret-down"></i>
+                                </div>
+                                <div class="alpine-select-menu" x-show="statusOpen" x-cloak x-transition>
+                                    <template x-for="opt in statusOptions" :key="opt.val">
+                                        <div class="alpine-select-option" :class="{ 'selected': status === opt.val }" @click="setStatus(opt)">
+                                            <span x-text="opt.label"></span>
+                                            <i class="ph ph-check check-icon" x-show="status === opt.val"></i>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 7: Bio -->
+                    <div class="form-row">
+                        <label>Bio / Agricultural Background</label>
+                        <textarea name="bio" id="form_bio" x-model="bio" class="form-input" rows="2" placeholder="Brief creator background, farming experience, region, expertise..."></textarea>
+                    </div>
+
+                    <!-- Row 8: Toggles -->
+                    <div style="display: flex; gap: 24px; padding: 10px 14px; background: #f8fafc; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer;">
+                            <input type="checkbox" name="is_verified" id="form_is_verified" value="1" :checked="isVerified == 1" @change="isVerified = $event.target.checked ? 1 : 0">
+                            <span><i class="ph-fill ph-check-circle" style="color: #0284c7;"></i> Verified Partner Badge</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer;">
+                            <input type="checkbox" name="terms_accepted" id="form_terms_accepted" value="1" :checked="termsAccepted == 1" @change="termsAccepted = $event.target.checked ? 1 : 0">
+                            <span>Terms of Service v1.0 Accepted</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('creatorModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="creatorSubmitBtn">
+                        <i class="ph ph-check"></i> <span x-text="isEdit ? 'Save Changes' : 'Enroll Creator'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: DELETE CREATOR PARTNER (WITH REELS CASCADE WARNING) -->
+    <!-- ============================================================== -->
+    <div class="modal-overlay" id="deleteCreatorModal">
+        <div class="modal-card confirm-dialog-card">
+            <div class="modal-head" style="border-bottom-color: #fecaca; background: #fef2f2;">
+                <h3 style="color: var(--danger); display: flex; align-items: center; gap: 8px;">
+                    <div class="confirm-icon-badge danger" style="width: 32px; height: 32px; font-size: 18px;">
+                        <i class="ph ph-trash"></i>
+                    </div>
+                    Delete Creator Partner
+                </h3>
+                <button type="button" class="close-btn" onclick="closeModal('deleteCreatorModal')">&times;</button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="delete_creator">
+                <input type="hidden" name="creator_id" id="delete_creator_id" value="0">
+
+                <div class="modal-body">
+                    <div style="margin-bottom: 14px; padding: 12px 16px; background: #f8fafc; border-radius: 8px; border: 1px solid var(--border);">
+                        <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Creator Partner</span>
+                        <div style="font-weight: 700; font-size: 1rem; color: var(--text-primary);" id="delete_creator_name"></div>
+                        <div style="font-size: 0.76rem; color: var(--text-muted);" id="delete_creator_meta"></div>
+                    </div>
+
+                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+                        <div style="color: #9f1239; font-weight: 700; font-size: 0.84rem; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                            <i class="ph ph-warning"></i> Permanent Deletion Warning
+                        </div>
+                        <p style="font-size: 0.78rem; color: #881337; margin: 0; line-height: 1.45;">
+                            This action cannot be undone. All agreements, payment profiles, and partner records for this creator will be erased.
+                        </p>
+                    </div>
+
+                    <div class="form-row" style="margin-bottom: 10px;">
+                        <label style="display: flex; align-items: flex-start; gap: 10px; font-size: 0.84rem; font-weight: 600; cursor: pointer; color: var(--text-primary);">
+                            <input type="checkbox" name="delete_reels" value="1" checked style="margin-top: 3px;">
+                            <span>Also permanently delete all (<span id="delete_reels_count">0</span>) uploaded agri reels, reviews, analytics, and comments by this creator</span>
+                        </label>
+                    </div>
+
+                    <p style="font-size: 0.74rem; color: var(--text-muted); margin: 0;">
+                        * Note: If the creator has a linked app user profile, their role will safely revert back to "farmer".
+                    </p>
+                </div>
+
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('deleteCreatorModal')">Cancel</button>
+                    <button type="submit" class="btn btn-danger" style="background: #dc2626; border-color: #dc2626; color: white;">
+                        <i class="ph ph-trash"></i> Permanently Delete Creator
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- ============================================================== -->
     <!-- MODAL: CREATE / EDIT NEWS (WITH ALPINE DROPDOWNS & PROGRESS UPLOAD) -->
@@ -3712,7 +5634,7 @@ $availableCategories = [
     </div>
 
     <!-- ============================================================== -->
-    <!-- MODAL: UPLOAD / EDIT REEL (WITH CUSTOM VIDEO UPLOAD & PROGRESS) -->
+    <!-- MODAL: UPLOAD / EDIT REEL (FULL BACKGROUND FEATURES INTEGRATION) -->
     <!-- ============================================================== -->
     <div class="modal-overlay" id="reelModal" x-data="{
         isActive: 1,
@@ -3721,7 +5643,33 @@ $availableCategories = [
         isUploading: false,
         progress: 0,
         statusText: '',
+        creatorId: 0,
+        creatorName: 'CropSync Creator',
+        creatorPhone: '9182867655',
+        creatorOpen: false,
+        cropVal: 'General',
+        cropOpen: false,
+        categoryVal: 'Crop Care',
+        categoryOpen: false,
+        languageVal: 'te',
+        languageOpen: false,
+        payoutEligible: 1,
+        isDuplicate: 0,
+        rightsDeclared: 1,
+        sourceUrl: '',
         setActive(val) { this.isActive = val; this.activeOpen = false; },
+        setCreator(id, name, phone) {
+            this.creatorId = id;
+            this.creatorName = name;
+            this.creatorPhone = phone;
+            document.getElementById('reel_creator_id').value = id;
+            document.getElementById('reel_creator_name').value = name;
+            document.getElementById('reel_phone_number').value = phone;
+            this.creatorOpen = false;
+        },
+        setCrop(val) { this.cropVal = val; this.cropOpen = false; },
+        setCategory(val) { this.categoryVal = val; this.categoryOpen = false; },
+        setLanguage(val) { this.languageVal = val; this.languageOpen = false; },
         uploadVideo(file) {
             if (!file) return;
             this.isUploading = true;
@@ -3770,7 +5718,7 @@ $availableCategories = [
             xhr.send(formData);
         }
     }">
-        <div class="modal-card">
+        <div class="modal-card" style="max-width: 680px;">
             <div class="modal-head">
                 <h3 id="reelModalTitle">Upload Agri Reel</h3>
                 <button type="button" class="close-btn" onclick="closeModal('reelModal')">&times;</button>
@@ -3778,33 +5726,145 @@ $availableCategories = [
             <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="save_reel">
                 <input type="hidden" name="reel_id" id="reel_id" value="0">
+                <input type="hidden" name="creator_id" id="reel_creator_id" :value="creatorId">
                 <input type="hidden" name="is_active" :value="isActive">
+                <input type="hidden" name="crop" id="reel_crop" :value="cropVal">
+                <input type="hidden" name="category" id="reel_category" :value="categoryVal">
+                <input type="hidden" name="language" id="reel_language" :value="languageVal">
+                <input type="hidden" name="payout_eligible" :value="payoutEligible">
+                <input type="hidden" name="is_duplicate" :value="isDuplicate">
+                <input type="hidden" name="rights_declared" :value="rightsDeclared">
 
                 <div class="modal-body">
+                    <!-- Caption -->
                     <div class="form-row">
                         <label>Reel Caption *</label>
-                        <textarea name="caption" id="reel_caption" class="form-input" placeholder="Video description, farming technique, crop variety..." required></textarea>
+                        <textarea name="caption" id="reel_caption" class="form-input" placeholder="Video description, farming technique, crop variety, organic inputs..." rows="3" required></textarea>
                     </div>
 
-                    <div class="grid-2">
-                        <div class="form-row">
-                            <label>Creator Name *</label>
-                            <input type="text" name="creator_name" id="reel_creator_name" class="form-input" value="CropSync Creator" required>
-                        </div>
-                        <div class="form-row">
-                            <label>Creator Phone</label>
-                            <input type="text" name="phone_number" id="reel_phone_number" class="form-input" value="9182867655">
+                    <!-- Enrolled Creator Selection (Alpine Dropdown) -->
+                    <div class="form-row">
+                        <label>Select Creator (Partner Program)</label>
+                        <div class="alpine-dropdown" style="width:100%;" @click.outside="creatorOpen = false">
+                            <button type="button" class="dropdown-trigger" style="width:100%;" @click="creatorOpen = !creatorOpen">
+                                <span style="display:flex; align-items:center; gap:8px;">
+                                    <i class="ph ph-user-circle" style="font-size:16px; color:#16a34a;"></i>
+                                    <span x-text="creatorId > 0 ? (creatorName + ' (@' + creatorPhone + ')') : 'Custom / Unregistered Creator'"></span>
+                                </span>
+                                <i class="ph ph-caret-down" style="font-size:12px;"></i>
+                            </button>
+                            <div class="dropdown-panel" style="width:100%; max-height:220px; overflow-y:auto;" x-show="creatorOpen" x-cloak x-transition>
+                                <div class="dropdown-option" :class="{ 'selected': creatorId == 0 }" @click="setCreator(0, 'CropSync Creator', '9182867655')">
+                                    <em>Custom / Unregistered Creator</em>
+                                </div>
+                                <?php if (!empty($allCreators)): foreach ($allCreators as $ac): ?>
+                                    <div class="dropdown-option" :class="{ 'selected': creatorId == <?= $ac['id'] ?> }" 
+                                         @click="setCreator(<?= $ac['id'] ?>, '<?= htmlspecialchars(addslashes($ac['display_name'])) ?>', '<?= htmlspecialchars(addslashes($ac['phone_number'] ?? '')) ?>')">
+                                        <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+                                            <span>
+                                                <strong><?= htmlspecialchars($ac['display_name']) ?></strong> 
+                                                <small style="color:var(--text-muted); font-size:0.75rem;">@<?= htmlspecialchars($ac['username']) ?></small>
+                                            </span>
+                                            <span style="font-size:0.7rem; background:#f1f5f9; padding:2px 6px; border-radius:4px;"><?= ucfirst(str_replace('_', ' ', $ac['partnership_tier'] ?? 'trial')) ?></span>
+                                        </div>
+                                    </div>
+                                <?php endforeach; endif; ?>
+                            </div>
                         </div>
                     </div>
 
+                    <!-- Creator Details Inputs -->
                     <div class="grid-2">
+                        <div class="form-row">
+                            <label>Creator Display Name *</label>
+                            <input type="text" name="creator_name" id="reel_creator_name" x-model="creatorName" class="form-input" required>
+                        </div>
+                        <div class="form-row">
+                            <label>Creator Phone Number</label>
+                            <input type="text" name="phone_number" id="reel_phone_number" x-model="creatorPhone" class="form-input">
+                        </div>
+                    </div>
+
+                    <!-- Agronomy Crop & Category Selectors (Alpine Custom Dropdowns) -->
+                    <div class="grid-2">
+                        <div class="form-row">
+                            <label>Agricultural Crop *</label>
+                            <div class="alpine-dropdown" style="width:100%;" @click.outside="cropOpen = false">
+                                <button type="button" class="dropdown-trigger" style="width:100%;" @click="cropOpen = !cropOpen">
+                                    <span style="display:flex; align-items:center; gap:6px;">
+                                        <i class="ph ph-plant" style="color:#10b981;"></i>
+                                        <span x-text="cropVal"></span>
+                                    </span>
+                                    <i class="ph ph-caret-down" style="font-size:12px;"></i>
+                                </button>
+                                <div class="dropdown-panel" style="width:100%; max-height:200px; overflow-y:auto;" x-show="cropOpen" x-cloak x-transition>
+                                    <template x-for="c in ['General', 'Paddy', 'Cotton', 'Chilli', 'Maize', 'Groundnut', 'Soybean', 'Sugarcane', 'Vegetables', 'Horticulture', 'Pulses']" :key="c">
+                                        <div class="dropdown-option" :class="{ 'selected': cropVal === c }" @click="setCrop(c)">
+                                            <span x-text="c"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <label>Advisory Category *</label>
+                            <div class="alpine-dropdown" style="width:100%;" @click.outside="categoryOpen = false">
+                                <button type="button" class="dropdown-trigger" style="width:100%;" @click="categoryOpen = !categoryOpen">
+                                    <span style="display:flex; align-items:center; gap:6px;">
+                                        <i class="ph ph-tag" style="color:#3b82f6;"></i>
+                                        <span x-text="categoryVal"></span>
+                                    </span>
+                                    <i class="ph ph-caret-down" style="font-size:12px;"></i>
+                                </button>
+                                <div class="dropdown-panel" style="width:100%; max-height:200px; overflow-y:auto;" x-show="categoryOpen" x-cloak x-transition>
+                                    <template x-for="cat in ['Crop Care', 'Pest Advisory', 'Fertilizer & Soil', 'Machinery & Tools', 'Govt Schemes', 'Market Prices', 'Organic Farming', 'Harvesting']" :key="cat">
+                                        <div class="dropdown-option" :class="{ 'selected': categoryVal === cat }" @click="setCategory(cat)">
+                                            <span x-text="cat"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Language & Audio Title -->
+                    <div class="grid-2">
+                        <div class="form-row">
+                            <label>Language *</label>
+                            <div class="alpine-dropdown" style="width:100%;" @click.outside="languageOpen = false">
+                                <button type="button" class="dropdown-trigger" style="width:100%;" @click="languageOpen = !languageOpen">
+                                    <span style="display:flex; align-items:center; gap:6px;">
+                                        <i class="ph ph-translate" style="color:#8b5cf6;"></i>
+                                        <span x-text="languageVal === 'te' ? 'Telugu (తెలుగు)' : (languageVal === 'en' ? 'English' : (languageVal === 'hi' ? 'Hindi (हिन्दी)' : (languageVal === 'kn' ? 'Kannada (ಕನ್ನಡ)' : 'Tamil (தமிழ்)')))"></span>
+                                    </span>
+                                    <i class="ph ph-caret-down" style="font-size:12px;"></i>
+                                </button>
+                                <div class="dropdown-panel" style="width:100%;" x-show="languageOpen" x-cloak x-transition>
+                                    <div class="dropdown-option" :class="{ 'selected': languageVal === 'te' }" @click="setLanguage('te')">Telugu (తెలుగు)</div>
+                                    <div class="dropdown-option" :class="{ 'selected': languageVal === 'en' }" @click="setLanguage('en')">English</div>
+                                    <div class="dropdown-option" :class="{ 'selected': languageVal === 'hi' }" @click="setLanguage('hi')">Hindi (हिन्दी)</div>
+                                    <div class="dropdown-option" :class="{ 'selected': languageVal === 'kn' }" @click="setLanguage('kn')">Kannada (ಕನ್ನಡ)</div>
+                                    <div class="dropdown-option" :class="{ 'selected': languageVal === 'ta' }" @click="setLanguage('ta')">Tamil (தமிழ்)</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="form-row">
                             <label>Audio Title</label>
                             <input type="text" name="music_title" id="reel_music_title" class="form-input" value="Original Audio">
                         </div>
+                    </div>
+
+                    <!-- Hashtags & Source Reference URL -->
+                    <div class="grid-2">
                         <div class="form-row">
                             <label>Hashtags</label>
                             <input type="text" name="tags" id="reel_tags" class="form-input" placeholder="#Paddy #Harvesting">
+                        </div>
+                        <div class="form-row">
+                            <label>Source Video Link / Credit</label>
+                            <input type="url" name="source_url" id="reel_source_url" x-model="sourceUrl" class="form-input" placeholder="https://youtube.com/shorts/... or external source">
                         </div>
                     </div>
 
@@ -3836,17 +5896,40 @@ $availableCategories = [
                         <input type="url" name="video_url" id="reel_video_url" x-model="videoUrl" class="form-input" placeholder="http://kiosk.cropsync.in/Reels/sample.mp4">
                     </div>
 
-                    <!-- Alpine Dropdown for Visibility Status in Dialog -->
-                    <div class="form-row">
-                        <label>Visibility Status</label>
-                        <div class="alpine-dropdown" style="width:100%;" @click.outside="activeOpen = false">
-                            <button type="button" class="dropdown-trigger" style="width:100%;" @click="activeOpen = !activeOpen">
-                                <span x-text="isActive == 1 ? 'Active (Live in Reel Feed)' : 'Hidden (Private)'"></span>
-                                <i class="ph ph-caret-down" style="font-size:12px;"></i>
-                            </button>
-                            <div class="dropdown-panel" style="width:100%;" x-show="activeOpen" x-cloak x-transition>
-                                <div class="dropdown-option" :class="{ 'selected': isActive == 1 }" @click="setActive(1)">Active (Live in Reel Feed)</div>
-                                <div class="dropdown-option" :class="{ 'selected': isActive == 0 }" @click="setActive(0)">Hidden (Private)</div>
+                    <!-- Governance, Visibility & Partner Program Flags -->
+                    <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-top: 10px;">
+                        <div style="font-weight: 700; font-size: 0.84rem; color: var(--text-primary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                            <i class="ph ph-shield-check" style="color: #10b981;"></i> Distribution & Compliance Settings
+                        </div>
+
+                        <div class="grid-2" style="margin-bottom: 10px;">
+                            <div class="form-row" style="margin: 0;">
+                                <label style="font-size: 0.78rem;">Feed Visibility</label>
+                                <div class="alpine-dropdown" style="width:100%;" @click.outside="activeOpen = false">
+                                    <button type="button" class="dropdown-trigger" style="width:100%;" @click="activeOpen = !activeOpen">
+                                        <span x-text="isActive == 1 ? '🟢 Active (Live in Reel Feed)' : '⚫ Hidden (Private)'"></span>
+                                        <i class="ph ph-caret-down" style="font-size:12px;"></i>
+                                    </button>
+                                    <div class="dropdown-panel" style="width:100%;" x-show="activeOpen" x-cloak x-transition>
+                                        <div class="dropdown-option" :class="{ 'selected': isActive == 1 }" @click="setActive(1)">🟢 Active (Live in Reel Feed)</div>
+                                        <div class="dropdown-option" :class="{ 'selected': isActive == 0 }" @click="setActive(0)">⚫ Hidden (Private)</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; justify-content: center; gap: 8px;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer;">
+                                    <input type="checkbox" :checked="payoutEligible == 1" @change="payoutEligible = $event.target.checked ? 1 : 0">
+                                    <span style="font-weight: 600; color: #15803d;">💰 Creator Payout Eligible</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer;">
+                                    <input type="checkbox" :checked="rightsDeclared == 1" @change="rightsDeclared = $event.target.checked ? 1 : 0">
+                                    <span style="font-weight: 600; color: var(--text-secondary);">🛡️ Original Rights Declared</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer;">
+                                    <input type="checkbox" :checked="isDuplicate == 1" @change="isDuplicate = $event.target.checked ? 1 : 0; if (isDuplicate) payoutEligible = 0;">
+                                    <span style="font-weight: 600; color: #dc2626;">⚠️ Mark as Duplicate</span>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -3939,6 +6022,9 @@ $availableCategories = [
                     <div style="margin-bottom: 12px; padding: 10px 14px; background: #f8fafc; border-radius: 8px; border: 1px solid var(--border);">
                         <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Creator Name:</span>
                         <strong id="rejectCreatorName" style="color: var(--text-primary); font-size: 0.95rem;"></strong>
+                    </div>
+                    <div id="suspendNotice" style="margin-bottom: 12px; padding: 10px 12px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; font-size: 0.78rem; color: #9f1239; display: none;">
+                        <i class="ph ph-warning-circle" style="font-weight: bold;"></i> <strong>Automatic Cascade:</strong> Suspending this creator will immediately deactivate all their published reels and suppress them from all public feeds.
                     </div>
                     <div class="form-row">
                         <label for="reject_reason">Reason for Rejection / Suspension *</label>
@@ -4093,16 +6179,41 @@ $availableCategories = [
                     </div>
 
                     <div class="form-row" id="reasonCodeRow">
-                        <label for="mod_reason_code" style="font-weight: 600;">Review Reason Code *</label>
-                        <select name="reason_code" id="mod_reason_code" class="form-input">
-                            <option value="manual_approval">Manual Approval (Verified Agricultural Content)</option>
-                            <option value="duplicate_content">Duplicate Content / Source URL</option>
-                            <option value="copyright_infringement">Copyright Infringement / Not Original</option>
-                            <option value="misleading_agri_info">Misleading / Inaccurate Agricultural Advice</option>
-                            <option value="low_quality_video">Low Quality Video / Distorted Audio</option>
-                            <option value="community_policy_violation">Community Policy / Guideline Violation</option>
-                            <option value="other">Other / General Reason</option>
-                        </select>
+                        <label style="font-weight: 600;">Review Reason Code *</label>
+                        <div class="alpine-select-wrapper full-width" id="modReasonAlpine" x-data="{ 
+                            open: false, 
+                            val: 'manual_approval', 
+                            label: 'Manual Approval (Verified Agricultural Content)',
+                            options: [
+                                { val: 'manual_approval', label: 'Manual Approval (Verified Agricultural Content)' },
+                                { val: 'duplicate_content', label: 'Duplicate Content / Source URL' },
+                                { val: 'copyright_infringement', label: 'Copyright Infringement / Not Original' },
+                                { val: 'misleading_agri_info', label: 'Misleading / Inaccurate Agricultural Advice' },
+                                { val: 'low_quality_video', label: 'Low Quality Video / Distorted Audio' },
+                                { val: 'community_policy_violation', label: 'Community Policy / Guideline Violation' },
+                                { val: 'other', label: 'Other / General Reason' }
+                            ],
+                            select(item) {
+                                this.val = item.val;
+                                this.label = item.label;
+                                this.open = false;
+                                document.getElementById('mod_reason_code').value = item.val;
+                            }
+                        }" @click.outside="open = false">
+                            <input type="hidden" name="reason_code" id="mod_reason_code" :value="val">
+                            <div class="alpine-select-trigger" :class="{ 'active': open }" @click="open = !open">
+                                <span x-text="label"></span>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
+                            <div class="alpine-select-menu" x-show="open" x-cloak x-transition>
+                                <template x-for="item in options" :key="item.val">
+                                    <div class="alpine-select-option" :class="{ 'selected': val === item.val }" @click="select(item)">
+                                        <span x-text="item.label"></span>
+                                        <i class="ph ph-check check-icon" x-show="val === item.val"></i>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-row">
@@ -4162,8 +6273,142 @@ $availableCategories = [
         </div>
     </div>
 
+    <!-- ============================================================== -->
+    <!-- MODAL: REEL COMMENTS MODERATION -->
+    <!-- ============================================================== -->
+    <div class="modal-overlay" id="reelCommentsModal">
+        <div class="modal-card" style="max-width: 620px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-head" style="background: #f8fafc; border-bottom: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="confirm-icon-badge primary" style="width:34px; height:34px; font-size:18px;">
+                        <i class="ph ph-chat-circle-dots"></i>
+                    </div>
+                    <div>
+                        <h3 style="font-size: 1.05rem; margin: 0;">Reel Comments & Moderation</h3>
+                        <div id="reelCommentsSubtitle" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;"></div>
+                    </div>
+                </div>
+                <button type="button" class="close-btn" onclick="closeModal('reelCommentsModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y: auto; flex: 1; padding: 16px;">
+                <div id="reelCommentsLoading" style="text-align: center; padding: 30px; color: var(--text-muted);">
+                    <i class="ph ph-spinner ph-spin" style="font-size: 28px; color: #3b82f6;"></i>
+                    <div style="margin-top: 8px; font-size: 0.85rem;">Loading comments...</div>
+                </div>
+                <div id="reelCommentsEmpty" style="display: none; text-align: center; padding: 36px; color: var(--text-muted);">
+                    <i class="ph ph-chat-slash" style="font-size: 36px; opacity: 0.4;"></i>
+                    <div style="margin-top: 8px; font-size: 0.9rem; font-weight: 600;">No comments yet</div>
+                    <div style="font-size: 0.78rem;">Farmers' comments and questions on this reel will appear here.</div>
+                </div>
+                <div id="reelCommentsList" style="display: none;"></div>
+            </div>
+            <div class="modal-foot" style="background: #f8fafc; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                <span id="reelCommentsTotalCount" style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;"></span>
+                <button type="button" class="btn btn-secondary" onclick="closeModal('reelCommentsModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: REEL WATCH & AUDIENCE ANALYTICS -->
+    <!-- ============================================================== -->
+    <div class="modal-overlay" id="reelAnalyticsModal">
+        <div class="modal-card" style="max-width: 740px; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-head" style="background: #f8fafc; border-bottom: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="confirm-icon-badge primary" style="width:34px; height:34px; font-size:18px; background: #e0f2fe; color: #0284c7;">
+                        <i class="ph ph-chart-line-up"></i>
+                    </div>
+                    <div>
+                        <h3 style="font-size: 1.05rem; margin: 0;">Reel Performance & Watch Analytics</h3>
+                        <div id="reelAnalyticsSubtitle" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;"></div>
+                    </div>
+                </div>
+                <button type="button" class="close-btn" onclick="closeModal('reelAnalyticsModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y: auto; flex: 1; padding: 20px;">
+                <div id="reelAnalyticsLoading" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                    <i class="ph ph-spinner ph-spin" style="font-size: 32px; color: #0284c7;"></i>
+                    <div style="margin-top: 8px; font-size: 0.88rem;">Analyzing reel watch time and actions...</div>
+                </div>
+                <div id="reelAnalyticsContent" style="display: none;">
+                    <!-- 4 KPI Cards -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                        <div class="analytics-kpi-card">
+                            <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Total Watches</span>
+                            <span id="anaTotalWatches" style="font-size: 1.4rem; font-weight: 800; color: var(--text-primary);">0</span>
+                            <span id="anaUniqueViewers" style="font-size: 0.7rem; color: var(--text-secondary);">0 unique farmers</span>
+                        </div>
+                        <div class="analytics-kpi-card">
+                            <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Avg Watch Time</span>
+                            <span id="anaAvgWatchTime" style="font-size: 1.4rem; font-weight: 800; color: #2563eb;">0s</span>
+                            <span id="anaTotalWatchTime" style="font-size: 0.7rem; color: var(--text-secondary);">0s total watch time</span>
+                        </div>
+                        <div class="analytics-kpi-card">
+                            <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Completion Rate</span>
+                            <span id="anaCompletionRate" style="font-size: 1.4rem; font-weight: 800; color: #16a34a;">0%</span>
+                            <span id="anaCompletedWatches" style="font-size: 0.7rem; color: var(--text-secondary);">0 completed</span>
+                        </div>
+                        <div class="analytics-kpi-card">
+                            <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Audience Actions</span>
+                            <span id="anaTotalActions" style="font-size: 1.4rem; font-weight: 800; color: #d97706;">0</span>
+                            <span style="font-size: 0.7rem; color: var(--text-secondary);">Engagement touches</span>
+                        </div>
+                    </div>
+
+                    <!-- Watch completion progress visual bar -->
+                    <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 600; margin-bottom: 6px;">
+                            <span>Audience Retention & Full Completion</span>
+                            <span id="anaCompletionRateText" style="color: #16a34a; font-weight: 700;">0%</span>
+                        </div>
+                        <div style="width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
+                            <div id="anaCompletionBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); transition: width 0.5s ease;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Actions Breakdown Grid -->
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="font-size: 0.88rem; font-weight: 700; margin-bottom: 10px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                            <i class="ph ph-hand-pointing"></i> Audience Interaction Breakdown
+                        </h4>
+                        <div id="anaActionsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;"></div>
+                    </div>
+
+                    <!-- Moderation & Review Timeline -->
+                    <div>
+                        <h4 style="font-size: 0.88rem; font-weight: 700; margin-bottom: 10px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                            <i class="ph ph-clock-counter-clockwise"></i> Moderation Audit Trail
+                        </h4>
+                        <div id="anaReviewsList"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-foot" style="background: #f8fafc; border-top: 1px solid var(--border);">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('reelAnalyticsModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- JAVASCRIPT LOGIC -->
     <script>
+        function getAlpineData(el) {
+            if (!el) return null;
+            if (window.Alpine && typeof window.Alpine.$data === 'function') {
+                try {
+                    const data = window.Alpine.$data(el);
+                    if (data) return data;
+                } catch(e) {}
+            }
+            if (el._x_dataStack && el._x_dataStack[0]) {
+                return el._x_dataStack[0];
+            }
+            if (el.__x && el.__x.$data) {
+                return el.__x.$data;
+            }
+            return null;
+        }
+
         function closeModal(id) {
             const el = document.getElementById(id);
             if (el) el.classList.remove('open');
@@ -4199,13 +6444,14 @@ $availableCategories = [
 
             // Sync Alpine state if initialized
             const modalEl = document.getElementById('newsModal');
-            if (modalEl && modalEl.__x) {
-                modalEl.__x.$data.category = 'Govt Schemes';
-                modalEl.__x.$data.status = 'published';
-                modalEl.__x.$data.langTab = 'en';
-                modalEl.__x.$data.targetLang = 'all';
-                modalEl.__x.$data.imageUrl = '';
-                modalEl.__x.$data.statusText = '';
+            const data = getAlpineData(modalEl);
+            if (data) {
+                data.category = 'Govt Schemes';
+                data.status = 'published';
+                data.langTab = 'en';
+                data.targetLang = 'all';
+                data.imageUrl = '';
+                data.statusText = '';
             }
 
             openModal('newsModal');
@@ -4230,13 +6476,14 @@ $availableCategories = [
             document.getElementById('news_is_featured').checked = !!parseInt(art.is_featured);
 
             const modalEl = document.getElementById('newsModal');
-            if (modalEl && modalEl.__x) {
-                modalEl.__x.$data.category = art.category || 'Govt Schemes';
-                modalEl.__x.$data.status = art.status || 'published';
-                modalEl.__x.$data.langTab = 'en';
-                modalEl.__x.$data.targetLang = art.language || 'all';
-                modalEl.__x.$data.imageUrl = art.image_url || '';
-                modalEl.__x.$data.statusText = '';
+            const data = getAlpineData(modalEl);
+            if (data) {
+                data.category = art.category || 'Govt Schemes';
+                data.status = art.status || 'published';
+                data.langTab = 'en';
+                data.targetLang = art.language || 'all';
+                data.imageUrl = art.image_url || '';
+                data.statusText = '';
             }
 
             openModal('newsModal');
@@ -4259,17 +6506,30 @@ $availableCategories = [
             document.getElementById('reelModalTitle').innerText = 'Upload Agri Reel';
             document.getElementById('reelSubmitBtn').innerText = 'Publish Reel';
             document.getElementById('reel_caption').value = '';
+            document.getElementById('reel_creator_id').value = '0';
             document.getElementById('reel_creator_name').value = 'CropSync Creator';
             document.getElementById('reel_phone_number').value = '9182867655';
             document.getElementById('reel_music_title').value = 'Original Audio';
             document.getElementById('reel_tags').value = '#Paddy #AgriTips';
             document.getElementById('reel_video_url').value = '';
+            if (document.getElementById('reel_source_url')) document.getElementById('reel_source_url').value = '';
 
             const modalEl = document.getElementById('reelModal');
-            if (modalEl && modalEl.__x) {
-                modalEl.__x.$data.isActive = 1;
-                modalEl.__x.$data.videoUrl = '';
-                modalEl.__x.$data.statusText = '';
+            const data = getAlpineData(modalEl);
+            if (data) {
+                data.isActive = 1;
+                data.videoUrl = '';
+                data.statusText = '';
+                data.creatorId = 0;
+                data.creatorName = 'CropSync Creator';
+                data.creatorPhone = '9182867655';
+                data.cropVal = 'General';
+                data.categoryVal = 'Crop Care';
+                data.languageVal = 'te';
+                data.sourceUrl = '';
+                data.payoutEligible = 1;
+                data.isDuplicate = 0;
+                data.rightsDeclared = 1;
             }
 
             openModal('reelModal');
@@ -4280,17 +6540,30 @@ $availableCategories = [
             document.getElementById('reelModalTitle').innerText = 'Edit Reel #' + rel.id;
             document.getElementById('reelSubmitBtn').innerText = 'Update Reel';
             document.getElementById('reel_caption').value = rel.caption || '';
+            document.getElementById('reel_creator_id').value = rel.creator_id || 0;
             document.getElementById('reel_creator_name').value = rel.creator_name || 'CropSync Creator';
             document.getElementById('reel_phone_number').value = rel.phone_number || '';
             document.getElementById('reel_music_title').value = rel.music_title || 'Original Audio';
             document.getElementById('reel_tags').value = rel.tags || '';
             document.getElementById('reel_video_url').value = rel.video_url || '';
+            if (document.getElementById('reel_source_url')) document.getElementById('reel_source_url').value = rel.source_url || '';
 
             const modalEl = document.getElementById('reelModal');
-            if (modalEl && modalEl.__x) {
-                modalEl.__x.$data.isActive = parseInt(rel.is_active) === 1 ? 1 : 0;
-                modalEl.__x.$data.videoUrl = rel.video_url || '';
-                modalEl.__x.$data.statusText = '';
+            const data = getAlpineData(modalEl);
+            if (data) {
+                data.isActive = parseInt(rel.is_active) === 1 ? 1 : 0;
+                data.videoUrl = rel.video_url || '';
+                data.statusText = '';
+                data.creatorId = parseInt(rel.creator_id) || 0;
+                data.creatorName = rel.creator_name || 'CropSync Creator';
+                data.creatorPhone = rel.phone_number || '';
+                data.cropVal = rel.crop || 'General';
+                data.categoryVal = rel.category || 'Crop Care';
+                data.languageVal = rel.language || 'te';
+                data.sourceUrl = rel.source_url || '';
+                data.payoutEligible = (rel.payout_eligible !== undefined && rel.payout_eligible !== null) ? parseInt(rel.payout_eligible) : 1;
+                data.isDuplicate = parseInt(rel.is_duplicate) || 0;
+                data.rightsDeclared = (rel.rights_declared !== undefined && rel.rights_declared !== null) ? parseInt(rel.rights_declared) : 1;
             }
 
             openModal('reelModal');
@@ -4310,6 +6583,213 @@ $availableCategories = [
             player.pause();
             player.src = '';
             closeModal('reelPlayerModal');
+        }
+
+        // --- Reel Comments Moderation Drawer ---
+        function openReelCommentsModal(reelId, caption) {
+            document.getElementById('reelCommentsSubtitle').innerText = 'Reel #' + reelId + ' • "' + (caption || '') + '"';
+            document.getElementById('reelCommentsLoading').style.display = 'block';
+            document.getElementById('reelCommentsEmpty').style.display = 'none';
+            document.getElementById('reelCommentsList').style.display = 'none';
+            document.getElementById('reelCommentsTotalCount').innerText = '';
+            openModal('reelCommentsModal');
+
+            fetch('?ajax_get_reel_comments=1&reel_id=' + encodeURIComponent(reelId))
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('reelCommentsLoading').style.display = 'none';
+                    if (!data.success) {
+                        document.getElementById('reelCommentsList').style.display = 'block';
+                        document.getElementById('reelCommentsList').innerHTML = '<div style="color:#ef4444; padding:12px; background:#fef2f2; border-radius:6px;">Failed to load comments: ' + (data.error || 'Server error') + '</div>';
+                        return;
+                    }
+                    const comments = data.comments || [];
+                    document.getElementById('reelCommentsTotalCount').innerText = comments.length + ' comments on this reel';
+                    if (comments.length === 0) {
+                        document.getElementById('reelCommentsEmpty').style.display = 'block';
+                        return;
+                    }
+                    let html = '';
+                    comments.forEach(c => {
+                        const commenter = c.farmer_username || c.phone_number || ('User #' + (c.user_id || 'Farmer'));
+                        const dateStr = new Date(c.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+                        html += `
+                            <div class="comment-item-card" id="commentCard_${c.id}">
+                                <div style="display: flex; gap: 10px; align-items: flex-start; flex: 1;">
+                                    <div style="width: 32px; height: 32px; border-radius: 50%; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem; flex-shrink: 0;">
+                                        <i class="ph ph-user"></i>
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px;">
+                                            <span style="font-weight: 700; font-size: 0.82rem; color: var(--text-primary);">${escapeHtml(commenter)}</span>
+                                            <span style="font-size: 0.70rem; color: var(--text-muted);">${dateStr}</span>
+                                        </div>
+                                        <div style="font-size: 0.84rem; color: var(--text-secondary); margin-top: 3px; line-height: 1.4;">
+                                            ${escapeHtml(c.comment_text)}
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-danger-outline btn-sm" style="padding: 2px 7px; font-size: 0.72rem;" onclick="deleteReelComment(${c.id}, ${reelId}, this)" title="Delete Comment">
+                                    <i class="ph ph-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                    });
+                    const listEl = document.getElementById('reelCommentsList');
+                    listEl.innerHTML = html;
+                    listEl.style.display = 'block';
+                })
+                .catch(err => {
+                    document.getElementById('reelCommentsLoading').style.display = 'none';
+                    document.getElementById('reelCommentsList').style.display = 'block';
+                    document.getElementById('reelCommentsList').innerHTML = '<div style="color:#ef4444; padding:12px; background:#fef2f2; border-radius:6px;">Network error while fetching comments.</div>';
+                });
+        }
+
+        function deleteReelComment(commentId, reelId, btnEl) {
+            showAppConfirm({
+                title: 'Delete Comment #' + commentId,
+                message: 'Are you sure you want to delete this farmer comment permanently?',
+                subtext: 'This will remove the comment and update the reel comment count.',
+                icon: 'ph-trash',
+                iconColor: 'danger',
+                confirmText: 'Delete Comment',
+                confirmClass: 'btn-danger',
+                onConfirm: () => {
+                    const fd = new FormData();
+                    fd.append('action', 'delete_comment');
+                    fd.append('comment_id', commentId);
+                    fd.append('comment_type', 'reel');
+                    fd.append('parent_id', reelId);
+                    fd.append('redirect_tab', 'reels');
+
+                    fetch(window.location.href, {
+                        method: 'POST',
+                        body: fd,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        const card = document.getElementById('commentCard_' + commentId);
+                        if (card) {
+                            card.style.opacity = '0.4';
+                            card.style.transform = 'scale(0.95)';
+                            setTimeout(() => card.remove(), 200);
+                        }
+                    })
+                    .catch(() => {
+                        location.reload();
+                    });
+                }
+            });
+        }
+
+        // --- Reel Watch & Dropoff Analytics Modal ---
+        function openReelAnalyticsModal(reelId, caption) {
+            document.getElementById('reelAnalyticsSubtitle').innerText = 'Reel #' + reelId + ' • "' + (caption || '') + '"';
+            document.getElementById('reelAnalyticsLoading').style.display = 'block';
+            document.getElementById('reelAnalyticsContent').style.display = 'none';
+            openModal('reelAnalyticsModal');
+
+            fetch('?ajax_get_reel_analytics=1&reel_id=' + encodeURIComponent(reelId))
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('reelAnalyticsLoading').style.display = 'none';
+                    if (!data.success) {
+                        alert('Could not load analytics: ' + (data.error || 'Server error'));
+                        return;
+                    }
+                    const reel = data.reel || {};
+                    const stats = data.watch_stats || {};
+                    const actions = data.actions || {};
+                    const reviews = data.reviews || [];
+
+                    const totalWatches = parseInt(stats.total_watches) || 0;
+                    const completedWatches = parseInt(stats.completed_watches) || 0;
+                    const uniqueViewers = parseInt(stats.unique_viewers) || 0;
+                    const avgSec = Math.round(parseFloat(stats.avg_watch_seconds) || 0);
+                    const totalSec = Math.round(parseFloat(stats.total_watch_seconds) || 0);
+                    const completionRate = totalWatches > 0 ? Math.round((completedWatches / totalWatches) * 100) : 0;
+
+                    let totalAudienceActions = 0;
+                    for (let k in actions) {
+                        totalAudienceActions += actions[k];
+                    }
+
+                    document.getElementById('anaTotalWatches').innerText = totalWatches.toLocaleString();
+                    document.getElementById('anaUniqueViewers').innerText = uniqueViewers.toLocaleString() + ' unique farmers';
+                    document.getElementById('anaAvgWatchTime').innerText = avgSec + 's';
+                    document.getElementById('anaTotalWatchTime').innerText = Math.round(totalSec / 60) + ' mins total watch time';
+                    document.getElementById('anaCompletionRate').innerText = completionRate + '%';
+                    document.getElementById('anaCompletedWatches').innerText = completedWatches.toLocaleString() + ' completed';
+                    document.getElementById('anaTotalActions').innerText = totalAudienceActions.toLocaleString();
+
+                    document.getElementById('anaCompletionRateText').innerText = completionRate + '%';
+                    document.getElementById('anaCompletionBar').style.width = Math.min(100, completionRate) + '%';
+
+                    // Actions Grid
+                    const actionLabels = {
+                        'like': { label: 'Likes', icon: 'ph-heart', color: '#ef4444' },
+                        'save': { label: 'Saves / Bookmarks', icon: 'ph-bookmark', color: '#0284c7' },
+                        'share': { label: 'Shares', icon: 'ph-share-network', color: '#10b981' },
+                        'profile_view': { label: 'Profile Taps', icon: 'ph-user', color: '#8b5cf6' },
+                        'contact_creator': { label: 'Creator Inquiries', icon: 'ph-phone-call', color: '#f59e0b' }
+                    };
+                    let actHtml = '';
+                    const defaultKeys = ['like', 'save', 'share', 'profile_view', 'contact_creator'];
+                    defaultKeys.forEach(k => {
+                        const meta = actionLabels[k];
+                        const count = actions[k] || 0;
+                        actHtml += `
+                            <div style="background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:10px 12px; display:flex; align-items:center; gap:8px;">
+                                <i class="ph ${meta.icon}" style="font-size:18px; color:${meta.color};"></i>
+                                <div>
+                                    <div style="font-size:1.05rem; font-weight:800; color:var(--text-primary);">${count.toLocaleString()}</div>
+                                    <div style="font-size:0.68rem; color:var(--text-muted);">${meta.label}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('anaActionsGrid').innerHTML = actHtml;
+
+                    // Reviews List
+                    let revHtml = '';
+                    if (reviews.length === 0) {
+                        revHtml = '<div style="font-size:0.8rem; color:var(--text-muted); font-style:italic;">No formal review logs recorded yet.</div>';
+                    } else {
+                        reviews.forEach(r => {
+                            const badgeColor = r.decision === 'approved' ? '#15803d' : (r.decision === 'rejected' ? '#dc2626' : '#d97706');
+                            const dateStr = new Date(r.reviewed_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+                            revHtml += `
+                                <div style="padding:10px 12px; background:#f8fafc; border:1px solid var(--border); border-radius:6px; margin-bottom:6px; font-size:0.8rem;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                        <span style="font-weight:700; color:${badgeColor}; text-transform:uppercase; font-size:0.75rem;">${escapeHtml(r.decision)}</span>
+                                        <span style="color:var(--text-muted); font-size:0.7rem;">${dateStr} &bull; ${escapeHtml(r.reviewer_id || 'Admin')}</span>
+                                    </div>
+                                    ${r.reason_code ? '<div style="color:var(--text-secondary); font-size:0.74rem;"><strong>Reason:</strong> ' + escapeHtml(r.reason_code) + '</div>' : ''}
+                                    ${r.comments ? '<div style="color:var(--text-muted); font-style:italic; margin-top:2px;">"' + escapeHtml(r.comments) + '"</div>' : ''}
+                                </div>
+                            `;
+                        });
+                    }
+                    document.getElementById('anaReviewsList').innerHTML = revHtml;
+
+                    document.getElementById('reelAnalyticsContent').style.display = 'block';
+                })
+                .catch(err => {
+                    document.getElementById('reelAnalyticsLoading').style.display = 'none';
+                    alert('Network error while fetching reel analytics.');
+                });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         // --- Single Item Delete Modal ---
@@ -4449,6 +6929,8 @@ $availableCategories = [
             document.getElementById('rejectCreatorSubmitBtn').innerText = isSuspend ? 'Confirm Suspension' : 'Confirm Rejection';
             document.getElementById('rejectCreatorName').innerText = creatorName;
             document.getElementById('reject_reason').value = '';
+            const sNotice = document.getElementById('suspendNotice');
+            if (sNotice) sNotice.style.display = isSuspend ? 'block' : 'none';
             openModal('rejectCreatorModal');
         }
 
@@ -4487,16 +6969,164 @@ $availableCategories = [
             });
         }
 
+        // --- Creator Management Helpers & Modals ---
+        function applyCreatorFilter(key, val) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', 'creators');
+            if (val && val !== 'all') {
+                url.searchParams.set(key, val);
+            } else {
+                url.searchParams.delete(key);
+            }
+            window.location.href = url.toString();
+        }
+
+        function openCreateCreatorModal() {
+            const modalEl = document.getElementById('creatorModal');
+            const data = getAlpineData(modalEl);
+            if (data) {
+                if (typeof data.reset === 'function') {
+                    data.reset();
+                } else {
+                    data.isEdit = false;
+                    data.creatorId = 0;
+                    data.displayName = '';
+                    data.username = '';
+                    data.phoneNumber = '';
+                    data.email = '';
+                    data.bio = '';
+                    data.profileImageUrl = '';
+                    data.niches = '';
+                    data.languages = 'te';
+                    data.upiId = '';
+                    data.socialHandles = '';
+                    data.tier = 'trial';
+                    data.tierLabel = 'Trial (M1)';
+                    data.status = 'active';
+                    data.statusLabel = 'Active Partner';
+                    data.isVerified = 0;
+                    data.termsAccepted = 1;
+                    data.tierOpen = false;
+                    data.statusOpen = false;
+                }
+            }
+            window.dispatchEvent(new CustomEvent('reset-creator'));
+            const form = document.getElementById('creatorForm');
+            if (form) form.reset();
+            openModal('creatorModal');
+        }
+
+        function openEditCreatorModal(cr) {
+            if (typeof cr === 'string') {
+                try { cr = JSON.parse(cr); } catch(e) {}
+            }
+            if (!cr) return;
+
+            // 1. Dispatch custom event for Alpine component listener
+            window.dispatchEvent(new CustomEvent('populate-creator', { detail: cr }));
+
+            // 2. Direct reactive Alpine state update via getAlpineData
+            const modalEl = document.getElementById('creatorModal');
+            const data = getAlpineData(modalEl);
+            if (data) {
+                if (typeof data.populate === 'function') {
+                    data.populate(cr);
+                } else {
+                    data.isEdit = true;
+                    data.creatorId = parseInt(cr.id) || 0;
+                    data.displayName = cr.display_name || '';
+                    data.username = cr.username || '';
+                    data.phoneNumber = cr.phone_number || '';
+                    data.email = cr.email || '';
+                    data.bio = cr.bio || '';
+                    data.profileImageUrl = cr.profile_image_url || '';
+                    data.niches = cr.agriculture_niches || '';
+                    data.languages = cr.languages || 'te';
+                    data.upiId = cr.upi_id || '';
+                    data.socialHandles = cr.social_handles || '';
+                    
+                    const curTier = cr.partnership_tier || 'trial';
+                    data.tier = curTier;
+                    const tierOpt = data.tierOptions ? data.tierOptions.find(o => o.val === curTier) : null;
+                    data.tierLabel = tierOpt ? tierOpt.label : curTier;
+
+                    const curStatus = cr.status || 'active';
+                    data.status = curStatus;
+                    const statusOpt = data.statusOptions ? data.statusOptions.find(o => o.val === curStatus) : null;
+                    data.statusLabel = statusOpt ? statusOpt.label : curStatus;
+
+                    data.isVerified = (parseInt(cr.is_verified) === 1 || cr.is_verified === true || cr.is_verified === '1') ? 1 : 0;
+                    data.termsAccepted = (parseInt(cr.terms_accepted) === 1 || cr.terms_accepted === true || cr.terms_accepted === '1') ? 1 : 0;
+                    data.tierOpen = false;
+                    data.statusOpen = false;
+                }
+            }
+
+            // 3. Fallback direct DOM value assignment and event dispatching (guarantees inputs autofill immediately)
+            setTimeout(() => {
+                const setVal = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.value = val;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                };
+                setVal('form_creator_id', cr.id || 0);
+                setVal('form_display_name', cr.display_name || '');
+                setVal('form_username', cr.username || '');
+                setVal('form_phone_number', cr.phone_number || '');
+                setVal('form_email', cr.email || '');
+                setVal('form_profile_image_url', cr.profile_image_url || '');
+                setVal('form_agriculture_niches', cr.agriculture_niches || '');
+                setVal('form_languages', cr.languages || 'te');
+                setVal('form_upi_id', cr.upi_id || '');
+                setVal('form_social_handles', cr.social_handles || '');
+                setVal('form_bio', cr.bio || '');
+
+                const vcb = document.getElementById('form_is_verified');
+                if (vcb) {
+                    vcb.checked = (parseInt(cr.is_verified) === 1);
+                    vcb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                const tcb = document.getElementById('form_terms_accepted');
+                if (tcb) {
+                    tcb.checked = (parseInt(cr.terms_accepted) === 1);
+                    tcb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }, 10);
+
+            openModal('creatorModal');
+        }
+
+        function openDeleteCreatorModal(id, name, username, reelsCount) {
+            document.getElementById('delete_creator_id').value = id;
+            document.getElementById('delete_creator_name').innerText = name + (username ? ' (@' + username + ')' : '');
+            document.getElementById('delete_creator_meta').innerText = 'Creator Partner ID #' + id;
+            document.getElementById('delete_reels_count').innerText = reelsCount || 0;
+            openModal('deleteCreatorModal');
+        }
+
         // --- Reel Moderation SLA & Review Helpers ---
+        function updateModReasonAlpine(val) {
+            const el = document.getElementById('modReasonAlpine');
+            const data = getAlpineData(el);
+            if (data && data.options) {
+                const opt = data.options.find(o => o.val === val);
+                data.val = val;
+                data.label = opt ? opt.label : val;
+            }
+        }
+
         function toggleReasonCodeRequired(decision) {
             const submitBtn = document.getElementById('modSubmitBtn');
-            const reasonSelect = document.getElementById('mod_reason_code');
+            const reasonInput = document.getElementById('mod_reason_code');
             if (decision === 'approved') {
                 submitBtn.style.background = '#15803d';
                 submitBtn.style.borderColor = '#15803d';
                 submitBtn.innerText = 'Approve & Publish Reel';
-                if (!reasonSelect.value || reasonSelect.value !== 'manual_approval') {
-                    reasonSelect.value = 'manual_approval';
+                if (!reasonInput.value || reasonInput.value !== 'manual_approval') {
+                    reasonInput.value = 'manual_approval';
+                    updateModReasonAlpine('manual_approval');
                 }
             } else if (decision === 'changes_requested') {
                 submitBtn.style.background = '#d97706';
@@ -4509,7 +7139,291 @@ $availableCategories = [
             }
         }
 
-        function quickApproveReel(reelId, caption) {
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = `toast-item ${type}`;
+
+            let iconClass = 'ph-check-circle';
+            if (type === 'danger') iconClass = 'ph-x-circle';
+            else if (type === 'warning') iconClass = 'ph-warning-circle';
+            else if (type === 'info') iconClass = 'ph-info';
+
+            toast.innerHTML = `
+                <i class="ph-fill ${iconClass} toast-icon"></i>
+                <div class="toast-content">${message}</div>
+                <button type="button" class="toast-close" onclick="this.parentElement.classList.remove('show'); setTimeout(() => this.parentElement.remove(), 300);">&times;</button>
+            `;
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.classList.remove('show');
+                    toast.classList.add('hide');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 3800);
+        }
+
+        async function realtimeToggleReelVisibility(reelId, btn) {
+            const creatorStatus = btn.dataset.creatorStatus || '';
+            const curActive = parseInt(btn.dataset.active || '0');
+
+            if (curActive === 0 && creatorStatus === 'suspended') {
+                showToast('Cannot activate reel: Creator is currently suspended. Unsuspend the creator first.', 'danger');
+                return;
+            }
+
+            const origContent = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i>';
+            btn.disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'toggle_reel_status');
+                formData.append('reel_id', reelId);
+                formData.append('is_active', curActive);
+                formData.append('ajax', '1');
+
+                const resp = await fetch('studio_dashboard.php', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    const newActive = parseInt(data.is_active);
+                    btn.dataset.active = newActive;
+                    if (newActive === 1) {
+                        btn.style.background = '#f0fdf4';
+                        btn.style.color = '#166534';
+                        btn.style.border = '1px solid #bbf7d0';
+                        btn.innerHTML = '🟢 Visible';
+                    } else {
+                        btn.style.background = '#f1f5f9';
+                        btn.style.color = '#64748b';
+                        btn.style.border = '1px solid #cbd5e1';
+                        btn.innerHTML = '⚫ Hidden';
+                    }
+                    showToast(data.message || 'Reel visibility updated', 'success');
+                } else {
+                    btn.innerHTML = origContent;
+                    showToast(data.error || 'Failed to update visibility', 'danger');
+                }
+            } catch (err) {
+                btn.innerHTML = origContent;
+                showToast('Network error while updating visibility', 'danger');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function realtimeToggleReelPayout(reelId, btn) {
+            const creatorStatus = btn.dataset.creatorStatus || '';
+            const curEligible = parseInt(btn.dataset.eligible || '0');
+
+            if (curEligible === 0 && creatorStatus === 'suspended') {
+                showToast('Cannot make payout eligible: Creator is suspended.', 'danger');
+                return;
+            }
+
+            const origContent = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i>';
+            btn.disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'toggle_reel_payout_eligible');
+                formData.append('reel_id', reelId);
+                formData.append('payout_eligible', curEligible);
+                formData.append('ajax', '1');
+
+                const resp = await fetch('studio_dashboard.php', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    const newEligible = parseInt(data.payout_eligible);
+                    btn.dataset.eligible = newEligible;
+                    if (newEligible === 1) {
+                        btn.className = 'payout-status-btn eligible';
+                        btn.innerHTML = '<i class="ph ph-currency-inr"></i> Payout OK';
+                    } else {
+                        btn.className = 'payout-status-btn ineligible';
+                        btn.innerHTML = '<i class="ph ph-currency-inr"></i> No Payout';
+                    }
+                    showToast(data.message || 'Payout status updated', 'success');
+                } else {
+                    btn.innerHTML = origContent;
+                    showToast(data.error || 'Failed to update payout status', 'danger');
+                }
+            } catch (err) {
+                btn.innerHTML = origContent;
+                showToast('Network error while updating payout status', 'danger');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function realtimeToggleReelDuplicate(reelId, btn) {
+            const curDup = parseInt(btn.dataset.duplicate || '0');
+            const origContent = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i>';
+            btn.disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'toggle_reel_duplicate');
+                formData.append('reel_id', reelId);
+                formData.append('is_duplicate', curDup);
+                formData.append('ajax', '1');
+
+                const resp = await fetch('studio_dashboard.php', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    const newDup = parseInt(data.is_duplicate);
+                    btn.dataset.duplicate = newDup;
+                    const dupBadge = document.getElementById('reel-dup-badge-' + reelId);
+                    if (newDup === 1) {
+                        btn.style.background = '#fee2e2';
+                        btn.style.color = '#b91c1c';
+                        btn.style.border = '1px solid #fecaca';
+                        btn.innerHTML = '⚠️ Dup Flag';
+                        if (dupBadge) dupBadge.style.display = 'inline-flex';
+
+                        // Payout is automatically forfeited
+                        const payoutBtn = document.getElementById('reel-payout-btn-' + reelId);
+                        if (payoutBtn) {
+                            payoutBtn.dataset.eligible = '0';
+                            payoutBtn.className = 'payout-status-btn ineligible';
+                            payoutBtn.innerHTML = '<i class="ph ph-currency-inr"></i> No Payout';
+                        }
+                    } else {
+                        btn.style.background = '#f8fafc';
+                        btn.style.color = '#94a3b8';
+                        btn.style.border = '1px solid #e2e8f0';
+                        btn.innerHTML = 'Mark Dup';
+                        if (dupBadge) dupBadge.style.display = 'none';
+
+                        const payoutBtn = document.getElementById('reel-payout-btn-' + reelId);
+                        if (payoutBtn) {
+                            payoutBtn.dataset.eligible = '1';
+                            payoutBtn.className = 'payout-status-btn eligible';
+                            payoutBtn.innerHTML = '<i class="ph ph-currency-inr"></i> Payout OK';
+                        }
+                    }
+                    showToast(data.message || 'Duplicate flag updated', 'success');
+                } else {
+                    btn.innerHTML = origContent;
+                    showToast(data.error || 'Failed to update duplicate flag', 'danger');
+                }
+            } catch (err) {
+                btn.innerHTML = origContent;
+                showToast('Network error while updating duplicate flag', 'danger');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function triggerReelsLiveSync() {
+            try {
+                const resp = await fetch('studio_dashboard.php?ajax_reels_live_sync=1');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (!data.success || !Array.isArray(data.reels)) return;
+
+                const indicatorText = document.getElementById('reelsRealtimeText');
+                if (indicatorText) {
+                    const now = new Date();
+                    indicatorText.innerText = 'Live Sync ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                }
+
+                // Process reels in the table
+                data.reels.forEach(rel => {
+                    const row = document.getElementById('reel-row-' + rel.id);
+                    if (!row) return;
+
+                    const isCreatorSuspended = (rel.creator_status === 'suspended');
+
+                    // Update row suppressed appearance
+                    if (isCreatorSuspended) {
+                        row.classList.add('row-suppressed');
+                        row.dataset.creatorStatus = 'suspended';
+
+                        // Update creator cell badge if not present
+                        const creatorCell = document.getElementById('reel-creator-cell-' + rel.id);
+                        if (creatorCell && !creatorCell.querySelector('.badge')) {
+                            const badge = document.createElement('span');
+                            badge.className = 'badge';
+                            badge.style.cssText = 'background:#fee2e2; color:#b91c1c; font-size:0.65rem; padding:1px 6px; border-radius:4px; font-weight:700; display:inline-flex; align-items:center; gap:3px;';
+                            badge.title = 'Creator account is currently suspended';
+                            badge.innerHTML = '<i class="ph ph-prohibit"></i> Suspended';
+                            const titleSpan = creatorCell.querySelector('span');
+                            if (titleSpan) titleSpan.parentElement.appendChild(badge);
+                        }
+
+                        // Update status cell to suppressed
+                        const statusCell = document.getElementById('reel-status-cell-' + rel.id);
+                        if (statusCell && !statusCell.innerHTML.includes('Suppressed')) {
+                            statusCell.querySelector('.status-tag')?.remove();
+                            const newTag = document.createElement('span');
+                            newTag.className = 'status-tag hidden';
+                            newTag.style.cssText = 'background:#fef2f2; color:#991b1b; border:1px solid #fecaca; font-weight:700; display:inline-flex; align-items:center; gap:4px;';
+                            newTag.title = 'Creator account is suspended. This reel is forcibly deactivated.';
+                            newTag.innerHTML = '<i class="ph ph-prohibit"></i> Suppressed (Creator Suspended)';
+                            statusCell.prepend(newTag);
+                        }
+
+                        // Block quick approve button
+                        const qBtn = document.getElementById('quick-approve-btn-' + rel.id);
+                        if (qBtn) {
+                            qBtn.className = 'btn btn-sm';
+                            qBtn.style.cssText = 'background:#fee2e2; color:#b91c1c; border-color:#fecaca; padding:4px 9px; font-size:0.75rem; cursor:not-allowed;';
+                            qBtn.disabled = true;
+                            qBtn.innerHTML = '<i class="ph ph-prohibit"></i> Blocked';
+                        }
+                    } else {
+                        row.classList.remove('row-suppressed');
+                        row.dataset.creatorStatus = rel.creator_status || '';
+                    }
+
+                    // Update views & likes counters
+                    const vEl = document.getElementById('reel-views-' + rel.id);
+                    if (vEl) vEl.innerText = Number(rel.views_count || 0).toLocaleString();
+                    const lEl = document.getElementById('reel-likes-' + rel.id);
+                    if (lEl) lEl.innerText = Number(rel.likes_count || 0).toLocaleString();
+                    const cEl = document.getElementById('reel-comments-' + rel.id);
+                    if (cEl) cEl.innerText = Number(rel.comments_count || 0).toLocaleString();
+                });
+            } catch (e) {
+                // Background sync silent fail
+            }
+        }
+
+        // Run sync poller every 15 seconds
+        setInterval(triggerReelsLiveSync, 15000);
+
+        function quickApproveReel(reelId, caption, creatorStatus = '') {
+            if (creatorStatus === 'suspended') {
+                showToast('Cannot approve reel: Creator is currently suspended.', 'danger');
+                return;
+            }
+
             showAppConfirm({
                 title: 'Approve Agri Reel #' + reelId,
                 message: 'Approve "' + caption + '" and make it publicly visible to users?',
@@ -4519,18 +7433,62 @@ $availableCategories = [
                 confirmText: 'Approve & Publish',
                 confirmClass: 'btn-primary',
                 confirmStyle: 'flex: 1; padding: 9px 16px; background: #15803d; border-color: #15803d; color: white;',
-                onConfirm: () => {
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.innerHTML = `
-                        <input type="hidden" name="action" value="admin_review_reel">
-                        <input type="hidden" name="reel_id" value="${reelId}">
-                        <input type="hidden" name="decision" value="approved">
-                        <input type="hidden" name="reason_code" value="manual_approval">
-                        <input type="hidden" name="comments" value="Manual approval by moderator from dashboard.">
-                    `;
-                    document.body.appendChild(form);
-                    form.submit();
+                onConfirm: async () => {
+                    try {
+                        const formData = new FormData();
+                        formData.append('action', 'admin_review_reel');
+                        formData.append('reel_id', reelId);
+                        formData.append('decision', 'approved');
+                        formData.append('reason_code', 'manual_approval');
+                        formData.append('comments', 'Manual approval by moderator from dashboard.');
+                        formData.append('ajax', '1');
+
+                        const resp = await fetch('studio_dashboard.php', {
+                            method: 'POST',
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            body: formData
+                        });
+                        const data = await resp.json();
+
+                        if (data.success) {
+                            showToast(`Reel #${reelId} approved and published live!`, 'success');
+                            
+                            // Real-time DOM updates
+                            const statusCell = document.getElementById('reel-status-cell-' + reelId);
+                            if (statusCell) {
+                                const oldTag = statusCell.querySelector('.status-tag');
+                                if (oldTag) oldTag.remove();
+                                const newTag = document.createElement('span');
+                                newTag.className = 'status-tag active';
+                                newTag.style.cssText = 'background:#dcfce7; color:#15803d; font-weight:600; display:inline-flex; align-items:center; gap:4px;';
+                                newTag.innerHTML = '<i class="ph ph-check-circle"></i> Live & Approved';
+                                statusCell.prepend(newTag);
+                            }
+
+                            const visBtn = document.getElementById('reel-vis-btn-' + reelId);
+                            if (visBtn) {
+                                visBtn.dataset.active = '1';
+                                visBtn.style.background = '#f0fdf4';
+                                visBtn.style.color = '#166534';
+                                visBtn.style.border = '1px solid #bbf7d0';
+                                visBtn.innerHTML = '🟢 Visible';
+                            }
+
+                            const payoutBtn = document.getElementById('reel-payout-btn-' + reelId);
+                            if (payoutBtn) {
+                                payoutBtn.dataset.eligible = '1';
+                                payoutBtn.className = 'payout-status-btn eligible';
+                                payoutBtn.innerHTML = '<i class="ph ph-currency-inr"></i> Payout OK';
+                            }
+
+                            const qBtn = document.getElementById('quick-approve-btn-' + reelId);
+                            if (qBtn) qBtn.remove();
+                        } else {
+                            showToast(data.error || 'Failed to approve reel', 'danger');
+                        }
+                    } catch (e) {
+                        showToast('Error approving reel: Network error', 'danger');
+                    }
                 }
             });
         }
@@ -4563,6 +7521,9 @@ $availableCategories = [
             toggleReasonCodeRequired(matchedDecision);
             if (reel.reason_code) {
                 document.getElementById('mod_reason_code').value = reel.reason_code;
+                updateModReasonAlpine(reel.reason_code);
+            } else {
+                updateModReasonAlpine('manual_approval');
             }
             document.getElementById('mod_comments').value = reel.feedback || '';
             

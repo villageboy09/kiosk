@@ -12,6 +12,7 @@ import 'package:cropsync/screens/reels_screen.dart';
 import 'package:cropsync/screens/creator/creator_studio_screen.dart';
 import 'package:cropsync/screens/creator/upload_reel_screen.dart';
 import 'package:cropsync/screens/notifications_screen.dart';
+import 'package:cropsync/auth/login_screen.dart';
 
 /// Dedicated Main Home Screen for Agricultural Content Creators
 class CreatorHomeScreen extends StatefulWidget {
@@ -21,8 +22,35 @@ class CreatorHomeScreen extends StatefulWidget {
   static final ValueNotifier<int> tabNotifier = ValueNotifier<int>(0);
   static bool isMounted = false;
 
-  /// Redirect to the Studio tab from any screen/button
+  /// Redirect to the Studio tab from any screen/button with role guard
   static void navigateToStudio(BuildContext context) {
+    final user = AuthService.currentUser;
+    if (user == null || !user.isCreator) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            user == null
+                ? 'Please login as a Content Creator to access Creator Studio.'
+                : 'This account is registered as ${user.role ?? "Farmer"}. Creator Studio is for Content Creators.',
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Login as Creator',
+            textColor: Colors.white,
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const LoginScreen(initialRole: 'content_creator'),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
     if (isMounted) {
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).popUntil((route) => route.isFirst);

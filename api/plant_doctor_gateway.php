@@ -137,57 +137,61 @@ if (empty($deepseekApiKey)) {
     exit();
 }
 
-// 3. Ground with MySQL Database problems if selectedCropId provided
+if (!in_array($language, ['en', 'te', 'hi'], true)) {
+    $language = 'en';
+}
+$selectedCropName = mb_substr(trim(strip_tags((string)$selectedCropName)), 0, 40);
+
+// 3. Ground with the selected crop's full problem catalog
 $candidateProblems = [];
 if (isset($pdo) && $pdo instanceof PDO && $selectedCropId) {
     try {
-        $stmtP = $pdo->prepare("SELECT id, problem_name_en, problem_name_te, category FROM rice_problems WHERE crop_id = ? LIMIT 30");
+        $stmtP = $pdo->prepare("SELECT id, problem_name_en, problem_name_te, problem_name_hi, category FROM rice_problems WHERE crop_id = ? ORDER BY id LIMIT 80");
         $stmtP->execute([$selectedCropId]);
         $candidateProblems = $stmtP->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {}
 }
 
-// 4. Build System Prompt with 24-Crop Whitelist
+// 4. System prompt (keep identical to the app's direct-call prompt)
 $systemPrompt = <<<PROMPT
-You are Dr. Krishi, Senior Indian Agricultural Plant Pathologist.
-You diagnose crop leaf images and provide CIBRC-compliant control measures.
+You are Dr. Krishi, a senior Indian plant pathologist and entomologist.
+Look carefully at the photo and name the SPECIFIC disease, pest or deficiency you see (e.g. "Rice Blast", "Early Blight", "Fall Armyworm", "Zinc Deficiency"). Never answer with generic labels like "Leaf Issue", "Crop Health Analysis", "Fungal infection" or "Disease".
 
-STRICT 24-CROP WHITELIST RULE:
 You ONLY diagnose these 24 crops:
 Paddy (Rice), Cotton, Sunflower, Banana, Turmeric, Maize, Chilli, Tomato, Bitter Gourd, Tea, Apple, Sugarcane, Brinjal, Cumin, Groundnut, Mango, Onion, Soybean, Wheat, Garlic, Okra, Potato, Pomegranate, Grapes.
 
-GUARDRAILS:
-1. If image is NOT a plant or crop (human, animal, tool, furniture, building, landscape):
-   Output: {"is_plant":false,"is_crop_supported":false,"unsupported_crop_name":null,"is_clear_image":false,"reason":"Not a plant or agricultural crop."}
-2. If image is a plant but NOT in the 24 allowed crops (e.g. weed, lawn grass, rose, croton, marigold, cabbage):
-   Output: {"is_plant":true,"is_crop_supported":false,"unsupported_crop_name":"<Plant Name>","detected_crop_name":"<Plant Name>","health_status":"unknown","confidence":0.9,"reason":"Not one of the 24 supported crops in CropSync.","ai_control_measures":{"chemical":[],"biological":[],"preventative":[]}}
-   CRITICAL: NEVER prescribe any chemical or biological sprays for unsupported crops!
-3. If image is blurry or unclear:
-   Output: {"is_plant":true,"is_clear_image":false,"reason":"Image is blurry or lacks lighting. Retake closer to the leaf."}
-4. For SUPPORTED crops:
-   Identify health_status ("healthy"|"diseased"|"deficiency"|"pest_infestation"), severity_level ("mild"|"moderate"|"severe"), matched_problem_name, matched_problem_id (if known), observed_symptoms, ai_analysis, weather_impact, recovery_recommendations.
-   For chemical and biological controls, ALWAYS provide exact per-acre dosage (e.g., ml/acre or g/acre) and water volume to mix (e.g., in 150-200 L water/acre).
+Method:
+1. Confirm the photo is a plant and is clear enough.
+2. Describe the visible signs (lesion shape, colour, margin, halo, location, insects, frass, webbing, mottling).
+3. Compare with the known problems of the crop (use the candidate catalog when given) and choose the single most likely cause.
+4. If the plant looks healthy, say healthy. Do not invent a disease.
 
-Output JSON only:
-{"is_plant":true,"is_crop_supported":true,"unsupported_crop_name":null,"is_clear_image":true,"detected_crop_name":"Crop","matched_problem_name":"Issue","matched_problem_id":null,"health_status":"healthy"|"diseased"|"deficiency"|"pest_infestation","severity_level":"mild"|"moderate"|"severe","confidence":0.9,"observed_symptoms":["short"],"ai_analysis":"1 clinical sentence.","weather_impact":"1 spray/risk sentence.","recovery_recommendations":["short"],"ai_control_measures":{"chemical":["CIBRC molecule @ dose/acre in 150-200 L water"],"biological":["Bio agent @ dose/acre in 150-200 L water"],"preventative":["Key step"]}}
+Guardrails:
+- Not a plant: {"is_plant":false,"is_crop_supported":false,"is_clear_image":false,"reason":"..."}
+- Plant but not one of the 24 crops: {"is_plant":true,"is_crop_supported":false,"unsupported_crop_name":"<name>","detected_crop_name":"<name>","health_status":"unknown","reason":"...","ai_control_measures":{"chemical":[],"biological":[],"preventative":[]}}. Never prescribe sprays for unsupported crops.
+- Blurry or dark: {"is_plant":true,"is_clear_image":false,"reason":"..."}
+
+For supported crops reply with exactly this JSON (no markdown):
+{"is_plant":true,"is_crop_supported":true,"is_clear_image":true,"detected_crop_name":"<crop, target language>","problem_name_en":"<specific common name in English>","scientific_name":"<pathogen/pest latin name or null>","matched_problem_name":"<same problem, target language>","matched_problem_id":<catalog id or null>,"health_status":"healthy|diseased|deficiency|pest_infestation","severity_level":"mild|moderate|severe","confidence":0.0-1.0,"observed_symptoms":["..."],"ai_analysis":"2 short sentences.","weather_impact":"1 sentence on spray timing/risk.","recovery_recommendations":["..."],"ai_control_measures":{"chemical":["<molecule % formulation> @ <dose>/acre in <L> water"],"biological":["<agent> @ <dose>/acre in <L> water"],"preventative":["..."]}}
+Use CIBRC-registered molecules with exact per-acre dose and water volume. Keep molecule/brand names in English letters.
+
 PROMPT;
 
-// Construct Dynamic User Instruction
 $langName = ($language === 'te') ? 'Telugu (తెలుగు)' : (($language === 'hi') ? 'Hindi (हिन्दी)' : 'English');
-$userText = "Diagnose crop. Give exact per-acre dosages & water mix volumes for chemical and biological controls. Target Language: $langName. ";
+$userText = '';
 
 if (!empty($selectedCropName)) {
-    $userText .= "Farmer specified crop: $selectedCropName. Restrict diagnosis exclusively to this crop. ";
+    $userText .= "Crop selected by farmer: $selectedCropName. Diagnose this crop only. ";
 }
 
 if (!empty($candidateProblems)) {
     $probListStr = implode(', ', array_map(function($p) {
         return $p['id'] . ':' . $p['problem_name_en'];
     }, $candidateProblems));
-    $userText .= "Match against these cataloged problem IDs if symptoms correspond: [$probListStr]. Set matched_problem_id to the matched numeric ID. ";
+    $userText .= "Known problems of this crop (id:name): [$probListStr]. If the photo matches one, set matched_problem_id to that id and use that name; otherwise give the correct specific name and matched_problem_id null. ";
 }
 
-$userText .= "CRITICAL: Generate ALL JSON values natively and fluently in $langName script. Keep only the JSON keys in English.";
+$userText .= "Target language: $langName. Write every JSON value (except problem_name_en, scientific_name, health_status, severity_level and molecule names) in $langName script. JSON keys stay in English.";
 
 // 5. Call DeepSeek Vision API
 $messages = [
@@ -215,8 +219,9 @@ $postBody = json_encode([
     'messages' => $messages,
     'thinking' => ['type' => 'disabled'],
     'temperature' => 0.1,
-    'max_tokens' => 700
-], JSON_UNESCAPED_SLASHES);
+    // Telugu/Hindi output needs far more tokens; 700 truncated the JSON.
+    'max_tokens' => 1800
+], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
 $ch = curl_init('https://api.deepseek.com/chat/completions');
 curl_setopt_array($ch, [
@@ -226,7 +231,7 @@ curl_setopt_array($ch, [
         'Content-Type: application/json',
         'Authorization: Bearer ' . $deepseekApiKey
     ],
-    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_RETURNTRANSF5R => true,
     CURLOPT_TIMEOUT => 40
 ]);
 
@@ -239,8 +244,7 @@ if ($curlErr || $httpCode !== 200) {
     http_response_code(502);
     echo json_encode([
         'success' => false,
-        'error' => 'AI Gateway communication error: ' . ($curlErr ?: "HTTP $httpCode"),
-        'raw' => $response
+        'error' => 'AI Gateway communication error: ' . ($curlErr ?: "HTTP $httpCode")
     ], JSON_UNESCAPED_UNICODE);
     exit();
 }
@@ -261,35 +265,51 @@ if (strpos($cleaned, '```') !== false) {
 $cleaned = trim($cleaned);
 
 $parsed = json_decode($cleaned, true);
+bracePos = strpos($cleaned, '{');
+if ($bracePos !== false && $bracePos > 0) {
+    $cleaned = substr($cleaned, $bracePos);
+}
+
+$parsed = json_decode($cleaned, true);
 
 if (!is_array($parsed)) {
-    // Fallback regex extraction if JSON syntax was imperfect
-    $parsed = [
-        'is_plant' => (strpos($cleaned, '"is_plant": false') === false),
-        'is_crop_supported' => (strpos($cleaned, '"is_crop_supported": false') === false),
-        'detected_crop_name' => $selectedCropName ?: 'Identified Crop',
-        'matched_problem_name' => 'Crop Health Analysis',
-        'health_status' => 'diseased',
-        'confidence' => 0.85,
-        'ai_analysis' => 'Visual analysis completed.',
-        'ai_control_measures' => ['chemical' => [], 'biological' => [], 'preventative' => []]
-    ];
+    // Let the app retry directly instead of returning a fake generic diagnosis.
+    http_response_code(502);
+    echo json_encode(['success' => false, 'error' => 'AI returned malformed output.'], JSON_UNESCAPED_UNICODE);
+    exit();
 }
 
-// 6. Enrich with CIBRC Database Details if matched_problem_id is available
+// 6. Validate matched id against this crop's catalog and use the curated localized name
 $matchedId = isset($parsed['matched_problem_id']) ? intval($parsed['matched_problem_id']) : 0;
-if ($matchedId > 0 && isset($pdo) && $pdo instanceof PDO) {
-    try {
-        $nameCol = ($language === 'en') ? 'problem_name_en' : (($language === 'hi') ? 'problem_name_hi' : 'problem_name_te');
-        $stmtA = $pdo->prepare("SELECT id, $nameCol as official_name, category FROM rice_problems WHERE id = ?");
-        $stmtA->execute([$matchedId]);
-        $official = $stmtA->fetch(PDO::FETCH_ASSOC);
-        if ($official) {
-            $parsed['official_database_verified'] = true;
-            $parsed['matched_problem_category'] = $official['category'];
-        }
-    } catch (Throwable $e) {}
+$official = null;
+foreach ($candidateProblems as $p) {
+    if ($matchedId > 0 && intval($p['id']) === $matchedId) {
+        $official = $p;
+        break;
+    }
 }
+if (!$official && !empty($candidateProblems) && !empty($parsed['problem_name_en'])) {
+    $needle = strtolower(trim($parsed['problem_name_en']));
+    foreach ($candidateProblems as $p) {
+        if (strtolower(trim($p['problem_name_en'])) === $needle) {
+            $official = $p;
+            break;
+        }
+    }
+}
+if ($official) {
+    $nameKey = ($language === 'en') ? 'problem_name_en' : (($language === 'hi') ? 'problem_name_hi' : 'problem_name_te');
+    $parsed['matched_problem_id'] = intval($official['id']);
+    if (!empty($official[$nameKey])) {
+        $parsed['matched_problem_name'] = $official[$nameKey];
+    }
+    if (empty($parsed['problem_name_en'])) {
+        $parsed['problem_name_en'] = $official['problem_name_en'];
+    }
+    $parsed['official_database_verified'] = true;
+    $parsed['matched_problem_category'] = $official['category'];
+} else {
+    $parsed['matched_problem_id'] = null;
 
 echo json_encode([
     'success' => true,

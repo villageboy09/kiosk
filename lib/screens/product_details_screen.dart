@@ -47,35 +47,38 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Future<void> _initializeVideo() async {
     try {
-      _videoController = VideoPlayerController.networkUrl(
+      final controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.product.videoUrl!),
       );
-      await _videoController!.initialize();
-      if (mounted) {
-        _chewieController = ChewieController(
-          videoPlayerController: _videoController!,
-          autoPlay: false,
-          looping: false,
-          errorBuilder: (context, errorMessage) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 42),
-                  const SizedBox(height: 8),
-                  Text(
-                    context.tr('video_unavailable'),
-                    style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-        setState(() {});
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
       }
+      _videoController = controller;
+      _chewieController = ChewieController(
+        videoPlayerController: controller,
+        autoPlay: false,
+        looping: false,
+        errorBuilder: (context, errorMessage) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 42),
+                const SizedBox(height: 8),
+                Text(
+                  context.tr('video_unavailable'),
+                  style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+      setState(() {});
     } catch (e) {
       // Video failed to initialize, will show images instead
     }
@@ -83,8 +86,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   @override
   void dispose() {
-    _videoController?.dispose();
     _chewieController?.dispose();
+    _videoController?.dispose();
     _pageController.dispose();
     super.dispose();
   }

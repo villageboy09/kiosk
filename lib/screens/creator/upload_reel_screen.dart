@@ -70,7 +70,9 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
     _captionController.dispose();
     _phoneController.dispose();
     _sourceUrlController.dispose();
-    _videoPlayerController?.dispose();
+    final controller = _videoPlayerController;
+    _videoPlayerController = null;
+    controller?.dispose();
     super.dispose();
   }
 
@@ -81,11 +83,11 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
         source: source,
         maxDuration: const Duration(minutes: 3),
       );
-      if (file != null) {
+      if (file != null && mounted) {
         setState(() {
           _pickedVideo = file;
         });
-        _initializeVideoPlayer(File(file.path));
+        await _initializeVideoPlayer(File(file.path));
       }
     } catch (e) {
       if (mounted) {
@@ -100,23 +102,88 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
   }
 
   Future<void> _initializeVideoPlayer(File file) async {
-    setState(() => _isInitializingVideo = true);
-    await _videoPlayerController?.dispose();
-
+    // 1. Immediately detach old controller so build() never inspects a disposed instance
+    final oldController = _videoPlayerController;
+    setState(() {
+      _videoPlayerController = null;
+      _isInitializingVideo = true;
+    });
     try {
-      final controller = VideoPlayerController.file(file);
-      await controller.initialize();
-      controller.setLooping(true);
-      controller.play();
-      if (mounted) {
-        setState(() {
-          _videoPlayerController = controller;
-          _isInitializingVideo = false;
-        });
+      await oldController?.dispose();
+    } catch (_) {}
+
+    // 2. Validate file existence and file size (limit to 105MB to prevent OOM/network crash)
+    try {
+      if (!await file.exists()) {
+        if (mounted) {
+          setState(() {
+            _pickedVideo = null;
+            _isInitializingVideo = false;
+          });
+          showModernPillToast(
+            context,
+            message: 'Selected video file could not be found.',
+            icon: Icons.error_outline_rounded,
+            isSuccess: false,
+          );
+        }
+        return;
+      }
+
+      final fileSize = await file.length();
+      if (fileSize > 105 * 1024 * 1024) {
+        if (mounted) {
+          setState(() {
+            _pickedVideo = null;
+            _isInitializingVideo = false;
+          });
+          showModernPillToast(
+            context,
+            message: 'Video file is too large (${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB). Limit is 100 MB.',
+            icon: Icons.warning_amber_rounded,
+            isSuccess: false,
+          );
+        }
+        return;
       }
     } catch (e) {
+      debugPrint('File check error: $e');
+    }
+
+    // 3. Safely initialize new controller
+    VideoPlayerController? newController;
+    try {
+      newController = VideoPlayerController.file(file);
+      await newController.initialize();
+
+      if (!mounted) {
+        await newController.dispose();
+        return;
+      }
+
+      newController.setLooping(true);
+      newController.play();
+
+      setState(() {
+        _videoPlayerController = newController;
+        _isInitializingVideo = false;
+      });
+    } catch (e) {
+      debugPrint('Error initializing video preview: $e');
+      try {
+        await newController?.dispose();
+      } catch (_) {}
       if (mounted) {
-        setState(() => _isInitializingVideo = false);
+        setState(() {
+          _videoPlayerController = null;
+          _isInitializingVideo = false;
+        });
+        showModernPillToast(
+          context,
+          message: 'Unable to preview video format. You can still submit.',
+          icon: Icons.info_outline_rounded,
+          isSuccess: false,
+        );
       }
     }
   }
@@ -166,6 +233,9 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
         : 'https://kiosk.cropsync.in/Reels/$fileName';
 
     setState(() => _isPublishing = true);
+    try {
+      _videoPlayerController?.pause();
+    } catch (_) {}
 
     final tags = _selectedTags.join(', ');
     final result = await CreatorService.uploadReelDetailed(
@@ -911,7 +981,8 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
   }
 
   Widget _buildModernVideoCard() {
-    final hasVideo = _videoPlayerController != null && _videoPlayerController!.value.isInitialized;
+    final controller = _videoPlayerController;
+    final bool hasVideo = controller != null && controller.value.isInitialized;
 
     return Container(
       decoration: BoxDecoration(
@@ -959,8 +1030,10 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
               alignment: Alignment.center,
               children: [
                 AspectRatio(
-                  aspectRatio: 9 / 16,
-                  child: VideoPlayer(_videoPlayerController!),
+                  aspectRatio: (controller.value.aspectRatio > 0)
+                      ? controller.value.aspectRatio
+                      : (9 / 16),
+                  child: VideoPlayer(controller),
                 ),
                 // Vignette overlays
                 Positioned.fill(
@@ -982,7 +1055,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                 // Center Play/Pause button
                 IconButton(
                   icon: Icon(
-                    _videoPlayerController!.value.isPlaying
+                    controller.value.isPlaying
                         ? Icons.pause_circle_filled_rounded
                         : Icons.play_circle_filled_rounded,
                     size: 68,
@@ -990,11 +1063,13 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                   ),
                   onPressed: () {
                     HapticFeedback.selectionClick();
-                    setState(() {
-                      _videoPlayerController!.value.isPlaying
-                          ? _videoPlayerController!.pause()
-                          : _videoPlayerController!.play();
-                    });
+                    if (controller.value.isInitialized) {
+                      setState(() {
+                        controller.value.isPlaying
+                            ? controller.pause()
+                            : controller.play();
+                      });
+                    }
                   },
                 ),
                 // Top floating pills (duration & replace)
@@ -1014,7 +1089,7 @@ class _UploadReelScreenState extends State<UploadReelScreen> {
                         const Icon(Icons.timer_outlined, color: Color(0xFF10B981), size: 13),
                         const SizedBox(width: 4),
                         Text(
-                          _formatDuration(_videoPlayerController!.value.duration),
+                          _formatDuration(controller.value.duration),
                           style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
                         ),
                       ],
