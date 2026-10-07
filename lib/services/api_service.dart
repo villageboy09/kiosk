@@ -8,6 +8,8 @@ import 'package:cropsync/models/user.dart';
 import 'package:cropsync/models/chc_operator.dart';
 import 'package:cropsync/models/chc_official.dart';
 import 'package:cropsync/services/cache_service.dart';
+import 'package:cropsync/models/shop_banner.dart';
+import 'package:cropsync/models/shop_updates.dart';
 
 /// API Service class for handling all HTTP requests to the MySQL backend
 class ApiService {
@@ -297,6 +299,73 @@ class ApiService {
       return null;
     } catch (e) {
       return null;
+    }
+  }
+
+  // ===================== SHOP BANNERS / UPDATES =====================
+
+  /// Fetches shop banners. Not cached. Returns [] on any error.
+  /// [client] is injectable for tests.
+  static Future<List<ShopBanner>> getShopBanners({
+    required String lang,
+    http.Client? client,
+  }) async {
+    final c = client ?? http.Client();
+    try {
+      final response = await c
+          .get(Uri.parse(
+              '$baseUrl/api.php?action=get_shop_banners&lang=${Uri.encodeQueryComponent(lang)}'))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) return [];
+      return parseShopBanners(jsonDecode(utf8.decode(response.bodyBytes)));
+    } catch (e) {
+      return [];
+    } finally {
+      if (client == null) c.close();
+    }
+  }
+
+  /// Parses a get_shop_banners response body; [] when malformed.
+  static List<ShopBanner> parseShopBanners(dynamic data) {
+    try {
+      if (data is! Map || data['success'] != true) return [];
+      final list = data['banners'];
+      if (list is! List) return [];
+      return list
+          .whereType<Map>()
+          .map((e) => ShopBanner.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Fetches shop updates since the given ids. Null on error.
+  static Future<ShopUpdates?> getShopUpdates({
+    required String lang,
+    required int sinceProductId,
+    required int sinceBannerId,
+    String? userId,
+    http.Client? client,
+  }) async {
+    final c = client ?? http.Client();
+    try {
+      final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: {
+        'action': 'get_shop_updates',
+        'lang': lang,
+        'since_product_id': '$sinceProductId',
+        'since_banner_id': '$sinceBannerId',
+        if (userId != null && userId.isNotEmpty) 'user_id': userId,
+      });
+      final response = await c.get(uri).timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (data is! Map || data['success'] != true) return null;
+      return ShopUpdates.fromJson(Map<String, dynamic>.from(data));
+    } catch (e) {
+      return null;
+    } finally {
+      if (client == null) c.close();
     }
   }
 

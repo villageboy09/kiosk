@@ -19,9 +19,8 @@ import 'package:cropsync/services/location_service.dart';
 import 'package:cropsync/services/razorpay_payment_service.dart';
 import 'package:cropsync/services/saved_advisories_service.dart';
 import 'package:cropsync/services/text_to_speech_service.dart';
-import 'package:cropsync/services/copyright_free_reference_service.dart';
 import 'package:cropsync/utils/safe_parser.dart';
-import 'package:cropsync/widgets/language_selector.dart';
+import 'package:cropsync/widgets/language_button.dart';
 import 'package:cropsync/screens/agri_shop.dart';
 import 'package:cropsync/screens/saved_advisories_screen.dart';
 
@@ -383,9 +382,6 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
       'इस स्थिति में आवश्यक नहीं।'
     ],
     'weather': ['Spray advice', 'పిచికారీ సలహా', 'छिड़काव सलाह'],
-    'your_photo': ['Your photo', 'మీ ఫోటో', 'आपकी फोटो'],
-    'reference': ['Reference', 'పోలిక', 'संदर्भ'],
-    'compare': ['Compare', 'పోల్చి చూడండి', 'तुलना करें'],
     'buy': ['Buy products', 'మందులు కొనండి', 'दवा खरीदें'],
     'helpline': ['Kisan helpline', 'కిసాన్ హెల్ప్‌లైన్', 'किसान हेल्पलाइन'],
     'new_scan': [
@@ -501,8 +497,7 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
           Color c = _ink,
           double? h,
           FontStyle? style}) =>
-      GoogleFonts.googleSans(
-          fontSize: size, fontWeight: w, color: c, height: h, fontStyle: style);
+      _plantTextStyle(_lang, size, w: w, c: c, h: h, style: style);
 
   _Stage _stage = _Stage.crop;
   Map<String, dynamic>? _selectedCrop;
@@ -516,8 +511,8 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
   Map<String, dynamic>? _result;
   String? _resultLang;
   bool _translating = false;
-  int _tab = 0;
-
+  // Bumped on every new/loaded result so the treatment section resets to tab 0.
+  int _treatmentEpoch = 0;
   int _loadingStep = 0;
   Timer? _loadingTimer;
   int _requestId = 0;
@@ -532,7 +527,6 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
   late final RazorpayPaymentService _razorpayService;
   bool _isPaymentProcessing = false;
 
-  List<CopyrightFreeReferencePhoto> _referencePhotos = [];
   List<SavedAdvisory> _recentDiagnoses = [];
 
   @override
@@ -554,7 +548,6 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
           _findCrop(name: _result!['detected_crop_name']?.toString());
       _stage = _Stage.result;
       _checkIfSaved();
-      _loadReferences();
     } else {
       _pendingImage = widget.imagePath;
     }
@@ -657,22 +650,6 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
     if (mounted) setState(() => _isSaved = saved);
   }
 
-  Future<void> _loadReferences() async {
-    final res = _result;
-    if (res == null) return;
-    final en = res['problem_name_en']?.toString();
-    final photos = await CopyrightFreeReferenceService.fetchReferences(
-      cropName: _selectedCrop?['name_en'] as String? ??
-          res['detected_crop_name']?.toString(),
-      problemName: (en != null && en.trim().isNotEmpty)
-          ? en
-          : res['matched_problem_name']?.toString(),
-      isHealthy: res['health_status']?.toString() == 'healthy',
-    ).catchError((_) => <CopyrightFreeReferencePhoto>[]);
-    if (mounted && identical(res, _result))
-      setState(() => _referencePhotos = photos);
-  }
-
   Future<void> _localizeResult(String lang) async {
     final current = _result;
     if (!mounted || current == null) return;
@@ -719,8 +696,8 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
       _stage = _Stage.crop;
       _result = null;
       _imagePath = null;
+      _existsPath = null;
       _translating = false;
-      _referencePhotos = [];
       _isSaved = false;
     });
     _loadRecentDiagnoses();
@@ -760,12 +737,12 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
     final reqId = ++_requestId;
     setState(() {
       _imagePath = path;
+      _existsPath = null;
       _stage = _Stage.analysing;
       _loadingStep = 0;
       _result = null;
       _isSaved = false;
-      _referencePhotos = [];
-      _tab = 0;
+      _treatmentEpoch++;
     });
 
     _loadingTimer?.cancel();
@@ -815,7 +792,6 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
       });
       if (_lang != lang) _localizeResult(_lang);
       _checkIfSaved();
-      _loadReferences();
     } catch (e) {
       if (!mounted || reqId != _requestId) return;
       setState(() => _stage = _Stage.crop);
@@ -840,14 +816,13 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
       _result = adv.toDiagnosisMap();
       _resultLang = null;
       _imagePath = adv.imagePath;
+      _existsPath = null;
       _selectedCrop = _findCrop(name: adv.cropName);
       _stage = _Stage.result;
-      _tab = 0;
-      _referencePhotos = [];
+      _treatmentEpoch++;
       _isSaved = true;
     });
     _localizeResult(_lang);
-    _loadReferences();
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -866,6 +841,34 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
   List<String> _list(dynamic v) => v is List
       ? v.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList()
       : <String>[];
+
+  // File.existsSync() is a sync disk hit; cache it per image path instead of
+  // calling it on every build.
+  String? _existsPath;
+  bool _existsValue = false;
+  bool get _hasImage {
+    final path = _imagePath;
+    if (path == null) return false;
+    if (path != _existsPath) {
+      _existsPath = path;
+      _existsValue = File(path).existsSync();
+    }
+    return _existsValue;
+  }
+
+  // Prevention list is derived from the result; rebuild only when it changes.
+  Map<String, dynamic>? _preventionFor;
+  List<String> _preventionCache = const [];
+  List<String> _preventionOf(Map<String, dynamic> res) {
+    if (!identical(_preventionFor, res)) {
+      _preventionFor = res;
+      _preventionCache = <String>{
+        ..._controls['preventative']!,
+        ..._list(res['recovery_recommendations'])
+      }.toList();
+    }
+    return _preventionCache;
+  }
 
   Map<String, List<String>> get _controls {
     final c = _result?['ai_control_measures'];
@@ -973,7 +976,7 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
     }
     b.writeln('\n— CropSync');
 
-    final hasImage = _imagePath != null && File(_imagePath!).existsSync();
+    final hasImage = _hasImage;
     SharePlus.instance.share(ShareParams(
       files: hasImage ? [XFile(_imagePath!)] : null,
       text: b.toString(),
@@ -1021,19 +1024,7 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
           ),
           title: Text(_t('title'), style: _ts(18, w: FontWeight.w700)),
           actions: [
-            TextButton(
-              onPressed: () => LanguageSelector.show(context),
-              style: TextButton.styleFrom(
-                  foregroundColor: _ink, minimumSize: const Size(44, 40)),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.translate_rounded, size: 18),
-                  const SizedBox(width: 4),
-                  Text(_lang.toUpperCase(), style: _ts(13, w: FontWeight.w600)),
-                ],
-              ),
-            ),
+            const LanguageButton.pill(color: _ink),
             IconButton(
               icon: const Icon(Icons.history_rounded, color: _ink),
               tooltip: _t('recent'),
@@ -1374,62 +1365,80 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
 
   Widget _buildAnalysing() {
     final steps = [_t('load1'), _t('load2'), _t('load3'), _t('load4')];
-    final hasImage = _imagePath != null && File(_imagePath!).existsSync();
+    final hasImage = _hasImage;
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const Spacer(),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(24),
+      child: Stack(
+        children: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
               child: SizedBox(
-                width: 220,
-                height: 220,
-                child: Stack(
-                  fit: StackFit.expand,
+                width: double.infinity,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    if (hasImage)
-                      Image.file(File(_imagePath!),
-                          fit: BoxFit.cover, cacheWidth: 600)
-                    else
-                      Container(color: _greenSoft),
-                    Container(color: Colors.black.withValues(alpha: 0.15)),
-                    const _ScanLine(),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: SizedBox(
+                        width: 220,
+                        height: 220,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (hasImage)
+                              Image.file(File(_imagePath!),
+                                  fit: BoxFit.cover, cacheWidth: 600)
+                            else
+                              Container(color: _greenSoft),
+                            Container(
+                                color: Colors.black.withValues(alpha: 0.15)),
+                            const _ScanLine(),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Text(_t('analysing'),
+                        textAlign: TextAlign.center,
+                        style: _ts(20, w: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: Text(
+                        steps[_loadingStep % steps.length],
+                        key: ValueKey(_loadingStep),
+                        textAlign: TextAlign.center,
+                        style: _ts(14, c: _muted),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const SizedBox(
+                        width: 160,
+                        child: LinearProgressIndicator(
+                            minHeight: 3,
+                            color: _green,
+                            backgroundColor: _line)),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 28),
-            Text(_t('analysing'),
-                textAlign: TextAlign.center,
-                style: _ts(20, w: FontWeight.w700)),
-            const SizedBox(height: 8),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              child: Text(
-                steps[_loadingStep % steps.length],
-                key: ValueKey(_loadingStep),
-                textAlign: TextAlign.center,
-                style: _ts(14, c: _muted),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: TextButton(
+                onPressed: _cancelAnalysis,
+                style: TextButton.styleFrom(
+                    foregroundColor: _muted, minimumSize: const Size(120, 48)),
+                child: Text(_t('cancel'),
+                    style: _ts(15, w: FontWeight.w600, c: _muted)),
               ),
             ),
-            const SizedBox(height: 20),
-            const SizedBox(
-                width: 160,
-                child: LinearProgressIndicator(
-                    minHeight: 3, color: _green, backgroundColor: _line)),
-            const Spacer(),
-            TextButton(
-              onPressed: _cancelAnalysis,
-              style: TextButton.styleFrom(
-                  foregroundColor: _muted, minimumSize: const Size(120, 48)),
-              child: Text(_t('cancel'),
-                  style: _ts(15, w: FontWeight.w600, c: _muted)),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1461,12 +1470,9 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
     final sciName = res['scientific_name']?.toString().trim() ?? '';
     final verified = res['official_database_verified'] == true;
     final c = _controls;
-    final prevention = <String>{
-      ...c['preventative']!,
-      ..._list(res['recovery_recommendations'])
-    }.toList();
+    final prevention = _preventionOf(res);
     final statusColor = _statusColor(status);
-    final hasImage = _imagePath != null && File(_imagePath!).existsSync();
+    final hasImage = _hasImage;
 
     return Column(
       children: [
@@ -1486,8 +1492,13 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.file(File(_imagePath!),
-                            fit: BoxFit.cover, cacheWidth: 1000),
+                        Image.file(
+                          File(_imagePath!),
+                          fit: BoxFit.cover,
+                          cacheWidth: 1000,
+                          errorBuilder: (_, __, ___) =>
+                              Container(color: _greenSoft),
+                        ),
                         if (_displayCropName.isNotEmpty)
                           Positioned(
                             left: 12,
@@ -1640,11 +1651,6 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
                     )),
               ],
 
-              if (_referencePhotos.isNotEmpty && hasImage && !isHealthy) ...[
-                _sectionTitle(_t('compare')),
-                _buildCompare(),
-              ],
-
               if (weather.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 Container(
@@ -1685,21 +1691,17 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
                 ],
               ] else ...[
                 _sectionTitle(_t('treatment')),
-                _buildSegmented(),
-                const SizedBox(height: 14),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: KeyedSubtree(
-                    key: ValueKey(_tab),
-                    child: _numberedList(
-                      _tab == 0
-                          ? c['chemical']!
-                          : (_tab == 1 ? c['biological']! : prevention),
-                      _tab == 0
-                          ? const Color(0xFF0369A1)
-                          : (_tab == 1 ? _green : const Color(0xFFB45309)),
-                    ),
-                  ),
+                _TreatmentSection(
+                  key: ValueKey(_treatmentEpoch),
+                  lang: _lang,
+                  labels: [_t('tab_chem'), _t('tab_bio'), _t('tab_prev')],
+                  lists: [c['chemical']!, c['biological']!, prevention],
+                  accents: const [
+                    Color(0xFF0369A1),
+                    _green,
+                    Color(0xFFB45309),
+                  ],
+                  listBuilder: _numberedList,
                 ),
               ],
 
@@ -1840,55 +1842,6 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
     );
   }
 
-  Widget _buildSegmented() {
-    final labels = [_t('tab_chem'), _t('tab_bio'), _t('tab_prev')];
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-          color: const Color(0xFFF3F4F6),
-          borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: List.generate(labels.length, (i) {
-          final sel = _tab == i;
-          return Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                setState(() => _tab = i);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: sel ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(9),
-                  boxShadow: sel
-                      ? [
-                          BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 6,
-                              offset: const Offset(0, 1))
-                        ]
-                      : null,
-                ),
-                child: Text(
-                  labels[i],
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _ts(13.5,
-                      w: sel ? FontWeight.w700 : FontWeight.w500,
-                      c: sel ? _ink : _muted),
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
   Widget _numberedList(List<String> items, Color accent) {
     if (items.isEmpty) {
       return Padding(
@@ -1926,52 +1879,6 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
           ),
         );
       }),
-    );
-  }
-
-  Widget _buildCompare() {
-    final ref = _referencePhotos.first;
-    Widget tile(Widget image, String label) => Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: AspectRatio(aspectRatio: 1, child: image)),
-              const SizedBox(height: 6),
-              Text(label, style: _ts(12.5, w: FontWeight.w600, c: _muted)),
-            ],
-          ),
-        );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            tile(
-                Image.file(File(_imagePath!),
-                    fit: BoxFit.cover, cacheWidth: 500),
-                _t('your_photo')),
-            const SizedBox(width: 12),
-            tile(
-              CachedNetworkImage(
-                imageUrl: ref.url,
-                fit: BoxFit.cover,
-                placeholder: (_, __) =>
-                    Container(color: const Color(0xFFF3F4F6)),
-                errorWidget: (_, __, ___) => Container(
-                    color: const Color(0xFFF3F4F6),
-                    child: const Icon(Icons.image_not_supported_outlined,
-                        color: _muted)),
-              ),
-              _t('reference'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text('${ref.source} · ${ref.license}',
-            style: _ts(10.5, c: const Color(0xFF9CA3AF))),
-      ],
     );
   }
 
@@ -2208,6 +2115,167 @@ class _CropImage extends StatelessWidget {
   }
 }
 
+/// Text style for the screen. Google Sans has no Telugu glyphs, so Telugu uses
+/// Tiro Telugu instead of the app-wide Noto Sans Telugu fallback.
+TextStyle _plantTextStyle(String lang, double size,
+    {FontWeight w = FontWeight.w400,
+    Color c = _ink,
+    double? h,
+    FontStyle? style}) {
+  // GoogleFonts lookups are not free; memoize per distinct style.
+  final key = '${lang == 'te'}|$size|${w.value}|${c.toARGB32()}|$h|$style';
+  return _plantTextStyleCache.putIfAbsent(
+      key, () => _buildPlantTextStyle(lang, size, w, c, h, style));
+}
+
+final Map<String, TextStyle> _plantTextStyleCache = {};
+
+TextStyle _buildPlantTextStyle(String lang, double size, FontWeight w, Color c,
+    double? h, FontStyle? style) {
+  if (lang == 'te') {
+    // Tiro Telugu ships only a regular weight (plus italic); the requested
+    // weight is passed through so Flutter synthesises bold for headings.
+    return GoogleFonts.tiroTelugu(
+        fontSize: size,
+        fontWeight: w,
+        color: c,
+        // Taller default line height so Telugu glyphs don't clip.
+        height: h ?? 1.5,
+        fontStyle: style);
+  }
+  return GoogleFonts.googleSans(
+      fontSize: size, fontWeight: w, color: c, height: h, fontStyle: style);
+}
+
+/// Treatment pills + content. Holds the selected tab locally so a tap only
+/// rebuilds this subtree instead of the whole result screen.
+class _TreatmentSection extends StatefulWidget {
+  final String lang;
+  final List<String> labels;
+  final List<List<String>> lists;
+  final List<Color> accents;
+  final Widget Function(List<String> items, Color accent) listBuilder;
+  const _TreatmentSection({
+    super.key,
+    required this.lang,
+    required this.labels,
+    required this.lists,
+    required this.accents,
+    required this.listBuilder,
+  });
+
+  @override
+  State<_TreatmentSection> createState() => _TreatmentSectionState();
+}
+
+class _TreatmentSectionState extends State<_TreatmentSection> {
+  int _tab = 0;
+
+  static const _slide = Duration(milliseconds: 220);
+
+  Widget _segmented() {
+    final n = widget.labels.length;
+    return RepaintBoundary(
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(12)),
+        child: SizedBox(
+          height: 40,
+          child: Stack(
+            children: [
+              // Sliding white pill behind the labels.
+              AnimatedAlign(
+                duration: _slide,
+                curve: Curves.easeOutCubic,
+                alignment: Alignment(n <= 1 ? 0 : -1 + 2 * _tab / (n - 1), 0),
+                child: FractionallySizedBox(
+                  widthFactor: 1 / n,
+                  heightFactor: 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(9),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 6,
+                            offset: const Offset(0, 1))
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Row(
+                children: List.generate(n, (i) {
+                  final sel = _tab == i;
+                  return Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (_tab == i) return;
+                        HapticFeedback.selectionClick();
+                        setState(() => _tab = i);
+                      },
+                      child: Center(
+                        // Constant weight so the label width never reflows.
+                        child: AnimatedDefaultTextStyle(
+                          duration: _slide,
+                          curve: Curves.easeOutCubic,
+                          style: _plantTextStyle(widget.lang, 13.5,
+                              w: FontWeight.w600, c: sel ? _ink : _muted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          child: Text(widget.labels[i]),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tab = _tab.clamp(0, widget.lists.length - 1);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _segmented(),
+        const SizedBox(height: 14),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            // Outgoing child is pinned to the top and doesn't contribute to
+            // the height, so the section never jumps mid-fade.
+            layoutBuilder: (current, previous) => Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                for (final p in previous)
+                  Positioned(top: 0, left: 0, right: 0, child: p),
+                if (current != null) current,
+              ],
+            ),
+            child: KeyedSubtree(
+              key: ValueKey(tab),
+              child: widget.listBuilder(widget.lists[tab], widget.accents[tab]),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _CropTile extends StatelessWidget {
   final Map<String, dynamic> crop;
   final String label;
@@ -2279,10 +2347,9 @@ class _CropTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.googleSans(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                            color: _ink),
+                        style: _plantTextStyle(
+                            context.locale.languageCode, 13.5,
+                            w: FontWeight.w600),
                       ),
                       if (subLabel != null)
                         Text(
@@ -2290,8 +2357,9 @@ class _CropTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.googleSans(
-                              fontSize: 11, color: _muted),
+                          style: _plantTextStyle(
+                              context.locale.languageCode, 11,
+                              c: _muted),
                         ),
                     ],
                   ),

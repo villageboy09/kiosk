@@ -3,7 +3,8 @@ import 'package:cropsync/utils/safe_parser.dart';
 class CropProblem {
   final int id;
   final String name;
-  final String? category; // 'Fungal Disease', 'Insect Pest', 'Nutrient Deficiency', etc.
+  final String?
+      category; // 'Fungal Disease', 'Insect Pest', 'Nutrient Deficiency', etc.
   final String? imageUrl1;
   final String? imageUrl2;
   final String? imageUrl3;

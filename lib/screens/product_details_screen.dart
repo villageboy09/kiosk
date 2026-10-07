@@ -6,12 +6,12 @@ import 'package:cropsync/services/farmer_analytics_service.dart';
 import 'package:cropsync/services/share_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cropsync/widgets/safe_network_image.dart';
 import 'package:cropsync/theme/app_theme.dart';
+import 'package:cropsync/theme/app_text.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final Product product;
@@ -69,9 +69,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 const SizedBox(height: 8),
                 Text(
                   context.tr('video_unavailable'),
-                  style: const TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontWeight: FontWeight.w700),
+                  style: appStyle(context,
+                      color: AppTheme.textSecondary, weight: FontWeight.w700),
                 ),
               ],
             ),
@@ -138,21 +137,24 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 const SizedBox(height: 24),
                 Text(
                   context.tr('success'),
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                  style: appStyle(
+                    context,
+                    size: 22,
+                    weight: FontWeight.w800,
                     color: AppTheme.textPrimary,
-                    letterSpacing: -0.5,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
+                  style: appStyle(
+                    context,
+                    text: message,
+                    size: 16,
                     color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w700,
+                    weight: FontWeight.w600,
+                    height: 1.4,
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -172,10 +174,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     ),
                     child: Text(
                       context.tr('ok'),
-                      style: const TextStyle(
+                      style: appStyle(
+                        context,
                         color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
+                        size: 16,
+                        weight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -223,7 +226,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${context.tr('error')}: ${e.toString()}'),
+          content: Text(
+            '${context.tr('error')}: ${e.toString()}',
+            style: appStyle(context, color: Colors.white),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -234,32 +240,42 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
   }
 
+  static const _ink = Color(0xFF0F172A);
+  static const _muted = Color(0xFF64748B);
+  static const double _gutter = 20;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Colors.white,
       body: Stack(
         children: [
           Positioned.fill(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 120),
+              padding: const EdgeInsets.only(bottom: 110),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildMediaShowcase(),
                   Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.fromLTRB(_gutter, 20, _gutter, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildProductHeader(),
+                        if (widget.product.advertiserName
+                            .trim()
+                            .isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          _buildSellerLine(),
+                        ],
                         const SizedBox(height: 20),
-                        _buildSellerGroupedCard(),
+                        const Divider(height: 1, color: Color(0xFFE2E8F0)),
                         const SizedBox(height: 20),
-                        _buildDescriptionCard(),
-                        const SizedBox(height: 20),
-                        _buildGuaranteeBanner(),
+                        _buildDescription(),
+                        const SizedBox(height: 24),
+                        _buildTrustNote(),
                       ],
                     ),
                   ),
@@ -287,48 +303,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Widget _buildFloatingTopBar() {
     final topPadding = MediaQuery.of(context).padding.top;
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 10),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, topPadding + 6, 12, 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _buildFrostedButton(
             icon: Icons.arrow_back_rounded,
+            label: context.tr('shopd_back'),
             onTap: () => Navigator.of(context).pop(),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 8,
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.verified_rounded,
-                    size: 14, color: Color(0xFF2563EB)),
-                const SizedBox(width: 4),
-                Text(
-                  context.tr('verified_input'),
-                  style: GoogleFonts.googleSans(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF1E3A8A),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
           ),
           _buildFrostedButton(
             icon: Icons.share_outlined,
+            label: context.tr('shopd_share'),
             onTap: () {
               HapticFeedback.lightImpact();
               ShareService.shareItem(
@@ -349,30 +336,30 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Widget _buildFrostedButton({
     required IconData icon,
+    required String label,
     required VoidCallback onTap,
   }) {
-    return ClipOval(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Material(
-          color: Colors.white.withValues(alpha: 0.88),
-          shape: const CircleBorder(),
-          child: InkWell(
-            onTap: onTap,
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.6)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 6,
-                  ),
-                ],
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: label,
+        textStyle: appStyle(context, size: 12, color: Colors.white),
+        child: ClipOval(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Material(
+              color: Colors.white.withValues(alpha: 0.88),
+              shape: const CircleBorder(),
+              child: InkWell(
+                onTap: onTap,
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(icon, size: 21, color: _ink),
+                ),
               ),
-              child: Icon(icon, size: 20, color: const Color(0xFF0F172A)),
             ),
           ),
         ),
@@ -381,32 +368,26 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _buildMediaShowcase() {
-    final heroHeight = MediaQuery.of(context).size.height * 0.38;
+    final media = MediaQuery.of(context);
+    final heroHeight =
+        (media.size.height * 0.34).clamp(220.0, 360.0) + media.padding.top;
 
     return Container(
       height: heroHeight,
       width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFF8FAFC), Color(0xFFEDF2F7)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+      decoration: const BoxDecoration(
+        color: Color(0xFFF6F8FA),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         fit: StackFit.expand,
         children: [
           if (hasVideo)
-            Chewie(controller: _chewieController!)
+            Padding(
+              padding: EdgeInsets.only(top: media.padding.top + 44),
+              child: Chewie(controller: _chewieController!),
+            )
           else if (imageUrls.isNotEmpty)
             PageView.builder(
               controller: _pageController,
@@ -415,7 +396,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 final img = Padding(
                   padding: EdgeInsets.fromLTRB(
                     24,
-                    MediaQuery.of(context).padding.top + 45,
+                    media.padding.top + 48,
                     24,
                     28,
                   ),
@@ -451,10 +432,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     color: Colors.grey.shade300, size: 72),
               ),
             ),
-
           if (imageUrls.length > 1 && !hasVideo)
             Positioned(
-              bottom: 14,
+              bottom: 12,
               left: 0,
               right: 0,
               child: Row(
@@ -464,11 +444,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   (index) => AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
                     margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: _currentPage == index ? 20 : 6,
+                    width: _currentPage == index ? 18 : 6,
                     height: 6,
                     decoration: BoxDecoration(
                       color: _currentPage == index
-                          ? const Color(0xFF0F172A)
+                          ? _ink
                           : const Color(0xFFCBD5E1),
                       borderRadius: BorderRadius.circular(3),
                     ),
@@ -482,311 +462,244 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _buildProductHeader() {
+    final product = widget.product;
+    final name = getLocalizedProductName(context, product.name);
+    final category = getLocalizedCategory(context, product.category);
+    final discount = product.discountPercent;
+    final mrp = product.mrp;
+    final showMrp = mrp != null && (double.tryParse(product.price) ?? 0) < mrp;
+    final showUnit = product.unit.isNotEmpty && product.unit != 'unit';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFBFDBFE)),
-              ),
-              child: Text(
-                getLocalizedCategory(context, widget.product.category).toUpperCase(),
-                style: GoogleFonts.googleSans(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF1D4ED8),
-                  letterSpacing: 0.5,
-                ),
-              ),
+        if (category.trim().isNotEmpty) ...[
+          Text(
+            category,
+            style: appStyle(
+              context,
+              text: category,
+              size: 13,
+              weight: FontWeight.w600,
+              color: _muted,
+              height: 1.4,
             ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFF10B981),
-                    ),
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    context.tr('available_for_order'),
-                    style: GoogleFonts.googleSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF334155),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
+          ),
+          const SizedBox(height: 6),
+        ],
         Text(
-          getLocalizedProductName(context, widget.product.name),
-          style: GoogleFonts.googleSans(
-            fontSize: 25,
-            fontWeight: FontWeight.w900,
-            color: const Color(0xFF0F172A),
-            letterSpacing: -0.6,
-            height: 1.18,
+          name,
+          style: appStyle(
+            context,
+            text: name,
+            size: 24,
+            weight: FontWeight.w800,
+            color: _ink,
+            height: 1.35,
           ),
         ),
         const SizedBox(height: 10),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 10,
+          runSpacing: 4,
           children: [
             Text(
-              '₹${widget.product.price}',
-              style: GoogleFonts.googleSans(
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFF0F172A),
-                letterSpacing: -0.6,
+              '₹${product.price}${showUnit ? ' / ${product.unit}' : ''}',
+              style: appStyle(
+                context,
+                size: 24,
+                weight: FontWeight.w800,
+                color: _ink,
               ),
             ),
-            const SizedBox(width: 4),
-            Text(
-              '/ ${widget.product.unit}',
-              style: GoogleFonts.googleSans(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF64748B),
+            if (showMrp)
+              Text(
+                '₹${mrp.toStringAsFixed(mrp % 1 == 0 ? 0 : 2)}',
+                style: appStyle(
+                  context,
+                  size: 15,
+                  color: _muted,
+                  decoration: TextDecoration.lineThrough,
+                ),
               ),
-            ),
+            if (showMrp && discount != null)
+              Text(
+                context.tr('shopd_percent_off',
+                    namedArgs: {'percent': discount.toString()}),
+                style: appStyle(
+                  context,
+                  size: 14,
+                  weight: FontWeight.w700,
+                  color: const Color(0xFF15803D),
+                ),
+              ),
+            if (!product.inStock)
+              Text(
+                context.tr('shopd_out_of_stock'),
+                style: appStyle(
+                  context,
+                  size: 14,
+                  weight: FontWeight.w600,
+                  color: _muted,
+                ),
+              ),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildSellerGroupedCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: const Icon(Icons.store_mall_directory_rounded,
-                color: Color(0xFF0F172A), size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      context.tr('authorized_dealer'),
-                      style: GoogleFonts.googleSans(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF64748B),
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.verified_rounded,
-                        color: Color(0xFF2563EB), size: 14),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  widget.product.advertiserName,
-                  style: GoogleFonts.googleSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0F172A),
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDescriptionCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.description_outlined,
-                  size: 18, color: Color(0xFF0F172A)),
-              const SizedBox(width: 8),
-              Text(
-                context.tr('description'),
-                style: GoogleFonts.googleSans(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            widget.product.description,
-            style: GoogleFonts.googleSans(
-              fontSize: 14,
+  Widget _buildSellerLine() {
+    final seller = widget.product.advertiserName.trim();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 2),
+          child: Icon(Icons.storefront_outlined, size: 18, color: _muted),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '${context.tr('sold_by')} $seller',
+            style: appStyle(
+              context,
+              text: seller,
+              size: 14,
               color: const Color(0xFF475569),
               height: 1.5,
-              fontWeight: FontWeight.w400,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildGuaranteeBanner() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFBFDBFE)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.verified_user_rounded,
-              color: Color(0xFF2563EB), size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.tr('genuine_guarantee'),
-                  style: GoogleFonts.googleSans(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF1E3A8A),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  context.tr('genuine_guarantee_desc'),
-                  style: GoogleFonts.googleSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    color: const Color(0xFF1D4ED8),
-                    height: 1.35,
-                  ),
-                ),
-              ],
+  Widget _buildDescription() {
+    final paragraphs = widget.product.description
+        .split(RegExp(r'\n+'))
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (paragraphs.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.tr('description'),
+          style: appStyle(
+            context,
+            size: 17,
+            weight: FontWeight.w700,
+            color: _ink,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 10),
+        for (var i = 0; i < paragraphs.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          Text(
+            paragraphs[i],
+            style: appStyle(
+              context,
+              text: paragraphs[i],
+              size: 15,
+              color: const Color(0xFF475569),
+              height: 1.7,
             ),
           ),
         ],
-      ),
+      ],
+    );
+  }
+
+  Widget _buildTrustNote() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 2),
+          child: Icon(Icons.verified_user_outlined, size: 16, color: _muted),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            context.tr('shopd_trust_note'),
+            style: appStyle(
+              context,
+              size: 12.5,
+              color: _muted,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildBottomBar() {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final product = widget.product;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 14, 20, bottomPadding + 14),
-      decoration: BoxDecoration(
+      padding: EdgeInsets.fromLTRB(_gutter, 10, _gutter, bottomPadding + 10),
+      decoration: const BoxDecoration(
         color: Colors.white,
-        border: const Border(top: BorderSide(color: Color(0xFFE2E8F0))),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, -6),
-          ),
-        ],
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
       ),
       child: Row(
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.tr('price').toUpperCase(),
-                style: GoogleFonts.googleSans(
-                  color: const Color(0xFF64748B),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
+          Flexible(
+            flex: 2,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.tr('price'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: appStyle(
+                    context,
+                    color: _muted,
+                    size: 12,
+                    weight: FontWeight.w600,
+                    height: 1.3,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '₹${widget.product.price}',
-                style: GoogleFonts.googleSans(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: -0.5,
+                Text(
+                  '₹${product.price}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: appStyle(
+                    context,
+                    size: 20,
+                    weight: FontWeight.w800,
+                    color: _ink,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(width: 20),
+          const SizedBox(width: 16),
           Expanded(
+            flex: 3,
             child: SizedBox(
               height: 48,
               child: ElevatedButton(
                 onPressed: _isSubmittingEnquiry ? null : _submitEnquiry,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F172A),
+                  backgroundColor: _ink,
                   foregroundColor: Colors.white,
                   elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  textStyle: appStyle(
+                    context,
+                    size: 15,
+                    weight: FontWeight.w700,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -805,13 +718,17 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         children: [
                           const Icon(Icons.send_rounded, size: 16),
                           const SizedBox(width: 8),
-                          Text(
-                            context.tr('enquire_now'),
-                            style: GoogleFonts.googleSans(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
+                          Flexible(
+                            child: Text(
+                              context.tr('enquire_now'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: appStyle(
+                                context,
+                                color: Colors.white,
+                                size: 15,
+                                weight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],
@@ -824,6 +741,3 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 }
-
-
-

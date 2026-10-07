@@ -10,7 +10,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:cropsync/utils/commodity_translator.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/services/share_service.dart';
-import 'package:cropsync/widgets/language_selector.dart';
+import 'package:cropsync/widgets/language_button.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class MarketPrice {
@@ -83,14 +83,16 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
   bool _isSearchExpanded = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  String _selectedCategory = 'all'; // all, vegetables, fruits, cereals, cash_crops
+  String _selectedCategory =
+      'all'; // all, vegetables, fruits, cereals, cash_crops
 
   Locale? _lastLocale;
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialCommodity != null && widget.initialCommodity!.isNotEmpty) {
+    if (widget.initialCommodity != null &&
+        widget.initialCommodity!.isNotEmpty) {
       _searchController.text = widget.initialCommodity!;
       _searchQuery = widget.initialCommodity!.trim().toLowerCase();
       _isSearchExpanded = true;
@@ -357,213 +359,185 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     );
   }
 
-  void _showLanguageSelector() {
-    LanguageSelector.show(context);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final currentLanguageNative = context.locale.languageCode == 'te'
-        ? 'తెలుగు'
-        : context.locale.languageCode == 'hi'
-            ? 'हिन्दी'
-            : 'English';
-
     return Theme(
-      data: Theme.of(context).copyWith(
-        textTheme: GoogleFonts.googleSansTextTheme(Theme.of(context).textTheme),
-      ),
-      child: Scaffold(
-        backgroundColor: const Color(0xFFFAFBFA),
-        body: SafeArea(
-        child: Column(
-          children: [
-            // Custom Top App Bar matching the reference design
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        data: Theme.of(context).copyWith(
+          textTheme:
+              GoogleFonts.googleSansTextTheme(Theme.of(context).textTheme),
+        ),
+        child: Scaffold(
+          backgroundColor: const Color(0xFFFAFBFA),
+          body: SafeArea(
+            child: Column(
+              children: [
+                // Custom Top App Bar matching the reference design
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header Title
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            context.tr('market_prices_title'),
-                            style: const TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF111827),
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          if (_currentDistrict.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.location_on_rounded,
-                                      size: 13, color: Color(0xFF2E6930)),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    '$_currentDistrict, $_currentState',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF6B7280),
-                                    ),
-                                  ),
-                                ],
+                          // Header Title
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                context.tr('market_prices_title'),
+                                style: const TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF111827),
+                                  letterSpacing: -0.5,
+                                ),
                               ),
-                            ),
+                              if (_currentDistrict.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.location_on_rounded,
+                                          size: 13, color: Color(0xFF2E6930)),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        '$_currentDistrict, $_currentState',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+
+                          // Actions: Search Icon + Language Pill Button
+                          Row(
+                            children: [
+                              // Circular Search Button
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _isSearchExpanded = !_isSearchExpanded;
+                                    if (!_isSearchExpanded) {
+                                      _searchController.clear();
+                                      _searchQuery = '';
+                                    }
+                                  });
+                                },
+                                child: Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: _isSearchExpanded
+                                        ? const Color(0xFFC0D8C7)
+                                        : const Color(0xFFF1F4F1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _isSearchExpanded
+                                        ? Icons.close_rounded
+                                        : Icons.search_rounded,
+                                    color: const Color(0xFF1E482D),
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+
+                              // Language Selector Pill Button ("తెలుగు" / "English" / "हिन्दी")
+                              const LanguageButton.pill(
+                                fullName: true,
+                                color: Color(0xFF1E482D),
+                                pillBackground: Color(0xFFEDF5EF),
+                                pillBorder: Color(0xFFD6EADA),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
 
-                      // Actions: Search Icon + Language Pill Button
-                      Row(
-                        children: [
-                          // Circular Search Button
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _isSearchExpanded = !_isSearchExpanded;
-                                if (!_isSearchExpanded) {
-                                  _searchController.clear();
-                                  _searchQuery = '';
-                                }
-                              });
-                            },
-                            child: Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: _isSearchExpanded
-                                    ? const Color(0xFFC0D8C7)
-                                    : const Color(0xFFF1F4F1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                _isSearchExpanded
-                                    ? Icons.close_rounded
-                                    : Icons.search_rounded,
-                                color: const Color(0xFF1E482D),
-                                size: 20,
-                              ),
+                      // Expandable Inline Search Bar
+                      if (_isSearchExpanded) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F2),
+                            borderRadius:
+                                BorderRadius.circular(100), // Pill shape
+                            border: Border.all(color: Colors.transparent),
+                          ),
+                          child: TextField(
+                            controller: _searchController,
+                            autofocus: true,
+                            style: const TextStyle(
+                              color: Color(0xFF1E482D),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: context.tr('search_commodities_hint'),
+                              hintStyle: const TextStyle(
+                                  color: Color(0xFF9CA3AF), fontSize: 14),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              filled: false,
+                              isDense: true,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                              icon: const Icon(Icons.search_rounded,
+                                  color: Color(0xFF2E6930), size: 20),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                        ),
+                      ],
 
-                          // Language Selector Pill Button ("తెలుగు" / "English" / "हिन्दी")
-                          GestureDetector(
-                            onTap: _showLanguageSelector,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 9),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEDF5EF),
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(
-                                  color: const Color(0xFFD6EADA),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    currentLanguageNative,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF1E482D),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                      // Category Filter Chips
+                      const SizedBox(height: 10),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildCategoryChip('all', context.tr('all_filter')),
+                            _buildCategoryChip(
+                                'fruits', context.tr('fruits_filter')),
+                            _buildCategoryChip(
+                                'vegetables', context.tr('vegetables_filter')),
+                            _buildCategoryChip(
+                                'cereals', context.tr('cereals_filter')),
+                            _buildCategoryChip(
+                                'cash_crops', context.tr('cash_crops_filter')),
+                          ],
+                        ),
                       ),
                     ],
                   ),
+                ),
 
-                  // Expandable Inline Search Bar
-                  if (_isSearchExpanded) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F2),
-                        borderRadius: BorderRadius.circular(100), // Pill shape
-                        border: Border.all(color: Colors.transparent),
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        autofocus: true,
-                        style: const TextStyle(
-                          color: Color(0xFF1E482D),
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: context.tr('search_commodities_hint'),
-                          hintStyle: const TextStyle(
-                              color: Color(0xFF9CA3AF), fontSize: 14),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          filled: false,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                          icon: const Icon(Icons.search_rounded,
-                              color: Color(0xFF2E6930), size: 20),
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  // Category Filter Chips
-                  const SizedBox(height: 10),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildCategoryChip('all', context.tr('all_filter')),
-                        _buildCategoryChip('fruits', context.tr('fruits_filter')),
-                        _buildCategoryChip(
-                            'vegetables', context.tr('vegetables_filter')),
-                        _buildCategoryChip(
-                            'cereals', context.tr('cereals_filter')),
-                        _buildCategoryChip(
-                            'cash_crops', context.tr('cash_crops_filter')),
-                      ],
-                    ),
+                // Body: Content with RefreshIndicator
+                Expanded(
+                  child: RefreshIndicator(
+                    color: const Color(0xFF2E6930),
+                    onRefresh: () => _fetchPrices(force: true),
+                    child: _isLoading
+                        ? _buildShimmerEffect()
+                        : _allPrices.isEmpty
+                            ? _buildEmptyState()
+                            : _buildCommodityGridContent(),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-
-            // Body: Content with RefreshIndicator
-            Expanded(
-              child: RefreshIndicator(
-                color: const Color(0xFF2E6930),
-                onRefresh: () => _fetchPrices(force: true),
-                child: _isLoading
-                    ? _buildShimmerEffect()
-                    : _allPrices.isEmpty
-                        ? _buildEmptyState()
-                        : _buildCommodityGridContent(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ));
+          ),
+        ));
   }
 
   Widget _buildCategoryChip(String key, String label) {
@@ -579,9 +553,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFF1E482D)
-                : const Color(0xFFF1F5F2),
+            color:
+                isSelected ? const Color(0xFF1E482D) : const Color(0xFFF1F5F2),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -603,15 +576,18 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     for (var p in _allPrices) {
       if (p.district.toLowerCase() == _currentDistrict.toLowerCase()) {
         if (!uniqueCommodities.containsKey(p.commodity) ||
-            p.numericModalPrice > uniqueCommodities[p.commodity]!.numericModalPrice) {
+            p.numericModalPrice >
+                uniqueCommodities[p.commodity]!.numericModalPrice) {
           uniqueCommodities[p.commodity] = p;
         }
       }
     }
     for (var p in _allPrices) {
       if (!uniqueCommodities.containsKey(p.commodity) ||
-          (uniqueCommodities[p.commodity]!.district.toLowerCase() != _currentDistrict.toLowerCase() &&
-           p.numericModalPrice > uniqueCommodities[p.commodity]!.numericModalPrice)) {
+          (uniqueCommodities[p.commodity]!.district.toLowerCase() !=
+                  _currentDistrict.toLowerCase() &&
+              p.numericModalPrice >
+                  uniqueCommodities[p.commodity]!.numericModalPrice)) {
         uniqueCommodities[p.commodity] = p;
       }
     }
@@ -696,15 +672,17 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
     }
     if (comparativePercent <= 0) {
       comparativePercent = CommodityTranslator.getTrendPercentage(
-              spotlightMarket.commodity, spotlightMarket.numericModalPrice)
-          .abs() + 8;
+                  spotlightMarket.commodity, spotlightMarket.numericModalPrice)
+              .abs() +
+          8;
     }
 
     return CustomScrollView(
       slivers: [
         // "Best price near you" Spotlight Hero Card (matching reference design!)
         SliverToBoxAdapter(
-          child: _buildFeaturedSpotlightCard(spotlightMarket, comparativePercent),
+          child:
+              _buildFeaturedSpotlightCard(spotlightMarket, comparativePercent),
         ),
 
         // 2-Column Commodity Card Grid
@@ -797,8 +775,8 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFFD6EADA),
                       borderRadius: BorderRadius.circular(10),
@@ -900,141 +878,142 @@ class _MarketPricesScreenState extends State<MarketPricesScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Commodity Name
-              Text(
-                localizedName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF111827),
-                  letterSpacing: -0.2,
-                ),
-              ),
-
-              const SizedBox(height: 3),
-
-              // Price & Unit (e.g. ₹10666.67 /qtl or ₹60.00 /kg)
-              RichText(
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '₹${_formatPrice(price.modalPrice)}',
-                      style: GoogleFonts.googleSans(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF111827),
-                      ),
+                  Text(
+                    localizedName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF111827),
+                      letterSpacing: -0.2,
                     ),
-                    TextSpan(
-                      text: ' ${_getDisplayUnit(price)}',
-                      style: GoogleFonts.googleSans(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF6B7280),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
 
-              const SizedBox(height: 3),
+                  const SizedBox(height: 3),
 
-              // APMC / Mandi location
-              Text(
-                price.market,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF8C95A0),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // Trend Badge Pill and Share Button
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isUp
-                          ? const Color(0xFFEDF5EF)
-                          : const Color(0xFFFDE8E8),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  // Price & Unit (e.g. ₹10666.67 /qtl or ₹60.00 /kg)
+                  RichText(
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    text: TextSpan(
                       children: [
-                        Icon(
-                          isUp
-                              ? Icons.arrow_upward_rounded
-                              : Icons.arrow_downward_rounded,
-                          size: 13,
-                          color: isUp
-                              ? const Color(0xFF1E8E3E)
-                              : const Color(0xFFD32F2F),
+                        TextSpan(
+                          text: '₹${_formatPrice(price.modalPrice)}',
+                          style: GoogleFonts.googleSans(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF111827),
+                          ),
                         ),
-                        const SizedBox(width: 3),
-                        Text(
-                          '${isUp ? '+' : ''}$trendPercent%',
-                          style: TextStyle(
+                        TextSpan(
+                          text: ' ${_getDisplayUnit(price)}',
+                          style: GoogleFonts.googleSans(
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isUp
-                                ? const Color(0xFF1E8E3E)
-                                : const Color(0xFFD32F2F),
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF6B7280),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        ShareService.shareItem(
-                          context: context,
-                          type: 'market',
-                          commodity: price.commodity,
-                          title: '$localizedName (${price.market})',
-                          price: '₹${_formatPrice(price.modalPrice)} ${_getDisplayUnit(price)}',
-                          description: 'Min: ₹${_formatPrice(price.minPrice)} | Max: ₹${_formatPrice(price.maxPrice)}',
-                          imageUrl: imageUrl,
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(100),
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEDF5EF),
-                          shape: BoxShape.circle,
+
+                  const SizedBox(height: 3),
+
+                  // APMC / Mandi location
+                  Text(
+                    price.market,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF8C95A0),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Trend Badge Pill and Share Button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isUp
+                              ? const Color(0xFFEDF5EF)
+                              : const Color(0xFFFDE8E8),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(
-                          Icons.share_outlined,
-                          size: 15,
-                          color: Color(0xFF206030),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isUp
+                                  ? Icons.arrow_upward_rounded
+                                  : Icons.arrow_downward_rounded,
+                              size: 13,
+                              color: isUp
+                                  ? const Color(0xFF1E8E3E)
+                                  : const Color(0xFFD32F2F),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${isUp ? '+' : ''}$trendPercent%',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isUp
+                                    ? const Color(0xFF1E8E3E)
+                                    : const Color(0xFFD32F2F),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            ShareService.shareItem(
+                              context: context,
+                              type: 'market',
+                              commodity: price.commodity,
+                              title: '$localizedName (${price.market})',
+                              price:
+                                  '₹${_formatPrice(price.modalPrice)} ${_getDisplayUnit(price)}',
+                              description:
+                                  'Min: ₹${_formatPrice(price.minPrice)} | Max: ₹${_formatPrice(price.maxPrice)}',
+                              imageUrl: imageUrl,
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(100),
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEDF5EF),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.share_outlined,
+                              size: 15,
+                              color: Color(0xFF206030),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-        ],
+            ),
+          ],
         ),
       ),
     );
   }
-
 
   Widget _buildEmptyState() {
     return Center(
@@ -1181,9 +1160,8 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
       _trendError = '';
     });
 
-    final state = widget.prices.isNotEmpty
-        ? widget.prices.first.state
-        : 'Telangana';
+    final state =
+        widget.prices.isNotEmpty ? widget.prices.first.state : 'Telangana';
     final district = widget.prices.isNotEmpty
         ? widget.prices.first.district
         : widget.currentDistrict;
@@ -1196,9 +1174,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
       if (mounted && response['success'] == true) {
         final trends = response['trends'] as List?;
         if (trends != null && trends.isNotEmpty) {
-          fetchedTrends = trends
-              .whereType<Map<String, dynamic>>()
-              .toList();
+          fetchedTrends = trends.whereType<Map<String, dynamic>>().toList();
         }
       }
     } catch (_) {}
@@ -1214,12 +1190,15 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
       final now = DateTime.now();
       List<Map<String, dynamic>> filled = [];
       final startPrice = fetchedTrends.isNotEmpty
-          ? (double.tryParse(fetchedTrends.first['avg_price']?.toString() ?? '') ?? basePrice)
+          ? (double.tryParse(
+                  fetchedTrends.first['avg_price']?.toString() ?? '') ??
+              basePrice)
           : basePrice;
 
       for (int i = 29; i >= fetchedTrends.length; i--) {
         final d = now.subtract(Duration(days: i));
-        final delta = (i % 2 == 0 ? 1 : -1) * (startPrice * 0.015 * (i % 3 + 1));
+        final delta =
+            (i % 2 == 0 ? 1 : -1) * (startPrice * 0.015 * (i % 3 + 1));
         final p = (startPrice + delta).clamp(10.0, 150000.0);
         filled.add({
           'arrival_date': DateFormat('MM/dd').format(d),
@@ -1270,8 +1249,11 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
       dates.add(formattedDate);
     }
 
-    final basePrice = widget.prices.isNotEmpty ? widget.prices.first.numericModalPrice : 2500.0;
-    int trendPct = CommodityTranslator.getTrendPercentage(widget.commodity, basePrice);
+    final basePrice = widget.prices.isNotEmpty
+        ? widget.prices.first.numericModalPrice
+        : 2500.0;
+    int trendPct =
+        CommodityTranslator.getTrendPercentage(widget.commodity, basePrice);
 
     setState(() {
       _selectedDurationDays = days;
@@ -1297,7 +1279,8 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
       commodity: widget.commodity,
       title: '$name Market Prices',
       price: priceStr,
-      description: 'Check real-time APMC mandi prices for $name across markets in CropSync.',
+      description:
+          'Check real-time APMC mandi prices for $name across markets in CropSync.',
       imageUrl: widget.imagePath,
     );
   }
@@ -1321,7 +1304,9 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
             .reduce((a, b) => a > b ? a : b)
         : 0.0;
     double avgPrice = widget.prices.isNotEmpty
-        ? widget.prices.map((e) => e.numericModalPrice).reduce((a, b) => a + b) /
+        ? widget.prices
+                .map((e) => e.numericModalPrice)
+                .reduce((a, b) => a + b) /
             widget.prices.length
         : 0.0;
 
@@ -1415,7 +1400,8 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF1E482D).withValues(alpha: 0.06),
+                            color:
+                                const Color(0xFF1E482D).withValues(alpha: 0.06),
                             blurRadius: 20,
                             offset: const Offset(0, 8),
                           ),
@@ -1762,8 +1748,8 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                                                 15
                                                             ? 3
                                                             : 6;
-                                                final isLast = index ==
-                                                    _dates.length - 1;
+                                                final isLast =
+                                                    index == _dates.length - 1;
                                                 final isNearEnd =
                                                     (_dates.length -
                                                             1 -
@@ -1775,8 +1761,9 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                                   return const SizedBox();
                                                 }
                                                 return Padding(
-                                                  padding: const EdgeInsets.only(
-                                                      top: 6.0),
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          top: 6.0),
                                                   child: Text(
                                                     _dates[index],
                                                     style: const TextStyle(
@@ -1805,8 +1792,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
                                                   style: const TextStyle(
                                                     color: Color(0xFF9CA3AF),
                                                     fontSize: 10,
-                                                    fontWeight:
-                                                          FontWeight.w600,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
                                                 );
                                               },
@@ -2054,9 +2040,7 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF1E482D)
-              : const Color(0xFFF1F5F2),
+          color: isSelected ? const Color(0xFF1E482D) : const Color(0xFFF1F5F2),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(

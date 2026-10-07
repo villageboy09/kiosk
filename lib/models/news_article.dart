@@ -103,7 +103,8 @@ class NewsArticle {
       sourceName: json['source_name']?.toString() ?? 'Krishi News',
       viewsCount: int.tryParse(json['views_count']?.toString() ?? '0') ?? 0,
       likesCount: int.tryParse(json['likes_count']?.toString() ?? '0') ?? 0,
-      commentsCount: int.tryParse(json['comments_count']?.toString() ?? '0') ?? 0,
+      commentsCount:
+          int.tryParse(json['comments_count']?.toString() ?? '0') ?? 0,
       isFeatured: json['is_featured'] == true ||
           json['is_featured'] == 1 ||
           json['is_featured'] == '1',
@@ -213,7 +214,20 @@ class NewsArticle {
     } else if (difference.inDays < 7) {
       return '${difference.inDays}d ago';
     } else {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
       final d = publishedAt!;
       return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]} ${d.year}';
     }
@@ -298,7 +312,20 @@ class NewsComment {
     } else if (difference.inDays < 7) {
       return '${difference.inDays}d ago';
     } else {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
       final d = createdAt!;
       return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]}';
     }

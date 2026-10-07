@@ -37,17 +37,24 @@ class User {
     String resolvedRole = rawRole ?? 'farmer';
     String resolvedMembership = rawMembership ?? 'Farmer';
 
-    if (resolvedRole == 'content_creator' || resolvedRole == 'creator' ||
-        rawMembership?.toLowerCase() == 'creator' || rawMembership?.toLowerCase() == 'content creator' || rawMembership?.toLowerCase() == 'content_creator') {
+    if (resolvedRole == 'content_creator' ||
+        resolvedRole == 'creator' ||
+        rawMembership?.toLowerCase() == 'creator' ||
+        rawMembership?.toLowerCase() == 'content creator' ||
+        rawMembership?.toLowerCase() == 'content_creator') {
       resolvedRole = 'content_creator';
       resolvedMembership = 'Creator';
-    } else if (resolvedRole == 'retailer' || rawMembership?.toLowerCase() == 'retailer') {
+    } else if (resolvedRole == 'retailer' ||
+        rawMembership?.toLowerCase() == 'retailer') {
       resolvedRole = 'retailer';
       resolvedMembership = 'Retailer';
-    } else if (resolvedRole == 'officer' || rawMembership?.toLowerCase() == 'officer') {
+    } else if (resolvedRole == 'officer' ||
+        rawMembership?.toLowerCase() == 'officer') {
       resolvedRole = 'officer';
       resolvedMembership = 'Officer';
-    } else if (resolvedRole == 'chc_operator' || rawMembership?.toLowerCase() == 'chc operator' || rawMembership?.toLowerCase() == 'chc_operator') {
+    } else if (resolvedRole == 'chc_operator' ||
+        rawMembership?.toLowerCase() == 'chc operator' ||
+        rawMembership?.toLowerCase() == 'chc_operator') {
       resolvedRole = 'chc_operator';
       resolvedMembership = 'CHC Operator';
     }
@@ -181,7 +188,9 @@ class User {
   bool get isOperator {
     final r = (role ?? '').toLowerCase().trim();
     final type = (membershipType ?? '').toLowerCase().trim();
-    return r == 'chc_operator' || type == 'chc operator' || type == 'chc_operator';
+    return r == 'chc_operator' ||
+        type == 'chc operator' ||
+        type == 'chc_operator';
   }
 
   /// Returns true if user is a standard farmer

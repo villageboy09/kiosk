@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Centralized design system for CropSync
@@ -54,8 +55,10 @@ class AppTheme {
   static const Color accentTeal = Color(0xFF00695C);
 
   // App Bar Colors
-  static const Color appBarBg = Color(0xFFE8F4EC); // Premium sage/mint light green
-  static const Color appBarText = Color(0xFF1E3A2F); // Contrast dark green/charcoal
+  static const Color appBarBg =
+      Color(0xFFE8F4EC); // Premium sage/mint light green
+  static const Color appBarText =
+      Color(0xFF1E3A2F); // Contrast dark green/charcoal
 
   // ============ GRADIENTS ============
 
@@ -126,8 +129,21 @@ class AppTheme {
         ),
       ];
 
+  /// Public so screens building their own themes share the same chain
+  /// (Tiro Telugu for Telugu glyphs, Noto Sans Devanagari for Hindi).
+  static List<String> get fontFallbacks => _fallbacks;
+
+  /// True when the active locale is Telugu. Safe if no localization is found.
+  static bool isTeluguLocale(BuildContext context) {
+    try {
+      return context.locale.languageCode == 'te';
+    } catch (_) {
+      return false;
+    }
+  }
+
   static List<String> get _fallbacks => [
-        GoogleFonts.notoSansTelugu().fontFamily ?? 'Noto Sans Telugu',
+        GoogleFonts.tiroTelugu().fontFamily ?? 'Tiro Telugu',
         GoogleFonts.notoSansDevanagari().fontFamily ?? 'Noto Sans Devanagari',
       ];
 
@@ -211,13 +227,13 @@ class AppTheme {
         letterSpacing: -1,
       ).copyWith(fontFamilyFallback: _fallbacks);
 
-  /// Telugu text style helper — uses GoogleFonts.notoSansTelugu directly
+  /// Telugu text style helper — uses GoogleFonts.tiroTelugu directly
   static TextStyle teluguText({
     double fontSize = 14,
     FontWeight fontWeight = FontWeight.w400,
     Color color = textPrimary,
   }) =>
-      GoogleFonts.notoSansTelugu(
+      GoogleFonts.tiroTelugu(
         fontSize: fontSize,
         fontWeight: fontWeight,
         color: color,
@@ -246,15 +262,24 @@ class AppTheme {
     double? height,
     double? letterSpacing,
   }) {
-    final double? responsiveSize = fontSize != null ? getResponsiveFontSize(context, fontSize) : null;
-    TextStyle baseStyle = GoogleFonts.googleSans(
-      fontSize: responsiveSize,
-      fontWeight: fontWeight,
-      color: color ?? textPrimary,
-      height: height,
-      letterSpacing: letterSpacing,
-    );
-    
+    final double? responsiveSize =
+        fontSize != null ? getResponsiveFontSize(context, fontSize) : null;
+    final TextStyle baseStyle = isTeluguLocale(context)
+        ? GoogleFonts.tiroTelugu(
+            fontSize: responsiveSize,
+            fontWeight: fontWeight,
+            color: color ?? textPrimary,
+            height: height,
+            letterSpacing: letterSpacing,
+          )
+        : GoogleFonts.googleSans(
+            fontSize: responsiveSize,
+            fontWeight: fontWeight,
+            color: color ?? textPrimary,
+            height: height,
+            letterSpacing: letterSpacing,
+          );
+
     return baseStyle.copyWith(fontFamilyFallback: _fallbacks);
   }
 
@@ -311,7 +336,9 @@ class AppTheme {
   /// Modern ThemeData for the entire app
   static ThemeData lightTheme(BuildContext context) {
     // Base text theme driven by Google Fonts
-    final baseTextTheme = GoogleFonts.googleSansTextTheme();
+    final baseTextTheme = isTeluguLocale(context)
+        ? GoogleFonts.tiroTeluguTextTheme()
+        : GoogleFonts.googleSansTextTheme();
 
     return ThemeData(
       useMaterial3: true,
@@ -410,5 +437,3 @@ class AppTheme {
     );
   }
 }
-
-

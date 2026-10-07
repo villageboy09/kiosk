@@ -3,6 +3,8 @@ import 'package:cropsync/models/news_article.dart';
 import 'package:cropsync/services/news_service.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:cropsync/screens/news/news_text_style.dart';
+import 'package:cropsync/theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/creator_service.dart';
@@ -60,7 +62,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       if (user != null && mounted) {
         final authorLower = _article.author.toLowerCase().trim();
         final userNameLower = user.name.toLowerCase().trim();
-        if (authorLower == userNameLower || authorLower.contains(userNameLower) || user.isCreator) {
+        if (authorLower == userNameLower ||
+            authorLower.contains(userNameLower) ||
+            user.isCreator) {
           setState(() => _isAuthor = true);
         }
       }
@@ -72,17 +76,29 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Article?'),
-        content: const Text('Are you sure you want to delete this article? This action cannot be undone.'),
+        title: Text('Delete Article?',
+            style: newsUiStyle(
+                ctx,
+                const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A)))),
+        content: Text(
+            'Are you sure you want to delete this article? This action cannot be undone.',
+            style: newsUiStyle(
+                ctx, const TextStyle(fontSize: 14, color: Color(0xFF334155)))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: newsUiStyle(ctx)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+                textStyle: newsUiStyle(ctx)),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text('Delete', style: newsUiStyle(ctx)),
           ),
         ],
       ),
@@ -93,12 +109,16 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       if (mounted) {
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Article deleted successfully')),
+            SnackBar(
+                content: Text('Article deleted successfully',
+                    style: newsUiStyle(context))),
           );
           Navigator.pop(context, true);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not delete article. Please try again.')),
+            SnackBar(
+                content: Text('Could not delete article. Please try again.',
+                    style: newsUiStyle(context))),
           );
         }
       }
@@ -112,7 +132,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   Future<void> _loadArticleData() async {
-    final updatedArticleFuture = NewsService.getArticleDetail(_article.id, incrementView: true);
+    final updatedArticleFuture =
+        NewsService.getArticleDetail(_article.id, incrementView: true);
     final commentsFuture = NewsService.getComments(_article.id);
 
     final results = await Future.wait([updatedArticleFuture, commentsFuture]);
@@ -142,7 +163,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
     setState(() {
       _isLiked = !_isLiked;
-      _likesCount = _isLiked ? _likesCount + 1 : (_likesCount > 0 ? _likesCount - 1 : 0);
+      _likesCount =
+          _isLiked ? _likesCount + 1 : (_likesCount > 0 ? _likesCount - 1 : 0);
     });
 
     final res = await NewsService.toggleLike(
@@ -191,14 +213,17 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _ArticleCommentModal(
-        article: _article,
-        onCommentAdded: (newComment) {
-          setState(() {
-            _comments.insert(0, newComment);
-            _commentsCount++;
-          });
-        },
+      builder: (context) => DefaultTextStyle.merge(
+        style: TextStyle(fontFamilyFallback: AppTheme.fontFallbacks),
+        child: _ArticleCommentModal(
+          article: _article,
+          onCommentAdded: (newComment) {
+            setState(() {
+              _comments.insert(0, newComment);
+              _commentsCount++;
+            });
+          },
+        ),
       ),
     );
   }
@@ -219,16 +244,63 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     return DateFormat('MMMM d, yyyy').format(dt);
   }
 
+  Widget _buildBody(String text, bool isTablet) {
+    final paragraphs = splitNewsParagraphs(text);
+    final fontSize = isTablet ? 16.0 : 15.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < paragraphs.length; i++) ...[
+          if (i > 0) const SizedBox(height: 16),
+          _buildParagraph(paragraphs[i], fontSize),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildParagraph(NewsParagraph p, double fontSize) {
+    final style = newsTextStyle(
+      context,
+      p.text,
+      TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w400,
+        color: const Color(0xFF1E293B),
+        height: newsHasTelugu(p.text) ? 1.7 : 1.6,
+      ),
+    );
+    final textWidget = Text(p.text, textAlign: TextAlign.start, style: style);
+    if (!p.isBullet) return textWidget;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 20, child: Text('•', style: style)),
+        Expanded(child: textWidget),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 600;
-    final hasImage = _article.imageUrl != null && _article.imageUrl!.trim().isNotEmpty;
-    final formattedDate = _formatDate(_article.publishedAt ?? _article.createdAt);
+    final hasImage =
+        _article.imageUrl != null && _article.imageUrl!.trim().isNotEmpty;
+    final formattedDate =
+        _formatDate(_article.publishedAt ?? _article.createdAt);
     final langCode = context.locale.languageCode;
     final articleTitle = _article.localizedTitle(langCode);
     final articleSummary = _article.localizedSummary(langCode);
     final articleContent = _article.localizedContent(langCode);
+    final bodyText =
+        articleContent.trim().isNotEmpty ? articleContent : articleSummary;
+    final metaLine = [
+      if (formattedDate.isNotEmpty) formattedDate,
+      '${_article.estimatedReadTimeMinutes} min read',
+    ].join(' • ');
+
+    TextStyle ui(TextStyle base) => newsUiStyle(context, base);
+    TextStyle dyn(String t, TextStyle base) => newsTextStyle(context, t, base);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -238,26 +310,35 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         scrolledUnderElevation: 1,
         shadowColor: Colors.black12,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Color(0xFF1E293B)),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              size: 18, color: Color(0xFF1E293B)),
           onPressed: () => Navigator.pop(context),
           splashRadius: 20,
         ),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text(
-                _article.category.toUpperCase(),
-                style: const TextStyle(
-                  color: Color(0xFF059669),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+            Flexible(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  _article.category,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: dyn(
+                    _article.category,
+                    const TextStyle(
+                      color: Color(0xFF059669),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -267,500 +348,620 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         actions: [
           if (_isAuthor)
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
+              icon: const Icon(Icons.delete_outline_rounded,
+                  color: Colors.redAccent, size: 22),
               onPressed: _deleteArticleConfirm,
               splashRadius: 20,
               tooltip: 'Delete Article',
             ),
           IconButton(
-            icon: const Icon(Icons.share_outlined, color: Color(0xFF475569), size: 21),
+            icon: const Icon(Icons.share_outlined,
+                color: Color(0xFF475569), size: 21),
             onPressed: _shareGeneral,
             splashRadius: 20,
           ),
           const SizedBox(width: 4),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            // Scrollable Story Content
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                physics: const BouncingScrollPhysics(),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isTablet ? 720 : double.infinity),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isTablet ? 36 : 20,
-                        vertical: 16,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 1. Title (Clean, bold editorial headline)
-                          Text(
-                            articleTitle,
-                            style: TextStyle(
-                              fontSize: isTablet ? 26 : 22,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF0F172A),
-                              height: 1.34,
-                              letterSpacing: -0.4,
-                            ),
-                          ),
-
-                          const SizedBox(height: 14),
-
-                          // 2. Byline & Timestamp
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.12),
-                                child: Text(
-                                  _article.author.isNotEmpty ? _article.author[0].toUpperCase() : 'C',
-                                  style: const TextStyle(
-                                    color: Color(0xFF059669),
+      body: DefaultTextStyle.merge(
+        style: TextStyle(fontFamilyFallback: AppTheme.fontFallbacks),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              // Scrollable story content: one centered reading column so all
+              // sections share identical left/right edges.
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  physics: const BouncingScrollPhysics(),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 680),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // 1. Title
+                            Text(
+                              articleTitle,
+                              textAlign: TextAlign.start,
+                              style: dyn(
+                                  articleTitle,
+                                  TextStyle(
+                                    fontSize: isTablet ? 26 : 22,
                                     fontWeight: FontWeight.w800,
-                                    fontSize: 14,
+                                    color: const Color(0xFF0F172A),
+                                    height: newsHasTelugu(articleTitle)
+                                        ? 1.45
+                                        : 1.34,
+                                  )),
+                            ),
+
+                            const SizedBox(height: 14),
+
+                            // 2. Byline & timestamp
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: const Color(0xFF10B981)
+                                      .withValues(alpha: 0.12),
+                                  child: Text(
+                                    _article.author.isNotEmpty
+                                        ? _article.author[0].toUpperCase()
+                                        : 'C',
+                                    style: dyn(
+                                      _article.author,
+                                      const TextStyle(
+                                        color: Color(0xFF059669),
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 14,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          _article.author,
-                                          style: const TextStyle(
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF1E293B),
-                                          ),
-                                        ),
-                                        if (_article.sourceName.isNotEmpty) ...[
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFF1F5F9),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              _article.sourceName,
-                                              style: const TextStyle(
-                                                fontSize: 10.5,
-                                                color: Color(0xFF64748B),
-                                                fontWeight: FontWeight.w600,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Wrap(
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        spacing: 6,
+                                        runSpacing: 2,
+                                        children: [
+                                          Text(
+                                            _article.author,
+                                            style: dyn(
+                                              _article.author,
+                                              const TextStyle(
+                                                fontSize: 13.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF1E293B),
                                               ),
                                             ),
                                           ),
+                                          if (_article.sourceName.isNotEmpty)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF1F5F9),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                _article.sourceName,
+                                                style: dyn(
+                                                  _article.sourceName,
+                                                  const TextStyle(
+                                                    fontSize: 10.5,
+                                                    color: Color(0xFF64748B),
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
                                         ],
-                                      ],
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      [
-                                        if (formattedDate.isNotEmpty) formattedDate,
-                                        '${_article.estimatedReadTimeMinutes} min read',
-                                      ].join(' • '),
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFF64748B),
-                                        fontWeight: FontWeight.w400,
                                       ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        metaLine,
+                                        style: dyn(
+                                          metaLine,
+                                          const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF64748B),
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // 3. Hero image (full column width)
+                            if (hasImage) ...[
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                      color: const Color(0xFFE2E8F0)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.04),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
                                     ),
                                   ],
                                 ),
+                                clipBehavior: Clip.antiAlias,
+                                child: CachedNetworkImage(
+                                  imageUrl: _article.imageUrl!,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => Container(
+                                    height: 200,
+                                    color: const Color(0xFFF1F5F9),
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFF10B981),
+                                      ),
+                                    ),
+                                  ),
+                                  errorWidget: (_, __, ___) =>
+                                      const SizedBox.shrink(),
+                                ),
                               ),
+                              const SizedBox(height: 22),
                             ],
-                          ),
 
-                          const SizedBox(height: 20),
+                            // 4. Lead summary (if present)
+                            if (articleSummary.isNotEmpty &&
+                                articleSummary != articleContent) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: const Border(
+                                    left: BorderSide(
+                                        color: Color(0xFF10B981), width: 3.5),
+                                  ),
+                                ),
+                                child: Text(
+                                  articleSummary,
+                                  textAlign: TextAlign.start,
+                                  style: dyn(
+                                      articleSummary,
+                                      TextStyle(
+                                        fontSize: isTablet ? 16 : 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF334155),
+                                        height: newsHasTelugu(articleSummary)
+                                            ? 1.7
+                                            : 1.55,
+                                      )),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                            ],
 
-                          // 3. Hero Image (Proportional with subtle border & shadow)
-                          if (hasImage) ...[
+                            // 5. Full story body: evenly wide paragraphs
+                            _buildBody(bodyText, isTablet),
+
+                            const SizedBox(height: 32),
+
+                            // 6. Share banner
                             Container(
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.04),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
+                                border:
+                                    Border.all(color: const Color(0xFFE2E8F0)),
                               ),
-                              clipBehavior: Clip.antiAlias,
-                              child: CachedNetworkImage(
-                                imageUrl: _article.imageUrl!,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                placeholder: (_, __) => Container(
-                                  height: 200,
-                                  color: const Color(0xFFF1F5F9),
-                                  child: const Center(
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Color(0xFF10B981),
-                                    ),
-                                  ),
-                                ),
-                                errorWidget: (_, __, ___) => const SizedBox.shrink(),
-                              ),
-                            ),
-                            const SizedBox(height: 22),
-                          ],
-
-                          // 4. Lead Summary (if present)
-                          if (articleSummary.isNotEmpty && articleSummary != articleContent) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(10),
-                                border: const Border(
-                                  left: BorderSide(color: Color(0xFF10B981), width: 3.5),
-                                ),
-                              ),
-                              child: Text(
-                                articleSummary,
-                                style: TextStyle(
-                                  fontSize: isTablet ? 16 : 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF334155),
-                                  height: 1.55,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                          ],
-
-                          // 5. Full Story Body
-                          Text(
-                            articleContent.isNotEmpty ? articleContent : articleSummary,
-                            style: TextStyle(
-                              fontSize: isTablet ? 16 : 15,
-                              fontWeight: FontWeight.w400,
-                              color: const Color(0xFF1E293B),
-                              height: 1.75,
-                              letterSpacing: 0.1,
-                            ),
-                          ),
-
-                          const SizedBox(height: 32),
-
-                          // 6. Share Section Banner
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Share this update',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          color: Color(0xFF0F172A),
-                                        ),
-                                      ),
-                                      SizedBox(height: 2),
-                                      Text(
-                                        'Help fellow farmers stay informed with daily news',
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          color: Color(0xFF64748B),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                ElevatedButton.icon(
-                                  onPressed: _shareOnWhatsApp,
-                                  icon: const Icon(Icons.share_rounded, size: 15, color: Colors.white),
-                                  label: const Text('WhatsApp'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF25D366),
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 36),
-
-                          // 7. Comments Header
-                          Container(
-                            key: _commentsSectionKey,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.chat_bubble_outline_rounded, size: 20, color: Color(0xFF0F172A)),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Comments (${_comments.length})',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF0F172A),
-                                    ),
-                                  ),
-                                ),
-                                TextButton.icon(
-                                  onPressed: _openCommentBottomSheet,
-                                  icon: const Icon(Icons.add_comment_rounded, size: 16, color: Color(0xFF10B981)),
-                                  label: const Text(
-                                    'Write Comment',
-                                    style: TextStyle(
-                                      color: Color(0xFF10B981),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          // 8. Comments List
-                          if (_isLoadingComments)
-                            const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(24),
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF10B981)),
-                              ),
-                            )
-                          else if (_comments.isEmpty)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: Column(
+                              child: Row(
                                 children: [
-                                  Icon(Icons.chat_bubble_outline_rounded, size: 36, color: Colors.grey.shade400),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'No comments yet.',
-                                    style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.w600),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Share this update',
+                                          style: ui(const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            color: Color(0xFF0F172A),
+                                          )),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Help fellow farmers stay informed with daily news',
+                                          style: ui(const TextStyle(
+                                            fontSize: 11.5,
+                                            color: Color(0xFF64748B),
+                                          )),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Be the first to share your thoughts on this story!',
-                                    style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                                  const SizedBox(width: 10),
+                                  Flexible(
+                                    flex: 0,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: ElevatedButton.icon(
+                                        onPressed: _shareOnWhatsApp,
+                                        icon: const Icon(Icons.share_rounded,
+                                            size: 15, color: Colors.white),
+                                        label: Text('WhatsApp',
+                                            style: ui(const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold))),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              const Color(0xFF25D366),
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14, vertical: 9),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(100)),
+                                          textStyle: ui(const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold)),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
-                            )
-                          else
-                            ListView.separated(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _comments.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 10),
-                              itemBuilder: (context, index) {
-                                final c = _comments[index];
-                                return Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF8FAFC),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+
+                            const SizedBox(height: 36),
+
+                            // 7. Comments header
+                            Container(
+                              key: _commentsSectionKey,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.chat_bubble_outline_rounded,
+                                      size: 20, color: Color(0xFF0F172A)),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Comments (${_comments.length})',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: ui(const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A),
+                                      )),
+                                    ),
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 13,
-                                            backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.15),
-                                            child: Text(
-                                              c.userName.isNotEmpty ? c.userName[0].toUpperCase() : 'F',
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xFF059669),
+                                  Flexible(
+                                    flex: 0,
+                                    child: TextButton.icon(
+                                      onPressed: _openCommentBottomSheet,
+                                      icon: const Icon(
+                                          Icons.add_comment_rounded,
+                                          size: 16,
+                                          color: Color(0xFF10B981)),
+                                      label: Text(
+                                        'Write Comment',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: ui(const TextStyle(
+                                          color: Color(0xFF10B981),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        )),
+                                      ),
+                                      style: TextButton.styleFrom(
+                                          textStyle: ui(const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold))),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // 8. Comments list
+                            if (_isLoadingComments)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(24),
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Color(0xFF10B981)),
+                                ),
+                              )
+                            else if (_comments.isEmpty)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 24, horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                      color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.chat_bubble_outline_rounded,
+                                        size: 36, color: Colors.grey.shade400),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'No comments yet.',
+                                      textAlign: TextAlign.center,
+                                      style: ui(TextStyle(
+                                          color: Colors.grey.shade700,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600)),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Be the first to share your thoughts on this story!',
+                                      textAlign: TextAlign.center,
+                                      style: ui(TextStyle(
+                                          color: Colors.grey.shade500,
+                                          fontSize: 12)),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _comments.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 10),
+                                itemBuilder: (context, index) {
+                                  final c = _comments[index];
+                                  return Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                          color: const Color(0xFFE2E8F0)),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 13,
+                                              backgroundColor:
+                                                  const Color(0xFF10B981)
+                                                      .withValues(alpha: 0.15),
+                                              child: Text(
+                                                c.userName.isNotEmpty
+                                                    ? c.userName[0]
+                                                        .toUpperCase()
+                                                    : 'F',
+                                                style: dyn(
+                                                  c.userName,
+                                                  const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Color(0xFF059669),
+                                                  ),
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            c.userName,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13,
-                                              color: Color(0xFF0F172A),
+                                            const SizedBox(width: 8),
+                                            Flexible(
+                                              child: Text(
+                                                c.userName,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: dyn(
+                                                  c.userName,
+                                                  const TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 13,
+                                                    color: Color(0xFF0F172A),
+                                                  ),
+                                                ),
+                                              ),
                                             ),
-                                          ),
-                                          const Spacer(),
-                                          Text(
-                                            c.formattedDate,
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              color: Color(0xFF94A3B8),
+                                            const Spacer(),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              c.formattedDate,
+                                              style: dyn(
+                                                c.formattedDate,
+                                                const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Color(0xFF94A3B8),
+                                                ),
+                                              ),
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Padding(
-                                        padding: const EdgeInsets.only(left: 34),
-                                        child: Text(
-                                          c.commentText,
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            color: Color(0xFF334155),
-                                            height: 1.45,
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: Text(
+                                            c.commentText,
+                                            textAlign: TextAlign.start,
+                                            style: dyn(
+                                                c.commentText,
+                                                TextStyle(
+                                                  fontSize: 13,
+                                                  color:
+                                                      const Color(0xFF334155),
+                                                  height: newsHasTelugu(
+                                                          c.commentText)
+                                                      ? 1.6
+                                                      : 1.45,
+                                                )),
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
 
-                          const SizedBox(height: 80), // Extra space for fixed action bar
-                        ],
+                            const SizedBox(
+                                height: 80), // Extra space for fixed action bar
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
 
-            // 9. Clean Docked Action Bar at bottom
-            Container(
-              height: 58,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 8,
-                    offset: Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  // Like Button
-                  InkWell(
-                    onTap: _toggleLike,
-                    borderRadius: BorderRadius.circular(100),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                            size: 21,
-                            color: _isLiked ? const Color(0xFFEF4444) : const Color(0xFF475569),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            '$_likesCount',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: _isLiked ? const Color(0xFFEF4444) : const Color(0xFF475569),
+              // 9. Docked action bar
+              Container(
+                constraints: const BoxConstraints(minHeight: 58),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 8,
+                      offset: Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    // Like
+                    InkWell(
+                      onTap: _toggleLike,
+                      borderRadius: BorderRadius.circular(100),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _isLiked
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              size: 21,
+                              color: _isLiked
+                                  ? const Color(0xFFEF4444)
+                                  : const Color(0xFF475569),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 5),
+                            Text(
+                              '$_likesCount',
+                              style: ui(TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: _isLiked
+                                    ? const Color(0xFFEF4444)
+                                    : const Color(0xFF475569),
+                              )),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(width: 8),
-
-                  // Comment Button
-                  InkWell(
-                    onTap: _scrollToComments,
-                    borderRadius: BorderRadius.circular(100),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 20,
-                            color: Color(0xFF475569),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            '$_commentsCount',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
+                    // Comment count
+                    InkWell(
+                      onTap: _scrollToComments,
+                      borderRadius: BorderRadius.circular(100),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 20,
                               color: Color(0xFF475569),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 5),
+                            Text(
+                              '$_commentsCount',
+                              style: ui(const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF475569),
+                              )),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  const Spacer(),
-
-                  // Add Comment Button
-                  OutlinedButton.icon(
-                    onPressed: _openCommentBottomSheet,
-                    icon: const Icon(Icons.edit_outlined, size: 14, color: Color(0xFF10B981)),
-                    label: const Text('Comment'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF10B981),
-                      side: const BorderSide(color: Color(0xFF10B981)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    // Add comment
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: OutlinedButton.icon(
+                            onPressed: _openCommentBottomSheet,
+                            icon: const Icon(Icons.edit_outlined,
+                                size: 14, color: Color(0xFF10B981)),
+                            label: Text('Comment',
+                                style: ui(const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold))),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF10B981),
+                              side: const BorderSide(color: Color(0xFF10B981)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(100)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              textStyle: ui(const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(width: 8),
-
-                  // WhatsApp Share
-                  IconButton(
-                    onPressed: _shareOnWhatsApp,
-                    icon: const Icon(Icons.share_rounded, color: Color(0xFF25D366), size: 21),
-                    tooltip: 'Share on WhatsApp',
-                    splashRadius: 20,
-                  ),
-                ],
+                    // WhatsApp share
+                    IconButton(
+                      onPressed: _shareOnWhatsApp,
+                      icon: const Icon(Icons.share_rounded,
+                          color: Color(0xFF25D366), size: 21),
+                      tooltip: 'Share on WhatsApp',
+                      splashRadius: 20,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -817,7 +1018,8 @@ class _ArticleCommentModalState extends State<_ArticleCommentModal> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.fromLTRB(18, 12, 18, MediaQuery.of(context).viewInsets.bottom + 16),
+      padding: EdgeInsets.fromLTRB(
+          18, 12, 18, MediaQuery.of(context).viewInsets.bottom + 16),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -837,12 +1039,15 @@ class _ArticleCommentModalState extends State<_ArticleCommentModal> {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Write a Comment',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
+            style: newsUiStyle(
+              context,
+              const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -851,10 +1056,15 @@ class _ArticleCommentModalState extends State<_ArticleCommentModal> {
             autofocus: true,
             maxLines: 4,
             minLines: 2,
-            style: const TextStyle(fontSize: 14),
+            textAlign: TextAlign.start,
+            style: newsUiStyle(
+                context,
+                const TextStyle(
+                    fontSize: 14, height: 1.5, color: Color(0xFF0F172A))),
             decoration: InputDecoration(
               hintText: 'Share your perspective or ask a question...',
-              hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5),
+              hintStyle: newsUiStyle(context,
+                  const TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5)),
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
@@ -878,7 +1088,9 @@ class _ArticleCommentModalState extends State<_ArticleCommentModal> {
             children: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                child: Text('Cancel',
+                    style: newsUiStyle(
+                        context, const TextStyle(color: Color(0xFF64748B)))),
               ),
               const SizedBox(width: 8),
               ElevatedButton.icon(
@@ -887,17 +1099,28 @@ class _ArticleCommentModalState extends State<_ArticleCommentModal> {
                     ? const SizedBox(
                         width: 14,
                         height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       )
-                    : const Icon(Icons.send_rounded, size: 14, color: Colors.white),
-                label: const Text('Post Comment'),
+                    : const Icon(Icons.send_rounded,
+                        size: 14, color: Colors.white),
+                label: Text('Post Comment',
+                    style: newsUiStyle(
+                        context,
+                        const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.bold))),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF10B981),
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(100)),
+                  textStyle: newsUiStyle(
+                      context,
+                      const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],

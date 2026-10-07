@@ -45,8 +45,10 @@ class CreatorStats {
       totalSaves: parseInt(json['totalSaves'] ?? json['total_saves']),
       totalCalls: parseInt(json['totalCalls'] ?? json['total_calls']),
       totalShares: parseInt(json['totalShares'] ?? json['total_shares']),
-      engagementRate: parseDouble(json['engagementRate'] ?? json['engagement_rate']),
-      avgWatchDurationSeconds: parseDouble(json['avgWatchDurationSeconds'] ?? json['avg_watch_duration_seconds']),
+      engagementRate:
+          parseDouble(json['engagementRate'] ?? json['engagement_rate']),
+      avgWatchDurationSeconds: parseDouble(json['avgWatchDurationSeconds'] ??
+          json['avg_watch_duration_seconds']),
       totalReels: parseInt(json['totalReels'] ?? json['total_reels']),
       totalArticles: parseInt(json['totalArticles'] ?? json['total_articles']),
     );

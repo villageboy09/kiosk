@@ -44,8 +44,12 @@ class ReelCreator {
     }
 
     return ReelCreator(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
-      username: json['username']?.toString() ?? json['creator_username']?.toString() ?? '',
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      username: json['username']?.toString() ??
+          json['creator_username']?.toString() ??
+          '',
       displayName: json['displayName']?.toString() ??
           json['display_name']?.toString() ??
           json['creator_display_name']?.toString() ??
@@ -101,18 +105,27 @@ class ReelComment {
   factory ReelComment.fromJson(Map<String, dynamic> json) {
     DateTime parsedDate;
     try {
-      parsedDate = json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now();
+      parsedDate = json['created_at'] != null
+          ? DateTime.parse(json['created_at'].toString())
+          : DateTime.now();
     } catch (_) {
       parsedDate = DateTime.now();
     }
 
     return ReelComment(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
-      reelId: json['reel_id'] is int ? json['reel_id'] : int.tryParse(json['reel_id']?.toString() ?? '0') ?? 0,
-      farmerUsername: json['farmer_username']?.toString() ?? json['username']?.toString() ?? 'Farmer',
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      reelId: json['reel_id'] is int
+          ? json['reel_id']
+          : int.tryParse(json['reel_id']?.toString() ?? '0') ?? 0,
+      farmerUsername: json['farmer_username']?.toString() ??
+          json['username']?.toString() ??
+          'Farmer',
       phoneNumber: json['phone_number']?.toString() ?? '',
       userId: json['user_id']?.toString() ?? '',
-      commentText: json['comment_text']?.toString() ?? json['text']?.toString() ?? '',
+      commentText:
+          json['comment_text']?.toString() ?? json['text']?.toString() ?? '',
       createdAt: parsedDate,
     );
   }
@@ -209,18 +222,25 @@ class Reel {
   factory Reel.fromJson(Map<String, dynamic> json) {
     DateTime parsedDate;
     try {
-      parsedDate = json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now();
+      parsedDate = json['created_at'] != null
+          ? DateTime.parse(json['created_at'].toString())
+          : DateTime.now();
     } catch (_) {
       parsedDate = DateTime.now();
     }
 
-    final rawLikes = json['likesRaw'] is int ? json['likesRaw'] as int : int.tryParse(json['likes_count']?.toString() ?? '0') ?? 0;
-    final rawSaves = json['savesRaw'] is int ? json['savesRaw'] as int : int.tryParse(json['saves_count']?.toString() ?? '0') ?? 0;
+    final rawLikes = json['likesRaw'] is int
+        ? json['likesRaw'] as int
+        : int.tryParse(json['likes_count']?.toString() ?? '0') ?? 0;
+    final rawSaves = json['savesRaw'] is int
+        ? json['savesRaw'] as int
+        : int.tryParse(json['saves_count']?.toString() ?? '0') ?? 0;
 
     List<ReelComment> parsedComments = [];
     if (json['comments'] is List) {
       parsedComments = (json['comments'] as List)
-          .map((c) => c is Map<String, dynamic> ? ReelComment.fromJson(c) : null)
+          .map(
+              (c) => c is Map<String, dynamic> ? ReelComment.fromJson(c) : null)
           .whereType<ReelComment>()
           .toList();
     }
@@ -246,16 +266,20 @@ class Reel {
       creatorData['profile_image_url'] = topLevelImage;
     }
 
-    if (creatorData['username'] == null || creatorData['username'].toString().trim().isEmpty) {
-      creatorData['username'] = json['creator_username'] ?? json['username'] ?? 'farmer';
+    if (creatorData['username'] == null ||
+        creatorData['username'].toString().trim().isEmpty) {
+      creatorData['username'] =
+          json['creator_username'] ?? json['username'] ?? 'farmer';
     }
-    if (creatorData['displayName'] == null || creatorData['displayName'].toString().trim().isEmpty) {
+    if (creatorData['displayName'] == null ||
+        creatorData['displayName'].toString().trim().isEmpty) {
       creatorData['displayName'] = json['creator_display_name'] ??
           json['display_name'] ??
           json['username'] ??
           'Farmer';
     }
-    if (creatorData['phone_number'] == null && json['creator_phone_number'] != null) {
+    if (creatorData['phone_number'] == null &&
+        json['creator_phone_number'] != null) {
       creatorData['phone_number'] = json['creator_phone_number'];
     }
 
@@ -263,36 +287,63 @@ class Reel {
     final saveStr = json['saves']?.toString() ?? _formatCount(rawSaves);
 
     return Reel(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
-      videoUrl: Reel.normalizeMediaUrl(json['videoUrl']?.toString() ?? json['video_url']?.toString() ?? ''),
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      videoUrl: Reel.normalizeMediaUrl(
+          json['videoUrl']?.toString() ?? json['video_url']?.toString() ?? ''),
       creator: ReelCreator.fromJson(creatorData),
       caption: json['caption']?.toString() ?? '',
-      musicTitle: json['musicTitle']?.toString() ?? json['music_title']?.toString() ?? 'Original Audio',
-      phoneNumber: json['phoneNumber']?.toString() ?? json['phone_number']?.toString() ?? '',
+      musicTitle: json['musicTitle']?.toString() ??
+          json['music_title']?.toString() ??
+          'Original Audio',
+      phoneNumber: json['phoneNumber']?.toString() ??
+          json['phone_number']?.toString() ??
+          '',
       tags: json['tags']?.toString() ?? '',
       likes: likeStr,
       likesRaw: rawLikes,
-      hasLiked: json['hasLiked'] == true || json['has_liked'] == true || json['has_liked'] == 1,
+      hasLiked: json['hasLiked'] == true ||
+          json['has_liked'] == true ||
+          json['has_liked'] == 1,
       saves: saveStr,
       savesRaw: rawSaves,
-      hasSaved: json['hasSaved'] == true || json['has_saved'] == true || json['has_saved'] == 1,
+      hasSaved: json['hasSaved'] == true ||
+          json['has_saved'] == true ||
+          json['has_saved'] == 1,
       commentsCount: json['commentsCount'] is int
           ? json['commentsCount'] as int
-          : int.tryParse(json['comments_count']?.toString() ?? '${parsedComments.length}') ?? parsedComments.length,
+          : int.tryParse(json['comments_count']?.toString() ??
+                  '${parsedComments.length}') ??
+              parsedComments.length,
       comments: parsedComments,
-      viewsCount: json['viewsCount'] is int ? json['viewsCount'] as int : int.tryParse(json['views_count']?.toString() ?? '0') ?? 0,
-      isActive: json['isActive'] == true || json['is_active'] == 1 || json['is_active'] == '1' || json['is_active'] == null,
+      viewsCount: json['viewsCount'] is int
+          ? json['viewsCount'] as int
+          : int.tryParse(json['views_count']?.toString() ?? '0') ?? 0,
+      isActive: json['isActive'] == true ||
+          json['is_active'] == 1 ||
+          json['is_active'] == '1' ||
+          json['is_active'] == null,
       createdAt: parsedDate,
       status: json['status']?.toString() ?? 'approved',
       crop: json['crop']?.toString(),
       category: json['category']?.toString(),
       language: json['language']?.toString(),
-      sourceUrl: json['sourceUrl']?.toString() ?? json['source_url']?.toString(),
-      thumbnailUrl: Reel.normalizeMediaUrl(json['thumbnailUrl']?.toString() ?? json['thumbnail_url']?.toString()),
-      payoutEligible: json['payoutEligible'] == true || json['payout_eligible'] == 1 || json['payout_eligible'] == '1' || json['payout_eligible'] == null,
-      isDuplicate: json['isDuplicate'] == true || json['is_duplicate'] == 1 || json['is_duplicate'] == '1',
-      rejectionReasonCode: json['rejectionReasonCode']?.toString() ?? json['rejection_reason_code']?.toString(),
-      reviewerFeedback: json['reviewerFeedback']?.toString() ?? json['reviewer_feedback']?.toString(),
+      sourceUrl:
+          json['sourceUrl']?.toString() ?? json['source_url']?.toString(),
+      thumbnailUrl: Reel.normalizeMediaUrl(json['thumbnailUrl']?.toString() ??
+          json['thumbnail_url']?.toString()),
+      payoutEligible: json['payoutEligible'] == true ||
+          json['payout_eligible'] == 1 ||
+          json['payout_eligible'] == '1' ||
+          json['payout_eligible'] == null,
+      isDuplicate: json['isDuplicate'] == true ||
+          json['is_duplicate'] == 1 ||
+          json['is_duplicate'] == '1',
+      rejectionReasonCode: json['rejectionReasonCode']?.toString() ??
+          json['rejection_reason_code']?.toString(),
+      reviewerFeedback: json['reviewerFeedback']?.toString() ??
+          json['reviewer_feedback']?.toString(),
     );
   }
 
@@ -300,7 +351,9 @@ class Reel {
   static String normalizeMediaUrl(dynamic rawUrl) {
     if (rawUrl == null) return '';
     var url = rawUrl.toString().trim();
-    if (url.isEmpty || url.toLowerCase() == 'null' || url.toLowerCase() == 'undefined') {
+    if (url.isEmpty ||
+        url.toLowerCase() == 'null' ||
+        url.toLowerCase() == 'undefined') {
       return '';
     }
 

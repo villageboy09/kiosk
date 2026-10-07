@@ -331,6 +331,39 @@ if (isset($pdo) && $pdo instanceof PDO) {
             INDEX `idx_audit_entity` (`entity_type`, `entity_id`),
             INDEX `idx_audit_action` (`action`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        // Shop Banners Table (Agri Shop home carousel)
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `shop_banners` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `tag_en` VARCHAR(40) NULL,
+            `tag_hi` VARCHAR(40) NULL,
+            `tag_te` VARCHAR(40) NULL,
+            `title_en` VARCHAR(120) NOT NULL,
+            `title_hi` VARCHAR(120) NULL,
+            `title_te` VARCHAR(120) NULL,
+            `subtitle_en` VARCHAR(200) NULL,
+            `subtitle_hi` VARCHAR(200) NULL,
+            `subtitle_te` VARCHAR(200) NULL,
+            `cta_text_en` VARCHAR(40) NULL,
+            `cta_text_hi` VARCHAR(40) NULL,
+            `cta_text_te` VARCHAR(40) NULL,
+            `badge_en` VARCHAR(30) NULL,
+            `badge_hi` VARCHAR(30) NULL,
+            `badge_te` VARCHAR(30) NULL,
+            `target_type` ENUM('none','product','category','url') NOT NULL DEFAULT 'none',
+            `target_value` VARCHAR(500) NULL,
+            `bg_color_1` CHAR(7) DEFAULT '#064E3B',
+            `bg_color_2` CHAR(7) DEFAULT '#047857',
+            `icon_key` VARCHAR(40) NULL,
+            `image_url` VARCHAR(500) NULL,
+            `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+            `sort_order` INT NOT NULL DEFAULT 0,
+            `start_at` DATETIME NULL,
+            `end_at` DATETIME NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX `idx_active_sort` (`is_active`, `sort_order`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
     } catch (Throwable $e) {}
 }
 
@@ -380,6 +413,172 @@ function uploadReelVideo($fileInputName, $defaultUrl = '') {
         }
     }
     return $defaultUrl;
+}
+
+// ---- Shop Banner helpers -------------------------------------------------
+const SHOP_BANNER_W = 1250;
+const SHOP_BANNER_H = 500;
+const SHOP_BANNER_MAX_BYTES = 1572864; // 1.5 MB
+const SHOP_BANNER_ICONS = ['eco', 'verified', 'local_shipping', 'bolt', 'star', 'agriculture', 'shield', 'percent'];
+
+function shopBannerDir() {
+    return __DIR__ . '/shop_banners/';
+}
+
+function shopBannerPublicBase() {
+    $base = defined('CDN_URL') ? rtrim((string)CDN_URL, '/') : 'https://kiosk.cropsync.in';
+    if (stripos($base, 'https://') !== 0) {
+        $base = 'https://kiosk.cropsync.in';
+    }
+    return $base . '/shop_banners/';
+}
+
+/**
+ * Delete a previously stored banner image. Only files directly inside /shop_banners/
+ * with a generated filename are ever removed (no path traversal possible).
+ */
+function shopBannerDeleteFile($url) {
+    $url = trim((string)$url);
+    if ($url === '') return;
+    $path = parse_url($url, PHP_URL_PATH);
+    if (!is_string($path) || strpos($path, '/shop_banners/') === false) return;
+    $name = basename($path);
+    if (!preg_match('/^[A-Za-z0-9_-]{8,64}\.(jpg|png|webp)$/', $name)) return;
+    $dir = realpath(shopBannerDir());
+    if ($dir === false) return;
+    $full = realpath($dir . DIRECTORY_SEPARATOR . $name);
+    if ($full === false || dirname($full) !== $dir || !is_file($full)) return;
+    @unlink($full);
+}
+
+/**
+ * Validate + store an uploaded banner image from a local file path.
+ * Returns ['url' => string|null, 'error' => string|null].
+ */
+/** memory_limit in bytes; 0 when unlimited (-1) or unreadable. */
+function shopBannerMemoryLimitBytes() {
+    $raw = trim((string)ini_get('memory_limit'));
+    if ($raw === '' || $raw === '-1') return 0;
+    $num = (float)$raw;
+    $unit = strtolower(substr($raw, -1));
+    if ($unit === 'g') $num *= 1073741824;
+    elseif ($unit === 'm') $num *= 1048576;
+    elseif ($unit === 'k') $num *= 1024;
+    return $num > 0 ? (int)$num : 0;
+}
+
+function shopBannerStoreImage($tmpPath, $size) {
+    if ($size <= 0 || $size > SHOP_BANNER_MAX_BYTES) {
+        return ['url' => null, 'error' => 'Banner image must be 1.5 MB or smaller.'];
+    }
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($tmpPath);
+    $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+    if (!isset($allowed[$mime])) {
+        return ['url' => null, 'error' => 'Banner image must be a JPEG, PNG or WEBP file.'];
+    }
+    $info = @getimagesize($tmpPath);
+    if (!$info || $info[0] < 1 || $info[1] < 1) {
+        return ['url' => null, 'error' => 'Could not read the uploaded image.'];
+    }
+    $w = (int)$info[0];
+    $h = (int)$info[1];
+    if (abs(($w / $h) - 2.5) > 2.5 * 0.02) { // must be within 2% of 5:2
+        return ['url' => null, 'error' => "Banner image must have a 5:2 ratio (1250x500 px). Uploaded image is {$w}x{$h}."];
+    }
+
+    $dir = shopBannerDir();
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return ['url' => null, 'error' => 'Server cannot write to the /shop_banners/ directory.'];
+    }
+    $rand = bin2hex(random_bytes(12));
+
+    if (function_exists('imagecreatetruecolor')) {
+        if ($w * $h > 16000000) {
+            return ['url' => null, 'error' => "Image dimensions are too large ({$w}x{$h}). Please upload an image under 16 megapixels."];
+        }
+        $memLimit = shopBannerMemoryLimitBytes();
+        if ($memLimit > 0 && (5 * $w * $h + memory_get_usage(true)) >= $memLimit) {
+            return ['url' => null, 'error' => "Image ({$w}x{$h}) is too large for the server's memory limit. Please upload a smaller image (1250x500 px recommended)."];
+        }
+        $src = null;
+        if ($mime === 'image/jpeg' && function_exists('imagecreatefromjpeg')) $src = @imagecreatefromjpeg($tmpPath);
+        elseif ($mime === 'image/png' && function_exists('imagecreatefrompng')) $src = @imagecreatefrompng($tmpPath);
+        elseif ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) $src = @imagecreatefromwebp($tmpPath);
+        if (!$src) {
+            return ['url' => null, 'error' => 'Server could not decode this image format. Please upload a JPEG.'];
+        }
+        // Apply EXIF orientation (JPEG only) so phone photos are cropped the right way up
+        if ($mime === 'image/jpeg' && function_exists('exif_read_data') && function_exists('imagerotate')) {
+            $exif = @exif_read_data($tmpPath);
+            $orient = (is_array($exif) && isset($exif['Orientation'])) ? (int)$exif['Orientation'] : 1;
+            $angle = [3 => 180, 6 => -90, 8 => 90][$orient] ?? 0;
+            if ($angle !== 0) {
+                $rot = @imagerotate($src, $angle, 0);
+                if ($rot) {
+                    imagedestroy($src);
+                    $src = $rot;
+                    $w = imagesx($src);
+                    $h = imagesy($src);
+                }
+            }
+        }
+        // Centre-crop to 5:2, then resample to exactly 1250x500
+        $targetRatio = SHOP_BANNER_W / SHOP_BANNER_H;
+        if (($w / $h) > $targetRatio) {
+            $sh = $h;
+            $sw = (int)round($h * $targetRatio);
+        } else {
+            $sw = $w;
+            $sh = (int)round($w / $targetRatio);
+        }
+        $sx = (int)floor(($w - $sw) / 2);
+        $sy = (int)floor(($h - $sh) / 2);
+        $dst = imagecreatetruecolor(SHOP_BANNER_W, SHOP_BANNER_H);
+        imagefill($dst, 0, 0, imagecolorallocate($dst, 255, 255, 255));
+        imagecopyresampled($dst, $src, 0, 0, $sx, $sy, SHOP_BANNER_W, SHOP_BANNER_H, $sw, $sh);
+        $fileName = 'banner_' . $rand . '.jpg';
+        $ok = imagejpeg($dst, $dir . $fileName, 82);
+        imagedestroy($src);
+        imagedestroy($dst);
+        if (!$ok) {
+            return ['url' => null, 'error' => 'Failed to save the banner image.'];
+        }
+        return ['url' => shopBannerPublicBase() . $fileName, 'error' => null];
+    }
+
+    // No GD: only accept images that are already exactly 1250x500
+    if ($w !== SHOP_BANNER_W || $h !== SHOP_BANNER_H) {
+        return ['url' => null, 'error' => "The server cannot resize images (GD missing). Upload an image that is exactly 1250x500 px (got {$w}x{$h})."];
+    }
+    $fileName = 'banner_' . $rand . '.' . $allowed[$mime];
+    $moved = is_uploaded_file($tmpPath) ? move_uploaded_file($tmpPath, $dir . $fileName) : rename($tmpPath, $dir . $fileName);
+    if (!$moved) {
+        return ['url' => null, 'error' => 'Failed to save the banner image.'];
+    }
+    return ['url' => shopBannerPublicBase() . $fileName, 'error' => null];
+}
+
+function shopBannerParseDate($raw) {
+    $raw = trim((string)$raw);
+    if ($raw === '') return [null, true];
+    foreach (['Y-m-d\TH:i', 'Y-m-d\TH:i:s', 'Y-m-d H:i:s', 'Y-m-d H:i'] as $fmt) {
+        $d = DateTime::createFromFormat($fmt, $raw);
+        $errs = DateTime::getLastErrors();
+        if ($d && (!$errs || ($errs['warning_count'] == 0 && $errs['error_count'] == 0))) {
+            return [$d->format('Y-m-d H:i:s'), true];
+        }
+    }
+    return [null, false];
+}
+
+/** Compute the display status of a banner row. */
+function shopBannerStatus($b, $now) {
+    if (empty($b['is_active'])) return 'Inactive';
+    if (!empty($b['start_at']) && strtotime($now) < strtotime($b['start_at'])) return 'Scheduled';
+    if (!empty($b['end_at']) && strtotime($now) > strtotime($b['end_at'])) return 'Expired';
+    return 'Live';
 }
 
 /**
@@ -1010,6 +1209,245 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($pdo) && $pdo instanceof PDO)
             setFlash("Article status set to " . ucfirst($new_status) . ".");
         }
         header("Location: " . $_SERVER['PHP_SELF'] . "?tab=news");
+        exit();
+    }
+
+    // D2. SHOP BANNERS: SAVE / EDIT
+    if ($action === 'save_shop_banner') {
+        $id = intval($_POST['banner_id'] ?? 0);
+        $errors = [];
+        $langs = ['en', 'hi', 'te'];
+        $limits = ['tag' => 40, 'title' => 120, 'subtitle' => 200, 'cta_text' => 40, 'badge' => 30];
+        $text = [];
+        foreach ($limits as $field => $max) {
+            foreach ($langs as $l) {
+                $key = $field . '_' . $l;
+                $val = trim((string)($_POST[$key] ?? ''));
+                if (mb_strlen($val) > $max) {
+                    $errors[] = strtoupper($l) . " " . str_replace('_', ' ', $field) . " must be at most $max characters.";
+                }
+                $text[$key] = $val;
+            }
+        }
+        if ($text['title_en'] === '') $errors[] = 'English title is required.';
+
+        $target_type = $_POST['target_type'] ?? 'none';
+        if (!in_array($target_type, ['none', 'product', 'category', 'url'], true)) $target_type = 'none';
+        $target_value = trim((string)($_POST['target_value'] ?? ''));
+        if ($target_type === 'none') {
+            $target_value = null;
+        } elseif ($target_type === 'product') {
+            if (!ctype_digit($target_value) || (int)$target_value < 1) {
+                $errors[] = 'Product target needs a valid numeric product ID.';
+            } else {
+                $target_value = (string)(int)$target_value;
+            }
+        } elseif ($target_type === 'category') {
+            if ($target_value === '' || mb_strlen($target_value) > 100) {
+                $errors[] = 'Category target needs a category name (max 100 characters).';
+            }
+        } else { // url
+            if (stripos($target_value, 'https://') !== 0 || !filter_var($target_value, FILTER_VALIDATE_URL) || strlen($target_value) > 500) {
+                $errors[] = 'URL target must be a valid https:// link (max 500 characters).';
+            }
+        }
+
+        $bg1 = strtoupper(trim((string)($_POST['bg_color_1'] ?? '#064E3B')));
+        $bg2 = strtoupper(trim((string)($_POST['bg_color_2'] ?? '#047857')));
+        if (!preg_match('/^#[0-9A-F]{6}$/', $bg1) || !preg_match('/^#[0-9A-F]{6}$/', $bg2)) {
+            $errors[] = 'Colours must be in #RRGGBB format.';
+        }
+
+        $icon_key = trim((string)($_POST['icon_key'] ?? ''));
+        if ($icon_key === '') {
+            $icon_key = null;
+        } elseif (!in_array($icon_key, SHOP_BANNER_ICONS, true)) {
+            $errors[] = 'Unknown icon selected.';
+        }
+
+        [$start_at, $startOk] = shopBannerParseDate($_POST['start_at'] ?? '');
+        [$end_at, $endOk] = shopBannerParseDate($_POST['end_at'] ?? '');
+        if (!$startOk || !$endOk) {
+            $errors[] = 'Invalid start/end date.';
+        } elseif ($start_at && $end_at && strtotime($end_at) <= strtotime($start_at)) {
+            $errors[] = 'End date must be after the start date.';
+        }
+
+        $is_active = isset($_POST['is_active']) ? 1 : 0;
+        $sortRaw = trim((string)($_POST['sort_order'] ?? ''));
+        $sort_order = null;
+        if ($sortRaw !== '') {
+            if (filter_var($sortRaw, FILTER_VALIDATE_INT) === false || abs((int)$sortRaw) > 100000) {
+                $errors[] = 'Sort order must be a whole number.';
+            } else {
+                $sort_order = (int)$sortRaw;
+            }
+        }
+
+        $oldImage = '';
+        $existing = null;
+        if ($id > 0) {
+            $st = $pdo->prepare("SELECT * FROM shop_banners WHERE id = ?");
+            $st->execute([$id]);
+            $existing = $st->fetch();
+            if (!$existing) {
+                $errors[] = "Banner #$id was not found.";
+            } else {
+                $oldImage = (string)($existing['image_url'] ?? '');
+            }
+        }
+
+        // Image intake (file upload from the cropper, or base64 fallback)
+        $imgTmp = null;
+        $imgSize = 0;
+        $imgTmpIsTemp = false;
+        if (empty($errors)) {
+            if (isset($_FILES['image_file']) && $_FILES['image_file']['error'] === UPLOAD_ERR_OK) {
+                $imgTmp = $_FILES['image_file']['tmp_name'];
+                $imgSize = (int)$_FILES['image_file']['size'];
+            } elseif (isset($_FILES['image_file']) && in_array($_FILES['image_file']['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+                $errors[] = 'Banner image must be 1.5 MB or smaller.';
+            } elseif (!empty($_POST['image_data']) && preg_match('#^data:image/(jpeg|png|webp);base64,#', (string)$_POST['image_data'], $mm)) {
+                $b64 = substr((string)$_POST['image_data'], strlen($mm[0]));
+                if (strlen($b64) > SHOP_BANNER_MAX_BYTES * 1.4) {
+                    $errors[] = 'Banner image must be 1.5 MB or smaller.';
+                } else {
+                    $bin = base64_decode($b64, true);
+                    if ($bin === false) {
+                        $errors[] = 'Invalid image data.';
+                    } else {
+                        $tmpName = tempnam(sys_get_temp_dir(), 'sbn');
+                        if ($tmpName !== false && file_put_contents($tmpName, $bin) !== false) {
+                            $imgTmp = $tmpName;
+                            $imgSize = strlen($bin);
+                            $imgTmpIsTemp = true;
+                        } else {
+                            $errors[] = 'Could not process image data.';
+                        }
+                    }
+                }
+            }
+        }
+
+        $newImageUrl = null;
+        if (empty($errors) && $imgTmp !== null) {
+            $res = shopBannerStoreImage($imgTmp, $imgSize);
+            if ($res['error']) {
+                $errors[] = $res['error'];
+            } else {
+                $newImageUrl = $res['url'];
+            }
+            if ($imgTmpIsTemp && is_file($imgTmp)) @unlink($imgTmp);
+        }
+
+        if (!empty($errors)) {
+            setFlash(implode(' ', $errors), 'danger');
+        } else {
+            $image_url = $oldImage !== '' ? $oldImage : null;
+            if ($newImageUrl !== null) {
+                $image_url = $newImageUrl;
+            } elseif (!empty($_POST['remove_image'])) {
+                $image_url = null;
+            }
+            try {
+                if ($sort_order === null) {
+                    $sort_order = $id > 0 ? (int)$existing['sort_order'] : ((int)$pdo->query("SELECT COALESCE(MAX(sort_order), 0) FROM shop_banners")->fetchColumn() + 1);
+                }
+                $vals = [
+                    $text['tag_en'] ?: null, $text['tag_hi'] ?: null, $text['tag_te'] ?: null,
+                    $text['title_en'], $text['title_hi'] ?: null, $text['title_te'] ?: null,
+                    $text['subtitle_en'] ?: null, $text['subtitle_hi'] ?: null, $text['subtitle_te'] ?: null,
+                    $text['cta_text_en'] ?: null, $text['cta_text_hi'] ?: null, $text['cta_text_te'] ?: null,
+                    $text['badge_en'] ?: null, $text['badge_hi'] ?: null, $text['badge_te'] ?: null,
+                    $target_type, $target_value, $bg1, $bg2, $icon_key, $image_url,
+                    $is_active, $sort_order, $start_at, $end_at
+                ];
+                if ($id > 0) {
+                    $stmt = $pdo->prepare("UPDATE shop_banners SET tag_en = ?, tag_hi = ?, tag_te = ?, title_en = ?, title_hi = ?, title_te = ?, subtitle_en = ?, subtitle_hi = ?, subtitle_te = ?, cta_text_en = ?, cta_text_hi = ?, cta_text_te = ?, badge_en = ?, badge_hi = ?, badge_te = ?, target_type = ?, target_value = ?, bg_color_1 = ?, bg_color_2 = ?, icon_key = ?, image_url = ?, is_active = ?, sort_order = ?, start_at = ?, end_at = ? WHERE id = ?");
+                    $stmt->execute(array_merge($vals, [$id]));
+                    setFlash("Shop banner #$id updated successfully.");
+                } else {
+                    $stmt = $pdo->prepare("INSERT INTO shop_banners (tag_en, tag_hi, tag_te, title_en, title_hi, title_te, subtitle_en, subtitle_hi, subtitle_te, cta_text_en, cta_text_hi, cta_text_te, badge_en, badge_hi, badge_te, target_type, target_value, bg_color_1, bg_color_2, icon_key, image_url, is_active, sort_order, start_at, end_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->execute($vals);
+                    setFlash("New shop banner created.");
+                }
+                // Remove the replaced / cleared image file once the DB write succeeded
+                if ($oldImage !== '' && $oldImage !== (string)$image_url) {
+                    shopBannerDeleteFile($oldImage);
+                }
+            } catch (Throwable $e) {
+                if ($newImageUrl !== null) shopBannerDeleteFile($newImageUrl);
+                setFlash("Database error: " . $e->getMessage(), 'danger');
+            }
+        }
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=shop_banners");
+        exit();
+    }
+
+    // D3. SHOP BANNERS: DELETE
+    if ($action === 'delete_shop_banner') {
+        $id = intval($_POST['banner_id'] ?? 0);
+        if ($id > 0) {
+            try {
+                $st = $pdo->prepare("SELECT image_url FROM shop_banners WHERE id = ?");
+                $st->execute([$id]);
+                $img = $st->fetchColumn();
+                $pdo->prepare("DELETE FROM shop_banners WHERE id = ?")->execute([$id]);
+                if ($img) shopBannerDeleteFile($img);
+                setFlash("Shop banner #$id deleted successfully.");
+            } catch (Throwable $e) {
+                setFlash("Error deleting banner: " . $e->getMessage(), 'danger');
+            }
+        }
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=shop_banners");
+        exit();
+    }
+
+    // D4. SHOP BANNERS: TOGGLE ACTIVE
+    if ($action === 'toggle_shop_banner') {
+        $id = intval($_POST['banner_id'] ?? 0);
+        if ($id > 0) {
+            try {
+                $pdo->prepare("UPDATE shop_banners SET is_active = 1 - is_active WHERE id = ?")->execute([$id]);
+                setFlash("Shop banner #$id visibility updated.");
+            } catch (Throwable $e) {
+                setFlash("Error updating banner: " . $e->getMessage(), 'danger');
+            }
+        }
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=shop_banners");
+        exit();
+    }
+
+    // D5. SHOP BANNERS: REORDER (swap with neighbour)
+    if ($action === 'reorder_shop_banners') {
+        $id = intval($_POST['banner_id'] ?? 0);
+        $dir = ($_POST['direction'] ?? '') === 'up' ? 'up' : 'down';
+        if ($id > 0) {
+            try {
+                $pdo->beginTransaction();
+                // Normalise to a clean 1..n sequence first so swaps always work even with duplicate sort values
+                $ids = $pdo->query("SELECT id FROM shop_banners ORDER BY sort_order ASC, id ASC FOR UPDATE")->fetchAll(PDO::FETCH_COLUMN);
+                $pos = array_search($id, array_map('intval', $ids), true);
+                if ($pos !== false) {
+                    $swapWith = $dir === 'up' ? $pos - 1 : $pos + 1;
+                    if ($swapWith >= 0 && $swapWith < count($ids)) {
+                        $tmp = $ids[$pos];
+                        $ids[$pos] = $ids[$swapWith];
+                        $ids[$swapWith] = $tmp;
+                    }
+                    $upd = $pdo->prepare("UPDATE shop_banners SET sort_order = ? WHERE id = ?");
+                    foreach ($ids as $i => $bid) {
+                        $upd->execute([$i + 1, (int)$bid]);
+                    }
+                }
+                $pdo->commit();
+                setFlash("Shop banner order updated.");
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                setFlash("Error reordering banners: " . $e->getMessage(), 'danger');
+            }
+        }
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=shop_banners");
         exit();
     }
 
@@ -3486,6 +3924,10 @@ $availableCategories = [
                 <button class="btn btn-primary" onclick="openCreateCreatorModal()">
                     <i class="ph ph-user-plus"></i> New Creator
                 </button>
+            <?php elseif ($activeTab === 'shop_banners'): ?>
+                <button class="btn btn-primary" onclick="openShopBannerModal()">
+                    <i class="ph ph-plus"></i> New Banner
+                </button>
             <?php endif; ?>
 
             <!-- Alpine Header Dropdown: Navigation & Quick Jump -->
@@ -3538,6 +3980,9 @@ $availableCategories = [
         </a>
         <a href="?tab=comments" class="tab-link <?= $activeTab === 'comments' ? 'active' : '' ?>">
             <i class="ph ph-chat-centered-text"></i> Comments & Feedback
+        </a>
+        <a href="?tab=shop_banners" class="tab-link <?= $activeTab === 'shop_banners' ? 'active' : '' ?>">
+            <i class="ph ph-image-square"></i> Shop Banners
         </a>
     </nav>
 
@@ -3693,6 +4138,138 @@ $availableCategories = [
                     </div>
                 </div>
             </form>
+        <?php endif; ?>
+
+        <!-- ============================================================== -->
+        <!-- TAB: SHOP BANNERS (Agri Shop home carousel) -->
+        <!-- ============================================================== -->
+        <?php if ($activeTab === 'shop_banners'):
+            $shopBanners = [];
+            $sbNow = date('Y-m-d H:i:s');
+            if (isset($pdo) && $pdo instanceof PDO) {
+                try {
+                    $sbNow = (string)$pdo->query("SELECT NOW()")->fetchColumn();
+                    $shopBanners = $pdo->query("SELECT * FROM shop_banners ORDER BY sort_order ASC, id ASC")->fetchAll();
+                } catch (Throwable $e) {
+                    $shopBanners = [];
+                }
+            }
+            $sbIcons = ['eco' => 'ph-leaf', 'verified' => 'ph-seal-check', 'local_shipping' => 'ph-truck', 'bolt' => 'ph-lightning', 'star' => 'ph-star', 'agriculture' => 'ph-plant', 'shield' => 'ph-shield-check', 'percent' => 'ph-percent'];
+            $sbStatusStyle = [
+                'Live' => 'background:#dcfce7; color:#166534;',
+                'Scheduled' => 'background:#dbeafe; color:#1e40af;',
+                'Expired' => 'background:#fee2e2; color:#991b1b;',
+                'Inactive' => 'background:#f1f5f9; color:#475569;',
+            ];
+            $sbCount = count($shopBanners);
+            $sbSafeColor = function ($c, $fallback) {
+                return preg_match('/^#[0-9A-Fa-f]{6}$/', (string)$c) ? $c : $fallback;
+            };
+        ?>
+            <style>
+                .sb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+                .sb-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+                .sb-preview { position: relative; width: 100%; aspect-ratio: 5 / 2; overflow: hidden; color: #fff; }
+                .sb-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+                .sb-preview .sb-text { position: absolute; inset: 0; padding: 4% 5%; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+                .sb-preview .sb-tag { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
+                .sb-preview .sb-title { font-size: 1.05rem; font-weight: 800; line-height: 1.15; max-width: 70%; }
+                .sb-preview .sb-sub { font-size: 0.72rem; opacity: 0.9; max-width: 65%; line-height: 1.3; }
+                .sb-preview .sb-cta { margin-top: 4px; align-self: flex-start; background: #fff; color: #064E3B; font-size: 0.68rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+                .sb-preview .sb-badge { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.22); font-size: 0.64rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+                .sb-preview .sb-icon { position: absolute; right: 6%; bottom: 10%; font-size: 3.2rem; opacity: 0.28; }
+                .sb-meta { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+                .sb-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+                .sb-pill { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+            </style>
+
+            <div class="section-toolbar">
+                <div style="font-size: 0.82rem; color: var(--text-muted);">
+                    <?= $sbCount ?> banner<?= $sbCount === 1 ? '' : 's' ?> &bull; shown in the Agri Shop carousel in the order below.
+                    Status and schedule times use server time (now: <?= htmlspecialchars($sbNow) ?>).
+                    Banner image: 1250x500 px (5:2). It will be cropped/resized automatically.
+                </div>
+            </div>
+
+            <?php if (empty($shopBanners)): ?>
+                <div class="table-card" style="padding: 36px; text-align: center; color: var(--text-muted);">
+                    No shop banners yet. Click "+ New Banner" to create one.
+                </div>
+            <?php else: ?>
+                <div class="sb-grid">
+                    <?php foreach ($shopBanners as $i => $b):
+                        $st = shopBannerStatus($b, $sbNow);
+                        $c1 = $sbSafeColor($b['bg_color_1'], '#064E3B');
+                        $c2 = $sbSafeColor($b['bg_color_2'], '#047857');
+                        $icoClass = $sbIcons[$b['icon_key'] ?? ''] ?? '';
+                        $targetLabel = $b['target_type'] === 'none' ? 'No link' : ucfirst($b['target_type']) . ': ' . mb_strimwidth((string)$b['target_value'], 0, 40, '...');
+                    ?>
+                        <div class="sb-card">
+                            <?php if (!empty($b['image_url'])): ?>
+                                <div class="sb-preview" style="background:#e2e8f0;">
+                                    <img src="<?= htmlspecialchars($b['image_url']) ?>" alt="Banner #<?= (int)$b['id'] ?>" loading="lazy">
+                                </div>
+                            <?php else: ?>
+                                <div class="sb-preview" style="background: linear-gradient(135deg, <?= htmlspecialchars($c1) ?>, <?= htmlspecialchars($c2) ?>);">
+                                    <?php if ($icoClass): ?><i class="ph <?= $icoClass ?> sb-icon"></i><?php endif; ?>
+                                    <?php if (!empty($b['badge_en'])): ?><span class="sb-badge"><?= htmlspecialchars($b['badge_en']) ?></span><?php endif; ?>
+                                    <div class="sb-text">
+                                        <?php if (!empty($b['tag_en'])): ?><div class="sb-tag"><?= htmlspecialchars($b['tag_en']) ?></div><?php endif; ?>
+                                        <div class="sb-title"><?= htmlspecialchars($b['title_en']) ?></div>
+                                        <?php if (!empty($b['subtitle_en'])): ?><div class="sb-sub"><?= htmlspecialchars($b['subtitle_en']) ?></div><?php endif; ?>
+                                        <?php if (!empty($b['cta_text_en'])): ?><div class="sb-cta"><?= htmlspecialchars($b['cta_text_en']) ?></div><?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+
+                            <div class="sb-meta">
+                                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                                    <div style="font-weight:600; color:var(--text-primary); font-size:0.88rem;">
+                                        #<?= (int)$b['id'] ?> &middot; <?= htmlspecialchars(mb_strimwidth($b['title_en'], 0, 40, '...')) ?>
+                                    </div>
+                                    <span class="sb-pill" style="<?= $sbStatusStyle[$st] ?>"><?= htmlspecialchars($st) ?></span>
+                                </div>
+                                <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.5;">
+                                    Order: <strong><?= (int)$b['sort_order'] ?></strong> &bull;
+                                    <?= !empty($b['image_url']) ? 'Image banner' : 'Gradient banner' ?> &bull;
+                                    <?= htmlspecialchars($targetLabel) ?>
+                                    <?php if (!empty($b['start_at']) || !empty($b['end_at'])): ?>
+                                        <br><?= !empty($b['start_at']) ? 'From ' . htmlspecialchars(date('M d, Y H:i', strtotime($b['start_at']))) : '' ?>
+                                        <?= !empty($b['end_at']) ? 'until ' . htmlspecialchars(date('M d, Y H:i', strtotime($b['end_at']))) : '' ?>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="sb-actions">
+                                    <form method="POST" style="margin:0;">
+                                        <input type="hidden" name="action" value="reorder_shop_banners">
+                                        <input type="hidden" name="banner_id" value="<?= (int)$b['id'] ?>">
+                                        <input type="hidden" name="direction" value="up">
+                                        <button type="submit" class="btn btn-secondary btn-sm" title="Move up" <?= $i === 0 ? 'disabled' : '' ?>><i class="ph ph-arrow-up"></i></button>
+                                    </form>
+                                    <form method="POST" style="margin:0;">
+                                        <input type="hidden" name="action" value="reorder_shop_banners">
+                                        <input type="hidden" name="banner_id" value="<?= (int)$b['id'] ?>">
+                                        <input type="hidden" name="direction" value="down">
+                                        <button type="submit" class="btn btn-secondary btn-sm" title="Move down" <?= $i === $sbCount - 1 ? 'disabled' : '' ?>><i class="ph ph-arrow-down"></i></button>
+                                    </form>
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick='openShopBannerModal(<?= json_encode($b, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}' ?>)' title="Edit">
+                                        <i class="ph ph-pencil"></i> Edit
+                                    </button>
+                                    <form method="POST" style="margin:0;">
+                                        <input type="hidden" name="action" value="toggle_shop_banner">
+                                        <input type="hidden" name="banner_id" value="<?= (int)$b['id'] ?>">
+                                        <button type="submit" class="btn btn-secondary btn-sm" title="<?= !empty($b['is_active']) ? 'Deactivate' : 'Activate' ?>">
+                                            <i class="ph <?= !empty($b['is_active']) ? 'ph-eye-slash' : 'ph-eye' ?>"></i> <?= !empty($b['is_active']) ? 'Deactivate' : 'Activate' ?>
+                                        </button>
+                                    </form>
+                                    <button type="button" class="btn btn-danger-outline btn-sm" style="margin-left:auto;" onclick='promptShopBannerDelete(<?= (int)$b['id'] ?>, <?= json_encode($b['title_en'], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) ?>)' title="Delete banner">
+                                        <i class="ph ph-trash"></i> Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
 
         <!-- ============================================================== -->
@@ -5938,6 +6515,356 @@ $availableCategories = [
                 <div class="modal-foot">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('reelModal')">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="reelSubmitBtn">Publish Reel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: CREATE / EDIT SHOP BANNER (LANG TABS + CLIENT-SIDE 5:2 CROP) -->
+    <!-- ============================================================== -->
+    <script>
+        function shopBannerForm() {
+            const blank = () => ({
+                tag_en: '', tag_hi: '', tag_te: '',
+                title_en: '', title_hi: '', title_te: '',
+                subtitle_en: '', subtitle_hi: '', subtitle_te: '',
+                cta_text_en: '', cta_text_hi: '', cta_text_te: '',
+                badge_en: '', badge_hi: '', badge_te: '',
+                target_type: 'none', target_value: '',
+                bg_color_1: '#064e3b', bg_color_2: '#047857',
+                icon_key: '', is_active: true, sort_order: '',
+                start_at: '', end_at: ''
+            });
+            const icons = { eco: 'ph-leaf', verified: 'ph-seal-check', local_shipping: 'ph-truck', bolt: 'ph-lightning', star: 'ph-star', agriculture: 'ph-plant', shield: 'ph-shield-check', percent: 'ph-percent' };
+            const dt = (v) => v ? String(v).replace(' ', 'T').slice(0, 16) : '';
+            return {
+                id: 0,
+                langTab: 'en',
+                f: blank(),
+                existingImage: '',
+                removeImage: false,
+                newPreview: '',
+                cropMsg: '',
+                cropErr: '',
+                formErr: '',
+                load(b) {
+                    this.clearNew();
+                    this.f = blank();
+                    this.id = 0;
+                    this.existingImage = '';
+                    this.removeImage = false;
+                    this.langTab = 'en';
+                    this.cropMsg = this.cropErr = this.formErr = '';
+                    if (!b) return;
+                    this.id = parseInt(b.id) || 0;
+                    Object.keys(this.f).forEach(k => {
+                        if (b[k] !== undefined && b[k] !== null) this.f[k] = b[k];
+                    });
+                    this.f.is_active = !!parseInt(b.is_active);
+                    this.f.sort_order = b.sort_order;
+                    this.f.start_at = dt(b.start_at);
+                    this.f.end_at = dt(b.end_at);
+                    this.f.bg_color_1 = (b.bg_color_1 || '#064E3B').toLowerCase();
+                    this.f.bg_color_2 = (b.bg_color_2 || '#047857').toLowerCase();
+                    this.f.target_type = b.target_type || 'none';
+                    this.f.target_value = b.target_value || '';
+                    this.f.icon_key = b.icon_key || '';
+                    this.existingImage = b.image_url || '';
+                },
+                get previewImage() { return this.newPreview || (this.removeImage ? '' : this.existingImage); },
+                get iconClass() { return icons[this.f.icon_key] || ''; },
+                pv(field) { return this.f[field + '_' + this.langTab] || this.f[field + '_en'] || ''; },
+                targetPlaceholder() {
+                    return { product: 'Product ID, e.g. 42', category: 'Category name, e.g. Seeds', url: 'https://example.com/offer', none: '' }[this.f.target_type] || '';
+                },
+                clearNew() {
+                    if (this.newPreview) { try { URL.revokeObjectURL(this.newPreview); } catch (e) {} }
+                    this.newPreview = '';
+                    ['sb_out', 'sb_data', 'sb_pick'].forEach(i => { const e = document.getElementById(i); if (e) e.value = ''; });
+                },
+                removeCurrent() {
+                    this.clearNew();
+                    this.removeImage = true;
+                    this.cropMsg = '';
+                },
+                onPick(ev) {
+                    const file = ev.target.files && ev.target.files[0];
+                    this.cropErr = ''; this.cropMsg = '';
+                    if (!file) return;
+                    if (['image/jpeg', 'image/png', 'image/webp'].indexOf(file.type) === -1) {
+                        this.cropErr = 'Please choose a JPEG, PNG or WEBP image.';
+                        ev.target.value = '';
+                        return;
+                    }
+                    if (file.size > 25 * 1024 * 1024) {
+                        this.cropErr = 'Source image is too large (max 25 MB).';
+                        ev.target.value = '';
+                        return;
+                    }
+                    const url = URL.createObjectURL(file);
+                    const img = new Image();
+                    img.onload = () => {
+                        const W = 1250, H = 500, ratio = W / H;
+                        const iw = img.naturalWidth, ih = img.naturalHeight;
+                        let sw, sh;
+                        if (iw / ih > ratio) { sh = ih; sw = ih * ratio; } else { sw = iw; sh = iw / ratio; }
+                        const sx = (iw - sw) / 2, sy = (ih - sh) / 2;
+                        const canvas = document.createElement('canvas');
+                        canvas.width = W; canvas.height = H;
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, W, H);
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+                        URL.revokeObjectURL(url);
+                        const attempt = (q) => canvas.toBlob((blob) => {
+                            if (!blob) { this.cropErr = 'Could not process the image in this browser.'; return; }
+                            if (blob.size > 1.5 * 1024 * 1024 && q > 0.5) { attempt(q - 0.1); return; }
+                            if (blob.size > 1.5 * 1024 * 1024) { this.cropErr = 'Image is still above 1.5 MB after compression. Try a simpler image.'; return; }
+                            this.useBlob(blob);
+                            this.cropMsg = 'Cropped to 1250x500 (5:2), ' + Math.round(blob.size / 1024) + ' KB' + ((iw < W || ih < H) ? ' - note: source is smaller than 1250x500 and was enlarged.' : '.');
+                        }, 'image/jpeg', q);
+                        attempt(0.85);
+                    };
+                    img.onerror = () => { URL.revokeObjectURL(url); this.cropErr = 'Could not read this image.'; };
+                    img.src = url;
+                },
+                useBlob(blob) {
+                    if (this.newPreview) { try { URL.revokeObjectURL(this.newPreview); } catch (e) {} }
+                    this.newPreview = URL.createObjectURL(blob);
+                    this.removeImage = false;
+                    document.getElementById('sb_data').value = '';
+                    try {
+                        const d = new DataTransfer();
+                        d.items.add(new File([blob], 'banner.jpg', { type: 'image/jpeg' }));
+                        document.getElementById('sb_out').files = d.files;
+                    } catch (e) {
+                        // Fallback: send as base64 in a hidden field
+                        const fr = new FileReader();
+                        fr.onload = () => { document.getElementById('sb_data').value = fr.result; };
+                        fr.readAsDataURL(blob);
+                    }
+                },
+                onSubmit(ev) {
+                    this.formErr = '';
+                    if (!this.f.title_en.trim()) {
+                        ev.preventDefault();
+                        this.langTab = 'en';
+                        this.formErr = 'English title is required.';
+                        return;
+                    }
+                    if (this.f.target_type === 'url' && !/^https:\/\//i.test(this.f.target_value.trim())) {
+                        ev.preventDefault();
+                        this.formErr = 'URL target must start with https://';
+                        return;
+                    }
+                    if (this.f.start_at && this.f.end_at && this.f.end_at <= this.f.start_at) {
+                        ev.preventDefault();
+                        this.formErr = 'End date must be after the start date.';
+                    }
+                }
+            };
+        }
+
+        function openShopBannerModal(b) {
+            if (b && !(parseInt(b.id) > 0)) {
+                showToast('Could not load this banner for editing. Please reload the page.', 'danger');
+                return;
+            }
+            const el = document.getElementById('shopBannerModal');
+            const data = getAlpineData(el);
+            if (data) data.load(b || null);
+            openModal('shopBannerModal');
+        }
+
+        function promptShopBannerDelete(id, title) {
+            document.getElementById('sb_del_id').value = id;
+            document.getElementById('sbDeleteTitle').innerText = 'Banner #' + id + ': ' + title;
+            openModal('shopBannerDeleteModal');
+        }
+    </script>
+
+    <div class="modal-overlay" id="shopBannerModal" x-data="shopBannerForm()">
+        <div class="modal-card" style="max-width: 760px;">
+            <div class="modal-head">
+                <h3 x-text="id ? 'Edit Banner #' + id : 'New Shop Banner'">New Shop Banner</h3>
+                <button type="button" class="close-btn" onclick="closeModal('shopBannerModal')">&times;</button>
+            </div>
+            <form method="POST" enctype="multipart/form-data" @submit="onSubmit($event)">
+                <input type="hidden" name="action" value="save_shop_banner">
+                <input type="hidden" name="banner_id" :value="id">
+                <input type="hidden" name="remove_image" :value="removeImage ? '1' : ''">
+                <input type="hidden" name="image_data" id="sb_data" value="">
+
+                <div class="modal-body">
+                    <div x-show="formErr" x-cloak style="background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; font-size:0.78rem; font-weight:600; padding:8px 12px; border-radius:6px; margin-bottom:12px;" x-text="formErr"></div>
+
+                    <!-- Live preview (fixed 5:2). Image banners show the image alone, like the app. -->
+                    <div style="margin-bottom:14px;">
+                        <label style="font-size:0.78rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:6px;">Live Preview (5:2)</label>
+                        <div class="sb-preview" style="border-radius:10px; border:1px solid var(--border); max-width:100%;"
+                             :style="previewImage ? 'background:#e2e8f0;' : 'background: linear-gradient(135deg, ' + f.bg_color_1 + ', ' + f.bg_color_2 + ');'">
+                            <template x-if="previewImage">
+                                <img :src="previewImage" alt="Banner preview">
+                            </template>
+                            <template x-if="!previewImage">
+                                <div style="position:absolute; inset:0;">
+                                    <i class="ph sb-icon" :class="iconClass" x-show="iconClass"></i>
+                                    <span class="sb-badge" x-show="pv('badge')" x-text="pv('badge')"></span>
+                                    <div class="sb-text">
+                                        <div class="sb-tag" x-show="pv('tag')" x-text="pv('tag')"></div>
+                                        <div class="sb-title" x-text="pv('title') || 'Banner title'"></div>
+                                        <div class="sb-sub" x-show="pv('subtitle')" x-text="pv('subtitle')"></div>
+                                        <div class="sb-cta" x-show="pv('cta_text')" x-text="pv('cta_text')"></div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Language tabs -->
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:12px; background:var(--surface-subtle); padding:10px 14px; border-radius:var(--radius-md); border:1px solid var(--border);">
+                        <button type="button" class="btn btn-sm" :class="langTab === 'en' ? 'btn-primary' : 'btn-outline'" @click="langTab = 'en'" style="font-size:0.75rem; padding:4px 10px;">🇬🇧 English</button>
+                        <button type="button" class="btn btn-sm" :class="langTab === 'hi' ? 'btn-primary' : 'btn-outline'" @click="langTab = 'hi'" style="font-size:0.75rem; padding:4px 10px;">🇮🇳 Hindi (हिंदी)</button>
+                        <button type="button" class="btn btn-sm" :class="langTab === 'te' ? 'btn-primary' : 'btn-outline'" @click="langTab = 'te'" style="font-size:0.75rem; padding:4px 10px;">🇮🇳 Telugu (తెలుగు)</button>
+                        <span style="font-size:0.72rem; color:var(--text-muted); margin-left:auto;">Only the English title is required; other languages fall back to English.</span>
+                    </div>
+
+                    <?php
+                    $sbLangFields = [
+                        'tag' => ['Tag', 40, false],
+                        'title' => ['Title', 120, false],
+                        'subtitle' => ['Subtitle', 200, true],
+                        'cta_text' => ['Button text (CTA)', 40, false],
+                        'badge' => ['Badge', 30, false],
+                    ];
+                    foreach (['en', 'hi', 'te'] as $sbL): ?>
+                        <div x-show="langTab === '<?= $sbL ?>'" <?= $sbL === 'en' ? '' : 'x-cloak' ?>>
+                            <?php foreach ($sbLangFields as $sbF => [$sbLabel, $sbMax, $sbArea]): ?>
+                                <div class="form-row">
+                                    <label><?= htmlspecialchars($sbLabel) ?> (<?= strtoupper($sbL) ?>)<?= ($sbF === 'title' && $sbL === 'en') ? ' *' : '' ?></label>
+                                    <?php if ($sbArea): ?>
+                                        <textarea name="<?= $sbF ?>_<?= $sbL ?>" class="form-input" rows="2" maxlength="<?= $sbMax ?>" x-model="f.<?= $sbF ?>_<?= $sbL ?>"></textarea>
+                                    <?php else: ?>
+                                        <input type="text" name="<?= $sbF ?>_<?= $sbL ?>" class="form-input" maxlength="<?= $sbMax ?>" x-model="f.<?= $sbF ?>_<?= $sbL ?>">
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <div class="grid-2">
+                        <div class="form-row">
+                            <label>Link Type</label>
+                            <select name="target_type" class="form-input" x-model="f.target_type" @change="if (f.target_type === 'none') f.target_value = ''">
+                                <option value="none">None</option>
+                                <option value="product">Product</option>
+                                <option value="category">Category</option>
+                                <option value="url">URL (https only)</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Link Value</label>
+                            <input type="text" name="target_value" class="form-input" maxlength="500" x-model="f.target_value" :disabled="f.target_type === 'none'" :placeholder="targetPlaceholder()">
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="form-row">
+                            <label>Background Colour 1</label>
+                            <input type="color" name="bg_color_1" class="form-input" style="height:38px; padding:3px;" x-model="f.bg_color_1">
+                        </div>
+                        <div class="form-row">
+                            <label>Background Colour 2</label>
+                            <input type="color" name="bg_color_2" class="form-input" style="height:38px; padding:3px;" x-model="f.bg_color_2">
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="form-row">
+                            <label>Icon</label>
+                            <select name="icon_key" class="form-input" x-model="f.icon_key">
+                                <option value="">None</option>
+                                <?php foreach (SHOP_BANNER_ICONS as $sbIc): ?>
+                                    <option value="<?= htmlspecialchars($sbIc) ?>"><?= htmlspecialchars($sbIc) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Sort Order (lower = first)</label>
+                            <input type="number" step="1" name="sort_order" class="form-input" x-model="f.sort_order" placeholder="Auto (last)">
+                        </div>
+                    </div>
+
+                    <div style="font-size:0.74rem; color:var(--text-muted); margin-bottom:4px;">Start/end times are in server time, not your browser's time zone.</div>
+                    <div class="grid-2">
+                        <div class="form-row">
+                            <label>Start (optional, server time)</label>
+                            <input type="datetime-local" name="start_at" class="form-input" x-model="f.start_at">
+                        </div>
+                        <div class="form-row">
+                            <label>End (optional, server time)</label>
+                            <input type="datetime-local" name="end_at" class="form-input" x-model="f.end_at">
+                        </div>
+                    </div>
+
+                    <!-- Optional image upload with client-side 5:2 crop -->
+                    <div class="form-row">
+                        <label>Banner Image (optional)</label>
+                        <div style="font-size:0.76rem; color:var(--text-muted); margin-bottom:6px;">
+                            Banner image: 1250x500 px (5:2). It will be cropped/resized automatically. When an image is set, the app shows the image alone.
+                        </div>
+                        <input type="file" id="sb_pick" accept="image/jpeg,image/png,image/webp" @change="onPick($event)">
+                        <input type="file" name="image_file" id="sb_out" style="display:none;">
+                        <div style="display:flex; gap:8px; align-items:center; margin-top:6px; flex-wrap:wrap;">
+                            <button type="button" class="btn btn-secondary btn-sm" x-show="newPreview" x-cloak @click="clearNew(); cropMsg = ''">Discard new image</button>
+                            <button type="button" class="btn btn-danger-outline btn-sm" x-show="existingImage && !removeImage && !newPreview" x-cloak @click="removeCurrent()">Remove current image</button>
+                            <button type="button" class="btn btn-secondary btn-sm" x-show="removeImage" x-cloak @click="removeImage = false">Keep current image</button>
+                        </div>
+                        <div x-show="cropMsg" x-cloak style="font-size:0.76rem; color:#065f46; margin-top:6px;" x-text="cropMsg"></div>
+                        <div x-show="cropErr" x-cloak style="font-size:0.76rem; color:#991b1b; margin-top:6px;" x-text="cropErr"></div>
+                    </div>
+
+                    <div class="form-row" style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                        <input type="checkbox" name="is_active" id="sb_is_active" value="1" x-model="f.is_active">
+                        <label for="sb_is_active" style="margin-bottom:0; cursor:pointer;">Active (visible in the app within its schedule)</label>
+                    </div>
+                </div>
+
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('shopBannerModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" x-text="id ? 'Save Changes' : 'Create Banner'">Save Banner</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: CONFIRM DELETE SHOP BANNER -->
+    <div class="modal-overlay" id="shopBannerDeleteModal">
+        <div class="modal-card confirm-dialog-card">
+            <div class="modal-head" style="border-bottom-color:#fecaca; background:#fef2f2;">
+                <h3 style="color:var(--danger); display:flex; align-items:center; gap:8px;">
+                    <div class="confirm-icon-badge danger" style="width:32px; height:32px; font-size:18px;">
+                        <i class="ph ph-warning-circle"></i>
+                    </div>
+                    Confirm Delete
+                </h3>
+                <button type="button" class="close-btn" onclick="closeModal('shopBannerDeleteModal')">&times;</button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="delete_shop_banner">
+                <input type="hidden" name="banner_id" id="sb_del_id" value="">
+                <div class="modal-body" style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5;">
+                    <p>Are you sure you want to permanently delete this banner (and its uploaded image)?</p>
+                    <div id="sbDeleteTitle" style="font-weight: 700; color: var(--text-primary); margin: 10px 0; padding: 10px 14px; background: #f8fafc; border-radius: 8px; border: 1px solid var(--border);"></div>
+                    <p style="font-size: 0.78rem; color: #dc2626; margin-top: 8px; display: flex; align-items: center; gap: 4px;">
+                        <i class="ph ph-warning"></i> This operation cannot be reversed.
+                    </p>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('shopBannerDeleteModal')">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Yes, Permanently Delete</button>
                 </div>
             </form>
         </div>

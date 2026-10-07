@@ -19,19 +19,25 @@ class ChcOfficial {
     final rawCodes = json['allowed_client_codes'];
     List<String> codes = ['ALL'];
     if (rawCodes is List) {
-      codes = rawCodes.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+      codes = rawCodes
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
       if (!codes.contains('ALL')) {
         codes.insert(0, 'ALL');
       }
     }
 
     return ChcOfficial(
-      adminId: json['admin_id'] is int ? json['admin_id'] as int : int.tryParse(json['admin_id']?.toString() ?? '0') ?? 0,
+      adminId: json['admin_id'] is int
+          ? json['admin_id'] as int
+          : int.tryParse(json['admin_id']?.toString() ?? '0') ?? 0,
       email: json['email']?.toString() ?? '',
       role: json['role']?.toString() ?? 'official',
       region: json['region']?.toString() ?? '',
       allowedClientCodes: codes,
-      currentClientCode: json['current_client_code']?.toString() ?? (codes.isNotEmpty ? codes[0] : 'ALL'),
+      currentClientCode: json['current_client_code']?.toString() ??
+          (codes.isNotEmpty ? codes[0] : 'ALL'),
     );
   }
 

@@ -773,6 +773,12 @@ switch ($action) {
     case 'get_products':
         getProducts($pdo);
         break;
+    case 'get_shop_banners':
+        getShopBanners($pdo);
+        break;
+    case 'get_shop_updates':
+        getShopUpdates($pdo);
+        break;
     case 'get_product_categories':
         getProductCategories($pdo);
         break;
@@ -2703,6 +2709,7 @@ function getProducts($pdo) {
                    COALESCE(NULLIF(p.$descField, ''), p.product_description, p.product_description_en) as product_description, 
                    p.product_video_url,
                    p.image_url_1, p.image_url_2, p.image_url_3,
+                   p.created_at,
                    a.advertiser_id, a.advertiser_name
             FROM products p
             LEFT JOIN product_categories pc ON (p.category = pc.category_name_te OR p.category = pc.category_name_en OR p.category_en = pc.category_name_en)
@@ -2729,6 +2736,8 @@ function getProducts($pdo) {
             $params[] = "%$search%";
         }
         
+        // Region rule duplicated in shopRegionFilterSql() (used by getShopUpdates); keep in sync.
+        // getProducts intentionally has no is_active filter (product decision pending).
         if ($userId) {
             $stmtUser = $pdo->prepare("SELECT region FROM users WHERE user_id = ?");
             $stmtUser->execute([$userId]);
@@ -2765,6 +2774,229 @@ function getProducts($pdo) {
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
+}
+
+// ===================== SHOP BANNERS / UPDATES =====================
+
+/**
+ * Run $fn (which queries shop_banners). If the table does not exist yet
+ * (SQLSTATE 42S02 / MySQL 1146), create it once and retry once.
+ */
+function shopBannersRetryingCreate($pdo, $fn) {
+    try {
+        return $fn();
+    } catch (PDOException $e) {
+        $missing = ($e->getCode() === '42S02')
+            || (isset($e->errorInfo[1]) && (int)$e->errorInfo[1] === 1146);
+        if (!$missing) throw $e;
+        ensureShopBannersTable($pdo);
+        return $fn();
+    }
+}
+
+function ensureShopBannersTable($pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS shop_banners (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      tag_en VARCHAR(40), tag_hi VARCHAR(40), tag_te VARCHAR(40),
+      title_en VARCHAR(120) NOT NULL, title_hi VARCHAR(120), title_te VARCHAR(120),
+      subtitle_en VARCHAR(200), subtitle_hi VARCHAR(200), subtitle_te VARCHAR(200),
+      cta_text_en VARCHAR(40), cta_text_hi VARCHAR(40), cta_text_te VARCHAR(40),
+      badge_en VARCHAR(30), badge_hi VARCHAR(30), badge_te VARCHAR(30),
+      target_type ENUM('none','product','category','url') NOT NULL DEFAULT 'none',
+      target_value VARCHAR(500) NULL,
+      bg_color_1 CHAR(7) DEFAULT '#064E3B', bg_color_2 CHAR(7) DEFAULT '#047857',
+      icon_key VARCHAR(40) NULL,
+      image_url VARCHAR(500) NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      sort_order INT NOT NULL DEFAULT 0,
+      start_at DATETIME NULL, end_at DATETIME NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_active_sort (is_active, sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+function shopBannerLang() {
+    $lang = $_GET['lang'] ?? 'en';
+    return in_array($lang, ['en', 'hi', 'te'], true) ? $lang : 'en';
+}
+
+function shopBannerLocalized($field, $lang) {
+    return "COALESCE(NULLIF($field" . "_$lang, ''), $field" . "_en)";
+}
+
+function shopBannerImageUrl($url) {
+    if ($url === null || $url === '') return null;
+    $url = trim($url);
+    if (stripos($url, 'http://') === 0) {
+        $host = parse_url($url, PHP_URL_HOST);
+        if ($host && strcasecmp($host, 'kiosk.cropsync.in') === 0) {
+            return 'https://' . substr($url, 7);
+        }
+        return null; // other cleartext hosts would be blocked on Android
+    }
+    if (stripos($url, 'https://') === 0) return $url;
+    if (isset($url[0]) && $url[0] === '/' && strpos($url, '//') !== 0) return $url; // root-relative
+    return null;
+}
+
+function getShopBanners($pdo) {
+    header('Cache-Control: no-cache');
+    $serverTime = date('Y-m-d H:i:s');
+    $banners = [];
+    try {
+        $lang = shopBannerLang();
+        $sql = "SELECT id,
+                   " . shopBannerLocalized('tag', $lang) . " AS tag,
+                   " . shopBannerLocalized('title', $lang) . " AS title,
+                   " . shopBannerLocalized('subtitle', $lang) . " AS subtitle,
+                   " . shopBannerLocalized('cta_text', $lang) . " AS cta_text,
+                   " . shopBannerLocalized('badge', $lang) . " AS badge,
+                   target_type, target_value, bg_color_1, bg_color_2, icon_key, image_url,
+                   sort_order, created_at, updated_at
+            FROM shop_banners
+            WHERE is_active = 1
+              AND (start_at IS NULL OR start_at <= NOW())
+              AND (end_at IS NULL OR end_at >= NOW())
+            ORDER BY sort_order ASC, id DESC";
+        $rows = shopBannersRetryingCreate($pdo, function () use ($pdo, $sql) {
+            return $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        });
+        foreach ($rows as $r) {
+            $r['id'] = (int)$r['id'];
+            $r['sort_order'] = (int)$r['sort_order'];
+            $r['image_url'] = shopBannerImageUrl($r['image_url']);
+            $banners[] = $r;
+        }
+    } catch (Throwable $e) {
+        $banners = [];
+    }
+    echo json_encode(['success' => true, 'server_time' => $serverTime, 'banners' => $banners]);
+}
+
+/**
+ * Region visibility rule for products: returns [sqlFragment, params].
+ * Mirrors the inline logic in getProducts (kept separate there on purpose; keep both in sync).
+ */
+function shopRegionFilterSql($pdo, $userId) {
+    $sql = '';
+    $params = [];
+    if ($userId) {
+        $stmtUser = $pdo->prepare("SELECT region FROM users WHERE user_id = ?");
+        $stmtUser->execute([$userId]);
+        $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
+        if ($user && !empty($user['region'])) {
+            try {
+                $stmtRegion = $pdo->prepare("SELECT id FROM regions WHERE region_name = ? LIMIT 1");
+                $stmtRegion->execute([$user['region']]);
+                $region = $stmtRegion->fetch(PDO::FETCH_ASSOC);
+                if ($region) {
+                    $sql = " AND (p.region_id IS NULL OR p.region_id = ?)";
+                    $params[] = $region['id'];
+                } else {
+                    $sql = " AND p.region_id IS NULL";
+                }
+            } catch (PDOException $e) {
+                $sql = " AND p.region_id IS NULL";
+            }
+        }
+    }
+    return [$sql, $params];
+}
+
+function getShopUpdates($pdo) {
+    header('Cache-Control: no-cache');
+    $lang = shopBannerLang();
+    $sinceProduct = isset($_GET['since_product_id']) ? (int)$_GET['since_product_id'] : -1;
+    $sinceBanner = isset($_GET['since_banner_id']) ? (int)$_GET['since_banner_id'] : -1;
+    $userId = $_GET['user_id'] ?? null;
+
+    $latestProductId = 0;
+    $newProductsCount = 0;
+    $newProducts = [];
+    $latestBannerId = 0;
+    $newBannersCount = 0;
+    $newBanners = [];
+
+    // Products (same region rule as getProducts)
+    try {
+        $nameField = ($lang === 'en') ? 'product_name_en' : (($lang === 'hi') ? 'product_name_hi' : 'product_name');
+        // NOTE: unlike getProducts (which has no is_active filter), updates only count active products.
+        // This difference is intentional pending a product decision.
+        $where = " WHERE p.is_active = 1";
+        [$regionSql, $params] = shopRegionFilterSql($pdo, $userId);
+        $where .= $regionSql;
+
+        $stmt = $pdo->prepare("SELECT COALESCE(MAX(p.product_id), 0) FROM products p" . $where);
+        $stmt->execute($params);
+        $latestProductId = (int)$stmt->fetchColumn();
+
+        if ($sinceProduct >= 0) {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM products p" . $where . " AND p.product_id > ?");
+            $stmt->execute(array_merge($params, [$sinceProduct]));
+            $newProductsCount = (int)$stmt->fetchColumn();
+
+            if ($newProductsCount > 0) {
+                $stmt = $pdo->prepare("SELECT p.product_id,
+                        COALESCE(NULLIF(p.$nameField, ''), p.product_name, p.product_name_en) AS name,
+                        p.image_url_1 AS image_url, p.price
+                    FROM products p" . $where . " AND p.product_id > ?
+                    ORDER BY p.product_id DESC LIMIT 4");
+                $stmt->execute(array_merge($params, [$sinceProduct]));
+                foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                    $newProducts[] = [
+                        'product_id' => (int)$r['product_id'],
+                        'name' => $r['name'],
+                        'image_url' => $r['image_url'],
+                        'price' => $r['price'],
+                    ];
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        // leave product section empty
+    }
+
+    // Banners
+    try {
+        $active = " is_active = 1 AND (start_at IS NULL OR start_at <= NOW()) AND (end_at IS NULL OR end_at >= NOW())";
+        $latestBannerId = (int)shopBannersRetryingCreate($pdo, function () use ($pdo, $active) {
+            return $pdo->query("SELECT COALESCE(MAX(id), 0) FROM shop_banners WHERE" . $active)->fetchColumn();
+        });
+
+        if ($sinceBanner >= 0) {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM shop_banners WHERE" . $active . " AND id > ?");
+            $stmt->execute([$sinceBanner]);
+            $newBannersCount = (int)$stmt->fetchColumn();
+
+            if ($newBannersCount > 0) {
+                $stmt = $pdo->prepare("SELECT id,
+                        " . shopBannerLocalized('title', $lang) . " AS title,
+                        " . shopBannerLocalized('subtitle', $lang) . " AS subtitle,
+                        image_url, bg_color_1, bg_color_2
+                    FROM shop_banners WHERE" . $active . " AND id > ?
+                    ORDER BY id DESC LIMIT 3");
+                $stmt->execute([$sinceBanner]);
+                foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                    $r['id'] = (int)$r['id'];
+                    $r['image_url'] = shopBannerImageUrl($r['image_url']);
+                    $newBanners[] = $r;
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        // leave banner section empty
+    }
+
+    echo json_encode([
+        'success' => true,
+        'latest_product_id' => $latestProductId,
+        'latest_banner_id' => $latestBannerId,
+        'new_products_count' => $newProductsCount,
+        'new_products' => $newProducts,
+        'new_banners_count' => $newBannersCount,
+        'new_banners' => $newBanners,
+    ]);
 }
 
 function getProductCategories($pdo) {

@@ -12,7 +12,7 @@ import 'package:cropsync/screens/operator/operator_history_screen.dart';
 import 'package:cropsync/screens/operator/operator_profile_screen.dart';
 import 'package:cropsync/screens/operator/operator_analytics_tab.dart';
 import 'package:cropsync/auth/signup_screen.dart';
-import 'package:cropsync/widgets/language_selector.dart';
+import 'package:cropsync/widgets/language_button.dart';
 
 class OperatorDashboard extends StatefulWidget {
   const OperatorDashboard({super.key});
@@ -368,12 +368,7 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
         ),
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.translate_rounded,
-              color: AppTheme.appBarText, size: 24),
-          onPressed: () => LanguageSelector.show(context),
-          splashRadius: 24,
-        ),
+        const LanguageButton(),
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: IconButton(

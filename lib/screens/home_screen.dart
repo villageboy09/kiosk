@@ -11,7 +11,7 @@ import 'package:cropsync/services/notification_service.dart';
 import 'package:cropsync/widgets/home_tab.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cropsync/widgets/language_selector.dart';
+import 'package:cropsync/widgets/language_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shimmer/shimmer.dart';
@@ -145,10 +145,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _showLanguageSheet() {
-    LanguageSelector.show(context);
-  }
-
   Future<void> _openProfile() async {
     HapticFeedback.selectionClick();
     await Navigator.of(context).push(
@@ -229,8 +225,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return AppBar(
       title: Text(
         'CropSync',
-        style: AppTheme.appBarTitle
-            .copyWith(fontWeight: FontWeight.w800, fontSize: 24, color: Colors.black),
+        style: AppTheme.appBarTitle.copyWith(
+            fontWeight: FontWeight.w800, fontSize: 24, color: Colors.black),
       ),
       centerTitle: false,
       backgroundColor: AppTheme.appBarBg,
@@ -239,12 +235,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       surfaceTintColor: Colors.transparent,
       systemOverlayStyle: SystemUiOverlayStyle.dark,
       actions: [
-        IconButton(
-          icon: const Icon(Icons.translate_rounded,
-              color: AppTheme.appBarText, size: 24),
-          onPressed: _showLanguageSheet,
-          splashRadius: 24,
-        ),
+        const LanguageButton(),
         const WiggleBellButton(),
         Padding(
           padding: const EdgeInsets.only(right: 8),

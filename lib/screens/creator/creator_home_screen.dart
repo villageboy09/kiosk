@@ -6,7 +6,7 @@ import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/notification_service.dart';
-import 'package:cropsync/widgets/language_selector.dart';
+import 'package:cropsync/widgets/language_button.dart';
 import 'package:cropsync/screens/profile_screen.dart';
 import 'package:cropsync/screens/reels_screen.dart';
 import 'package:cropsync/screens/creator/creator_studio_screen.dart';
@@ -138,10 +138,6 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
     ReelsScreen.isTabActive.value = (index == 1);
   }
 
-  void _showLanguageSheet() {
-    LanguageSelector.show(context);
-  }
-
   Future<void> _openProfile() async {
     HapticFeedback.selectionClick();
     await Navigator.of(context).push(
@@ -231,11 +227,7 @@ class _CreatorHomeScreenState extends State<CreatorHomeScreen> with TickerProvid
       surfaceTintColor: Colors.transparent,
       systemOverlayStyle: SystemUiOverlayStyle.dark,
       actions: [
-        IconButton(
-          icon: const Icon(Icons.translate_rounded, color: AppTheme.appBarText, size: 22),
-          onPressed: _showLanguageSheet,
-          splashRadius: 24,
-        ),
+        const LanguageButton(),
         _buildWiggleBell(),
         Padding(
           padding: const EdgeInsets.only(right: 12),

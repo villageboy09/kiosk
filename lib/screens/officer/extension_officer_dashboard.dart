@@ -4,7 +4,7 @@ import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
-import 'package:cropsync/widgets/language_selector.dart';
+import 'package:cropsync/widgets/language_button.dart';
 import 'package:cropsync/auth/signup_screen.dart';
 import 'package:cropsync/widgets/animated_widgets.dart';
 import 'package:cropsync/utils/safe_parser.dart';
@@ -157,10 +157,7 @@ class _ExtensionOfficerDashboardState extends State<ExtensionOfficerDashboard> {
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.translate_rounded),
-          onPressed: () => LanguageSelector.show(context),
-        ),
+        const LanguageButton(color: Color(0xFF1F2937)),
         IconButton(
           icon: const Icon(Icons.logout, color: Colors.redAccent),
           onPressed: _logout,
@@ -417,11 +414,7 @@ class _ExtensionOfficerDashboardState extends State<ExtensionOfficerDashboard> {
           ),
         ),
         const SizedBox(height: 24),
-        ListTile(
-          leading: const Icon(Icons.language_rounded),
-          title: const Text("Select Language"),
-          onTap: () => LanguageSelector.show(context),
-        ),
+        const LanguageListTile(title: "Select Language"),
         const Divider(),
         ListTile(
           leading: const Icon(Icons.info_outline_rounded),

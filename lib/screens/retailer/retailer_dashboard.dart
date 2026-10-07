@@ -5,7 +5,7 @@ import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/api_service.dart';
-import 'package:cropsync/widgets/language_selector.dart';
+import 'package:cropsync/widgets/language_button.dart';
 import 'package:cropsync/auth/signup_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:cropsync/widgets/animated_widgets.dart';
@@ -245,10 +245,7 @@ class _RetailerDashboardState extends State<RetailerDashboard> {
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.translate_rounded),
-          onPressed: () => LanguageSelector.show(context),
-        ),
+        const LanguageButton(color: Color(0xFF1F2937)),
         IconButton(
           icon: const Icon(Icons.logout, color: Colors.redAccent),
           onPressed: _logout,
@@ -570,11 +567,7 @@ class _RetailerDashboardState extends State<RetailerDashboard> {
           ),
         ),
         const SizedBox(height: 24),
-        ListTile(
-          leading: const Icon(Icons.language_rounded),
-          title: Text("select_language".tr()),
-          onTap: () => LanguageSelector.show(context),
-        ),
+        LanguageListTile(title: "select_language".tr()),
         const Divider(),
         ListTile(
           leading: const Icon(Icons.info_outline_rounded),
