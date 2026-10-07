@@ -1,10 +1,11 @@
-﻿import 'package:cropsync/services/deepseek_plant_doctor_service.dart';
+import 'package:cropsync/services/deepseek_plant_doctor_service.dart';
 import 'package:cropsync/services/text_to_speech_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('TextToSpeechService Language & Formatting Tests', () {
-    test('resolveTtsLanguage maps languages to native Indian TTS locale tags', () {
+    test('resolveTtsLanguage maps languages to native Indian TTS locale tags',
+        () {
       expect(TextToSpeechService.resolveTtsLanguage('te'), equals('te-IN'));
       expect(TextToSpeechService.resolveTtsLanguage('TE'), equals('te-IN'));
       expect(TextToSpeechService.resolveTtsLanguage('hi'), equals('hi-IN'));
@@ -14,7 +15,9 @@ void main() {
       expect(TextToSpeechService.resolveTtsLanguage('fr'), equals('en-IN'));
     });
 
-    test('cleanTextForSpeech cleans markdown, bullets, and expands agricultural units', () {
+    test(
+        'cleanTextForSpeech cleans markdown, bullets, and expands agricultural units',
+        () {
       const raw = '''
 *Spray Mancozeb 75% WP* @ 2.5 g/L (500 g/acre in 200 L water).
 • Ensure uniform spray coverage on leaves.
@@ -34,8 +37,11 @@ void main() {
       expect(cleaned.contains('grams per'), isTrue);
     });
 
-    test('cleanTextForSpeech preserves and fluently formats Telugu agricultural text', () {
-      const teluguRaw = 'మాంకోజెబ్ 75% WP @ 2.5 గ్రా/లీ (500 గ్రా/ఎకరా 200 లీటర్ల నీటిలో కలపాలి)';
+    test(
+        'cleanTextForSpeech preserves and fluently formats Telugu agricultural text',
+        () {
+      const teluguRaw =
+          'మాంకోజెబ్ 75% WP @ 2.5 గ్రా/లీ (500 గ్రా/ఎకరా 200 లీటర్ల నీటిలో కలపాలి)';
       final cleaned = TextToSpeechService.cleanTextForSpeech(teluguRaw);
 
       expect(cleaned, isNotEmpty);
@@ -44,8 +50,11 @@ void main() {
       expect(cleaned.contains('@'), isFalse);
     });
 
-    test('cleanTextForSpeech preserves and fluently formats Hindi agricultural text', () {
-      const hindiRaw = 'मैंकोजेब 75% WP @ 2.5 ग्राम/लीटर (500 ग्राम/एकड़ 200 लीटर पानी में मिलाएं)';
+    test(
+        'cleanTextForSpeech preserves and fluently formats Hindi agricultural text',
+        () {
+      const hindiRaw =
+          'मैंकोजेब 75% WP @ 2.5 ग्राम/लीटर (500 ग्राम/एकड़ 200 लीटर पानी में मिलाएं)';
       final cleaned = TextToSpeechService.cleanTextForSpeech(hindiRaw);
 
       expect(cleaned, isNotEmpty);
@@ -72,7 +81,8 @@ void main() {
 ''';
 
     test('Enriches Telugu responses with Telugu CIBRC per-acre controls', () {
-      final parsed = DeepSeekPlantDoctorService.parseCleanJson(testJson, language: 'te');
+      final parsed =
+          DeepSeekPlantDoctorService.parseCleanJson(testJson, language: 'te');
       final controls = parsed['ai_control_measures'] as Map<String, dynamic>;
       final chemical = controls['chemical'] as List;
       final biological = controls['biological'] as List;
@@ -87,7 +97,8 @@ void main() {
     });
 
     test('Enriches Hindi responses with Hindi CIBRC per-acre controls', () {
-      final parsed = DeepSeekPlantDoctorService.parseCleanJson(testJson, language: 'hi');
+      final parsed =
+          DeepSeekPlantDoctorService.parseCleanJson(testJson, language: 'hi');
       final controls = parsed['ai_control_measures'] as Map<String, dynamic>;
       final chemical = controls['chemical'] as List;
       final biological = controls['biological'] as List;
@@ -102,7 +113,8 @@ void main() {
     });
 
     test('Enriches English responses with English CIBRC per-acre controls', () {
-      final parsed = DeepSeekPlantDoctorService.parseCleanJson(testJson, language: 'en');
+      final parsed =
+          DeepSeekPlantDoctorService.parseCleanJson(testJson, language: 'en');
       final controls = parsed['ai_control_measures'] as Map<String, dynamic>;
       final chemical = controls['chemical'] as List;
 

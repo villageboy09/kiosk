@@ -75,7 +75,8 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
 
-    await tester.pumpWidget(createTestWidget(screenSize: const Size(1280, 800)));
+    await tester
+        .pumpWidget(createTestWidget(screenSize: const Size(1280, 800)));
     await tester.pumpAndSettle();
 
     expect(find.text('తెలుగు'), findsOneWidget);
@@ -109,6 +110,3 @@ void main() {
     expect(prefs.getBool('language_selected'), isTrue);
   });
 }
-
-
-

@@ -73,6 +73,28 @@ foreach ($districts as $district) {
     $district = trim($district);
     $safeDistrict = strtolower(preg_replace('/[^a-zA-Z0-9-_.~%]/', '_', $district));
 
+    // State of this district, taken from recent verified rows; used to keep the fallback queries state-bound.
+    // No verified recent rows => no state => nothing is sent for this district (never send from legacy/stale data).
+    $stateVariants = [];
+    $stateIn = '';
+    try {
+        $stmtState = $pdo->prepare("
+            SELECT state FROM market_prices_history
+            WHERE LOWER(TRIM(district)) = LOWER(TRIM(?))
+              AND source = 'gov'
+              AND arrival_date >= CURDATE() - INTERVAL 3 DAY
+            ORDER BY arrival_date DESC LIMIT 1
+        ");
+        $stmtState->execute([$district]);
+        $districtState = trim((string)$stmtState->fetchColumn());
+        if ($districtState !== '') {
+            $stateVariants = mpStateVariants(mpCanonicalState($districtState));
+            $stateIn = implode(',', array_fill(0, count($stateVariants), '?'));
+        }
+    } catch (PDOException $e) {
+        $stateVariants = [];
+    }
+
     // A. Fetch unique crop English names sown in this district
     try {
         $stmtCrops = $pdo->prepare("
@@ -107,6 +129,8 @@ foreach ($districts as $district) {
                 FROM market_prices_history 
                 WHERE LOWER(TRIM(district)) = LOWER(TRIM(?)) 
                   AND commodity LIKE ? 
+                  AND source = 'gov'
+                  AND arrival_date >= CURDATE() - INTERVAL 3 DAY
                 ORDER BY arrival_date DESC, id DESC LIMIT 1
             ");
             $stmtPrice->execute([$district, $pattern]);
@@ -117,15 +141,18 @@ foreach ($districts as $district) {
         }
 
         // State-wide fallback if not found in the district
-        if (!$priceRecord) {
+        if (!$priceRecord && !empty($stateVariants)) {
             foreach ($patterns as $pattern) {
                 $stmtPrice = $pdo->prepare("
                     SELECT commodity, market, modal_price, arrival_date, district as record_district
                     FROM market_prices_history 
                     WHERE commodity LIKE ? 
+                      AND source = 'gov'
+                      AND arrival_date >= CURDATE() - INTERVAL 3 DAY
+                      AND state IN ($stateIn)
                     ORDER BY arrival_date DESC, id DESC LIMIT 1
                 ");
-                $stmtPrice->execute([$pattern]);
+                $stmtPrice->execute(array_merge([$pattern], $stateVariants));
                 $priceRecord = $stmtPrice->fetch(PDO::FETCH_ASSOC);
                 if ($priceRecord) {
                     break;
@@ -166,6 +193,8 @@ foreach ($districts as $district) {
             SELECT commodity, market, modal_price, arrival_date 
             FROM market_prices_history 
             WHERE LOWER(TRIM(district)) = LOWER(TRIM(?))
+              AND source = 'gov'
+              AND arrival_date >= CURDATE() - INTERVAL 3 DAY
             ORDER BY arrival_date DESC, modal_price DESC LIMIT 1
         ");
         $stmtNative->execute([$district]);
@@ -175,14 +204,18 @@ foreach ($districts as $district) {
     }
 
     // Default state-wide fallback if no district prices exist
-    if (!$nativePrice) {
+    if (!$nativePrice && !empty($stateVariants)) {
         try {
-            $stmtNative = $pdo->query("
+            $stmtNative = $pdo->prepare("
                 SELECT commodity, market, modal_price, arrival_date, district as fallback_district
                 FROM market_prices_history 
+                WHERE source = 'gov'
+                  AND arrival_date >= CURDATE() - INTERVAL 3 DAY
+                  AND state IN ($stateIn)
                 ORDER BY arrival_date DESC, modal_price DESC LIMIT 1
             ");
-            $nativePrice = $stmtNative ? $stmtNative->fetch(PDO::FETCH_ASSOC) : null;
+            $stmtNative->execute($stateVariants);
+            $nativePrice = $stmtNative->fetch(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             $nativePrice = null;
         }

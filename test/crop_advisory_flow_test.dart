@@ -13,8 +13,10 @@ class AdvisoryTestAssetLoader extends AssetLoader {
     return {
       'home_feature_advisory_title': 'Crop Advisory',
       'home_feature_advisory_subtitle': 'Expert Tips',
-      'advisory_grid_subtitle': 'Select a crop to explore complete growth stages, care guides, and disease protection',
-      'advisory_search_crop_hint': 'Search crops (e.g. Rice, Cotton, Chilli)...',
+      'advisory_grid_subtitle':
+          'Select a crop to explore complete growth stages, care guides, and disease protection',
+      'advisory_search_crop_hint':
+          'Search crops (e.g. Rice, Cotton, Chilli)...',
       'advisory_sowing_to_harvest': 'Complete Guide from Sowing to Harvest',
       'advisory_search_problems_hint': 'Search problem by name, symptoms...',
       'advisory_filter_all': 'All Problems',
@@ -62,7 +64,8 @@ void main() {
   }
 
   group('Crop Advisory Flow Responsive Widget Tests', () {
-    testWidgets('CropAdvisoryGridScreen renders search bar and title on mobile (360x640)',
+    testWidgets(
+        'CropAdvisoryGridScreen renders search bar and title on mobile (360x640)',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;
@@ -78,7 +81,8 @@ void main() {
 
       expect(find.text('Crop Advisory'), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
-      expect(find.text('Search crops (e.g. Rice, Cotton, Chilli)...'), findsOneWidget);
+      expect(find.text('Search crops (e.g. Rice, Cotton, Chilli)...'),
+          findsOneWidget);
     });
 
     testWidgets('CropAdvisoryGridScreen renders on tablet screen (1280x800)',
@@ -99,7 +103,8 @@ void main() {
       expect(find.byType(TextField), findsOneWidget);
     });
 
-    testWidgets('CropProblemsScreen renders category filter chips and search on mobile (360x640)',
+    testWidgets(
+        'CropProblemsScreen renders category filter chips and search on mobile (360x640)',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;

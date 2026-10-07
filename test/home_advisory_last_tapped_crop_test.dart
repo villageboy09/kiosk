@@ -67,7 +67,9 @@ void main() {
   }
 
   group('HomeTab Crop Advisory Card Last Tapped Crop Tests', () {
-    testWidgets('Shows default subtitle "Expert Tips" when no crop has been tapped', (tester) async {
+    testWidgets(
+        'Shows default subtitle "Expert Tips" when no crop has been tapped',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       GlobalNotifiers.lastTappedCrop.value = null;
 
@@ -86,7 +88,8 @@ void main() {
       expect(selectedTab, 1);
     });
 
-    testWidgets('Shows cached last tapped crop on Crop Advisory card', (tester) async {
+    testWidgets('Shows cached last tapped crop on Crop Advisory card',
+        (tester) async {
       SharedPreferences.setMockInitialValues({
         'last_tapped_crop_name': 'Chilli (మిరప)',
         'last_tapped_crop_id': 5,
@@ -103,7 +106,9 @@ void main() {
       expect(find.text('Chilli (మిరప)'), findsOneWidget);
     });
 
-    testWidgets('Updates Crop Advisory subtitle when GlobalNotifiers emits new tapped crop', (tester) async {
+    testWidgets(
+        'Updates Crop Advisory subtitle when GlobalNotifiers emits new tapped crop',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       GlobalNotifiers.lastTappedCrop.value = null;
 

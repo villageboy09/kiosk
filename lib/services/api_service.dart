@@ -1,5 +1,6 @@
-// ignore_for_file: avoid_print
+// ignore_for_file: curly_braces_in_flow_control_structures, avoid_print
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'dart:io';
@@ -37,12 +38,14 @@ class ApiService {
       if (region != null) request.fields['region'] = region;
 
       request.files.add(
-        await http.MultipartFile.fromPath('profile_image', profileImageFile.path),
+        await http.MultipartFile.fromPath(
+            'profile_image', profileImageFile.path),
       );
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && data['success'] == true) {
         final userData = (data['user'] is Map<String, dynamic>)
@@ -52,12 +55,15 @@ class ApiService {
                 if (name != null) 'name': name,
                 if (phoneNumber != null) 'phone_number': phoneNumber,
               };
-        if (data['profile_image_url'] != null && (userData['profile_image_url'] == null || userData['profile_image_url'].toString().isEmpty)) {
+        if (data['profile_image_url'] != null &&
+            (userData['profile_image_url'] == null ||
+                userData['profile_image_url'].toString().isEmpty)) {
           userData['profile_image_url'] = data['profile_image_url'];
         }
         return User.fromJson(userData);
       } else {
-        throw Exception(data['message'] ?? data['error'] ?? 'Failed to update profile');
+        throw Exception(
+            data['message'] ?? data['error'] ?? 'Failed to update profile');
       }
     } else {
       final response = await http.post(
@@ -74,7 +80,8 @@ class ApiService {
         }),
       );
 
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (response.statusCode == 200 && data['success'] == true) {
         final userData = (data['user'] is Map<String, dynamic>)
             ? Map<String, dynamic>.from(data['user'] as Map)
@@ -83,12 +90,15 @@ class ApiService {
                 if (name != null) 'name': name,
                 if (phoneNumber != null) 'phone_number': phoneNumber,
               };
-        if (data['profile_image_url'] != null && (userData['profile_image_url'] == null || userData['profile_image_url'].toString().isEmpty)) {
+        if (data['profile_image_url'] != null &&
+            (userData['profile_image_url'] == null ||
+                userData['profile_image_url'].toString().isEmpty)) {
           userData['profile_image_url'] = data['profile_image_url'];
         }
         return User.fromJson(userData);
       } else {
-        throw Exception(data['message'] ?? data['error'] ?? 'Failed to update profile');
+        throw Exception(
+            data['message'] ?? data['error'] ?? 'Failed to update profile');
       }
     }
   }
@@ -98,19 +108,23 @@ class ApiService {
   /// Returns a User object on success, throws an exception on failure
   static Future<User> loginWithUserId(String userId, {String? role}) async {
     final cleanPhone = userId.trim().replaceAll(RegExp(r'\D'), '');
-    final phone = cleanPhone.length > 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
+    final phone = cleanPhone.length > 10
+        ? cleanPhone.substring(cleanPhone.length - 10)
+        : cleanPhone;
     final url = Uri.parse('$baseUrl/api.php?action=login');
 
     try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'user_id': phone,
-          'phone_number': phone,
-          if (role != null) 'role': role,
-        }),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'user_id': phone,
+              'phone_number': phone,
+              if (role != null) 'role': role,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
       final data =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -217,16 +231,20 @@ class ApiService {
 
   /// Register a new user
   static Future<Map<String, dynamic>> registerUser(
-      String name, String phoneNumber, String clientCode, {
-        String? role,
-        String? password,
-        String? securityQuestion,
-        String? securityAnswer,
-        String? username,
-        String? email,
-      }) async {
+    String name,
+    String phoneNumber,
+    String clientCode, {
+    String? role,
+    String? password,
+    String? securityQuestion,
+    String? securityAnswer,
+    String? username,
+    String? email,
+  }) async {
     final cleanPhone = phoneNumber.trim().replaceAll(RegExp(r'\D'), '');
-    final phone = cleanPhone.length > 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
+    final phone = cleanPhone.length > 10
+        ? cleanPhone.substring(cleanPhone.length - 10)
+        : cleanPhone;
     final url = Uri.parse('$baseUrl/api.php?action=register_user');
 
     try {
@@ -254,12 +272,14 @@ class ApiService {
       if (email != null) {
         body['email'] = email;
       }
-      
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 15));
+
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         return jsonDecode(utf8.decode(response.bodyBytes));
@@ -275,15 +295,19 @@ class ApiService {
 
   /// Check if a user exists by phone number.
   /// Returns user data if found, null otherwise.
-  static Future<Map<String, dynamic>?> checkUser(String phoneNumber, {String? role}) async {
+  static Future<Map<String, dynamic>?> checkUser(String phoneNumber,
+      {String? role}) async {
     try {
       final cleanPhone = phoneNumber.trim().replaceAll(RegExp(r'\D'), '');
-      final phone = cleanPhone.length > 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
+      final phone = cleanPhone.length > 10
+          ? cleanPhone.substring(cleanPhone.length - 10)
+          : cleanPhone;
       String url = '$baseUrl/api.php?action=check_user&phone_number=$phone';
       if (role != null) {
         url += '&role=$role';
       }
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      final response =
+          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -835,47 +859,99 @@ class ApiService {
     }
   }
 
-  /// Create a product enquiry
+  /// Create a product enquiry (legacy Map result; prefer [placeEnquiry]).
   static Future<Map<String, dynamic>> createEnquiry({
     required int productId,
     required String farmerId,
     required int advertiserId,
+    http.Client? client,
   }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api.php?action=create_enquiry'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'product_id': productId,
-          'farmer_id': farmerId,
-          'advertiser_id': advertiserId,
-        }),
-      );
+    final r = await placeEnquiry(
+      productId: productId,
+      farmerId: farmerId,
+      advertiserId: advertiserId,
+      client: client,
+    );
+    if (r.ok) return {'success': true, 'id': r.id};
+    return {'success': false, 'error': r.message ?? 'Server error'};
+  }
 
-      if (response.statusCode == 200) {
-        return jsonDecode(utf8.decode(response.bodyBytes));
+  /// Places a product enquiry ("order request") and returns a typed result.
+  /// Never throws. [client] is injectable for tests.
+  static Future<EnquiryResult> placeEnquiry({
+    required int productId,
+    required String farmerId,
+    required int advertiserId,
+    http.Client? client,
+  }) async {
+    final c = client ?? http.Client();
+    try {
+      final response = await c
+          .post(
+            Uri.parse('$baseUrl/api.php?action=create_enquiry'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'product_id': productId,
+              'farmer_id': farmerId,
+              'advertiser_id': advertiserId,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200) {
+        return const EnquiryResult.failed(EnquiryFailure.server,
+            message: 'Server error');
       }
-      return {'success': false, 'error': 'Server error'};
+      final dynamic data;
+      try {
+        data = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        return const EnquiryResult.failed(EnquiryFailure.server,
+            message: 'Invalid server response');
+      }
+      if (data is Map && data['success'] == true) {
+        return EnquiryResult.success(id: int.tryParse('${data['id']}'));
+      }
+      return EnquiryResult.failed(
+        EnquiryFailure.server,
+        message: data is Map ? data['error']?.toString() : null,
+      );
+    } on TimeoutException {
+      return const EnquiryResult.failed(EnquiryFailure.network,
+          message: 'Request timed out');
+    } on SocketException {
+      return const EnquiryResult.failed(EnquiryFailure.network,
+          message: 'No internet connection');
+    } on http.ClientException {
+      return const EnquiryResult.failed(EnquiryFailure.network,
+          message: 'No internet connection');
     } catch (e) {
-      return {'success': false, 'error': 'Network error: $e'};
+      return EnquiryResult.failed(EnquiryFailure.server, message: '$e');
+    } finally {
+      if (client == null) c.close();
     }
   }
 
   // ===================== SEED VARIETIES FUNCTIONS =====================
 
-  /// Get seed varieties
-  /// Get seed varieties
+  /// Get seed varieties.
+  ///
+  /// Failures are never cached. By default they resolve to `[]`; with
+  /// [throwOnError] the error is rethrown so callers can show a retry state.
   static Future<List<Map<String, dynamic>>> getSeedVarieties(
-      {String? cropName, String? userId, String lang = 'te'}) async {
+      {String? cropName,
+      String? userId,
+      String lang = 'te',
+      bool throwOnError = false}) async {
     final cacheKey = CacheKeys.withParams(
       '${CacheKeys.seedVarieties}_$lang',
       {'crop_name': cropName, 'user_id': userId},
     );
 
-    return CacheService.getOrFetch(
-      cacheKey,
-      () async {
-        try {
+    try {
+      return await CacheService.getOrFetch(
+        cacheKey,
+        () async {
           String url = '$baseUrl/api.php?action=get_seed_varieties&lang=$lang';
           if (cropName != null) {
             url += '&crop_name=${Uri.encodeComponent(cropName)}';
@@ -886,22 +962,25 @@ class ApiService {
 
           final response = await http.get(Uri.parse(url));
 
-          if (response.statusCode == 200) {
-            final data = jsonDecode(utf8.decode(response.bodyBytes));
-            if (data['success'] == true) {
-              return List<Map<String, dynamic>>.from(data['varieties']);
-            }
+          if (response.statusCode != 200) {
+            throw Exception('Server error: ${response.statusCode}');
           }
-          return [];
-        } catch (e) {
-          return [];
-        }
-      },
-    );
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
+          if (data['success'] != true) {
+            throw Exception('get_seed_varieties unsuccessful');
+          }
+          return List<Map<String, dynamic>>.from(data['varieties']);
+        },
+      );
+    } catch (e) {
+      if (throwOnError) rethrow;
+      return [];
+    }
   }
 
   /// Get crop names for seed varieties filter
-  static Future<Map<String, dynamic>> getCropNamesForSeeds({String lang = 'te'}) async {
+  static Future<Map<String, dynamic>> getCropNamesForSeeds(
+      {String lang = 'te'}) async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/api.php?action=get_crop_names&lang=$lang'),
@@ -948,7 +1027,18 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(utf8.decode(response.bodyBytes));
+        try {
+          return Map<String, dynamic>.from(
+              jsonDecode(utf8.decode(response.bodyBytes)) as Map);
+        } catch (e) {
+          // The server answered 200 but the body was unreadable: the booking
+          // may or may not have been created.
+          return {
+            'success': false,
+            'error': 'Unreadable response: $e',
+            'unknown': true,
+          };
+        }
       }
       return {
         'success': false,
@@ -1225,12 +1315,14 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>?> getOperatorAnalytics(String operatorId, {String timeframe = 'month'}) async {
+  static Future<Map<String, dynamic>?> getOperatorAnalytics(String operatorId,
+      {String timeframe = 'month'}) async {
     try {
       final trimmedOperatorId = operatorId.trim();
       if (trimmedOperatorId.isEmpty) return null;
 
-      final url = '$baseUrl/api.php?action=get_operator_analytics&operator_id=${Uri.encodeComponent(trimmedOperatorId)}&timeframe=${Uri.encodeComponent(timeframe)}';
+      final url =
+          '$baseUrl/api.php?action=get_operator_analytics&operator_id=${Uri.encodeComponent(trimmedOperatorId)}&timeframe=${Uri.encodeComponent(timeframe)}';
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
@@ -1363,118 +1455,10 @@ class ApiService {
     }
   }
 
-  // ===================== MARKET PRICES V2 ENDPOINTS =====================
-
-  /// Get state market prices
-  static Future<Map<String, dynamic>> getStateMarketPrices(String state) async {
-    final url = Uri.parse(
-        '$baseUrl/api.php?action=get_state_market_prices&state=${Uri.encodeComponent(state)}');
-    try {
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        if (decoded is Map<String, dynamic> && decoded['success'] == true && (decoded['records'] as List?)?.isNotEmpty == true) {
-          return decoded;
-        }
-      }
-    } catch (_) {}
-    return _getDefaultStateMarketPrices(state);
-  }
-
-  /// Get live market prices directly from the upstream market API.
-  static Future<Map<String, dynamic>> getLiveStateMarketPrices(
-      String state) async {
-    final url = Uri.parse(
-        '$baseUrl/api.php?action=get_live_state_market_prices&state=${Uri.encodeComponent(state)}');
-    try {
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        if (decoded is Map<String, dynamic> && decoded['success'] == true && (decoded['records'] as List?)?.isNotEmpty == true) {
-          return decoded;
-        }
-      }
-    } catch (_) {}
-    return getStateMarketPrices(state);
-  }
-
-  static Map<String, dynamic> _getDefaultStateMarketPrices(String state) {
-    final stateName = state.isNotEmpty ? state : 'Telangana';
-    final isAP = stateName.toLowerCase().contains('andhra');
-    final now = DateTime.now();
-    final today = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
-
-    final districts = isAP
-        ? ['Guntur', 'Kurnool', 'Krishna', 'East Godavari', 'Anantapur']
-        : ['Hyderabad', 'Warangal', 'Khammam', 'Karimnagar', 'Nizamabad', 'Suryapet', 'Mahabubnagar'];
-
-    final commodities = [
-      {'name': 'Apple', 'variety': 'Royal Delicious', 'min': '9800', 'max': '11200', 'modal': '10666.67'},
-      {'name': 'Avocado', 'variety': 'Hass', 'min': '45', 'max': '75', 'modal': '60.00'},
-      {'name': 'Banana', 'variety': 'Robusta', 'min': '22', 'max': '35', 'modal': '28.00'},
-      {'name': 'Beetroot', 'variety': 'Detroit Dark Red', 'min': '14', 'max': '24', 'modal': '18.00'},
-      {'name': 'Tomato', 'variety': 'Hybrid', 'min': '1800', 'max': '2800', 'modal': '2300'},
-      {'name': 'Paddy(Dhan)(Common)', 'variety': 'Common', 'min': '2250', 'max': '2360', 'modal': '2300'},
-      {'name': 'Cotton', 'variety': 'Medium Staple', 'min': '6900', 'max': '7450', 'modal': '7150'},
-      {'name': 'Maize', 'variety': 'Yellow', 'min': '2100', 'max': '2400', 'modal': '2280'},
-      {'name': 'Chilli Red', 'variety': 'Teja / Guntur', 'min': '14500', 'max': '18500', 'modal': '16500'},
-      {'name': 'Red Gram (Arhar/Tur)', 'variety': 'Red', 'min': '7200', 'max': '7900', 'modal': '7550'},
-      {'name': 'Groundnut', 'variety': 'Pods with Shell', 'min': '5800', 'max': '6700', 'modal': '6350'},
-      {'name': 'Soyabean', 'variety': 'Yellow', 'min': '4300', 'max': '4850', 'modal': '4600'},
-      {'name': 'Turmeric', 'variety': 'Finger', 'min': '11000', 'max': '14800', 'modal': '13200'},
-      {'name': 'Onion', 'variety': 'Red', 'min': '1500', 'max': '2200', 'modal': '1850'},
-      {'name': 'Bengal Gram(Gram)(Whole)', 'variety': 'Desi', 'min': '5400', 'max': '6100', 'modal': '5800'},
-      {'name': 'Green Gram (Moong)', 'variety': 'Medium', 'min': '7600', 'max': '8400', 'modal': '8100'},
-      {'name': 'Potato', 'variety': 'Jyoti', 'min': '1600', 'max': '2100', 'modal': '1900'},
-      {'name': 'Mango', 'variety': 'Banganapalli', 'min': '4500', 'max': '6500', 'modal': '5500'},
-    ];
-
-    final records = <Map<String, dynamic>>[];
-    for (final d in districts) {
-      for (final c in commodities) {
-        records.add({
-          'state': stateName,
-          'district': d,
-          'market': '$d Market',
-          'commodity': c['name'],
-          'variety': c['variety'],
-          'grade': 'FAQ',
-          'arrival_date': today,
-          'min_price': c['min'],
-          'max_price': c['max'],
-          'modal_price': c['modal'],
-        });
-      }
-    }
-
-    return {
-      'success': true,
-      'state': stateName,
-      'date': today,
-      'records': records,
-      'source': 'local_cache',
-    };
-  }
-
-  /// Get commodity trends
-  static Future<Map<String, dynamic>> getCommodityTrends(
-      String state, String district, String commodity) async {
-    final url = Uri.parse(
-        '$baseUrl/api.php?action=get_commodity_trends&state=${Uri.encodeComponent(state)}&district=${Uri.encodeComponent(district)}&commodity=${Uri.encodeComponent(commodity)}');
-    try {
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        return jsonDecode(utf8.decode(response.bodyBytes));
-      }
-      return {'success': false, 'error': 'Server error'};
-    } catch (e) {
-      return {'success': false, 'error': 'Network error'};
-    }
-  }
-
   // ===================== RETAILER AND EXTENSION OFFICER MODULES =====================
 
-  static Future<Map<String, dynamic>?> getRetailerInfo(String phoneNumber) async {
+  static Future<Map<String, dynamic>?> getRetailerInfo(
+      String phoneNumber) async {
     // Queries info about a retailer by phone/contact number
     final url = Uri.parse('$baseUrl/api.php?action=login');
     try {
@@ -1495,7 +1479,8 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>?> getOfficerInfo(String phoneNumber) async {
+  static Future<Map<String, dynamic>?> getOfficerInfo(
+      String phoneNumber) async {
     // Queries info about an extension officer by phone/contact number
     final url = Uri.parse('$baseUrl/api.php?action=login');
     try {
@@ -1516,8 +1501,10 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getRetailerDashboard(int retailerId, {String lang = 'te'}) async {
-    final url = Uri.parse('$baseUrl/api.php?action=get_retailer_dashboard&retailer_id=$retailerId&lang=$lang');
+  static Future<Map<String, dynamic>> getRetailerDashboard(int retailerId,
+      {String lang = 'te'}) async {
+    final url = Uri.parse(
+        '$baseUrl/api.php?action=get_retailer_dashboard&retailer_id=$retailerId&lang=$lang');
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
@@ -1529,8 +1516,10 @@ class ApiService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getRetailerLeads(int retailerId, {String lang = 'te'}) async {
-    final url = Uri.parse('$baseUrl/api.php?action=get_retailer_leads&retailer_id=$retailerId&lang=$lang');
+  static Future<List<Map<String, dynamic>>> getRetailerLeads(int retailerId,
+      {String lang = 'te'}) async {
+    final url = Uri.parse(
+        '$baseUrl/api.php?action=get_retailer_leads&retailer_id=$retailerId&lang=$lang');
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
@@ -1570,8 +1559,10 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getExtensionDashboard(int officerId) async {
-    final url = Uri.parse('$baseUrl/api.php?action=get_extension_dashboard&officer_id=$officerId');
+  static Future<Map<String, dynamic>> getExtensionDashboard(
+      int officerId) async {
+    final url = Uri.parse(
+        '$baseUrl/api.php?action=get_extension_dashboard&officer_id=$officerId');
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
@@ -1588,9 +1579,10 @@ class ApiService {
     String? mandal,
   }) async {
     String urlStr = '$baseUrl/api.php?action=get_active_outbreaks';
-    if (district != null) urlStr += '&district=${Uri.encodeComponent(district)}';
+    if (district != null)
+      urlStr += '&district=${Uri.encodeComponent(district)}';
     if (mandal != null) urlStr += '&mandal=${Uri.encodeComponent(mandal)}';
-    
+
     final url = Uri.parse(urlStr);
     try {
       final response = await http.get(url);
@@ -1633,7 +1625,8 @@ class ApiService {
           )
           .timeout(const Duration(seconds: 15));
 
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       return data;
     } catch (e) {
       return {
@@ -1668,7 +1661,8 @@ class ApiService {
           )
           .timeout(const Duration(seconds: 15));
 
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       return data;
     } catch (e) {
       return {
@@ -1680,11 +1674,13 @@ class ApiService {
 
   /// Fetches the user's purchased AI credit balance from the server database
   static Future<int?> getAiCreditBalance({required String userId}) async {
-    final url = Uri.parse('$baseUrl/api.php?action=get_ai_credit_balance&user_id=${Uri.encodeComponent(userId)}');
+    final url = Uri.parse(
+        '$baseUrl/api.php?action=get_ai_credit_balance&user_id=${Uri.encodeComponent(userId)}');
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final data =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         if (data['success'] == true) {
           return (data['purchased_credits'] as num?)?.toInt();
         }
@@ -1700,7 +1696,8 @@ class ApiService {
   // ==============================================================================
 
   /// Authenticate official with email and password
-  static Future<ChcOfficial> chcOfficialLogin(String email, String password) async {
+  static Future<ChcOfficial> chcOfficialLogin(
+      String email, String password) async {
     final url = Uri.parse('$baseUrl/api.php?action=chc_official_login');
     try {
       final response = await http
@@ -1714,7 +1711,8 @@ class ApiService {
           )
           .timeout(const Duration(seconds: 15));
 
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (response.statusCode == 200 && data['success'] == true) {
         return ChcOfficial.fromJson(data['data'] as Map<String, dynamic>);
       } else {
@@ -1738,13 +1736,17 @@ class ApiService {
       'client_code': clientCode,
     };
     if (region != null && region.isNotEmpty) queryParams['region'] = region;
-    if (startDate != null && startDate.isNotEmpty) queryParams['start_date'] = startDate;
-    if (endDate != null && endDate.isNotEmpty) queryParams['end_date'] = endDate;
+    if (startDate != null && startDate.isNotEmpty)
+      queryParams['start_date'] = startDate;
+    if (endDate != null && endDate.isNotEmpty)
+      queryParams['end_date'] = endDate;
 
-    final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
+    final uri =
+        Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
     final response = await http.get(uri).timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (data['success'] == true) {
         return data;
       }
@@ -1772,16 +1774,22 @@ class ApiService {
       'offset': offset.toString(),
     };
     if (region != null && region.isNotEmpty) queryParams['region'] = region;
-    if (status != null && status.isNotEmpty && status != 'All') queryParams['status'] = status;
+    if (status != null && status.isNotEmpty && status != 'All')
+      queryParams['status'] = status;
     if (search != null && search.isNotEmpty) queryParams['search'] = search;
-    if (equipmentType != null && equipmentType.isNotEmpty) queryParams['equipment_type'] = equipmentType;
-    if (startDate != null && startDate.isNotEmpty) queryParams['start_date'] = startDate;
-    if (endDate != null && endDate.isNotEmpty) queryParams['end_date'] = endDate;
+    if (equipmentType != null && equipmentType.isNotEmpty)
+      queryParams['equipment_type'] = equipmentType;
+    if (startDate != null && startDate.isNotEmpty)
+      queryParams['start_date'] = startDate;
+    if (endDate != null && endDate.isNotEmpty)
+      queryParams['end_date'] = endDate;
 
-    final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
+    final uri =
+        Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
     final response = await http.get(uri).timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (data['success'] == true && data['bookings'] is List) {
         return List<Map<String, dynamic>>.from(data['bookings']);
       }
@@ -1791,11 +1799,14 @@ class ApiService {
   }
 
   /// Fetch booking details by booking ID
-  static Future<Map<String, dynamic>> getChcBookingDetails(String bookingId) async {
-    final uri = Uri.parse('$baseUrl/api.php?action=get_chc_booking_details&booking_id=${Uri.encodeComponent(bookingId)}');
+  static Future<Map<String, dynamic>> getChcBookingDetails(
+      String bookingId) async {
+    final uri = Uri.parse(
+        '$baseUrl/api.php?action=get_chc_booking_details&booking_id=${Uri.encodeComponent(bookingId)}');
     final response = await http.get(uri).timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (data['success'] == true && data['data'] is Map) {
         return data['data'] as Map<String, dynamic>;
       }
@@ -1805,17 +1816,20 @@ class ApiService {
   }
 
   /// Fetch operator cancelled orders audit list
-  static Future<List<Map<String, dynamic>>> getChcCancelledOrders({required String clientCode, String? region}) async {
+  static Future<List<Map<String, dynamic>>> getChcCancelledOrders(
+      {required String clientCode, String? region}) async {
     final queryParams = <String, String>{
       'action': 'get_chc_cancelled_orders',
       'client_code': clientCode,
     };
     if (region != null && region.isNotEmpty) queryParams['region'] = region;
 
-    final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
+    final uri =
+        Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
     final response = await http.get(uri).timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (data['success'] == true && data['cancelled_orders'] is List) {
         return List<Map<String, dynamic>>.from(data['cancelled_orders']);
       }
@@ -1825,17 +1839,20 @@ class ApiService {
   }
 
   /// Fetch fleet operators
-  static Future<List<Map<String, dynamic>>> getChcOperators({required String clientCode, String? region}) async {
+  static Future<List<Map<String, dynamic>>> getChcOperators(
+      {required String clientCode, String? region}) async {
     final queryParams = <String, String>{
       'action': 'get_chc_operators',
       'client_code': clientCode,
     };
     if (region != null && region.isNotEmpty) queryParams['region'] = region;
 
-    final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
+    final uri =
+        Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
     final response = await http.get(uri).timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (data['success'] == true && data['operators'] is List) {
         return List<Map<String, dynamic>>.from(data['operators']);
       }
@@ -1845,17 +1862,20 @@ class ApiService {
   }
 
   /// Fetch fleet machinery & inventory
-  static Future<List<Map<String, dynamic>>> getChcInventory({required String clientCode, String? region}) async {
+  static Future<List<Map<String, dynamic>>> getChcInventory(
+      {required String clientCode, String? region}) async {
     final queryParams = <String, String>{
       'action': 'get_chc_inventory',
       'client_code': clientCode,
     };
     if (region != null && region.isNotEmpty) queryParams['region'] = region;
 
-    final uri = Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
+    final uri =
+        Uri.parse('$baseUrl/api.php').replace(queryParameters: queryParams);
     final response = await http.get(uri).timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (data['success'] == true && data['inventory'] is List) {
         return List<Map<String, dynamic>>.from(data['inventory']);
       }
@@ -1865,4 +1885,22 @@ class ApiService {
   }
 }
 
+/// Why an enquiry could not be placed.
+enum EnquiryFailure { notLoggedIn, missingSeller, network, server }
 
+/// Typed outcome of [ApiService.placeEnquiry].
+class EnquiryResult {
+  final bool ok;
+  final EnquiryFailure? failure;
+  final String? message;
+  final int? id;
+
+  const EnquiryResult.success({this.id})
+      : ok = true,
+        failure = null,
+        message = null;
+
+  const EnquiryResult.failed(EnquiryFailure this.failure, {this.message})
+      : ok = false,
+        id = null;
+}

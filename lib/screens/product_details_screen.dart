@@ -1,8 +1,8 @@
-import 'dart:ui';
 import 'package:cropsync/screens/agri_shop.dart';
-import 'package:cropsync/services/api_service.dart';
-import 'package:cropsync/services/auth_service.dart';
-import 'package:cropsync/services/farmer_analytics_service.dart';
+import 'package:cropsync/widgets/shop/buy_now_sheet.dart';
+import 'package:cropsync/widgets/shop/expandable_paragraphs.dart';
+import 'package:cropsync/widgets/shop/shop_category_style.dart';
+import 'package:cropsync/widgets/shop/shop_circle_button.dart';
 import 'package:cropsync/services/share_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,18 +25,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
   final PageController _pageController = PageController();
-  int _currentPage = 0;
-  bool _isSubmittingEnquiry = false;
+  // Only the 'n/m' badge listens, so scrolling doesn't rebuild the screen.
+  final ValueNotifier<int> _currentPage = ValueNotifier<int>(0);
 
   @override
   void initState() {
     super.initState();
     _pageController.addListener(() {
-      if (mounted) {
-        setState(() {
-          _currentPage = _pageController.page?.round() ?? 0;
-        });
-      }
+      _currentPage.value = _pageController.page?.round() ?? 0;
     });
 
     if (widget.product.videoUrl != null &&
@@ -46,8 +42,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Future<void> _initializeVideo() async {
+    VideoPlayerController? controller;
     try {
-      final controller = VideoPlayerController.networkUrl(
+      controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.product.videoUrl!),
       );
       await controller.initialize();
@@ -79,7 +76,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       );
       setState(() {});
     } catch (e) {
-      // Video failed to initialize, will show images instead
+      // Video failed to initialize: release it; images remain the gallery.
+      await controller?.dispose();
     }
   }
 
@@ -88,6 +86,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     _chewieController?.dispose();
     _videoController?.dispose();
     _pageController.dispose();
+    _currentPage.dispose();
     super.dispose();
   }
 
@@ -106,146 +105,38 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   bool get hasVideo =>
       _videoController != null && _videoController!.value.isInitialized;
 
-  void _showSuccessPopup(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  duration: const Duration(milliseconds: 600),
-                  curve: Curves.elasticOut,
-                  builder: (context, value, child) {
-                    return Transform.scale(
-                      scale: value,
-                      child: const Icon(
-                        Icons.check_circle_rounded,
-                        color: AppTheme.textPrimary,
-                        size: 80,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  context.tr('success'),
-                  style: appStyle(
-                    context,
-                    size: 22,
-                    weight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: appStyle(
-                    context,
-                    text: message,
-                    size: 16,
-                    color: AppTheme.textSecondary,
-                    weight: FontWeight.w600,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(dialogContext).pop(); // close dialog
-                      Navigator.of(context).pop(); // go back to AgriShop
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.textPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                    ),
-                    child: Text(
-                      context.tr('ok'),
-                      style: appStyle(
-                        context,
-                        color: Colors.white,
-                        size: 16,
-                        weight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _submitEnquiry() async {
-    if (_isSubmittingEnquiry) return;
-
-    setState(() => _isSubmittingEnquiry = true);
-
-    try {
-      final currentUser = AuthService.currentUser;
-      if (currentUser == null) {
-        throw Exception('User not logged in');
-      }
-
-      final result = await ApiService.createEnquiry(
-        productId: widget.product.id,
-        farmerId: currentUser.userId,
-        advertiserId: widget.product.advertiserId,
-      );
-
-      if (result['success'] != true) {
-        throw Exception(result['error'] ?? 'Failed to send enquiry');
-      }
-
-      // Log farmer shop enquiry
-      FarmerAnalyticsService.logShopEnquiry(
-        productId: widget.product.id,
-        productName: widget.product.name,
-        advertiserId: widget.product.advertiserId,
-        advertiserName: widget.product.advertiserName,
-      );
-
-      if (!mounted) return;
-      _showSuccessPopup(context.tr('enquiry_sent_success'));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${context.tr('error')}: ${e.toString()}',
-            style: appStyle(context, color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmittingEnquiry = false);
-      }
-    }
-  }
-
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF64748B);
+  static const _brand = Color(0xFF15803D);
   static const double _gutter = 20;
+  static const double _barHeight = 76;
+  static const double _overlap = 28;
+  static const double _maxContentWidth = 640;
+
+  /// Hero backdrop gradient from the same tint the shop cards use.
+  static (Color, Color) _gradientFor(String category) {
+    final st = shopCategoryStyle(category);
+    return (st.tint, Color.lerp(st.tint, st.accent, 0.14)!);
+  }
+
+  bool get _showMrp {
+    final p = widget.product;
+    return p.mrp != null && p.mrp! > p.priceValue && p.priceValue > 0;
+  }
+
+  String get _mrpText => formatShopPrice(widget.product.mrp);
+
+  Future<void> _buyNow() async {
+    HapticFeedback.selectionClick();
+    await showBuyNowSheet(context, widget.product);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final heroH = (media.size.height * 0.42).clamp(260.0, 460.0);
+    final scrollBottom = _barHeight + media.padding.bottom + 16;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -253,68 +144,53 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           Positioned.fill(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 110),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: EdgeInsets.only(bottom: scrollBottom),
+              child: Stack(
                 children: [
-                  _buildMediaShowcase(),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(_gutter, 20, _gutter, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildProductHeader(),
-                        if (widget.product.advertiserName
-                            .trim()
-                            .isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          _buildSellerLine(),
-                        ],
-                        const SizedBox(height: 20),
-                        const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                        const SizedBox(height: 20),
-                        _buildDescription(),
-                        const SizedBox(height: 24),
-                        _buildTrustNote(),
-                      ],
-                    ),
+                  _buildHero(heroH),
+                  Column(
+                    children: [
+                      SizedBox(height: heroH - _overlap),
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: 1),
+                        duration: const Duration(milliseconds: 420),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, v, child) => Opacity(
+                          opacity: v,
+                          child: Transform.translate(
+                            offset: Offset(0, 24 * (1 - v)),
+                            child: child,
+                          ),
+                        ),
+                        child: _buildContentCard(),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildFloatingTopBar(),
-          ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildBottomBar(),
-          ),
+          Positioned(top: 0, left: 0, right: 0, child: _buildTopBar()),
+          Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomBar()),
         ],
       ),
     );
   }
 
-  Widget _buildFloatingTopBar() {
+  Widget _buildTopBar() {
     final topPadding = MediaQuery.of(context).padding.top;
-
     return Padding(
-      padding: EdgeInsets.fromLTRB(12, topPadding + 6, 12, 6),
+      padding: EdgeInsets.fromLTRB(12, topPadding + 8, 12, 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildFrostedButton(
+          ShopCircleButton(
             icon: Icons.arrow_back_rounded,
             label: context.tr('shopd_back'),
             onTap: () => Navigator.of(context).pop(),
           ),
-          _buildFrostedButton(
-            icon: Icons.share_outlined,
+          ShopCircleButton(
+            icon: Icons.ios_share_rounded,
             label: context.tr('shopd_share'),
             onTap: () {
               HapticFeedback.lightImpact();
@@ -334,124 +210,104 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  Widget _buildFrostedButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Semantics(
-      button: true,
-      label: label,
-      excludeSemantics: true,
-      child: Tooltip(
-        message: label,
-        textStyle: appStyle(context, size: 12, color: Colors.white),
-        child: ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Material(
-              color: Colors.white.withValues(alpha: 0.88),
-              shape: const CircleBorder(),
-              child: InkWell(
-                onTap: onTap,
-                child: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Icon(icon, size: 21, color: _ink),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMediaShowcase() {
+  Widget _buildHero(double heroH) {
     final media = MediaQuery.of(context);
-    final heroHeight =
-        (media.size.height * 0.34).clamp(220.0, 360.0) + media.padding.top;
+    final tint = _gradientFor(widget.product.category);
+    final images = imageUrls;
+    final video = hasVideo;
+    final pageCount = (video ? 1 : 0) + images.length;
+    final showImages = images.isNotEmpty;
 
     return Container(
-      height: heroHeight,
+      height: heroH,
       width: double.infinity,
-      decoration: const BoxDecoration(
-        color: Color(0xFFF6F8FA),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [tint.$1, tint.$2],
+        ),
       ),
-      clipBehavior: Clip.antiAlias,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (hasVideo)
-            Padding(
-              padding: EdgeInsets.only(top: media.padding.top + 44),
-              child: Chewie(controller: _chewieController!),
-            )
-          else if (imageUrls.isNotEmpty)
+          if (showImages)
+            Positioned(
+              bottom: _overlap + 20,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  width: 190,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(100),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.16),
+                        blurRadius: 22,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          // Pages: the video (if it initialised) first, then every image.
+          if (pageCount > 0)
             PageView.builder(
               controller: _pageController,
-              itemCount: imageUrls.length,
+              itemCount: pageCount,
               itemBuilder: (context, index) {
-                final img = Padding(
+                if (video && index == 0) {
+                  return Padding(
+                    padding: EdgeInsets.only(
+                        top: media.padding.top + 60, bottom: _overlap),
+                    child: Chewie(controller: _chewieController!),
+                  );
+                }
+                final imgIndex = video ? index - 1 : index;
+                return Padding(
                   padding: EdgeInsets.fromLTRB(
-                    24,
-                    media.padding.top + 48,
-                    24,
-                    28,
-                  ),
+                      32, media.padding.top + 60, 32, _overlap + 30),
                   child: SafeNetworkImage(
-                    imageUrl: imageUrls[index],
+                    imageUrl: images[imgIndex],
                     fit: BoxFit.contain,
-                    placeholder: Container(
-                      color: const Color(0xFFF1F5F9),
-                      alignment: Alignment.center,
-                      child: const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
+                    placeholder: Center(
+                      child: Icon(Icons.image_outlined,
+                          size: 48, color: Colors.white.withValues(alpha: 0.9)),
                     ),
                   ),
                 );
-
-                if (index == 0) {
-                  return Hero(
-                    tag: 'product_image_${widget.product.id}',
-                    child: img,
-                  );
-                }
-                return img;
               },
             )
           else
-            Hero(
-              tag: 'product_image_${widget.product.id}',
-              child: Center(
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: _overlap),
                 child: Icon(Icons.eco_outlined,
-                    color: Colors.grey.shade300, size: 72),
+                    color: Colors.white.withValues(alpha: 0.9), size: 84),
               ),
             ),
-          if (imageUrls.length > 1 && !hasVideo)
+          if (pageCount > 1)
             Positioned(
-              bottom: 12,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  imageUrls.length,
-                  (index) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: _currentPage == index ? 18 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: _currentPage == index
-                          ? _ink
-                          : const Color(0xFFCBD5E1),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
+              right: 16,
+              bottom: _overlap + 12,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _currentPage,
+                  builder: (context, page, _) => Text(
+                    '${page.clamp(0, pageCount - 1) + 1}/$pageCount',
+                    style: appStyle(context,
+                        size: 12.5,
+                        weight: FontWeight.w700,
+                        color: Colors.white),
                   ),
                 ),
               ),
@@ -461,282 +317,425 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  Widget _buildProductHeader() {
+  Widget _buildContentCard() {
     final product = widget.product;
     final name = getLocalizedProductName(context, product.name);
-    final category = getLocalizedCategory(context, product.category);
+    final category = getLocalizedCategory(context, product.category).trim();
+    final seller = product.advertiserName.trim();
+    final tint = _gradientFor(product.category);
     final discount = product.discountPercent;
-    final mrp = product.mrp;
-    final showMrp = mrp != null && (double.tryParse(product.price) ?? 0) < mrp;
     final showUnit = product.unit.isNotEmpty && product.unit != 'unit';
 
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(_overlap)),
+      ),
+      padding: const EdgeInsets.fromLTRB(_gutter, 22, _gutter, 8),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (category.isNotEmpty)
+                    _chip(category, tint.$2.withValues(alpha: 0.7), _ink,
+                        dynamic: true),
+                  _stockChip(),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                name,
+                style: appStyle(context,
+                    text: name,
+                    size: 23,
+                    weight: FontWeight.w800,
+                    color: _ink,
+                    height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 10,
+                runSpacing: 6,
+                children: [
+                  Text(
+                    formatShopPrice(product.price),
+                    style: appStyle(context,
+                        size: 30, weight: FontWeight.w800, color: _ink),
+                  ),
+                  if (showUnit)
+                    Text('/ ${product.unit}',
+                        style: appStyle(context,
+                            text: product.unit, size: 14, color: _muted)),
+                  if (_showMrp)
+                    Text(
+                      _mrpText,
+                      style: appStyle(context,
+                          size: 16,
+                          color: _muted,
+                          decoration: TextDecoration.lineThrough),
+                    ),
+                  if (_showMrp && discount != null)
+                    _chip(
+                      context.tr('shopd_percent_off',
+                          namedArgs: {'percent': discount.toString()}),
+                      const Color(0xFFDCFCE7),
+                      const Color(0xFF166534),
+                    ),
+                ],
+              ),
+              if (seller.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                _buildSellerRow(seller),
+              ],
+              const SizedBox(height: 22),
+              _buildHighlights(category, seller),
+              ..._buildDescriptionSection(),
+              const SizedBox(height: 20),
+              _buildPayNote(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(String text, Color bg, Color fg, {bool dynamic = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Text(
+        text,
+        style: appStyle(context,
+            text: dynamic ? text : null,
+            size: 12.5,
+            weight: FontWeight.w700,
+            color: fg,
+            height: 1.35),
+      ),
+    );
+  }
+
+  Widget _stockChip() {
+    final inStock = widget.product.inStock;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: inStock ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            inStock ? Icons.check_circle_rounded : Icons.cancel_rounded,
+            size: 14,
+            color: inStock ? const Color(0xFF166534) : const Color(0xFF991B1B),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            context.tr(inStock ? 'pd_in_stock' : 'shopd_out_of_stock'),
+            style: appStyle(context,
+                size: 12.5,
+                weight: FontWeight.w700,
+                height: 1.35,
+                color: inStock
+                    ? const Color(0xFF166534)
+                    : const Color(0xFF991B1B)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSellerRow(String seller) {
+    final initial = seller.characters.first.toUpperCase();
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: Color(0xFFE2E8F0),
+            shape: BoxShape.circle,
+          ),
+          child: Text(initial,
+              style: appStyle(context,
+                  text: initial,
+                  size: 17,
+                  weight: FontWeight.w800,
+                  color: _ink)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(context.tr('sold_by'),
+                  style:
+                      appStyle(context, size: 12, color: _muted, height: 1.4)),
+              Text(seller,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: appStyle(context,
+                      text: seller,
+                      size: 15,
+                      weight: FontWeight.w700,
+                      color: _ink,
+                      height: 1.4)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHighlights(String category, String seller) {
+    final items = <(IconData, String, String, bool)>[
+      if (category.isNotEmpty)
+        (Icons.category_outlined, context.tr('pd_category'), category, true),
+      if (seller.isNotEmpty)
+        (Icons.storefront_outlined, context.tr('pd_seller'), seller, true),
+      (
+        Icons.inventory_2_outlined,
+        context.tr('pd_availability'),
+        context
+            .tr(widget.product.inStock ? 'pd_in_stock' : 'shopd_out_of_stock'),
+        false
+      ),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (category.trim().isNotEmpty) ...[
-          Text(
-            category,
-            style: appStyle(
-              context,
-              text: category,
-              size: 13,
-              weight: FontWeight.w600,
-              color: _muted,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 6),
-        ],
-        Text(
-          name,
-          style: appStyle(
-            context,
-            text: name,
-            size: 24,
-            weight: FontWeight.w800,
-            color: _ink,
-            height: 1.35,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 10,
-          runSpacing: 4,
-          children: [
-            Text(
-              '₹${product.price}${showUnit ? ' / ${product.unit}' : ''}',
-              style: appStyle(
-                context,
-                size: 24,
-                weight: FontWeight.w800,
-                color: _ink,
-              ),
-            ),
-            if (showMrp)
-              Text(
-                '₹${mrp.toStringAsFixed(mrp % 1 == 0 ? 0 : 2)}',
-                style: appStyle(
-                  context,
-                  size: 15,
-                  color: _muted,
-                  decoration: TextDecoration.lineThrough,
+        Text(context.tr('pd_highlights'),
+            style: appStyle(context,
+                size: 17, weight: FontWeight.w800, color: _ink, height: 1.4)),
+        const SizedBox(height: 12),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                if (i > 0) const SizedBox(width: 10),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(items[i].$1, size: 20, color: _brand),
+                        const SizedBox(height: 8),
+                        Text(items[i].$2,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: appStyle(context,
+                                size: 11.5, color: _muted, height: 1.4)),
+                        const SizedBox(height: 2),
+                        Text(items[i].$3,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: appStyle(context,
+                                text: items[i].$4 ? items[i].$3 : null,
+                                size: 13,
+                                weight: FontWeight.w700,
+                                color: _ink,
+                                height: 1.4)),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            if (showMrp && discount != null)
-              Text(
-                context.tr('shopd_percent_off',
-                    namedArgs: {'percent': discount.toString()}),
-                style: appStyle(
-                  context,
-                  size: 14,
-                  weight: FontWeight.w700,
-                  color: const Color(0xFF15803D),
-                ),
-              ),
-            if (!product.inStock)
-              Text(
-                context.tr('shopd_out_of_stock'),
-                style: appStyle(
-                  context,
-                  size: 14,
-                  weight: FontWeight.w600,
-                  color: _muted,
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSellerLine() {
-    final seller = widget.product.advertiserName.trim();
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 2),
-          child: Icon(Icons.storefront_outlined, size: 18, color: _muted),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            '${context.tr('sold_by')} $seller',
-            style: appStyle(
-              context,
-              text: seller,
-              size: 14,
-              color: const Color(0xFF475569),
-              height: 1.5,
-            ),
+              ],
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildDescription() {
+  List<Widget> _buildDescriptionSection() {
     final paragraphs = widget.product.description
         .split(RegExp(r'\n+'))
         .map((p) => p.trim())
         .where((p) => p.isNotEmpty)
         .toList();
-    if (paragraphs.isEmpty) return const SizedBox.shrink();
+    if (paragraphs.isEmpty) return const [];
+    return [
+      const SizedBox(height: 24),
+      Text(context.tr('pd_about'),
+          style: appStyle(context,
+              size: 17, weight: FontWeight.w800, color: _ink, height: 1.4)),
+      const SizedBox(height: 10),
+      ExpandableParagraphs(paragraphs: paragraphs),
+    ];
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          context.tr('description'),
-          style: appStyle(
-            context,
-            size: 17,
-            weight: FontWeight.w700,
-            color: _ink,
-            height: 1.4,
+  Widget _buildPayNote() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.info_outline_rounded, size: 17, color: _muted),
           ),
-        ),
-        const SizedBox(height: 10),
-        for (var i = 0; i < paragraphs.length; i++) ...[
-          if (i > 0) const SizedBox(height: 12),
-          Text(
-            paragraphs[i],
-            style: appStyle(
-              context,
-              text: paragraphs[i],
-              size: 15,
-              color: const Color(0xFF475569),
-              height: 1.7,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              context.tr('pd_pay_note'),
+              style: appStyle(context, size: 12.5, color: _muted, height: 1.5),
             ),
           ),
         ],
-      ],
-    );
-  }
-
-  Widget _buildTrustNote() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 2),
-          child: Icon(Icons.verified_user_outlined, size: 16, color: _muted),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            context.tr('shopd_trust_note'),
-            style: appStyle(
-              context,
-              size: 12.5,
-              color: _muted,
-              height: 1.5,
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
   Widget _buildBottomBar() {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final product = widget.product;
+    final enabled = product.inStock;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(_gutter, 10, _gutter, bottomPadding + 10),
-      decoration: const BoxDecoration(
+      padding: EdgeInsets.fromLTRB(_gutter, 0, _gutter, bottomPadding),
+      decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
-      ),
-      child: Row(
-        children: [
-          Flexible(
-            flex: 2,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.tr('price'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: appStyle(
-                    context,
-                    color: _muted,
-                    size: 12,
-                    weight: FontWeight.w600,
-                    height: 1.3,
-                  ),
-                ),
-                Text(
-                  '₹${product.price}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: appStyle(
-                    context,
-                    size: 20,
-                    weight: FontWeight.w800,
-                    color: _ink,
-                  ),
-                ),
-              ],
-            ),
+        border: const Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            flex: 3,
+        ],
+      ),
+      // The bar has a fixed height, so cap the text scale inside it.
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.4,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _maxContentWidth),
             child: SizedBox(
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _isSubmittingEnquiry ? null : _submitEnquiry,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _ink,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  textStyle: appStyle(
-                    context,
-                    size: 15,
-                    weight: FontWeight.w700,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: _isSubmittingEnquiry
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
+              height: _barHeight,
+              child: Row(
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                        maxWidth: (MediaQuery.of(context).size.width * 0.34)
+                            .clamp(96.0, 200.0)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_showMrp)
+                          Text(
+                            _mrpText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: appStyle(context,
+                                size: 12,
+                                color: _muted,
+                                height: 1.2,
+                                decoration: TextDecoration.lineThrough),
+                          ),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            formatShopPrice(product.price),
+                            maxLines: 1,
+                            style: appStyle(context,
+                                size: 24,
+                                weight: FontWeight.w800,
+                                color: _ink,
+                                height: 1.2),
+                          ),
                         ),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.send_rounded, size: 16),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              context.tr('enquire_now'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: appStyle(
-                                context,
-                                color: Colors.white,
-                                size: 15,
-                                weight: FontWeight.w700,
-                              ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Semantics(
+                      button: true,
+                      enabled: enabled,
+                      excludeSemantics: true,
+                      label: context
+                          .tr(enabled ? 'pd_buy_now' : 'shopd_out_of_stock'),
+                      child: SizedBox(
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: enabled ? _buyNow : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _brand,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: const Color(0xFFE2E8F0),
+                            disabledForegroundColor: _muted,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                        ],
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (enabled) ...[
+                                const Icon(Icons.shopping_bag_outlined,
+                                    size: 20),
+                                const SizedBox(width: 8),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  context.tr(enabled
+                                      ? 'pd_buy_now'
+                                      : 'shopd_out_of_stock'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: appStyle(context,
+                                      size: 16,
+                                      weight: FontWeight.w800,
+                                      color: enabled ? Colors.white : _muted),
+                                ),
+                              ),
+                              if (enabled) ...[
+                                const SizedBox(width: 6),
+                                const Icon(Icons.arrow_forward_rounded,
+                                    size: 18),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

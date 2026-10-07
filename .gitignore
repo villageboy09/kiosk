@@ -52,3 +52,5 @@ app.*.map.json
 *.jks
 *.keystore
 key.properties
+# Market prices secrets (data.gov.in key etc.) - never commit
+api/market_secrets.php

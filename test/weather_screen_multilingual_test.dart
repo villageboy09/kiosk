@@ -43,33 +43,39 @@ void main() {
     test('All 31 weather keys exist and are non-empty in en.json', () {
       final file = File('assets/translations/en.json');
       expect(file.existsSync(), isTrue);
-      final jsonMap = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      final jsonMap =
+          jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
 
       for (final k in keys) {
         expect(jsonMap.containsKey(k), isTrue, reason: 'Missing $k in en.json');
-        expect(jsonMap[k].toString().trim().isNotEmpty, isTrue, reason: 'Empty $k in en.json');
+        expect(jsonMap[k].toString().trim().isNotEmpty, isTrue,
+            reason: 'Empty $k in en.json');
       }
     });
 
     test('All 31 weather keys exist and are non-empty in te.json', () {
       final file = File('assets/translations/te.json');
       expect(file.existsSync(), isTrue);
-      final jsonMap = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      final jsonMap =
+          jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
 
       for (final k in keys) {
         expect(jsonMap.containsKey(k), isTrue, reason: 'Missing $k in te.json');
-        expect(jsonMap[k].toString().trim().isNotEmpty, isTrue, reason: 'Empty $k in te.json');
+        expect(jsonMap[k].toString().trim().isNotEmpty, isTrue,
+            reason: 'Empty $k in te.json');
       }
     });
 
     test('All 31 weather keys exist and are non-empty in hi.json', () {
       final file = File('assets/translations/hi.json');
       expect(file.existsSync(), isTrue);
-      final jsonMap = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      final jsonMap =
+          jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
 
       for (final k in keys) {
         expect(jsonMap.containsKey(k), isTrue, reason: 'Missing $k in hi.json');
-        expect(jsonMap[k].toString().trim().isNotEmpty, isTrue, reason: 'Empty $k in hi.json');
+        expect(jsonMap[k].toString().trim().isNotEmpty, isTrue,
+            reason: 'Empty $k in hi.json');
       }
     });
   });

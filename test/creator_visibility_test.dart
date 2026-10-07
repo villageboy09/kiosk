@@ -76,21 +76,31 @@ void main() {
   });
 
   group('User Model & AuthService isCreator Tests', () {
-    test('User.isCreator returns true for Creator, Content Creator, content_creator', () {
-      final creator1 = User(userId: '1', name: 'Creator 1', membershipType: 'Creator');
-      final creator2 = User(userId: '2', name: 'Creator 2', membershipType: 'Content Creator');
-      final creator3 = User(userId: '3', name: 'Creator 3', membershipType: 'content_creator');
+    test(
+        'User.isCreator returns true for Creator, Content Creator, content_creator',
+        () {
+      final creator1 =
+          User(userId: '1', name: 'Creator 1', membershipType: 'Creator');
+      final creator2 = User(
+          userId: '2', name: 'Creator 2', membershipType: 'Content Creator');
+      final creator3 = User(
+          userId: '3', name: 'Creator 3', membershipType: 'content_creator');
 
       expect(creator1.isCreator, isTrue);
       expect(creator2.isCreator, isTrue);
       expect(creator3.isCreator, isTrue);
     });
 
-    test('User.isCreator returns false for Farmer, Retailer, Officer, null', () {
-      final farmer = User(userId: '4', name: 'Farmer 1', membershipType: 'Farmer');
-      final retailer = User(userId: '5', name: 'Retailer 1', membershipType: 'Retailer');
-      final officer = User(userId: '6', name: 'Officer 1', membershipType: 'Officer');
-      final normal = User(userId: '7', name: 'Normal User', membershipType: null);
+    test('User.isCreator returns false for Farmer, Retailer, Officer, null',
+        () {
+      final farmer =
+          User(userId: '4', name: 'Farmer 1', membershipType: 'Farmer');
+      final retailer =
+          User(userId: '5', name: 'Retailer 1', membershipType: 'Retailer');
+      final officer =
+          User(userId: '6', name: 'Officer 1', membershipType: 'Officer');
+      final normal =
+          User(userId: '7', name: 'Normal User', membershipType: null);
 
       expect(farmer.isCreator, isFalse);
       expect(retailer.isCreator, isFalse);
@@ -99,7 +109,8 @@ void main() {
     });
 
     test('AuthService.isCreator correctly reflects session state', () async {
-      final farmer = User(userId: '9876543210', name: 'Ramesh', membershipType: 'Farmer');
+      final farmer =
+          User(userId: '9876543210', name: 'Ramesh', membershipType: 'Farmer');
       SharedPreferences.setMockInitialValues({
         'current_user': jsonEncode(farmer.toJson()),
         'is_logged_in': true,
@@ -107,7 +118,8 @@ void main() {
 
       expect(await AuthService.isCreator(), isFalse);
 
-      final creator = User(userId: '9876543211', name: 'Suresh', membershipType: 'Creator');
+      final creator =
+          User(userId: '9876543211', name: 'Suresh', membershipType: 'Creator');
       await AuthService.updateLocalUser(creator);
 
       expect(await AuthService.isCreator(), isTrue);
@@ -115,7 +127,8 @@ void main() {
   });
 
   group('ProfileScreen Creator Studio Visibility Tests', () {
-    testWidgets('Hides Creator Studio menu pill for Farmer accounts', (tester) async {
+    testWidgets('Hides Creator Studio menu pill for Farmer accounts',
+        (tester) async {
       final farmer = User(
         userId: '9876543210',
         name: 'Ramesh Farmer',
@@ -136,7 +149,8 @@ void main() {
       expect(find.text('Creator Studio'), findsNothing);
     });
 
-    testWidgets('Shows Creator Studio menu pill for Creator accounts', (tester) async {
+    testWidgets('Shows Creator Studio menu pill for Creator accounts',
+        (tester) async {
       final creator = User(
         userId: '9876543211',
         name: 'Suresh Creator',
@@ -158,7 +172,8 @@ void main() {
   });
 
   group('NewsFeedScreen AppBar & Creator Studio Visibility Tests', () {
-    testWidgets('Renders top bar with title, and hides Studio for Farmer', (tester) async {
+    testWidgets('Renders top bar with title, and hides Studio for Farmer',
+        (tester) async {
       final farmer = User(
         userId: '9876543210',
         name: 'Ramesh Farmer',
@@ -180,7 +195,8 @@ void main() {
       expect(find.text('Studio'), findsNothing);
     });
 
-    testWidgets('Shows Studio button in header for Creator accounts', (tester) async {
+    testWidgets('Shows Studio button in header for Creator accounts',
+        (tester) async {
       final creator = User(
         userId: '9876543211',
         name: 'Suresh Creator',
@@ -202,7 +218,9 @@ void main() {
   });
 
   group('ReelsScreen Creator Studio Visibility Tests', () {
-    testWidgets('Renders ReelsScreen and hides Studio in empty state for Farmer accounts', (tester) async {
+    testWidgets(
+        'Renders ReelsScreen and hides Studio in empty state for Farmer accounts',
+        (tester) async {
       final farmer = User(
         userId: '9876543210',
         name: 'Ramesh Farmer',

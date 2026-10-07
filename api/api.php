@@ -866,6 +866,12 @@ switch ($action) {
     case 'get_commodity_trends':
         getCommodityTrends($pdo);
         break;
+    case 'get_market_prices':
+        getMarketPrices($pdo);
+        break;
+    case 'get_market_locations':
+        getMarketLocations($pdo);
+        break;
     // RETAILER AND EXTENSION OFFICER ENDPOINTS
     case 'get_retailer_dashboard':
         getRetailerDashboard($pdo);

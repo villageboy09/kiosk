@@ -12,7 +12,8 @@ void main() {
   });
 
   group('FarmerAnalyticsService Unit Tests', () {
-    test('Logs crop view event safely without throwing when unauthenticated', () async {
+    test('Logs crop view event safely without throwing when unauthenticated',
+        () async {
       expect(
         () => FarmerAnalyticsService.logCropView(
           cropId: 1,
@@ -97,9 +98,10 @@ void main() {
       );
     });
 
-    test('logCropView caches last tapped crop and updates GlobalNotifiers', () async {
+    test('logCropView caches last tapped crop and updates GlobalNotifiers',
+        () async {
       SharedPreferences.setMockInitialValues({});
-      
+
       FarmerAnalyticsService.logCropView(
         cropId: 3,
         cropName: 'Cotton / పత్తి',

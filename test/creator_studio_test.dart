@@ -31,15 +31,18 @@ class CreatorTestAssetLoader extends AssetLoader {
       'creator_stat_engagement': 'Engagement',
       'creator_stat_avg_watch': 'Avg. Watch Time',
       'creator_no_reels': 'No reels uploaded yet',
-      'creator_no_reels_sub': 'Share video guides and farming tips with fellow farmers',
+      'creator_no_reels_sub':
+          'Share video guides and farming tips with fellow farmers',
       'creator_no_articles': 'No articles published yet',
-      'creator_no_articles_sub': 'Write helpful advisories, news, or crop care guides',
+      'creator_no_articles_sub':
+          'Write helpful advisories, news, or crop care guides',
       'creator_status_active': 'Active',
       'creator_status_inactive': 'Inactive',
       'creator_status_published': 'Published',
       'creator_status_draft': 'Draft',
       'creator_delete_confirm_title': 'Delete Content?',
-      'creator_delete_confirm_desc': 'Are you sure you want to delete this? This action cannot be undone.',
+      'creator_delete_confirm_desc':
+          'Are you sure you want to delete this? This action cannot be undone.',
       'creator_delete_btn': 'Delete',
       'creator_cancel_btn': 'Cancel',
       'upload_reel_title': 'New Agri Reel',
@@ -47,7 +50,8 @@ class CreatorTestAssetLoader extends AssetLoader {
       'upload_reel_gallery': 'Choose from Gallery',
       'upload_reel_camera': 'Record Video',
       'upload_reel_url_hint': 'Or enter public video URL (MP4)',
-      'upload_reel_caption_hint': 'Write a caption for your reel... #paddy #organic',
+      'upload_reel_caption_hint':
+          'Write a caption for your reel... #paddy #organic',
       'upload_reel_audio_hint': 'Audio Title (e.g. Original Sound)',
       'upload_reel_phone_hint': 'Contact Number for farmer inquiries',
       'upload_reel_tags_hint': 'Add topic tags',
@@ -125,13 +129,15 @@ void main() {
       expect(stats.totalReels, 4);
       expect(stats.totalArticles, 2);
 
-      final trend = DailyTrendItem.fromJson({'day': 'Mon', 'views': 500, 'likes': 30});
+      final trend =
+          DailyTrendItem.fromJson({'day': 'Mon', 'views': 500, 'likes': 30});
       expect(trend.day, 'Mon');
       expect(trend.views, 500);
       expect(trend.likes, 30);
     });
 
-    test('CreatorStudioData parses correctly with nested reels and articles', () {
+    test('CreatorStudioData parses correctly with nested reels and articles',
+        () {
       final json = {
         'creator': {
           'id': 1,
@@ -179,7 +185,8 @@ void main() {
           {
             'id': 10,
             'title': 'Soil Health Management in Kharif Season',
-            'summary': 'Key practices to improve soil organic carbon and yield.',
+            'summary':
+                'Key practices to improve soil organic carbon and yield.',
             'content': 'Soil testing is the first fundamental step...',
             'category': 'Farming Tips',
             'views_count': 3000,
@@ -212,7 +219,8 @@ void main() {
   });
 
   group('Creator Studio & Upload Screens Widget Tests', () {
-    testWidgets('CreatorStudioScreen renders header, KPI metrics and tabs', (tester) async {
+    testWidgets('CreatorStudioScreen renders header, KPI metrics and tabs',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -229,7 +237,8 @@ void main() {
       expect(find.text('Inquiries'), findsOneWidget);
     });
 
-    testWidgets('UploadReelScreen renders form fields and suggested tag chips', (tester) async {
+    testWidgets('UploadReelScreen renders form fields and suggested tag chips',
+        (tester) async {
       tester.view.physicalSize = const Size(600, 1000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -241,7 +250,8 @@ void main() {
       expect(find.text('Select Video'), findsOneWidget);
       expect(find.text('Choose from Gallery'), findsOneWidget);
       expect(find.text('Record Video'), findsOneWidget);
-      expect(find.text('Publish Reel'), findsNWidgets(2)); // AppBar action + Bottom button
+      expect(find.text('Publish Reel'),
+          findsNWidgets(2)); // AppBar action + Bottom button
       expect(find.text('#PaddyCare'), findsOneWidget);
       expect(find.text('#DroneSpray'), findsOneWidget);
 
@@ -250,7 +260,8 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('UploadNewsScreen renders category chips and form inputs', (tester) async {
+    testWidgets('UploadNewsScreen renders category chips and form inputs',
+        (tester) async {
       tester.view.physicalSize = const Size(600, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -263,14 +274,17 @@ void main() {
       expect(find.text('Govt Schemes'), findsOneWidget);
       expect(find.text('Market & MSP'), findsOneWidget);
       expect(find.text('Tech & Drones'), findsOneWidget);
-      expect(find.text('Publish Article'), findsNWidgets(2)); // AppBar action + Bottom button
+      expect(find.text('Publish Article'),
+          findsNWidgets(2)); // AppBar action + Bottom button
 
       // Select Govt Schemes category chip
       await tester.tap(find.text('Govt Schemes'));
       await tester.pumpAndSettle();
     });
 
-    testWidgets('CreatorStudioScreen blocks activating unapproved reel and shows toast', (tester) async {
+    testWidgets(
+        'CreatorStudioScreen blocks activating unapproved reel and shows toast',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -350,12 +364,15 @@ void main() {
       switchWidget = tester.widget(switchFinder);
       expect(switchWidget.value, isFalse);
       expect(
-        find.text('Reel cannot be activated until inspected and approved by a moderator.'),
+        find.text(
+            'Reel cannot be activated until inspected and approved by a moderator.'),
         findsOneWidget,
       );
     });
 
-    testWidgets('CreatorStudioScreen delete button shows modal bottom sheet instead of AlertDialog', (tester) async {
+    testWidgets(
+        'CreatorStudioScreen delete button shows modal bottom sheet instead of AlertDialog',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);

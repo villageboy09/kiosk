@@ -58,7 +58,8 @@ void main() {
   group('LoginScreen Phone Validation Unit Tests', () {
     test('Rejects empty or short phone numbers', () {
       expect(LoginScreen.validatePhoneNumber(''), isNotNull);
-      expect(LoginScreen.validatePhoneNumber('987654321'), isNotNull); // 9 digits
+      expect(
+          LoginScreen.validatePhoneNumber('987654321'), isNotNull); // 9 digits
     });
 
     test('Rejects invalid starting prefixes (0 to 5)', () {
@@ -81,19 +82,22 @@ void main() {
   });
 
   group('LoginScreen Responsive Widget Tests', () {
-    testWidgets('Renders unified single-step phone layout cleanly on small screen (360x640)',
+    testWidgets(
+        'Renders unified single-step phone layout cleanly on small screen (360x640)',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(createTestWidget(screenSize: const Size(360, 640)));
+      await tester
+          .pumpWidget(createTestWidget(screenSize: const Size(360, 640)));
       await tester.pumpAndSettle();
 
       expect(find.text('Welcome Back'), findsOneWidget);
       expect(find.text('LOGGING IN AS'), findsOneWidget);
       expect(find.text('Farmer'), findsOneWidget);
-      expect(find.byType(TextField), findsOneWidget); // Direct Phone Input Field
+      expect(
+          find.byType(TextField), findsOneWidget); // Direct Phone Input Field
       expect(find.text('+91 '), findsOneWidget);
       expect(find.text('SIM'), findsOneWidget);
       expect(find.text('Sign In'), findsOneWidget);
@@ -106,7 +110,8 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(createTestWidget(screenSize: const Size(1280, 800)));
+      await tester
+          .pumpWidget(createTestWidget(screenSize: const Size(1280, 800)));
       await tester.pumpAndSettle();
 
       expect(find.text('CropSync'), findsOneWidget);
@@ -124,7 +129,8 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(createTestWidget(screenSize: const Size(400, 800)));
+      await tester
+          .pumpWidget(createTestWidget(screenSize: const Size(400, 800)));
       await tester.pumpAndSettle();
 
       final phoneField = find.byType(TextField).first;

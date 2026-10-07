@@ -172,7 +172,8 @@ void main() {
   });
 
   group('ReelsService Tests', () {
-    test('getReels returns default curated reels catalog in offline test mode', () async {
+    test('getReels returns default curated reels catalog in offline test mode',
+        () async {
       final reels = await ReelsService.getReels();
       expect(reels, isNotEmpty);
       expect(reels.length, greaterThanOrEqualTo(4));
@@ -200,8 +201,10 @@ void main() {
       expect(res2['hasSaved'], false);
     });
 
-    test('addComment creates valid comment object and logs analytics', () async {
-      final comment = await ReelsService.addComment(1, 'Nice harvest demonstration!');
+    test('addComment creates valid comment object and logs analytics',
+        () async {
+      final comment =
+          await ReelsService.addComment(1, 'Nice harvest demonstration!');
       expect(comment, isNotNull);
       expect(comment!.commentText, 'Nice harvest demonstration!');
       expect(comment.reelId, 1);
@@ -209,7 +212,8 @@ void main() {
   });
 
   group('FarmerAnalyticsService Reel Events Tests', () {
-    test('logs all reel interaction types without throwing exceptions', () async {
+    test('logs all reel interaction types without throwing exceptions',
+        () async {
       await FarmerAnalyticsService.logReelView(
         reelId: 1,
         watchDurationSeconds: 15,
@@ -244,7 +248,8 @@ void main() {
   });
 
   group('ReelsScreen Widget Tests', () {
-    testWidgets('ReelsScreen mounts and displays list of reels on mobile', (tester) async {
+    testWidgets('ReelsScreen mounts and displays list of reels on mobile',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
 
       await tester.pumpWidget(
@@ -260,7 +265,8 @@ void main() {
       expect(find.byType(PageView), findsOneWidget);
     });
 
-    testWidgets('ReelsScreen mounts and constrains layout on tablet', (tester) async {
+    testWidgets('ReelsScreen mounts and constrains layout on tablet',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(1280, 800));
 
       await tester.pumpWidget(
@@ -276,7 +282,9 @@ void main() {
       expect(find.byType(ConstrainedBox), findsWidgets);
     });
 
-    testWidgets('ReelsScreen updates visibility and activates when isTabVisible becomes true', (tester) async {
+    testWidgets(
+        'ReelsScreen updates visibility and activates when isTabVisible becomes true',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
 
       await tester.pumpWidget(
@@ -309,12 +317,15 @@ void main() {
 
       // Verify active item is now activated for playback
       final activeItems = tester.widgetList(find.byWidgetPredicate(
-        (w) => w.runtimeType.toString() == '_AuthenticReelItem' && (w as dynamic).isActive == true,
+        (w) =>
+            w.runtimeType.toString() == '_AuthenticReelItem' &&
+            (w as dynamic).isActive == true,
       ));
       expect(activeItems, hasLength(1));
     });
 
-    testWidgets('ReelsScreen responds to static isTabActive changes', (tester) async {
+    testWidgets('ReelsScreen responds to static isTabActive changes',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
 
       ReelsScreen.isTabActive.value = false;
@@ -340,7 +351,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       final activeItems = tester.widgetList(find.byWidgetPredicate(
-        (w) => w.runtimeType.toString() == '_AuthenticReelItem' && (w as dynamic).isActive == true,
+        (w) =>
+            w.runtimeType.toString() == '_AuthenticReelItem' &&
+            (w as dynamic).isActive == true,
       ));
       expect(activeItems, hasLength(1));
 
@@ -356,7 +369,9 @@ void main() {
       }
     });
 
-    testWidgets('ReelsScreen mounts RefreshIndicator and supports pull-to-refresh', (tester) async {
+    testWidgets(
+        'ReelsScreen mounts RefreshIndicator and supports pull-to-refresh',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       ReelsScreen.isTabActive.value = true;
 
@@ -378,7 +393,9 @@ void main() {
       expect(find.byType(ReelsScreen), findsOneWidget);
     });
 
-    testWidgets('ReelsScreen supports smooth swiping between reels without errors', (tester) async {
+    testWidgets(
+        'ReelsScreen supports smooth swiping between reels without errors',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       ReelsScreen.isTabActive.value = true;
 

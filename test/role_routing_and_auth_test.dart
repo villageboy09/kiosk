@@ -27,7 +27,9 @@ void main() {
       expect(user.isOperator, isFalse);
     });
 
-    test('Content Creator user correctly resolves isCreator and rejects isFarmer', () {
+    test(
+        'Content Creator user correctly resolves isCreator and rejects isFarmer',
+        () {
       final user = User(
         userId: '9876543211',
         name: 'Dr. Kalyan Creator',
@@ -76,13 +78,17 @@ void main() {
   });
 
   group('Strict Phone Validation Tests', () {
-    test('LoginScreen phone validation rejects invalid lengths and repetitive numbers', () {
+    test(
+        'LoginScreen phone validation rejects invalid lengths and repetitive numbers',
+        () {
       expect(LoginScreen.validatePhoneNumber(''), isNotNull);
       expect(LoginScreen.validatePhoneNumber('12345'), isNotNull);
       expect(LoginScreen.validatePhoneNumber('9999999999'), isNotNull);
       expect(LoginScreen.validatePhoneNumber('9898989898'), isNotNull);
-      expect(LoginScreen.validatePhoneNumber('5123456789'), isNotNull); // Doesn't start with 6-9
-      expect(LoginScreen.validatePhoneNumber('9848022338'), isNull); // Valid Indian mobile
+      expect(LoginScreen.validatePhoneNumber('5123456789'),
+          isNotNull); // Doesn't start with 6-9
+      expect(LoginScreen.validatePhoneNumber('9848022338'),
+          isNull); // Valid Indian mobile
     });
 
     test('SignupScreen phone validation accepts valid mobile', () {
@@ -92,9 +98,11 @@ void main() {
   });
 
   group('AuthService Session Isolation & Cleanup', () {
-    test('Logout clears currentUser and removes creator studio cache keys', () async {
+    test('Logout clears currentUser and removes creator studio cache keys',
+        () async {
       SharedPreferences.setMockInitialValues({
-        'current_user': '{"user_id":"9876543210","name":"Arjun","role":"farmer"}',
+        'current_user':
+            '{"user_id":"9876543210","name":"Arjun","role":"farmer"}',
         'is_logged_in': true,
         'user_phone': '9876543210',
         'cropsync_creator_studio_cache_9876543210': '{"cached":true}',
@@ -109,13 +117,16 @@ void main() {
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('is_logged_in'), isFalse);
-      expect(prefs.getString('cropsync_creator_studio_cache_9876543210'), isNull);
+      expect(
+          prefs.getString('cropsync_creator_studio_cache_9876543210'), isNull);
       expect(prefs.getString('cropsync_creator_studio_cache_v1'), isNull);
     });
   });
 
   group('Creator Studio Navigation Guard Widget Tests', () {
-    testWidgets('navigateToStudio blocks Farmer from entering Studio and shows SnackBar', (tester) async {
+    testWidgets(
+        'navigateToStudio blocks Farmer from entering Studio and shows SnackBar',
+        (tester) async {
       // Set current user as Farmer
       AuthService.currentUser = User(
         userId: '9876543210',
@@ -144,7 +155,8 @@ void main() {
       await tester.pump(); // Pump snackbar animation
 
       // Must show restricted warning snackbar
-      expect(find.textContaining('Creator Studio is for Content Creators'), findsOneWidget);
+      expect(find.textContaining('Creator Studio is for Content Creators'),
+          findsOneWidget);
       expect(find.text('Login as Creator'), findsOneWidget);
 
       // Must NOT have navigated to CreatorHomeScreen

@@ -111,7 +111,8 @@ void main() {
       expect(selectedTab, 2);
     });
 
-    testWidgets('Shows News Card when clientCode is lowercase or padded hyd001', (tester) async {
+    testWidgets('Shows News Card when clientCode is lowercase or padded hyd001',
+        (tester) async {
       await tester.pumpWidget(
         buildTestableHomeTab(
           clientCode: '  hyd001  ',
@@ -125,7 +126,9 @@ void main() {
       expect(find.text('CropSync CHC'), findsNothing);
     });
 
-    testWidgets('Shows CHC Card when user has a specific regional clientCode (e.g. KHM001)', (tester) async {
+    testWidgets(
+        'Shows CHC Card when user has a specific regional clientCode (e.g. KHM001)',
+        (tester) async {
       await tester.pumpWidget(
         buildTestableHomeTab(
           clientCode: 'KHM001',

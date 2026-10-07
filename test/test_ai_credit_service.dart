@@ -29,7 +29,8 @@ void main() {
       const testUser = 'farmer_test_2';
 
       for (int i = 1; i <= 10; i++) {
-        final canScan = await AiCreditService.canPerformAnalysis(userId: testUser);
+        final canScan =
+            await AiCreditService.canPerformAnalysis(userId: testUser);
         expect(canScan, isTrue);
 
         final consumed = await AiCreditService.consumeCredit(userId: testUser);
@@ -42,14 +43,18 @@ void main() {
       }
 
       // 11th scan should fail (0 free daily scans left and 0 purchased credits)
-      final canScan11th = await AiCreditService.canPerformAnalysis(userId: testUser);
+      final canScan11th =
+          await AiCreditService.canPerformAnalysis(userId: testUser);
       expect(canScan11th, isFalse);
 
-      final consumed11th = await AiCreditService.consumeCredit(userId: testUser);
+      final consumed11th =
+          await AiCreditService.consumeCredit(userId: testUser);
       expect(consumed11th, isFalse);
     });
 
-    test('Adding 10 purchased credits enables scans when daily quota is exhausted', () async {
+    test(
+        'Adding 10 purchased credits enables scans when daily quota is exhausted',
+        () async {
       const testUser = 'farmer_test_3';
 
       // Exhaust 10 daily scans
@@ -85,7 +90,9 @@ void main() {
       expect(status.totalAvailable, equals(9));
     });
 
-    test('New calendar day resets daily count to 10 but preserves purchased balance', () async {
+    test(
+        'New calendar day resets daily count to 10 but preserves purchased balance',
+        () async {
       const testUser = 'farmer_test_4';
       final prefs = await SharedPreferences.getInstance();
 
@@ -102,7 +109,8 @@ void main() {
       expect(status.totalAvailable, equals(15)); // 10 free + 5 purchased
     });
 
-    test('syncPurchasedCredits accurately syncs balance reported from server', () async {
+    test('syncPurchasedCredits accurately syncs balance reported from server',
+        () async {
       const testUser = 'farmer_test_5';
 
       final syncedStatus = await AiCreditService.syncPurchasedCredits(
@@ -118,15 +126,24 @@ void main() {
 
   group('Razorpay Mobile Number Autofill Tests', () {
     test('sanitizeIndianPhoneNumber handles various formats correctly', () {
-      expect(RazorpayPaymentService.sanitizeIndianPhoneNumber('9876543210'), equals('9876543210'));
-      expect(RazorpayPaymentService.sanitizeIndianPhoneNumber('+91 98765 43210'), equals('9876543210'));
-      expect(RazorpayPaymentService.sanitizeIndianPhoneNumber('+91-98765-43210'), equals('9876543210'));
-      expect(RazorpayPaymentService.sanitizeIndianPhoneNumber('919876543210'), equals('9876543210'));
-      expect(RazorpayPaymentService.sanitizeIndianPhoneNumber('09876543210'), equals('9876543210'));
-      expect(RazorpayPaymentService.sanitizeIndianPhoneNumber('  9876543210  '), equals('9876543210'));
+      expect(RazorpayPaymentService.sanitizeIndianPhoneNumber('9876543210'),
+          equals('9876543210'));
+      expect(
+          RazorpayPaymentService.sanitizeIndianPhoneNumber('+91 98765 43210'),
+          equals('9876543210'));
+      expect(
+          RazorpayPaymentService.sanitizeIndianPhoneNumber('+91-98765-43210'),
+          equals('9876543210'));
+      expect(RazorpayPaymentService.sanitizeIndianPhoneNumber('919876543210'),
+          equals('9876543210'));
+      expect(RazorpayPaymentService.sanitizeIndianPhoneNumber('09876543210'),
+          equals('9876543210'));
+      expect(RazorpayPaymentService.sanitizeIndianPhoneNumber('  9876543210  '),
+          equals('9876543210'));
     });
 
-    test('resolveUserPhoneNumber resolves from SharedPreferences phone_number', () async {
+    test('resolveUserPhoneNumber resolves from SharedPreferences phone_number',
+        () async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('phone_number', '+91 98765 43210');
 
@@ -134,7 +151,9 @@ void main() {
       expect(resolved, equals('9876543210'));
     });
 
-    test('resolveUserPhoneNumber resolves from SharedPreferences user_id if 10-digits', () async {
+    test(
+        'resolveUserPhoneNumber resolves from SharedPreferences user_id if 10-digits',
+        () async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
       await prefs.setString('user_id', '9123456780');
@@ -144,4 +163,3 @@ void main() {
     });
   });
 }
-

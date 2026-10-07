@@ -5,7 +5,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const locales = ['en', 'hi', 'te'];
-  final prefixes = ['shop_', 'shopd_', 'shopnew_'];
+  final prefixes = [
+    'shop_',
+    'shopd_',
+    'shopnew_',
+    'buy_',
+    'shoph_',
+    'pd_',
+    'seedui_',
+    'seedd_',
+    'mkt_',
+    'mktui_',
+    'mktd_',
+  ];
   final data = <String, Map<String, dynamic>>{
     for (final l in locales)
       l: jsonDecode(File('assets/translations/$l.json').readAsStringSync())

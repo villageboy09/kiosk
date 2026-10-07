@@ -10,8 +10,12 @@ import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/services/farmer_analytics_service.dart';
 import 'package:cropsync/services/shop_visit_tracker.dart';
 import 'package:cropsync/theme/app_text.dart';
-import 'package:cropsync/theme/app_theme.dart';
+import 'package:cropsync/widgets/shop/buy_now_sheet.dart';
+import 'package:cropsync/widgets/shop/shop_back_gate.dart';
 import 'package:cropsync/widgets/shop/shop_banner_carousel.dart';
+import 'package:cropsync/widgets/shop/shop_chrome.dart';
+import 'package:cropsync/widgets/shop/shop_category_style.dart';
+import 'package:cropsync/widgets/shop/shop_discover.dart';
 import 'package:cropsync/widgets/shop/shop_filters.dart';
 import 'package:cropsync/widgets/shop/shop_product_card.dart';
 import 'package:cropsync/widgets/shop_whats_new_sheet.dart';
@@ -23,6 +27,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 export '../models/product.dart';
+export '../widgets/shop/shop_back_gate.dart';
 
 /// Localizes category names (e.g. 'మెషీన్', 'Machinery', 'Tools', 'పనిముట్లు')
 String getLocalizedCategory(BuildContext context, String category) {
@@ -78,6 +83,9 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   String _selectedCategory = 'all_category';
   ShopFilters _filters = const ShopFilters();
   bool _showWishlistOnly = false;
+  bool _forceGrid = false; // 'See all' on the discover 'More products' rail
+  String _loadedKey = '|'; // category|search the current _products belong to
+  String _inflightKey = ''; // key of the request currently loading
 
   Set<int> _wishlist = {};
   int? _seenProductId; // captured once on open, before anything marks seen
@@ -186,6 +194,8 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
 
   Future<void> _loadProducts() async {
     final request = ++_productsRequest;
+    final key = '$_selectedCategory|$_appliedSearch';
+    _inflightKey = key;
     setState(() {
       _isLoadingProducts = true;
       _error = null;
@@ -210,6 +220,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
           .toList();
       setState(() {
         _products = products;
+        _loadedKey = key;
         _isLoadingProducts = false;
         _hasLoadedOnce = true;
       });
@@ -260,6 +271,13 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
       _showWishlistOnly ||
       _appliedSearch.isNotEmpty ||
       _selectedCategory != 'all_category';
+
+  bool get _isDiscover =>
+      !_forceGrid &&
+      !_filtersActive &&
+      !_showWishlistOnly &&
+      _appliedSearch.isEmpty &&
+      _selectedCategory == 'all_category';
 
   bool _isNew(Product p) => _seenProductId != null && p.id > _seenProductId!;
 
@@ -325,8 +343,14 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   }
 
   void _selectCategory(String category) {
-    if (category == _selectedCategory) return;
-    setState(() => _selectedCategory = category);
+    if (category == _selectedCategory) {
+      if (_forceGrid) setState(() => _forceGrid = false);
+      return;
+    }
+    setState(() {
+      _selectedCategory = category;
+      _forceGrid = false;
+    });
     _loadProducts();
   }
 
@@ -343,14 +367,37 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     if (result != null && mounted) setState(() => _filters = result);
   }
 
+  /// Back navigation: anywhere but the discover home (or with text in the
+  /// search field) first returns to discover; only discover leaves the screen.
+  bool get _atShopHome => _isDiscover && _searchController.text.trim().isEmpty;
+
+  void _onBackPressed() {
+    if (_atShopHome) {
+      Navigator.maybePop(context);
+    } else {
+      _backToDiscover();
+    }
+  }
+
+  void _backToDiscover() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _resetAll();
+  }
+
   void _resetAll({bool reload = true}) {
     _debounce?.cancel();
     _searchController.clear();
-    final needsReload =
-        _appliedSearch.isNotEmpty || _selectedCategory != 'all_category';
+    // Refetch only if the loaded (or in-flight) data is not the unfiltered
+    // "all" list; otherwise discover reuses it without a network call.
+    const allKey = 'all_category|';
+    final allInFlight = _isLoadingProducts && _inflightKey == allKey;
+    final allLoaded =
+        _loadedKey == allKey && !(_isLoadingProducts && _inflightKey != allKey);
+    final needsReload = !(allInFlight || allLoaded);
     setState(() {
       _filters = const ShopFilters();
       _showWishlistOnly = false;
+      _forceGrid = false;
       _selectedCategory = 'all_category';
       _appliedSearch = '';
     });
@@ -369,6 +416,15 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
       context,
       MaterialPageRoute(builder: (_) => ProductDetailsScreen(product: product)),
     );
+  }
+
+  void _buyNow(Product product) {
+    showBuyNowSheet(context, product);
+  }
+
+  void _seeAll(String category) {
+    if (_showWishlistOnly) setState(() => _showWishlistOnly = false);
+    _selectCategory(category);
   }
 
   Future<void> _onBannerTap(ShopBanner banner) async {
@@ -450,249 +506,111 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     final searching = _searchController.text.trim().isNotEmpty;
     final showBanner = !searching && !_showWishlistOnly && _banners.isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: RefreshIndicator(
-        color: kShopGreen,
-        backgroundColor: Colors.white,
-        onRefresh: _refresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          slivers: [
-            _buildAppBar(),
-            SliverToBoxAdapter(child: _buildSearchRow()),
-            if (showBanner)
-              SliverToBoxAdapter(
-                child: ShopBannerCarousel(
-                  banners: _banners,
-                  onTap: _onBannerTap,
-                ),
+    return ShopBackGate(
+        atHome: _atShopHome,
+        onBackToHome: _backToDiscover,
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          body: RefreshIndicator(
+            color: kShopGreen,
+            backgroundColor: Colors.white,
+            onRefresh: _refresh,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
               ),
-            SliverToBoxAdapter(child: _buildCategoryRow()),
-            if (_filtersActive || _showWishlistOnly)
-              SliverToBoxAdapter(child: _buildActiveFilters()),
-            ..._buildBody(products),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAppBar() {
-    final title = context.tr('crop_sync_market');
-    return SliverAppBar(
-      pinned: true,
-      toolbarHeight: 56,
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      centerTitle: false,
-      titleSpacing: 0,
-      leading: AppTheme.backButton(context),
-      title: Text(
-        title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: appStyle(
-          context,
-          text: title,
-          size: 18,
-          weight: FontWeight.w800,
-          color: kShopInk,
-          height: 1.3,
-        ),
-      ),
-      actions: [
-        Semantics(
-          button: true,
-          toggled: _showWishlistOnly,
-          label: context.tr('shop_wishlist'),
-          child: IconButton(
-            tooltip: context.tr('shop_wishlist'),
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            onPressed: () {
-              HapticFeedback.selectionClick();
-              setState(() => _showWishlistOnly = !_showWishlistOnly);
-            },
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  _showWishlistOnly
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  color: _showWishlistOnly ? const Color(0xFFE11D48) : kShopInk,
-                  size: 24,
-                ),
-                if (_wishlist.isNotEmpty && !_showWishlistOnly)
-                  Positioned(
-                    top: -1,
-                    right: -1,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFE11D48),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
+              slivers: [
+                _buildAppBar(),
+                SliverToBoxAdapter(child: _buildSearchRow()),
+                if (showBanner)
+                  SliverToBoxAdapter(
+                    child: Center(
+                        child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 820),
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: ShopBannerCarousel(
+                                banners: _banners,
+                                onTap: _onBannerTap,
+                              ),
+                            ))),
                   ),
+                SliverToBoxAdapter(
+                  child: ShopCategoryChips(
+                    categories: _categories,
+                    selected: _selectedCategory,
+                    labelOf: getLocalizedCategory,
+                    onSelected: _selectCategory,
+                  ),
+                ),
+                if (_filtersActive || _showWishlistOnly)
+                  SliverToBoxAdapter(child: _buildActiveFilters()),
+                ..._buildBody(products),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
               ],
             ),
           ),
+        ));
+  }
+
+  Widget _buildAppBar() {
+    return buildShopAppBar(
+      context,
+      title: context.tr('crop_sync_market'),
+      onBack: _onBackPressed,
+      trailing: Semantics(
+        button: true,
+        toggled: _showWishlistOnly,
+        label: context.tr('shop_wishlist'),
+        child: IconButton(
+          tooltip: context.tr('shop_wishlist'),
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          onPressed: () {
+            HapticFeedback.selectionClick();
+            setState(() => _showWishlistOnly = !_showWishlistOnly);
+          },
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(
+                _showWishlistOnly
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                color: _showWishlistOnly ? const Color(0xFFE11D48) : kShopInk,
+                size: 24,
+              ),
+              if (_wishlist.isNotEmpty && !_showWishlistOnly)
+                Positioned(
+                  top: -1,
+                  right: -1,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE11D48),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-        const SizedBox(width: 8),
-      ],
+      ),
     );
   }
 
   Widget _buildSearchRow() {
-    final text = _searchController.text;
-    final hint = context.tr('search_products');
-    OutlineInputBorder border() => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 44,
-              child: TextField(
-                controller: _searchController,
-                onChanged: _onSearchChanged,
-                onSubmitted: (v) {
-                  _debounce?.cancel();
-                  _applySearch(v);
-                },
-                textInputAction: TextInputAction.search,
-                style: appStyle(
-                  context,
-                  text: text,
-                  size: 14,
-                  color: kShopInk,
-                  height: 1.3,
-                ),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: kShopGrey,
-                  isDense: true,
-                  hintText: hint,
-                  hintStyle: appStyle(
-                    context,
-                    text: hint,
-                    size: 14,
-                    color: const Color(0xFF94A3B8),
-                    height: 1.3,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  prefixIcon: const Icon(Icons.search_rounded,
-                      size: 20, color: Color(0xFF64748B)),
-                  suffixIcon: text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: context.tr('shop_clear'),
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: _clearSearch,
-                        ),
-                  border: border(),
-                  enabledBorder: border(),
-                  focusedBorder: border(),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Semantics(
-            button: true,
-            label: context.tr('shop_filters'),
-            child: Material(
-              color: kShopGrey,
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: _openFilters,
-                child: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      const Icon(Icons.tune_rounded, size: 22, color: kShopInk),
-                      if (_filtersActive)
-                        Positioned(
-                          top: 9,
-                          right: 9,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: kShopGreen,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoryRow() {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final raw = _categories[i];
-          final label = getLocalizedCategory(context, raw);
-          final selected = raw == _selectedCategory;
-          return Semantics(
-            button: true,
-            selected: selected,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () => _selectCategory(raw),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Container(
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: selected ? kShopGreen : kShopGrey,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: appStyle(
-                      context,
-                      text: label,
-                      size: 13,
-                      weight: FontWeight.w600,
-                      color: selected ? Colors.white : kShopInk,
-                      height: 1.3,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+    return ShopSearchRow(
+      controller: _searchController,
+      hint: context.tr('search_products'),
+      onChanged: _onSearchChanged,
+      onSubmitted: (v) {
+        _debounce?.cancel();
+        _applySearch(v);
+      },
+      onFilterTap: _openFilters,
+      filterActive: _filtersActive,
+      onClear: _clearSearch,
     );
   }
 
@@ -749,10 +667,18 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
   }
 
   List<Widget> _buildBody(List<Product> products) {
-    if (_isLoadingProducts && !_hasLoadedOnce) {
-      return [_buildSkeletonGrid()];
+    final discover = _isDiscover;
+    // `_products` may still hold the previous category's items while a new
+    // load is in flight (or after it failed); never render them as this view.
+    final stale = _loadedKey != '$_selectedCategory|$_appliedSearch';
+    if (_isLoadingProducts && (!_hasLoadedOnce || stale)) {
+      return [
+        discover
+            ? const SliverToBoxAdapter(child: ShopDiscoverSkeleton())
+            : _buildSkeletonGrid(),
+      ];
     }
-    if (_error != null && _products == null) {
+    if (_error != null && (_products == null || stale)) {
       return [
         SliverFillRemaining(
           hasScrollBody: false,
@@ -785,7 +711,47 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
           ),
       ];
     }
-    return [_buildGrid(products)];
+    if (discover) {
+      return [
+        SliverToBoxAdapter(
+          child: ShopDiscoverHome(
+            products: products,
+            categories: _categories,
+            wishlist: _wishlist,
+            isNew: _isNew,
+            categoryLabel: getLocalizedCategory,
+            productName: getLocalizedProductName,
+            onOpen: _openProduct,
+            onBuyNow: _buyNow,
+            onToggleWishlist: _toggleWishlist,
+            onSeeAll: _seeAll,
+            onViewAll: () => setState(() => _forceGrid = true),
+          ),
+        ),
+      ];
+    }
+    return [_buildCount(products.length), _buildGrid(products)];
+  }
+
+  Widget _buildCount(int count) {
+    final text =
+        context.tr('shoph_items_count', namedArgs: {'count': '$count'});
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: Text(
+          text,
+          style: appStyle(
+            context,
+            text: text,
+            size: 12.5,
+            weight: FontWeight.w500,
+            color: const Color(0xFF64748B),
+            height: 1.4,
+          ),
+        ),
+      ),
+    );
   }
 
   /// Shared grid metrics so the real grid and skeleton line up.
@@ -795,11 +761,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
     final cols = width > 600 ? (avail ~/ 200).clamp(3, 4) : 2;
     final cell = (avail - gap * (cols - 1)) / cols;
     final scale = MediaQuery.textScalerOf(context).scale(1);
-    return (
-      cols: cols,
-      cellWidth: cell,
-      extent: cell + shopCardInfoHeight(scale)
-    );
+    return (cols: cols, cellWidth: cell, extent: shopCardExtent(cell, scale));
   }
 
   SliverGridDelegate _delegate(
@@ -832,6 +794,7 @@ class _AgriShopScreenState extends State<AgriShopScreen> {
                   isNew: _isNew(p),
                   memCacheWidth: cache,
                   onTap: () => _openProduct(p),
+                  onBuyNow: () => _buyNow(p),
                   onToggleWishlist: () => _toggleWishlist(p.id),
                 );
               },

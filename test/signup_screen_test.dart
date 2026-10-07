@@ -64,7 +64,8 @@ void main() {
     test('Rejects empty or short phone numbers', () {
       expect(SignupScreen.validatePhoneNumber(''), isNotNull);
       expect(SignupScreen.validatePhoneNumber('12345'), isNotNull);
-      expect(SignupScreen.validatePhoneNumber('987654321'), isNotNull); // 9 digits
+      expect(
+          SignupScreen.validatePhoneNumber('987654321'), isNotNull); // 9 digits
     });
 
     test('Rejects invalid starting prefixes (0 to 5)', () {
@@ -81,7 +82,8 @@ void main() {
       expect(SignupScreen.validatePhoneNumber('6666666666'), isNotNull);
     });
 
-    test('Rejects low-entropy / nearly-identical numbers (e.g. 9999999998)', () {
+    test('Rejects low-entropy / nearly-identical numbers (e.g. 9999999998)',
+        () {
       expect(SignupScreen.validatePhoneNumber('9999999998'), isNotNull);
       expect(SignupScreen.validatePhoneNumber('9999999988'), isNotNull);
       expect(SignupScreen.validatePhoneNumber('9999988888'), isNotNull);
@@ -118,7 +120,8 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(createTestWidget(screenSize: const Size(360, 640)));
+      await tester
+          .pumpWidget(createTestWidget(screenSize: const Size(360, 640)));
       await tester.pumpAndSettle();
 
       expect(find.text('Create Account'), findsOneWidget);
@@ -136,7 +139,8 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(createTestWidget(screenSize: const Size(1280, 800)));
+      await tester
+          .pumpWidget(createTestWidget(screenSize: const Size(1280, 800)));
       await tester.pumpAndSettle();
 
       expect(find.text('CropSync'), findsOneWidget);
@@ -152,7 +156,8 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(createTestWidget(screenSize: const Size(400, 800)));
+      await tester
+          .pumpWidget(createTestWidget(screenSize: const Size(400, 800)));
       await tester.pumpAndSettle();
 
       // Enter fake 9999999998 number directly into the phone field
@@ -161,7 +166,8 @@ void main() {
       await tester.pump();
 
       // Submit button should be disabled because 9999999998 is an invalid pattern
-      final buttonFinder = find.widgetWithText(ElevatedButton, 'Confirm & Create');
+      final buttonFinder =
+          find.widgetWithText(ElevatedButton, 'Confirm & Create');
       expect(buttonFinder, findsOneWidget);
       final ElevatedButton invalidButton = tester.widget(buttonFinder);
       expect(invalidButton.onPressed, isNull);

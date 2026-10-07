@@ -31,7 +31,8 @@ class NewsTestAssetLoader extends AssetLoader {
       'news_comment_hint': 'Write your thoughts or ask a question...',
       'news_comment_submit': 'Post',
       'news_empty_title': 'No news articles found',
-      'news_empty_subtitle': 'Try clearing your search or switching categories.',
+      'news_empty_subtitle':
+          'Try clearing your search or switching categories.',
       'news_min_read': 'min read',
       'home_bottom_nav_news': 'News',
     };
@@ -74,8 +75,11 @@ void main() {
       final json = {
         'id': 101,
         'title': 'Solar Pump Subsidy Announced',
-        'summary': 'Farmers get up to 60% subsidy for installing PM-KUSUM solar pumps.',
-        'content': 'Detailed guidelines for solar irrigation pumps application...\n' * 50,
+        'summary':
+            'Farmers get up to 60% subsidy for installing PM-KUSUM solar pumps.',
+        'content':
+            'Detailed guidelines for solar irrigation pumps application...\n' *
+                50,
         'category': 'Govt Schemes',
         'image_url': 'https://example.com/solar.jpg',
         'author': 'Renewable Energy Wing',
@@ -85,7 +89,8 @@ void main() {
         'comments_count': 7,
         'is_featured': 1,
         'has_liked': 0,
-        'published_at': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
+        'published_at':
+            DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
       };
 
       final article = NewsArticle.fromJson(json);
@@ -110,7 +115,9 @@ void main() {
         'user_role': 'farmer',
         'phone_number': '9876543210',
         'comment_text': 'Where can we apply for this scheme?',
-        'created_at': DateTime.now().subtract(const Duration(minutes: 15)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(const Duration(minutes: 15))
+            .toIso8601String(),
       };
 
       final comment = NewsComment.fromJson(json);
@@ -124,23 +131,30 @@ void main() {
   });
 
   group('NewsService Unit Tests', () {
-    test('getArticles retrieves fallback articles and filters by category', () async {
+    test('getArticles retrieves fallback articles and filters by category',
+        () async {
       final allArticles = await NewsService.getArticles();
       expect(allArticles.isNotEmpty, isTrue);
       expect(allArticles.any((a) => a.isFeatured), isTrue);
 
-      final schemeArticles = await NewsService.getArticles(category: 'Govt Schemes');
+      final schemeArticles =
+          await NewsService.getArticles(category: 'Govt Schemes');
       expect(schemeArticles.every((a) => a.category == 'Govt Schemes'), isTrue);
     });
 
     test('getArticles searches by keyword', () async {
       final searchResults = await NewsService.getArticles(searchQuery: 'Paddy');
-      expect(searchResults.any((a) => a.title.contains('Paddy') || a.content.contains('Paddy')), isTrue);
+      expect(
+          searchResults.any(
+              (a) => a.title.contains('Paddy') || a.content.contains('Paddy')),
+          isTrue);
     });
   });
 
   group('NewsFeedScreen Responsive Widget Tests', () {
-    testWidgets('Renders search bar, category chips, and news list on mobile (360x640)', (tester) async {
+    testWidgets(
+        'Renders search bar, category chips, and news list on mobile (360x640)',
+        (tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -160,7 +174,8 @@ void main() {
       expect(find.byType(CustomScrollView), findsOneWidget);
     });
 
-    testWidgets('Renders responsive layout on tablet screen (1280x800)', (tester) async {
+    testWidgets('Renders responsive layout on tablet screen (1280x800)',
+        (tester) async {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -184,7 +199,8 @@ void main() {
       id: 9999,
       title: 'Solar Irrigation Subsidy Available for All Districts',
       summary: 'State Govt announces 50% subsidy for solar pump sets.',
-      content: 'Under the new agricultural modernization initiative, farmers can now apply online for solar powered pumps...',
+      content:
+          'Under the new agricultural modernization initiative, farmers can now apply online for solar powered pumps...',
       category: 'Govt Schemes',
       author: 'Agri Dept',
       sourceName: 'Govt Portal',
@@ -196,7 +212,8 @@ void main() {
       publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
     );
 
-    testWidgets('Renders full article, metrics, and comments section', (tester) async {
+    testWidgets('Renders full article, metrics, and comments section',
+        (tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -211,14 +228,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       // Verify title and category
-      expect(find.text('Solar Irrigation Subsidy Available for All Districts'), findsOneWidget);
+      expect(find.text('Solar Irrigation Subsidy Available for All Districts'),
+          findsOneWidget);
       expect(find.text('Govt Schemes'), findsOneWidget);
 
       // Verify comment input field
       expect(find.byType(TextField), findsOneWidget);
     });
 
-    testWidgets('Tapping like button updates like state optimistically', (tester) async {
+    testWidgets('Tapping like button updates like state optimistically',
+        (tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);

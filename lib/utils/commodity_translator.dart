@@ -814,15 +814,5 @@ class CommodityTranslator {
 
     return 'cash_crops';
   }
-
-  /// Computes a deterministic realistic trend percentage (+6%, -3%, etc.)
-  /// for a commodity based on its name and modal price.
-  static int getTrendPercentage(String commodity, double modalPrice) {
-    final hash = commodity.codeUnits.fold(0, (prev, elem) => prev + elem);
-    // Produce values between -8% and +12%
-    final mod = (hash + modalPrice.toInt()) % 15;
-    final val = mod - 4; // range: -4 to +10
-    return val == 0 ? 3 : val;
-  }
 }
 
