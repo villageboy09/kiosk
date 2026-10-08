@@ -1,5 +1,6 @@
 // ignore_for_file: curly_braces_in_flow_control_structures
 
+import 'package:cropsync/theme/app_theme.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -747,7 +748,8 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
 
     _loadingTimer?.cancel();
     _loadingTimer = Timer.periodic(const Duration(milliseconds: 2200), (_) {
-      if (mounted) setState(() => _loadingStep = (_loadingStep + 1) % 4);
+      if (mounted)
+        setState(() => _loadingStep = (_loadingStep + 1).clamp(0, 3));
     });
 
     try {
@@ -1018,10 +1020,7 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
           backgroundColor: _stage == _Stage.result ? Colors.white : _bg,
           elevation: 0,
           scrolledUnderElevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: _ink),
-            onPressed: () => Navigator.maybePop(context),
-          ),
+          leading: AppTheme.backButton(context),
           title: Text(_t('title'), style: _ts(18, w: FontWeight.w700)),
           actions: [
             const LanguageButton.pill(color: _ink),
@@ -1064,120 +1063,149 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
           .any((k) => (c[k] as String).toLowerCase().contains(q));
     }).toList();
 
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-          sliver: SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_t('pick_crop_title'),
-                    style: _ts(24, w: FontWeight.w700, h: 1.2)),
-                const SizedBox(height: 6),
-                Text(_t('pick_crop_sub'), style: _ts(14, c: _muted, h: 1.4)),
-                if (_creditStatus != null) ...[
-                  const SizedBox(height: 12),
-                  _buildCreditsPill(),
-                ],
-                const SizedBox(height: 18),
-                TextField(
-                  onChanged: (v) => setState(() => _search = v),
-                  style: _ts(15),
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: _t('search'),
-                    hintStyle: _ts(15, c: const Color(0xFF9CA3AF)),
-                    prefixIcon: const Icon(Icons.search_rounded, color: _muted),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: _line)),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: _line)),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide:
-                            const BorderSide(color: _green, width: 1.5)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final landscape = w >= 900 && w > constraints.maxHeight;
+        final pad = landscape ? 20.0 : (((w - 1000) / 2).clamp(20.0, 400.0));
+        final header = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_t('pick_crop_title'),
+                style: _ts(24, w: FontWeight.w700, h: 1.2)),
+            const SizedBox(height: 6),
+            Text(_t('pick_crop_sub'), style: _ts(14, c: _muted, h: 1.4)),
+            if (_creditStatus != null) ...[
+              const SizedBox(height: 12),
+              _buildCreditsPill(),
+            ],
+            const SizedBox(height: 18),
+            TextField(
+              onChanged: (v) => setState(() => _search = v),
+              style: _ts(15),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: _t('search'),
+                hintStyle: _ts(15, c: const Color(0xFF9CA3AF)),
+                prefixIcon: const Icon(Icons.search_rounded, color: _muted),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: _line)),
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: _line)),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: _green, width: 1.5)),
+              ),
+            ),
+            if (_recentDiagnoses.isNotEmpty && q.isEmpty) ...[
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  Expanded(
+                      child: Text(_t('recent'),
+                          style: _ts(15, w: FontWeight.w700))),
+                  TextButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const SavedAdvisoriesScreen()),
+                    ).then((_) => _loadRecentDiagnoses()),
+                    style: TextButton.styleFrom(
+                        foregroundColor: _green,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(48, 36)),
+                    child: Text(_t('view_all'),
+                        style: _ts(13, w: FontWeight.w600, c: _green)),
                   ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 64,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _recentDiagnoses.length.clamp(0, 6),
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (_, i) => _buildRecentChip(_recentDiagnoses[i]),
                 ),
-                if (_recentDiagnoses.isNotEmpty && q.isEmpty) ...[
-                  const SizedBox(height: 22),
-                  Row(
-                    children: [
-                      Expanded(
-                          child: Text(_t('recent'),
-                              style: _ts(15, w: FontWeight.w700))),
-                      TextButton(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const SavedAdvisoriesScreen()),
-                        ).then((_) => _loadRecentDiagnoses()),
-                        style: TextButton.styleFrom(
-                            foregroundColor: _green,
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(48, 36)),
-                        child: Text(_t('view_all'),
-                            style: _ts(13, w: FontWeight.w600, c: _green)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    height: 64,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _recentDiagnoses.length.clamp(0, 6),
-                      separatorBuilder: (_, __) => const SizedBox(width: 10),
-                      itemBuilder: (_, i) =>
-                          _buildRecentChip(_recentDiagnoses[i]),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 22),
-              ],
-            ),
-          ),
-        ),
-        if (crops.isEmpty)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(40),
-              child: Center(
-                  child: Text(_t('no_crop_found'), style: _ts(14, c: _muted))),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 140,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.8,
               ),
-              delegate: SliverChildBuilderDelegate(
-                (_, i) {
-                  final c = crops[i];
-                  return _CropTile(
-                    crop: c,
-                    label: _cropLabel(c),
-                    subLabel: _lang == 'en' ? null : c['name_en'] as String,
-                    selected: _selectedCrop?['id'] == c['id'],
-                    onTap: () => _onCropTap(c),
-                  );
-                },
-                childCount: crops.length,
+            ],
+            const SizedBox(height: 22),
+          ],
+        );
+        final gridSlivers = <Widget>[
+          if (crops.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(40),
+                child: Center(
+                    child:
+                        Text(_t('no_crop_found'), style: _ts(14, c: _muted))),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(pad, 0, pad, 32),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 140,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.8,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) {
+                    final c = crops[i];
+                    return _CropTile(
+                      crop: c,
+                      label: _cropLabel(c),
+                      subLabel: _lang == 'en' ? null : c['name_en'] as String,
+                      selected: _selectedCrop?['id'] == c['id'],
+                      onTap: () => _onCropTap(c),
+                    );
+                  },
+                  childCount: crops.length,
+                ),
               ),
             ),
-          ),
-      ],
+        ];
+        if (landscape) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: w * 0.34,
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 4, 12, 24),
+                  child: header,
+                ),
+              ),
+              Expanded(
+                child: CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: gridSlivers,
+                ),
+              ),
+            ],
+          );
+        }
+        return CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(pad, 4, pad, 0),
+              sliver: SliverToBoxAdapter(child: header),
+            ),
+            ...gridSlivers,
+          ],
+        );
+      },
     );
   }
 
@@ -1264,6 +1292,8 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
     if (crop == null) return;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      constraints: const BoxConstraints(maxWidth: 560),
       backgroundColor: Colors.white,
       showDragHandle: true,
       shape: const RoundedRectangleBorder(
@@ -1271,74 +1301,76 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
       builder: (sheetCtx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: _CropImage(crop: crop, emojiSize: 20)),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: Text(_cropLabel(crop),
-                          style: _ts(16, w: FontWeight.w700))),
-                  TextButton(
-                    onPressed: () => Navigator.pop(sheetCtx),
-                    style: TextButton.styleFrom(foregroundColor: _green),
-                    child: Text(_t('change'),
-                        style: _ts(13.5, w: FontWeight.w600, c: _green)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Text(_t('photo_title'), style: _ts(20, w: FontWeight.w700)),
-              const SizedBox(height: 12),
-              _tipRow(Icons.crop_free_rounded, _t('tip1')),
-              _tipRow(Icons.wb_sunny_outlined, _t('tip2')),
-              _tipRow(Icons.back_hand_outlined, _t('tip3')),
-              const SizedBox(height: 20),
-              SizedBox(
-                height: 54,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    Navigator.pop(sheetCtx);
-                    _pickImage(ImageSource.camera);
-                  },
-                  icon: const Icon(Icons.photo_camera_rounded),
-                  label: Text(_t('camera'),
-                      style: _ts(16, w: FontWeight.w600, c: Colors.white)),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _green,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: _CropImage(crop: crop, emojiSize: 20)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: Text(_cropLabel(crop),
+                            style: _ts(16, w: FontWeight.w700))),
+                    TextButton(
+                      onPressed: () => Navigator.pop(sheetCtx),
+                      style: TextButton.styleFrom(foregroundColor: _green),
+                      child: Text(_t('change'),
+                          style: _ts(13.5, w: FontWeight.w600, c: _green)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text(_t('photo_title'), style: _ts(20, w: FontWeight.w700)),
+                const SizedBox(height: 12),
+                _tipRow(Icons.crop_free_rounded, _t('tip1')),
+                _tipRow(Icons.wb_sunny_outlined, _t('tip2')),
+                _tipRow(Icons.back_hand_outlined, _t('tip3')),
+                const SizedBox(height: 20),
+                SizedBox(
+                  height: 54,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetCtx);
+                      _pickImage(ImageSource.camera);
+                    },
+                    icon: const Icon(Icons.photo_camera_rounded),
+                    label: Text(_t('camera'),
+                        style: _ts(16, w: FontWeight.w600, c: Colors.white)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _green,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 54,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(sheetCtx);
-                    _pickImage(ImageSource.gallery);
-                  },
-                  icon: const Icon(Icons.photo_library_outlined, color: _ink),
-                  label:
-                      Text(_t('gallery'), style: _ts(16, w: FontWeight.w600)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: _line),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 54,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetCtx);
+                      _pickImage(ImageSource.gallery);
+                    },
+                    icon: const Icon(Icons.photo_library_outlined, color: _ink),
+                    label:
+                        Text(_t('gallery'), style: _ts(16, w: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: _line),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1365,77 +1397,167 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
 
   Widget _buildAnalysing() {
     final steps = [_t('load1'), _t('load2'), _t('load3'), _t('load4')];
-    final hasImage = _hasImage;
+    final active = _loadingStep.clamp(0, steps.length - 1);
 
     return SafeArea(
-      child: Stack(
-        children: [
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: SizedBox(
-                width: double.infinity,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: SizedBox(
-                        width: 220,
-                        height: 220,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (hasImage)
-                              Image.file(File(_imagePath!),
-                                  fit: BoxFit.cover, cacheWidth: 600)
-                            else
-                              Container(color: _greenSoft),
-                            Container(
-                                color: Colors.black.withValues(alpha: 0.15)),
-                            const _ScanLine(),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    Text(_t('analysing'),
-                        textAlign: TextAlign.center,
-                        style: _ts(20, w: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: Text(
-                        steps[_loadingStep % steps.length],
-                        key: ValueKey(_loadingStep),
-                        textAlign: TextAlign.center,
-                        style: _ts(14, c: _muted),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const SizedBox(
-                        width: 160,
-                        child: LinearProgressIndicator(
-                            minHeight: 3,
-                            color: _green,
-                            backgroundColor: _line)),
-                  ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
+          final landscape = w >= 800 && w > h;
+          final side = landscape
+              ? (h - 96).clamp(240.0, 560.0)
+              : (w * 0.62).clamp(220.0, (h * 0.42).clamp(220.0, 480.0));
+
+          final image = _buildScanFrame(side);
+          final info = _buildAnalysisInfo(steps, active, landscape);
+
+          return Stack(
+            children: [
+              Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 88),
+                  child: ConstrainedBox(
+                    constraints:
+                        BoxConstraints(maxWidth: landscape ? 1000 : 520),
+                    child: landscape
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              image,
+                              const SizedBox(width: 48),
+                              Expanded(child: info),
+                            ],
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              image,
+                              const SizedBox(height: 28),
+                              info,
+                            ],
+                          ),
+                  ),
                 ),
               ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: TextButton(
+                    onPressed: _cancelAnalysis,
+                    style: TextButton.styleFrom(
+                        foregroundColor: _muted,
+                        minimumSize: const Size(120, 48)),
+                    child: Text(_t('cancel'),
+                        style: _ts(15, w: FontWeight.w600, c: _muted)),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildScanFrame(double side) {
+    return Container(
+      width: side,
+      height: side,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: _green.withValues(alpha: 0.18),
+            blurRadius: 32,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (_hasImage)
+              Image.file(File(_imagePath!), fit: BoxFit.cover, cacheWidth: 900)
+            else
+              Container(color: _greenSoft),
+            Container(color: Colors.black.withValues(alpha: 0.15)),
+            const _ScanLine(),
+            // Corner brackets for a "scanner" feel.
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: CustomPaint(painter: _ScanCornersPainter()),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnalysisInfo(List<String> steps, int active, bool landscape) {
+    final align =
+        landscape ? CrossAxisAlignment.start : CrossAxisAlignment.center;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: align,
+      children: [
+        if (_displayCropName.isNotEmpty) ...[
+          _pill(_displayCropName, _green),
+          const SizedBox(height: 12),
+        ],
+        Text(_t('analysing'),
+            textAlign: landscape ? TextAlign.start : TextAlign.center,
+            style: _ts(landscape ? 28 : 22, w: FontWeight.w700, h: 1.2)),
+        const SizedBox(height: 20),
+        for (var i = 0; i < steps.length; i++)
+          _analysisStepRow(steps[i], i < active ? 2 : (i == active ? 1 : 0)),
+        const SizedBox(height: 16),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            width: landscape ? 320 : 220,
+            child: LinearProgressIndicator(
+              value: (active + 1) / steps.length,
+              minHeight: 5,
+              color: _green,
+              backgroundColor: _line,
             ),
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: TextButton(
-                onPressed: _cancelAnalysis,
-                style: TextButton.styleFrom(
-                    foregroundColor: _muted, minimumSize: const Size(120, 48)),
-                child: Text(_t('cancel'),
-                    style: _ts(15, w: FontWeight.w600, c: _muted)),
-              ),
+        ),
+      ],
+    );
+  }
+
+  /// state: 0 = pending, 1 = active, 2 = done
+  Widget _analysisStepRow(String text, int state) {
+    final Widget leading = switch (state) {
+      2 => const Icon(Icons.check_circle_rounded, size: 22, color: _green),
+      1 => const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2.5, color: _green)),
+      _ => const Icon(Icons.radio_button_unchecked_rounded,
+          size: 22, color: Color(0xFFD1D5DB)),
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(width: 24, child: Center(child: leading)),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              text,
+              style: _ts(15,
+                  w: state == 1 ? FontWeight.w700 : FontWeight.w500,
+                  c: state == 0 ? const Color(0xFF9CA3AF) : _ink),
             ),
           ),
         ],
@@ -1474,307 +1596,324 @@ class _PlantDoctorScreenState extends State<PlantDoctorScreen> {
     final statusColor = _statusColor(status);
     final hasImage = _hasImage;
 
+    final head = <Widget>[
+      if (hasImage)
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: AspectRatio(
+            aspectRatio: 16 / 10,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.file(
+                  File(_imagePath!),
+                  fit: BoxFit.cover,
+                  cacheWidth: 1000,
+                  errorBuilder: (_, __, ___) => Container(color: _greenSoft),
+                ),
+                if (_displayCropName.isNotEmpty)
+                  Positioned(
+                    left: 12,
+                    bottom: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(_displayCropName,
+                          style:
+                              _ts(12.5, w: FontWeight.w600, c: Colors.white)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      const SizedBox(height: 20),
+
+      // Status + severity
+      Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _pill(_t('status_$status'), statusColor),
+          if (!isHealthy &&
+              const {'mild', 'moderate', 'severe'}.contains(severity))
+            _pill(_t('sev_$severity'),
+                severity == 'severe' ? const Color(0xFFB91C1C) : _muted,
+                outlined: true),
+          if (verified)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.verified_rounded, size: 15, color: _green),
+                const SizedBox(width: 3),
+                Text(_t('verified'),
+                    style: _ts(12, w: FontWeight.w600, c: _green)),
+              ],
+            ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      Text(_displayProblemName, style: _ts(26, w: FontWeight.w700, h: 1.2)),
+      if (!isHealthy && (enName.isNotEmpty || sciName.isNotEmpty)) ...[
+        const SizedBox(height: 4),
+        Text.rich(
+          TextSpan(children: [
+            if (enName.isNotEmpty &&
+                enName.toLowerCase() != _displayProblemName.toLowerCase())
+              TextSpan(text: enName),
+            if (enName.isNotEmpty &&
+                enName.toLowerCase() != _displayProblemName.toLowerCase() &&
+                sciName.isNotEmpty &&
+                sciName.toLowerCase() != 'null')
+              const TextSpan(text: '  ·  '),
+            if (sciName.isNotEmpty && sciName.toLowerCase() != 'null')
+              TextSpan(
+                  text: sciName,
+                  style: const TextStyle(fontStyle: FontStyle.italic)),
+          ]),
+          style: _ts(14, c: _muted),
+        ),
+      ],
+      const SizedBox(height: 14),
+      Row(
+        children: [
+          Text('${_t('confidence')} $confidence%',
+              style: _ts(12.5, w: FontWeight.w600, c: _muted)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: confidence / 100,
+                minHeight: 5,
+                color: statusColor,
+                backgroundColor: const Color(0xFFF3F4F6),
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 18),
+
+      // Quick actions
+      Row(
+        children: [
+          Expanded(
+              child: _actionButton(
+                  _isPlayingAudio
+                      ? Icons.stop_rounded
+                      : Icons.volume_up_rounded,
+                  _isPlayingAudio ? _t('stop') : _t('listen'),
+                  _toggleAudio,
+                  active: _isPlayingAudio)),
+          const SizedBox(width: 8),
+          Expanded(
+              child: _actionButton(
+                  _isSaved
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
+                  _isSaved ? _t('saved') : _t('save'),
+                  _toggleSave,
+                  active: _isSaved)),
+          const SizedBox(width: 8),
+          Expanded(
+              child:
+                  _actionButton(Icons.ios_share_rounded, _t('share'), _share)),
+        ],
+      ),
+    ];
+    final tail = <Widget>[
+      if (analysis.isNotEmpty) ...[
+        _sectionTitle(_t('summary')),
+        Text(analysis, style: _ts(15, h: 1.55, c: const Color(0xFF374151))),
+      ],
+      if (symptoms.isNotEmpty) ...[
+        _sectionTitle(_t('symptoms')),
+        ...symptoms.map((s) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                            color: statusColor, shape: BoxShape.circle)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Text(s,
+                          style:
+                              _ts(14.5, h: 1.45, c: const Color(0xFF374151)))),
+                ],
+              ),
+            )),
+      ],
+      if (weather.isNotEmpty) ...[
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(14)),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.water_drop_outlined,
+                  color: Color(0xFF2563EB), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_t('weather'),
+                        style: _ts(13.5,
+                            w: FontWeight.w700, c: const Color(0xFF1E3A8A))),
+                    const SizedBox(height: 3),
+                    Text(weather,
+                        style: _ts(14, h: 1.45, c: const Color(0xFF1E40AF))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+      if (isHealthy) ...[
+        if (prevention.isNotEmpty) ...[
+          _sectionTitle(_t('care')),
+          _numberedList(prevention, _green),
+        ],
+      ] else ...[
+        _sectionTitle(_t('treatment')),
+        _TreatmentSection(
+          key: ValueKey(_treatmentEpoch),
+          lang: _lang,
+          labels: [_t('tab_chem'), _t('tab_bio'), _t('tab_prev')],
+          lists: [c['chemical']!, c['biological']!, prevention],
+          accents: const [
+            Color(0xFF0369A1),
+            _green,
+            Color(0xFFB45309),
+          ],
+          listBuilder: _numberedList,
+        ),
+      ],
+      const SizedBox(height: 28),
+      if (!isHealthy) ...[
+        SizedBox(
+          height: 52,
+          child: FilledButton.icon(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const AgriShopScreen()));
+            },
+            icon: const Icon(Icons.storefront_outlined),
+            label: Text(_t('buy'),
+                style: _ts(15.5, w: FontWeight.w600, c: Colors.white)),
+            style: FilledButton.styleFrom(
+              backgroundColor: _green,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+      Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: _callHelpline,
+                icon: const Icon(Icons.call_outlined, size: 18, color: _ink),
+                label: Text(_t('helpline'),
+                    style: _ts(14, w: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: _line),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SizedBox(
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: _goToCropStage,
+                icon: const Icon(Icons.add_a_photo_outlined,
+                    size: 18, color: _ink),
+                label: Text(_t('new_scan'),
+                    style: _ts(14, w: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: _line),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 18),
+      Text(_t('disclaimer'),
+          textAlign: TextAlign.center,
+          style: _ts(12, c: const Color(0xFF9CA3AF), h: 1.4)),
+    ];
+
     return Column(
       children: [
         if (_translating)
           const LinearProgressIndicator(
               minHeight: 2, color: _green, backgroundColor: _greenSoft),
         Expanded(
-          child: ListView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-            children: [
-              if (hasImage)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 10,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.file(
-                          File(_imagePath!),
-                          fit: BoxFit.cover,
-                          cacheWidth: 1000,
-                          errorBuilder: (_, __, ___) =>
-                              Container(color: _greenSoft),
-                        ),
-                        if (_displayCropName.isNotEmpty)
-                          Positioned(
-                            left: 12,
-                            bottom: 12,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.55),
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                              child: Text(_displayCropName,
-                                  style: _ts(12.5,
-                                      w: FontWeight.w600, c: Colors.white)),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 20),
-
-              // Status + severity
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _pill(_t('status_$status'), statusColor),
-                  if (!isHealthy &&
-                      const {'mild', 'moderate', 'severe'}.contains(severity))
-                    _pill(_t('sev_$severity'),
-                        severity == 'severe' ? const Color(0xFFB91C1C) : _muted,
-                        outlined: true),
-                  if (verified)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.verified_rounded,
-                            size: 15, color: _green),
-                        const SizedBox(width: 3),
-                        Text(_t('verified'),
-                            style: _ts(12, w: FontWeight.w600, c: _green)),
-                      ],
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(_displayProblemName,
-                  style: _ts(26, w: FontWeight.w700, h: 1.2)),
-              if (!isHealthy && (enName.isNotEmpty || sciName.isNotEmpty)) ...[
-                const SizedBox(height: 4),
-                Text.rich(
-                  TextSpan(children: [
-                    if (enName.isNotEmpty &&
-                        enName.toLowerCase() !=
-                            _displayProblemName.toLowerCase())
-                      TextSpan(text: enName),
-                    if (enName.isNotEmpty &&
-                        enName.toLowerCase() !=
-                            _displayProblemName.toLowerCase() &&
-                        sciName.isNotEmpty &&
-                        sciName.toLowerCase() != 'null')
-                      const TextSpan(text: '  ·  '),
-                    if (sciName.isNotEmpty && sciName.toLowerCase() != 'null')
-                      TextSpan(
-                          text: sciName,
-                          style: const TextStyle(fontStyle: FontStyle.italic)),
-                  ]),
-                  style: _ts(14, c: _muted),
-                ),
-              ],
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Text('${_t('confidence')} $confidence%',
-                      style: _ts(12.5, w: FontWeight.w600, c: _muted)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: confidence / 100,
-                        minHeight: 5,
-                        color: statusColor,
-                        backgroundColor: const Color(0xFFF3F4F6),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final w = constraints.maxWidth;
+              final landscape = w >= 900 && w > constraints.maxHeight;
+              if (landscape) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: ListView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 4, 10, 32),
+                        children: head,
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-
-              // Quick actions
-              Row(
-                children: [
-                  Expanded(
-                      child: _actionButton(
-                          _isPlayingAudio
-                              ? Icons.stop_rounded
-                              : Icons.volume_up_rounded,
-                          _isPlayingAudio ? _t('stop') : _t('listen'),
-                          _toggleAudio,
-                          active: _isPlayingAudio)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: _actionButton(
-                          _isSaved
-                              ? Icons.bookmark_rounded
-                              : Icons.bookmark_border_rounded,
-                          _isSaved ? _t('saved') : _t('save'),
-                          _toggleSave,
-                          active: _isSaved)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: _actionButton(
-                          Icons.ios_share_rounded, _t('share'), _share)),
-                ],
-              ),
-
-              if (analysis.isNotEmpty) ...[
-                _sectionTitle(_t('summary')),
-                Text(analysis,
-                    style: _ts(15, h: 1.55, c: const Color(0xFF374151))),
-              ],
-
-              if (symptoms.isNotEmpty) ...[
-                _sectionTitle(_t('symptoms')),
-                ...symptoms.map((s) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Container(
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                    color: statusColor,
-                                    shape: BoxShape.circle)),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                              child: Text(s,
-                                  style: _ts(14.5,
-                                      h: 1.45, c: const Color(0xFF374151)))),
-                        ],
+                    Expanded(
+                      flex: 6,
+                      child: ListView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(10, 0, 24, 32),
+                        children: tail,
                       ),
-                    )),
-              ],
-
-              if (weather.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(14)),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.water_drop_outlined,
-                          color: Color(0xFF2563EB), size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(_t('weather'),
-                                style: _ts(13.5,
-                                    w: FontWeight.w700,
-                                    c: const Color(0xFF1E3A8A))),
-                            const SizedBox(height: 3),
-                            Text(weather,
-                                style: _ts(14,
-                                    h: 1.45, c: const Color(0xFF1E40AF))),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              if (isHealthy) ...[
-                if (prevention.isNotEmpty) ...[
-                  _sectionTitle(_t('care')),
-                  _numberedList(prevention, _green),
-                ],
-              ] else ...[
-                _sectionTitle(_t('treatment')),
-                _TreatmentSection(
-                  key: ValueKey(_treatmentEpoch),
-                  lang: _lang,
-                  labels: [_t('tab_chem'), _t('tab_bio'), _t('tab_prev')],
-                  lists: [c['chemical']!, c['biological']!, prevention],
-                  accents: const [
-                    Color(0xFF0369A1),
-                    _green,
-                    Color(0xFFB45309),
+                    ),
                   ],
-                  listBuilder: _numberedList,
-                ),
-              ],
-
-              const SizedBox(height: 28),
-              if (!isHealthy) ...[
-                SizedBox(
-                  height: 52,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const AgriShopScreen()));
-                    },
-                    icon: const Icon(Icons.storefront_outlined),
-                    label: Text(_t('buy'),
-                        style: _ts(15.5, w: FontWeight.w600, c: Colors.white)),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _green,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 50,
-                      child: OutlinedButton.icon(
-                        onPressed: _callHelpline,
-                        icon: const Icon(Icons.call_outlined,
-                            size: 18, color: _ink),
-                        label: Text(_t('helpline'),
-                            style: _ts(14, w: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: _line),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: SizedBox(
-                      height: 50,
-                      child: OutlinedButton.icon(
-                        onPressed: _goToCropStage,
-                        icon: const Icon(Icons.add_a_photo_outlined,
-                            size: 18, color: _ink),
-                        label: Text(_t('new_scan'),
-                            style: _ts(14, w: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: _line),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Text(_t('disclaimer'),
-                  textAlign: TextAlign.center,
-                  style: _ts(12, c: const Color(0xFF9CA3AF), h: 1.4)),
-            ],
+                );
+              }
+              final pad = ((w - 760) / 2).clamp(20.0, 400.0);
+              return ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(pad, 4, pad, 32),
+                children: [...head, ...tail],
+              );
+            },
           ),
         ),
       ],
@@ -2413,4 +2552,44 @@ class _ScanLineState extends State<_ScanLine>
       ),
     );
   }
+}
+
+class _ScanCornersPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.9)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    const l = 28.0;
+    final w = size.width, h = size.height;
+    canvas.drawPath(
+        Path()
+          ..moveTo(0, l)
+          ..lineTo(0, 0)
+          ..lineTo(l, 0),
+        paint);
+    canvas.drawPath(
+        Path()
+          ..moveTo(w - l, 0)
+          ..lineTo(w, 0)
+          ..lineTo(w, l),
+        paint);
+    canvas.drawPath(
+        Path()
+          ..moveTo(0, h - l)
+          ..lineTo(0, h)
+          ..lineTo(l, h),
+        paint);
+    canvas.drawPath(
+        Path()
+          ..moveTo(w - l, h)
+          ..lineTo(w, h)
+          ..lineTo(w, h - l),
+        paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

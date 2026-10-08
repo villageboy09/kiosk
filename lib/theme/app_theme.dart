@@ -1,3 +1,4 @@
+import 'package:cropsync/widgets/shop/shop_circle_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -305,30 +306,14 @@ class AppTheme {
 
   // ============ COMMON WIDGETS ============
 
-  /// Standard back button for app bars
+  /// Standard back button for app bars: the frosted round shop-style button.
+  /// [color] is ignored; kept so existing call sites keep compiling.
   static Widget backButton(BuildContext context, {Color? color}) {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.hardEdge,
-        child: InkWell(
-          onTap: () => Navigator.pop(context),
-          borderRadius: BorderRadius.circular(50),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: (color ?? textPrimary).withValues(alpha: 0.1),
-            ),
-            child: Icon(
-              Icons.arrow_back_ios_new,
-              size: 20,
-              color: color ?? textPrimary,
-            ),
-          ),
-        ),
+    return Center(
+      child: ShopCircleButton(
+        icon: Icons.arrow_back_rounded,
+        label: 'shopd_back'.tr(),
+        onTap: () => Navigator.maybePop(context),
       ),
     );
   }
@@ -349,6 +334,23 @@ class AppTheme {
         bodyColor: textPrimary,
         displayColor: textPrimary,
         fontFamilyFallback: _fallbacks,
+      ),
+      actionIconTheme: ActionIconThemeData(
+        backButtonIconBuilder: (context) => Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+            border: Border.all(color: const Color(0x1F0F172A)),
+            boxShadow: const [
+              BoxShadow(
+                  color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+            ],
+          ),
+          child: const Icon(Icons.arrow_back_rounded,
+              size: 22, color: Color(0xFF0F172A)),
+        ),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: appBarBg,

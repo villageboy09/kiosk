@@ -308,6 +308,10 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen>
     final scrollBottom =
         (bookable ? _barHeight : 0) + media.padding.bottom + 16;
 
+    if (media.size.width >= 900 && media.size.width > media.size.height) {
+      return _buildLandscape(media, bookable);
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -344,6 +348,47 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen>
           Positioned(top: 0, left: 0, right: 0, child: _buildTopBar()),
           if (bookable)
             Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomBar()),
+        ],
+      ),
+    );
+  }
+
+  /// Landscape tablets: image on the left, details + booking bar on the right.
+  Widget _buildLandscape(MediaQueryData media, bool bookable) {
+    final heroWidth = media.size.width * 0.5;
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: heroWidth,
+                height: media.size.height,
+                child: _buildHero(media.size.height, overlap: 0),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.only(top: media.padding.top),
+                        child: _buildContentCard(landscape: true),
+                      ),
+                    ),
+                    if (bookable) _buildBottomBar(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            width: heroWidth,
+            child: _buildTopBar(),
+          ),
         ],
       ),
     );
@@ -421,7 +466,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen>
     );
   }
 
-  Widget _buildHero(double heroH) {
+  Widget _buildHero(double heroH, {double overlap = _overlap}) {
     final media = MediaQuery.of(context);
     final video = _videoReady;
     final pageCount = video ? 2 : 1;
@@ -441,7 +486,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen>
             itemBuilder: (context, index) {
               if (video && index == 1) {
                 return Padding(
-                  padding: EdgeInsets.only(top: topInset, bottom: _overlap),
+                  padding: EdgeInsets.only(top: topInset, bottom: overlap),
                   child: Chewie(controller: _chewieController!),
                 );
               }
@@ -450,13 +495,12 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen>
               return DecoratedBox(
                 decoration: _heroBackdrop,
                 child: LayoutBuilder(builder: (context, c) {
-                  final h =
-                      (c.maxHeight - media.padding.top - 24 - _overlap - 8)
-                          .clamp(120.0, 520.0);
+                  final h = (c.maxHeight - media.padding.top - 24 - overlap - 8)
+                      .clamp(120.0, 520.0);
                   final w = (c.maxWidth - 32).clamp(120.0, 560.0);
                   return Padding(
                     padding: EdgeInsets.only(
-                        top: media.padding.top + 24, bottom: _overlap + 8),
+                        top: media.padding.top + 24, bottom: overlap + 8),
                     child: Center(child: _heroImage(w, h)),
                   );
                 }),
@@ -466,7 +510,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen>
           if (pageCount > 1)
             Positioned(
               right: 16,
-              bottom: _overlap + 12,
+              bottom: overlap + 12,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -491,7 +535,7 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen>
     );
   }
 
-  Widget _buildContentCard() {
+  Widget _buildContentCard({bool landscape = false}) {
     final v = widget.variety;
     final lang = _lang;
     final name = v.displayName(lang);
@@ -503,9 +547,11 @@ class _SeedVarietyDetailScreenState extends State<SeedVarietyDetailScreen>
 
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(_overlap)),
+        borderRadius: landscape
+            ? BorderRadius.zero
+            : const BorderRadius.vertical(top: Radius.circular(_overlap)),
       ),
       padding: const EdgeInsets.fromLTRB(_gutter, 22, _gutter, 8),
       child: Align(

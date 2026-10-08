@@ -32,10 +32,8 @@ class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
       systemOverlayStyle: SystemUiOverlayStyle.dark,
-      leading: leading ?? (showBackButton ? IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppTheme.appBarText),
-        onPressed: () => Navigator.maybePop(context),
-      ) : null),
+      leading:
+          leading ?? (showBackButton ? AppTheme.backButton(context) : null),
       automaticallyImplyLeading: false,
       actions: actions,
     );
@@ -81,10 +79,7 @@ class CommonSliverAppBar extends StatelessWidget {
       surfaceTintColor: Colors.transparent,
       systemOverlayStyle: SystemUiOverlayStyle.dark,
       flexibleSpace: flexibleSpace,
-      leading: showBackButton ? IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppTheme.appBarText),
-        onPressed: () => Navigator.maybePop(context),
-      ) : null,
+      leading: showBackButton ? AppTheme.backButton(context) : null,
       automaticallyImplyLeading: false,
       title: Text(
         title,

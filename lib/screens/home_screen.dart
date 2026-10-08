@@ -162,6 +162,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final currentGreeting = _getGreeting();
+    // Reels is a phone-only tab: hidden on tablets (shortest side >= 600dp).
+    final showReels = MediaQuery.sizeOf(context).shortestSide < 600;
+    if (!showReels && _selectedIndex == 3) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _selectedIndex == 3) _onNavTap(0);
+      });
+    }
+    final index = (!showReels && _selectedIndex == 3) ? 0 : _selectedIndex;
 
     final screens = [
       HomeTab(
@@ -174,10 +182,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
       const CropAdvisoryGridScreen(key: ValueKey('advisory_tab')),
       const NewsFeedScreen(key: ValueKey('news_tab')),
-      ReelsScreen(
-        key: const ValueKey('reels_tab'),
-        isTabVisible: _selectedIndex == 3,
-      ),
+      if (showReels)
+        ReelsScreen(
+          key: const ValueKey('reels_tab'),
+          isTabVisible: _selectedIndex == 3,
+        ),
     ];
 
     return PopScope(
@@ -199,6 +208,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       },
       child: Scaffold(
+        extendBody: true,
         backgroundColor:
             _selectedIndex == 3 ? Colors.black : AppTheme.background,
         extendBodyBehindAppBar: _selectedIndex == 3,
@@ -212,11 +222,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ? const _HomeShimmer(key: ValueKey('shimmer'))
               : IndexedStack(
                   key: const ValueKey('content'),
-                  index: _selectedIndex,
+                  index: index,
                   children: screens,
                 ),
         ),
-        bottomNavigationBar: _buildBottomNav(),
+        bottomNavigationBar: _buildBottomNav(showReels),
       ),
     );
   }
@@ -282,75 +292,124 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildBottomNav() {
-    return Container(
-      height: 72,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border:
-            const Border(top: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _NavItem(
-                    icon: Icons.home_outlined,
-                    activeIcon: Icons.home_rounded,
-                    label: 'home_bottom_nav_home'.tr(),
-                    isActive: _selectedIndex == 0,
-                    onTap: () => _onNavTap(0),
-                    activeColor: AppTheme.primary,
-                  ),
+  Widget _buildBottomNav(bool showReels) {
+    // Slots: home, advisories, camera, news, [reels]. The camera slot is an
+    // action, not a tab, so it never hosts the sliding indicator.
+    final slotCount = showReels ? 5 : 4;
+    final activeSlot = switch (_selectedIndex) {
+      0 => 0,
+      1 => 1,
+      2 => 3,
+      _ => showReels ? 4 : 0,
+    };
+    const hPad = 8.0;
+
+    return SafeArea(
+      top: false,
+      child: Center(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Container(
+            height: 68,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(34),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withValues(alpha: 0.12),
+                  blurRadius: 26,
+                  offset: const Offset(0, 10),
                 ),
-                Expanded(
-                  child: _NavItem(
-                    icon: Icons.eco_outlined,
-                    activeIcon: Icons.eco,
-                    label: 'home_bottom_nav_advisories'.tr(),
-                    isActive: _selectedIndex == 1,
-                    onTap: () => _onNavTap(1),
-                    activeColor: AppTheme.primary,
-                  ),
-                ),
-                Expanded(
-                  child: _AnimatedCameraTab(
-                    animationController: _pulseController,
-                    onTap: _openPlantDoctorScreen,
-                  ),
-                ),
-                Expanded(
-                  child: _NavItem(
-                    icon: Icons.newspaper_outlined,
-                    activeIcon: Icons.newspaper_rounded,
-                    label: 'home_bottom_nav_news'.tr(),
-                    isActive: _selectedIndex == 2,
-                    onTap: () => _onNavTap(2),
-                    activeColor: AppTheme.primary,
-                  ),
-                ),
-                Expanded(
-                  child: _NavItem(
-                    icon: Icons.video_library_outlined,
-                    activeIcon: Icons.video_library_rounded,
-                    label: 'home_bottom_nav_reels'.tr(),
-                    isActive: _selectedIndex == 3,
-                    onTap: () => _onNavTap(3),
-                    activeColor: AppTheme.primary,
-                  ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  final slotW = (c.maxWidth - hPad * 2) / slotCount;
+                  return Stack(
+                    children: [
+                      // One pill that glides between tabs.
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 420),
+                        curve: Curves.easeOutCubic,
+                        left: hPad + slotW * activeSlot + 4,
+                        top: 8,
+                        bottom: 8,
+                        width: slotW - 8,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.13),
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: hPad),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _NavItem(
+                                icon: Icons.home_outlined,
+                                activeIcon: Icons.home_rounded,
+                                label: 'home_bottom_nav_home'.tr(),
+                                isActive: _selectedIndex == 0,
+                                onTap: () => _onNavTap(0),
+                                activeColor: AppTheme.primary,
+                              ),
+                            ),
+                            Expanded(
+                              child: _NavItem(
+                                icon: Icons.eco_outlined,
+                                activeIcon: Icons.eco,
+                                label: 'home_bottom_nav_advisories'.tr(),
+                                isActive: _selectedIndex == 1,
+                                onTap: () => _onNavTap(1),
+                                activeColor: AppTheme.primary,
+                              ),
+                            ),
+                            Expanded(
+                              child: _AnimatedCameraTab(
+                                animationController: _pulseController,
+                                onTap: _openPlantDoctorScreen,
+                              ),
+                            ),
+                            Expanded(
+                              child: _NavItem(
+                                icon: Icons.newspaper_outlined,
+                                activeIcon: Icons.newspaper_rounded,
+                                label: 'home_bottom_nav_news'.tr(),
+                                isActive: _selectedIndex == 2,
+                                onTap: () => _onNavTap(2),
+                                activeColor: AppTheme.primary,
+                              ),
+                            ),
+                            if (showReels)
+                              Expanded(
+                                child: _NavItem(
+                                  icon: Icons.video_library_outlined,
+                                  activeIcon: Icons.video_library_rounded,
+                                  label: 'home_bottom_nav_reels'.tr(),
+                                  isActive: _selectedIndex == 3,
+                                  onTap: () => _onNavTap(3),
+                                  activeColor: AppTheme.primary,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -378,41 +437,47 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    const inactive = Color(0xFF9CA3AF);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
       child: SizedBox(
         width: double.infinity,
         height: double.infinity,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(
-                isActive ? activeIcon : icon,
-                size: 24,
-                color: isActive ? activeColor : const Color(0xFF9CA3AF),
-              ),
-              const SizedBox(height: 4),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                    color: isActive ? activeColor : const Color(0xFF9CA3AF),
-                    letterSpacing: 0.1,
-                  ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedScale(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutBack,
+              scale: isActive ? 1.14 : 1.0,
+              child: TweenAnimationBuilder<Color?>(
+                duration: const Duration(milliseconds: 250),
+                tween: ColorTween(end: isActive ? activeColor : inactive),
+                builder: (context, color, _) => Icon(
+                  isActive ? activeIcon : icon,
+                  size: 24,
+                  color: color,
                 ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 3),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
+                  color: isActive ? activeColor : inactive,
+                  letterSpacing: 0.1,
+                ),
+                child:
+                    Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -431,7 +496,7 @@ class _HomeShimmer extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
+            constraints: const BoxConstraints(maxWidth: 1200),
             child: Shimmer.fromColors(
               baseColor: const Color(0xFFE0E0E0),
               highlightColor: const Color(0xFFF5F5F5),

@@ -1,3 +1,4 @@
+import 'package:cropsync/widgets/shop/shop_circle_button.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/news_article.dart';
 import 'package:cropsync/services/news_service.dart';
@@ -284,6 +285,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 600;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final landscape = screenWidth >= 900 && screenWidth > screenHeight;
     final hasImage =
         _article.imageUrl != null && _article.imageUrl!.trim().isNotEmpty;
     final formattedDate =
@@ -309,12 +312,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         elevation: 0,
         scrolledUnderElevation: 1,
         shadowColor: Colors.black12,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              size: 18, color: Color(0xFF1E293B)),
-          onPressed: () => Navigator.pop(context),
-          splashRadius: 20,
-        ),
+        leading: AppTheme.backButton(context),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -346,21 +344,24 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         ),
         centerTitle: true,
         actions: [
-          if (_isAuthor)
-            IconButton(
-              icon: const Icon(Icons.delete_outline_rounded,
-                  color: Colors.redAccent, size: 22),
-              onPressed: _deleteArticleConfirm,
-              splashRadius: 20,
-              tooltip: 'Delete Article',
+          if (_isAuthor) ...[
+            Center(
+              child: ShopCircleButton(
+                icon: Icons.delete_outline_rounded,
+                label: 'Delete Article',
+                onTap: _deleteArticleConfirm,
+              ),
             ),
-          IconButton(
-            icon: const Icon(Icons.share_outlined,
-                color: Color(0xFF475569), size: 21),
-            onPressed: _shareGeneral,
-            splashRadius: 20,
+            const SizedBox(width: 8),
+          ],
+          Center(
+            child: ShopCircleButton(
+              icon: Icons.ios_share_rounded,
+              label: context.tr('shopd_share'),
+              onTap: _shareGeneral,
+            ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 12),
         ],
       ),
       body: DefaultTextStyle.merge(
@@ -372,469 +373,527 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               // Scrollable story content: one centered reading column so all
               // sections share identical left/right edges.
               Expanded(
-                child: SingleChildScrollView(
-                  controller: _scrollController,
-                  physics: const BouncingScrollPhysics(),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 680),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 16,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (landscape && hasImage)
+                      Expanded(
+                        flex: 5,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 16, 4, 16),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: CachedNetworkImage(
+                              imageUrl: _article.imageUrl!,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) =>
+                                  Container(color: const Color(0xFFF1F5F9)),
+                              errorWidget: (_, __, ___) =>
+                                  Container(color: const Color(0xFFF1F5F9)),
+                            ),
+                          ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // 1. Title
-                            Text(
-                              articleTitle,
-                              textAlign: TextAlign.start,
-                              style: dyn(
-                                  articleTitle,
-                                  TextStyle(
-                                    fontSize: isTablet ? 26 : 22,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF0F172A),
-                                    height: newsHasTelugu(articleTitle)
-                                        ? 1.45
-                                        : 1.34,
-                                  )),
-                            ),
-
-                            const SizedBox(height: 14),
-
-                            // 2. Byline & timestamp
-                            Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: const Color(0xFF10B981)
-                                      .withValues(alpha: 0.12),
-                                  child: Text(
-                                    _article.author.isNotEmpty
-                                        ? _article.author[0].toUpperCase()
-                                        : 'C',
+                      ),
+                    Expanded(
+                      flex: landscape && hasImage ? 6 : 1,
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        physics: const BouncingScrollPhysics(),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints:
+                                BoxConstraints(maxWidth: landscape ? 900 : 680),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 16,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // 1. Title
+                                  Text(
+                                    articleTitle,
+                                    textAlign: TextAlign.start,
                                     style: dyn(
-                                      _article.author,
-                                      const TextStyle(
-                                        color: Color(0xFF059669),
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Wrap(
-                                        crossAxisAlignment:
-                                            WrapCrossAlignment.center,
-                                        spacing: 6,
-                                        runSpacing: 2,
-                                        children: [
-                                          Text(
-                                            _article.author,
-                                            style: dyn(
-                                              _article.author,
-                                              const TextStyle(
-                                                fontSize: 13.5,
-                                                fontWeight: FontWeight.w700,
-                                                color: Color(0xFF1E293B),
-                                              ),
-                                            ),
-                                          ),
-                                          if (_article.sourceName.isNotEmpty)
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 6,
-                                                      vertical: 1.5),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFF1F5F9),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                              ),
-                                              child: Text(
-                                                _article.sourceName,
-                                                style: dyn(
-                                                  _article.sourceName,
-                                                  const TextStyle(
-                                                    fontSize: 10.5,
-                                                    color: Color(0xFF64748B),
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        metaLine,
-                                        style: dyn(
-                                          metaLine,
-                                          const TextStyle(
-                                            fontSize: 12,
-                                            color: Color(0xFF64748B),
-                                            fontWeight: FontWeight.w400,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            // 3. Hero image (full column width)
-                            if (hasImage) ...[
-                              Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                      color: const Color(0xFFE2E8F0)),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.04),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: CachedNetworkImage(
-                                  imageUrl: _article.imageUrl!,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  placeholder: (_, __) => Container(
-                                    height: 200,
-                                    color: const Color(0xFFF1F5F9),
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Color(0xFF10B981),
-                                      ),
-                                    ),
-                                  ),
-                                  errorWidget: (_, __, ___) =>
-                                      const SizedBox.shrink(),
-                                ),
-                              ),
-                              const SizedBox(height: 22),
-                            ],
-
-                            // 4. Lead summary (if present)
-                            if (articleSummary.isNotEmpty &&
-                                articleSummary != articleContent) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: const Border(
-                                    left: BorderSide(
-                                        color: Color(0xFF10B981), width: 3.5),
-                                  ),
-                                ),
-                                child: Text(
-                                  articleSummary,
-                                  textAlign: TextAlign.start,
-                                  style: dyn(
-                                      articleSummary,
-                                      TextStyle(
-                                        fontSize: isTablet ? 16 : 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF334155),
-                                        height: newsHasTelugu(articleSummary)
-                                            ? 1.7
-                                            : 1.55,
-                                      )),
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                            ],
-
-                            // 5. Full story body: evenly wide paragraphs
-                            _buildBody(bodyText, isTablet),
-
-                            const SizedBox(height: 32),
-
-                            // 6. Share banner
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(14),
-                                border:
-                                    Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Share this update',
-                                          style: ui(const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                            color: Color(0xFF0F172A),
-                                          )),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Help fellow farmers stay informed with daily news',
-                                          style: ui(const TextStyle(
-                                            fontSize: 11.5,
-                                            color: Color(0xFF64748B),
-                                          )),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Flexible(
-                                    flex: 0,
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: ElevatedButton.icon(
-                                        onPressed: _shareOnWhatsApp,
-                                        icon: const Icon(Icons.share_rounded,
-                                            size: 15, color: Colors.white),
-                                        label: Text('WhatsApp',
-                                            style: ui(const TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold))),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              const Color(0xFF25D366),
-                                          foregroundColor: Colors.white,
-                                          elevation: 0,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 14, vertical: 9),
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(100)),
-                                          textStyle: ui(const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold)),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(height: 36),
-
-                            // 7. Comments header
-                            Container(
-                              key: _commentsSectionKey,
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.chat_bubble_outline_rounded,
-                                      size: 20, color: Color(0xFF0F172A)),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Comments (${_comments.length})',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: ui(const TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFF0F172A),
-                                      )),
-                                    ),
-                                  ),
-                                  Flexible(
-                                    flex: 0,
-                                    child: TextButton.icon(
-                                      onPressed: _openCommentBottomSheet,
-                                      icon: const Icon(
-                                          Icons.add_comment_rounded,
-                                          size: 16,
-                                          color: Color(0xFF10B981)),
-                                      label: Text(
-                                        'Write Comment',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: ui(const TextStyle(
-                                          color: Color(0xFF10B981),
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
+                                        articleTitle,
+                                        TextStyle(
+                                          fontSize: isTablet ? 26 : 22,
+                                          fontWeight: FontWeight.w800,
+                                          color: const Color(0xFF0F172A),
+                                          height: newsHasTelugu(articleTitle)
+                                              ? 1.45
+                                              : 1.34,
                                         )),
-                                      ),
-                                      style: TextButton.styleFrom(
-                                          textStyle: ui(const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.bold))),
-                                    ),
                                   ),
-                                ],
-                              ),
-                            ),
 
-                            const SizedBox(height: 12),
+                                  const SizedBox(height: 14),
 
-                            // 8. Comments list
-                            if (_isLoadingComments)
-                              const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(24),
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Color(0xFF10B981)),
-                                ),
-                              )
-                            else if (_comments.isEmpty)
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 24, horizontal: 16),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                      color: const Color(0xFFE2E8F0)),
-                                ),
-                                child: Column(
-                                  children: [
-                                    Icon(Icons.chat_bubble_outline_rounded,
-                                        size: 36, color: Colors.grey.shade400),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'No comments yet.',
-                                      textAlign: TextAlign.center,
-                                      style: ui(TextStyle(
-                                          color: Colors.grey.shade700,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600)),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Be the first to share your thoughts on this story!',
-                                      textAlign: TextAlign.center,
-                                      style: ui(TextStyle(
-                                          color: Colors.grey.shade500,
-                                          fontSize: 12)),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            else
-                              ListView.separated(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: _comments.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 10),
-                                itemBuilder: (context, index) {
-                                  final c = _comments[index];
-                                  return Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF8FAFC),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: const Color(0xFFE2E8F0)),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
+                                  // 2. Byline & timestamp
+                                  Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor: const Color(0xFF10B981)
+                                            .withValues(alpha: 0.12),
+                                        child: Text(
+                                          _article.author.isNotEmpty
+                                              ? _article.author[0].toUpperCase()
+                                              : 'C',
+                                          style: dyn(
+                                            _article.author,
+                                            const TextStyle(
+                                              color: Color(0xFF059669),
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            CircleAvatar(
-                                              radius: 13,
-                                              backgroundColor:
-                                                  const Color(0xFF10B981)
-                                                      .withValues(alpha: 0.15),
-                                              child: Text(
-                                                c.userName.isNotEmpty
-                                                    ? c.userName[0]
-                                                        .toUpperCase()
-                                                    : 'F',
-                                                style: dyn(
-                                                  c.userName,
-                                                  const TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Color(0xFF059669),
+                                            Wrap(
+                                              crossAxisAlignment:
+                                                  WrapCrossAlignment.center,
+                                              spacing: 6,
+                                              runSpacing: 2,
+                                              children: [
+                                                Text(
+                                                  _article.author,
+                                                  style: dyn(
+                                                    _article.author,
+                                                    const TextStyle(
+                                                      fontSize: 13.5,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: Color(0xFF1E293B),
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Flexible(
-                                              child: Text(
-                                                c.userName,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: dyn(
-                                                  c.userName,
-                                                  const TextStyle(
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 13,
-                                                    color: Color(0xFF0F172A),
+                                                if (_article
+                                                    .sourceName.isNotEmpty)
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 1.5),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                          0xFFF1F5F9),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              4),
+                                                    ),
+                                                    child: Text(
+                                                      _article.sourceName,
+                                                      style: dyn(
+                                                        _article.sourceName,
+                                                        const TextStyle(
+                                                          fontSize: 10.5,
+                                                          color:
+                                                              Color(0xFF64748B),
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
                                                   ),
-                                                ),
-                                              ),
+                                              ],
                                             ),
-                                            const Spacer(),
-                                            const SizedBox(width: 8),
+                                            const SizedBox(height: 2),
                                             Text(
-                                              c.formattedDate,
+                                              metaLine,
                                               style: dyn(
-                                                c.formattedDate,
+                                                metaLine,
                                                 const TextStyle(
-                                                  fontSize: 11,
-                                                  color: Color(0xFF94A3B8),
+                                                  fontSize: 12,
+                                                  color: Color(0xFF64748B),
+                                                  fontWeight: FontWeight.w400,
                                                 ),
                                               ),
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 6),
-                                        SizedBox(
-                                          width: double.infinity,
-                                          child: Text(
-                                            c.commentText,
-                                            textAlign: TextAlign.start,
-                                            style: dyn(
-                                                c.commentText,
-                                                TextStyle(
-                                                  fontSize: 13,
-                                                  color:
-                                                      const Color(0xFF334155),
-                                                  height: newsHasTelugu(
-                                                          c.commentText)
-                                                      ? 1.6
-                                                      : 1.45,
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 20),
+
+                                  // 3. Hero image (full column width)
+                                  if (hasImage && !landscape) ...[
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                            color: const Color(0xFFE2E8F0)),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black
+                                                .withValues(alpha: 0.04),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: CachedNetworkImage(
+                                        imageUrl: _article.imageUrl!,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                        placeholder: (_, __) => Container(
+                                          height: 200,
+                                          color: const Color(0xFFF1F5F9),
+                                          child: const Center(
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Color(0xFF10B981),
+                                            ),
+                                          ),
+                                        ),
+                                        errorWidget: (_, __, ___) =>
+                                            const SizedBox.shrink(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 22),
+                                  ],
+
+                                  // 4. Lead summary (if present)
+                                  if (articleSummary.isNotEmpty &&
+                                      articleSummary != articleContent) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: const Border(
+                                          left: BorderSide(
+                                              color: Color(0xFF10B981),
+                                              width: 3.5),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        articleSummary,
+                                        textAlign: TextAlign.start,
+                                        style: dyn(
+                                            articleSummary,
+                                            TextStyle(
+                                              fontSize: isTablet ? 16 : 15,
+                                              fontWeight: FontWeight.w600,
+                                              color: const Color(0xFF334155),
+                                              height:
+                                                  newsHasTelugu(articleSummary)
+                                                      ? 1.7
+                                                      : 1.55,
+                                            )),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                  ],
+
+                                  // 5. Full story body: evenly wide paragraphs
+                                  _buildBody(bodyText, isTablet),
+
+                                  const SizedBox(height: 32),
+
+                                  // 6. Share banner
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: const Color(0xFFE2E8F0)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Share this update',
+                                                style: ui(const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                  color: Color(0xFF0F172A),
                                                 )),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                'Help fellow farmers stay informed with daily news',
+                                                style: ui(const TextStyle(
+                                                  fontSize: 11.5,
+                                                  color: Color(0xFF64748B),
+                                                )),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Flexible(
+                                          flex: 0,
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: ElevatedButton.icon(
+                                              onPressed: _shareOnWhatsApp,
+                                              icon: const Icon(
+                                                  Icons.share_rounded,
+                                                  size: 15,
+                                                  color: Colors.white),
+                                              label: Text('WhatsApp',
+                                                  style: ui(const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.bold))),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    const Color(0xFF25D366),
+                                                foregroundColor: Colors.white,
+                                                elevation: 0,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 14,
+                                                        vertical: 9),
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            100)),
+                                                textStyle: ui(const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
-                                  );
-                                },
-                              ),
+                                  ),
 
-                            const SizedBox(
-                                height: 80), // Extra space for fixed action bar
-                          ],
+                                  const SizedBox(height: 36),
+
+                                  // 7. Comments header
+                                  Container(
+                                    key: _commentsSectionKey,
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                            Icons.chat_bubble_outline_rounded,
+                                            size: 20,
+                                            color: Color(0xFF0F172A)),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Comments (${_comments.length})',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: ui(const TextStyle(
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF0F172A),
+                                            )),
+                                          ),
+                                        ),
+                                        Flexible(
+                                          flex: 0,
+                                          child: TextButton.icon(
+                                            onPressed: _openCommentBottomSheet,
+                                            icon: const Icon(
+                                                Icons.add_comment_rounded,
+                                                size: 16,
+                                                color: Color(0xFF10B981)),
+                                            label: Text(
+                                              'Write Comment',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: ui(const TextStyle(
+                                                color: Color(0xFF10B981),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                              )),
+                                            ),
+                                            style: TextButton.styleFrom(
+                                                textStyle: ui(const TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight:
+                                                        FontWeight.bold))),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 12),
+
+                                  // 8. Comments list
+                                  if (_isLoadingComments)
+                                    const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(24),
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Color(0xFF10B981)),
+                                      ),
+                                    )
+                                  else if (_comments.isEmpty)
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 24, horizontal: 16),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color: const Color(0xFFE2E8F0)),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Icon(
+                                              Icons.chat_bubble_outline_rounded,
+                                              size: 36,
+                                              color: Colors.grey.shade400),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'No comments yet.',
+                                            textAlign: TextAlign.center,
+                                            style: ui(TextStyle(
+                                                color: Colors.grey.shade700,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600)),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Be the first to share your thoughts on this story!',
+                                            textAlign: TextAlign.center,
+                                            style: ui(TextStyle(
+                                                color: Colors.grey.shade500,
+                                                fontSize: 12)),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  else
+                                    ListView.separated(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      itemCount: _comments.length,
+                                      separatorBuilder: (_, __) =>
+                                          const SizedBox(height: 10),
+                                      itemBuilder: (context, index) {
+                                        final c = _comments[index];
+                                        return Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF8FAFC),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            border: Border.all(
+                                                color: const Color(0xFFE2E8F0)),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  CircleAvatar(
+                                                    radius: 13,
+                                                    backgroundColor:
+                                                        const Color(0xFF10B981)
+                                                            .withValues(
+                                                                alpha: 0.15),
+                                                    child: Text(
+                                                      c.userName.isNotEmpty
+                                                          ? c.userName[0]
+                                                              .toUpperCase()
+                                                          : 'F',
+                                                      style: dyn(
+                                                        c.userName,
+                                                        const TextStyle(
+                                                          fontSize: 11,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color:
+                                                              Color(0xFF059669),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Flexible(
+                                                    child: Text(
+                                                      c.userName,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: dyn(
+                                                        c.userName,
+                                                        const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          fontSize: 13,
+                                                          color:
+                                                              Color(0xFF0F172A),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const Spacer(),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    c.formattedDate,
+                                                    style: dyn(
+                                                      c.formattedDate,
+                                                      const TextStyle(
+                                                        fontSize: 11,
+                                                        color:
+                                                            Color(0xFF94A3B8),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 6),
+                                              SizedBox(
+                                                width: double.infinity,
+                                                child: Text(
+                                                  c.commentText,
+                                                  textAlign: TextAlign.start,
+                                                  style: dyn(
+                                                      c.commentText,
+                                                      TextStyle(
+                                                        fontSize: 13,
+                                                        color: const Color(
+                                                            0xFF334155),
+                                                        height: newsHasTelugu(
+                                                                c.commentText)
+                                                            ? 1.6
+                                                            : 1.45,
+                                                      )),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+
+                                  const SizedBox(
+                                      height:
+                                          80), // Extra space for fixed action bar
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
 

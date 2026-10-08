@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -132,6 +132,8 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
   @override
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.sizeOf(context).width >= 600;
+    // Space for the floating bottom nav; content scrolls behind it.
+    final navInset = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -151,6 +153,7 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
+        bottom: false,
         child: RefreshIndicator(
           onRefresh: _loadCrops,
           color: AppTheme.primary,
@@ -234,7 +237,8 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
                                         color: Color(0xFF9CA3AF),
                                         size: 18,
                                       ),
-                                      onPressed: () => _searchController.clear(),
+                                      onPressed: () =>
+                                          _searchController.clear(),
                                     )
                                   : null,
                               suffixIconConstraints: const BoxConstraints(
@@ -300,7 +304,7 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
                     isTablet ? 24 : 16,
                     6,
                     isTablet ? 24 : 16,
-                    24,
+                    24 + navInset,
                   ),
                   sliver: SliverGrid(
                     gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
@@ -396,7 +400,8 @@ class _CropCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        errorWidget: (context, url, error) => _buildFallbackIcon(),
+                        errorWidget: (context, url, error) =>
+                            _buildFallbackIcon(),
                       )
                     else
                       _buildFallbackIcon(),
@@ -442,7 +447,8 @@ class _CropCard extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                         color: AppTheme.textPrimary,
                         letterSpacing: -0.2,
-                        height: context.locale.languageCode == 'te' ? 1.45 : 1.25,
+                        height:
+                            context.locale.languageCode == 'te' ? 1.45 : 1.25,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -463,7 +469,9 @@ class _CropCard extends StatelessWidget {
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                               color: const Color(0xFF047857),
-                              height: context.locale.languageCode == 'te' ? 1.35 : 1.15,
+                              height: context.locale.languageCode == 'te'
+                                  ? 1.35
+                                  : 1.15,
                             ),
                           ),
                         ),
@@ -498,5 +506,3 @@ class _CropCard extends StatelessWidget {
     );
   }
 }
-
-

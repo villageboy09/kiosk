@@ -1,5 +1,6 @@
 // lib/screens/advisory_details.dart
 
+import 'package:cropsync/widgets/shop/shop_circle_button.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cropsync/models/advisory.dart';
 import 'package:cropsync/models/crop_problem.dart';
@@ -207,171 +208,307 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
 
           final isTelugu = context.locale.languageCode == 'te';
 
-          return CustomScrollView(
-            slivers: [
-              _buildSliverAppBar(images),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    // Category badge if available (Translated)
-                    if (widget.problem.category != null)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 24),
-                        child: Wrap(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _getCategoryColor(
-                                        widget.problem.category!)
-                                    .withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(100),
-                                border: Border.all(
-                                  color: _getCategoryColor(
-                                          widget.problem.category!)
-                                      .withValues(alpha: 0.2),
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: Text(
-                                _getLocalizedCategory(widget.problem.category!),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w900,
-                                  color: _getCategoryColor(
-                                      widget.problem.category!),
-                                  letterSpacing: 0.5,
-                                  height: isTelugu ? 1.4 : 1.15,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    // Symptoms section
-                    _buildSectionCard(
-                      title: context.tr('symptoms_title'),
-                      content: advisory.symptoms,
-                      icon: Icons.visibility_rounded,
-                      isTelugu: isTelugu,
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final w = constraints.maxWidth;
+              final h = constraints.maxHeight;
+              final landscapeWide = w >= 900 && w > h;
+              if (landscapeWide) {
+                return Row(
+                  children: [
+                    SizedBox(
+                      width: w * 0.58,
+                      child: _buildSidePanel(images),
                     ),
-
-                    if (advisory.notes != null && advisory.notes!.isNotEmpty)
-                      _buildSectionCard(
-                        title: context.tr('notes_title'),
-                        content: advisory.notes!,
-                        icon: Icons.edit_note_rounded,
-                        isTelugu: isTelugu,
-                      ),
-
-                    // Management/Remedies section
-                    if (advisory.recommendations.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 24.0, bottom: 16.0),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFF1F5F9),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.settings_suggest_rounded,
-                                color: AppTheme.primary,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                context.tr('management_title'),
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppTheme.textPrimary,
-                                  letterSpacing: -0.6,
-                                  height: isTelugu ? 1.4 : 1.2,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Warning note for chemical usage
-                      if (chemicalRecs.isNotEmpty || biologicalRecs.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16.0),
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEF2F2), // soft red
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFFEE2E2)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 20),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    context.tr('advisory_single_chemical_note'),
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Color(0xFF991B1B),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                    Expanded(
+                      child: CustomScrollView(
+                        slivers: [
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20.0, vertical: 16.0),
+                            sliver: SliverList(
+                              delegate: SliverChildListDelegate([
+                                ..._contentChildren(advisory, chemicalRecs,
+                                    biologicalRecs, isTelugu, false),
+                              ]),
                             ),
                           ),
-                        ),
-
-                      // Chemical treatments section
-                      if (chemicalRecs.isNotEmpty) ...[
-                        _buildTreatmentTypeHeader(
-                          context.tr('chemical_treatments'),
-                          Icons.biotech_rounded,
-                          const Color(0xFF2563EB),
-                          chemicalRecs.length,
-                          isTelugu,
-                        ),
-                        ...chemicalRecs
-                            .map((rec) => _buildRecommendationCard(rec, isTelugu)),
-                      ],
-
-                      // Biological treatments section
-                      if (biologicalRecs.isNotEmpty) ...[
-                        _buildTreatmentTypeHeader(
-                          context.tr('biological_treatments'),
-                          Icons.eco_rounded,
-                          const Color(0xFF059669),
-                          biologicalRecs.length,
-                          isTelugu,
-                        ),
-                        ...biologicalRecs
-                            .map((rec) => _buildRecommendationCard(rec, isTelugu)),
-                      ],
-                    ],
-
-                    // Non-sticky Problem Identification Button
-                    Padding(
-                      padding: const EdgeInsets.only(top: 24.0, bottom: 32.0),
-                      child: _buildIdentificationButton(isTelugu),
+                        ],
+                      ),
                     ),
-                  ]),
+                  ],
+                );
+              }
+              final twoCol = w >= 700;
+              final expanded = (h * 0.45).clamp(320.0, 620.0);
+              return CustomScrollView(
+                slivers: [
+                  _buildSliverAppBar(images, expanded),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 20.0),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        ..._contentChildren(advisory, chemicalRecs,
+                            biologicalRecs, isTelugu, twoCol),
+                      ]),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  List<Widget> _contentChildren(
+    Advisory advisory,
+    List<AdvisoryRecommendation> chemicalRecs,
+    List<AdvisoryRecommendation> biologicalRecs,
+    bool isTelugu,
+    bool twoCol,
+  ) {
+    return [
+      // Category badge if available (Translated)
+      if (widget.problem.category != null)
+        Container(
+          margin: const EdgeInsets.only(bottom: 24),
+          child: Wrap(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: _getCategoryColor(widget.problem.category!)
+                      .withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(
+                    color: _getCategoryColor(widget.problem.category!)
+                        .withValues(alpha: 0.2),
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  _getLocalizedCategory(widget.problem.category!),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: _getCategoryColor(widget.problem.category!),
+                    letterSpacing: 0.5,
+                    height: isTelugu ? 1.4 : 1.15,
+                  ),
                 ),
               ),
             ],
-          );
-        },
+          ),
+        ),
+
+      // Symptoms section
+      _buildSectionCard(
+        title: context.tr('symptoms_title'),
+        content: advisory.symptoms,
+        icon: Icons.visibility_rounded,
+        isTelugu: isTelugu,
+      ),
+
+      if (advisory.notes != null && advisory.notes!.isNotEmpty)
+        _buildSectionCard(
+          title: context.tr('notes_title'),
+          content: advisory.notes!,
+          icon: Icons.edit_note_rounded,
+          isTelugu: isTelugu,
+        ),
+
+      // Management/Remedies section
+      if (advisory.recommendations.isNotEmpty) ...[
+        Padding(
+          padding: const EdgeInsets.only(top: 24.0, bottom: 16.0),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF1F5F9),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.settings_suggest_rounded,
+                  color: AppTheme.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  context.tr('management_title'),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: AppTheme.textPrimary,
+                    letterSpacing: -0.6,
+                    height: isTelugu ? 1.4 : 1.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Warning note for chemical usage
+        if (chemicalRecs.isNotEmpty || biologicalRecs.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2), // soft red
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFFEE2E2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      color: Color(0xFFEF4444), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr('advisory_single_chemical_note'),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF991B1B),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        // Chemical treatments section
+        if (chemicalRecs.isNotEmpty) ...[
+          _buildTreatmentTypeHeader(
+            context.tr('chemical_treatments'),
+            Icons.biotech_rounded,
+            const Color(0xFF2563EB),
+            chemicalRecs.length,
+            isTelugu,
+          ),
+          ..._recommendationCards(chemicalRecs, isTelugu, twoCol),
+        ],
+
+        // Biological treatments section
+        if (biologicalRecs.isNotEmpty) ...[
+          _buildTreatmentTypeHeader(
+            context.tr('biological_treatments'),
+            Icons.eco_rounded,
+            const Color(0xFF059669),
+            biologicalRecs.length,
+            isTelugu,
+          ),
+          ..._recommendationCards(biologicalRecs, isTelugu, twoCol),
+        ],
+      ],
+
+      // Non-sticky Problem Identification Button
+      Padding(
+        padding: const EdgeInsets.only(top: 24.0, bottom: 32.0),
+        child: _buildIdentificationButton(isTelugu),
+      ),
+    ];
+  }
+
+  List<Widget> _recommendationCards(
+      List<AdvisoryRecommendation> recs, bool isTelugu, bool twoCol) {
+    if (!twoCol) {
+      return recs
+          .map((rec) => _buildRecommendationCard(rec, isTelugu))
+          .toList();
+    }
+    final rows = <Widget>[];
+    for (var i = 0; i < recs.length; i += 2) {
+      rows.add(
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _buildRecommendationCard(recs[i], isTelugu)),
+              const SizedBox(width: 16),
+              Expanded(
+                child: i + 1 < recs.length
+                    ? _buildRecommendationCard(recs[i + 1], isTelugu)
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return rows;
+  }
+
+  /// Landscape layout: full-height image carousel with overlaid controls.
+  Widget _buildSidePanel(List<String?> images) {
+    final top = MediaQuery.of(context).padding.top;
+    return Container(
+      color: const Color(0xFF111827),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (images.isNotEmpty) _buildImageGallery(images),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 140,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.8),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 24,
+            child: Text(
+              widget.problem.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.getTextStyle(
+                context,
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 28,
+              ),
+            ),
+          ),
+          Positioned(
+            top: top + 8,
+            left: 8,
+            child: ShopCircleButton(
+              icon: Icons.arrow_back_rounded,
+              label: context.tr('shopd_back'),
+              onTap: () => Navigator.of(context).pop(),
+            ),
+          ),
+          Positioned(
+            top: top + 8,
+            right: 4,
+            child: Row(children: _appBarActions(images)),
+          ),
+        ],
       ),
     );
   }
@@ -391,14 +528,20 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       return 'category_insect_pest'.tr();
     }
     if (cat.contains('bacter')) return 'category_bacterial_disease'.tr();
-    if (cat.contains('virus') || cat.contains('viral')) return 'category_viral_disease'.tr();
-    if (cat.contains('nutrient') || cat.contains('deficiency') || cat.contains('లోపం')) {
+    if (cat.contains('virus') || cat.contains('viral')) {
+      return 'category_viral_disease'.tr();
+    }
+    if (cat.contains('nutrient') ||
+        cat.contains('deficiency') ||
+        cat.contains('లోపం')) {
       return 'category_nutrient_deficiency'.tr();
     }
     if (cat.contains('abiotic')) return 'category_abiotic_disorder'.tr();
     if (cat.contains('nematode')) return 'category_nematode'.tr();
     if (cat.contains('weed')) return 'category_weed'.tr();
-    if (cat.contains('disease') || cat.contains('తెగులు') || cat.contains('रोग')) {
+    if (cat.contains('disease') ||
+        cat.contains('తెగులు') ||
+        cat.contains('रोग')) {
       return 'category_disease'.tr();
     }
     return category;
@@ -470,65 +613,73 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
       ),
     );
   }
-  Widget _buildSliverAppBar(List<String?> images) {
-    return SliverAppBar(
-      expandedHeight: 320.0,
-      backgroundColor: const Color(0xFF111827),
-      elevation: 0,
-      pinned: true,
-      leadingWidth: 72,
-      leading: Center(child: AppTheme.backButton(context, color: Colors.white)),
-      actions: [
-        if (images.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: IconButton(
-              tooltip: context.tr('zoom'),
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.black.withValues(alpha: 0.35),
-                shape: const CircleBorder(),
-              ),
-              icon: const Icon(Icons.zoom_in_rounded, color: Colors.white, size: 20),
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => FullScreenImageViewer(
-                      imageUrls: images.whereType<String>().toList(),
-                      initialIndex: _currentPage,
-                      tagPrefix: 'problem_image_${widget.problem.id}',
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+
+  List<Widget> _appBarActions(List<String?> images) {
+    return [
+      if (images.isNotEmpty)
         Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: IconButton(
-            tooltip: context.tr('share_button'),
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.black.withValues(alpha: 0.35),
-              shape: const CircleBorder(),
-            ),
-            icon: const Icon(Icons.share_outlined, color: Colors.white, size: 20),
-            onPressed: () {
+          padding: const EdgeInsets.only(right: 8),
+          child: ShopCircleButton(
+            icon: Icons.zoom_in_rounded,
+            label: context.tr('zoom'),
+            onTap: () {
               HapticFeedback.lightImpact();
-              final firstImg = images.whereType<String>().firstOrNull;
-              ShareService.shareItem(
-                context: context,
-                type: 'advisory',
-                id: widget.problem.id.toString(),
-                crop: widget.cropName,
-                title: '${widget.problem.name}${widget.cropName != null ? " (${widget.cropName})" : ""}',
-                description: 'CropSync Advisory: Symptoms and treatment remedies for ${widget.problem.name}.',
-                imageUrl: firstImg,
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => FullScreenImageViewer(
+                    imageUrls: images.whereType<String>().toList(),
+                    initialIndex: _currentPage,
+                    tagPrefix: 'problem_image_${widget.problem.id}',
+                  ),
+                ),
               );
             },
           ),
         ),
-      ],
+      Padding(
+        padding: const EdgeInsets.only(right: 12),
+        child: ShopCircleButton(
+          icon: Icons.ios_share_rounded,
+          label: context.tr('share_button'),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            final firstImg = images.whereType<String>().firstOrNull;
+            ShareService.shareItem(
+              context: context,
+              type: 'advisory',
+              id: widget.problem.id.toString(),
+              crop: widget.cropName,
+              title:
+                  '${widget.problem.name}${widget.cropName != null ? " (${widget.cropName})" : ""}',
+              description:
+                  'CropSync Advisory: Symptoms and treatment remedies for ${widget.problem.name}.',
+              imageUrl: firstImg,
+            );
+          },
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildSliverAppBar(List<String?> images, double expandedHeight) {
+    return SliverAppBar(
+      expandedHeight: expandedHeight,
+      backgroundColor: const Color(0xFF111827),
+      elevation: 0,
+      pinned: true,
+      leadingWidth: 70,
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: Center(
+          child: ShopCircleButton(
+            icon: Icons.arrow_back_rounded,
+            label: context.tr('shopd_back'),
+            onTap: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+      actions: _appBarActions(images),
       flexibleSpace: FlexibleSpaceBar(
         centerTitle: true,
         title: Text(
@@ -639,8 +790,6 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             );
           },
         ),
-
-
         if (images.length > 1)
           Positioned(
             bottom: 64.0,
@@ -726,7 +875,7 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16.0),
-      padding: const EdgeInsets.all(20.0),
+      padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
@@ -800,31 +949,11 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
             ),
 
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 18.0),
+            padding: EdgeInsets.symmetric(vertical: 12.0),
             child: Divider(height: 1, thickness: 1),
           ),
 
-          if (rec.dose != null && rec.dose!.isNotEmpty)
-            _buildDetailRow(
-              Icons.science_rounded,
-              context.tr('dose_title'),
-              rec.dose!,
-              isTelugu,
-            ),
-          if (rec.method != null && rec.method!.isNotEmpty)
-            _buildDetailRow(
-              Icons.water_drop_rounded,
-              context.tr('method_title'),
-              rec.method!,
-              isTelugu,
-            ),
-          if (rec.notes != null && rec.notes!.isNotEmpty)
-            _buildDetailRow(
-              Icons.notes_rounded,
-              context.tr('notes_row_title'),
-              rec.notes!,
-              isTelugu,
-            ),
+          _buildDetailTiles(rec, isTelugu, typeColor),
         ],
       ),
     );
@@ -934,46 +1063,99 @@ class _AdvisoryDetailScreenState extends State<AdvisoryDetailScreen> {
     return Icons.settings_rounded;
   }
 
-  Widget _buildDetailRow(IconData icon, String title, String value, bool isTelugu) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14.0),
-      child: Row(
+  Widget _buildDetailTiles(
+      AdvisoryRecommendation rec, bool isTelugu, Color color) {
+    final dose = rec.dose;
+    final method = rec.method;
+    final notes = rec.notes;
+    final hasDose = dose != null && dose.isNotEmpty;
+    final hasMethod = method != null && method.isNotEmpty;
+    final hasNotes = notes != null && notes.isNotEmpty;
+    if (!hasDose && !hasMethod && !hasNotes) return const SizedBox.shrink();
+
+    final doseTile = hasDose
+        ? _buildDetailTile(Icons.science_rounded, context.tr('dose_title'),
+            dose, isTelugu, color)
+        : null;
+    final methodTile = hasMethod
+        ? _buildDetailTile(Icons.water_drop_rounded, context.tr('method_title'),
+            method, isTelugu, color)
+        : null;
+    final notesTile = hasNotes
+        ? _buildDetailTile(Icons.notes_rounded, context.tr('notes_row_title'),
+            notes, isTelugu, color)
+        : null;
+
+    // No LayoutBuilder here: this sits inside IntrinsicHeight rows.
+    final sideBySide = MediaQuery.of(context).size.width >= 600;
+    final children = <Widget>[];
+    if (doseTile != null && methodTile != null && sideBySide) {
+      children.add(
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: doseTile),
+              const SizedBox(width: 10),
+              Expanded(child: methodTile),
+            ],
+          ),
+        ),
+      );
+    } else {
+      if (doseTile != null) children.add(doseTile);
+      if (methodTile != null) {
+        if (children.isNotEmpty) children.add(const SizedBox(height: 10));
+        children.add(methodTile);
+      }
+    }
+    if (notesTile != null) {
+      if (children.isNotEmpty) children.add(const SizedBox(height: 10));
+      children.add(notesTile);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
+  }
+
+  Widget _buildDetailTile(
+      IconData icon, String title, String value, bool isTelugu, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 18, color: AppTheme.textPrimary),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title.toUpperCase(),
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
-                    fontSize: 14.5,
-                    letterSpacing: -0.2,
+                    color: color,
+                    fontSize: 11,
+                    letterSpacing: 0.6,
                     height: isTelugu ? 1.35 : 1.15,
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  value,
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    height: isTelugu ? 1.65 : 1.5,
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              height: isTelugu ? 1.6 : 1.4,
             ),
           ),
         ],
@@ -1086,27 +1268,6 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
     return _transformControllers[index]!;
   }
 
-  void _zoomIn() {
-    final controller = _getController(_currentIndex);
-    final currentScale = controller.value.getMaxScaleOnAxis();
-    final newScale = (currentScale + 0.75).clamp(1.0, 5.0);
-    controller.value = Matrix4.diagonal3Values(newScale, newScale, 1.0);
-  }
-
-  void _zoomOut() {
-    final controller = _getController(_currentIndex);
-    final currentScale = controller.value.getMaxScaleOnAxis();
-    final newScale = (currentScale - 0.75).clamp(1.0, 5.0);
-    controller.value = Matrix4.diagonal3Values(newScale, newScale, 1.0);
-  }
-
-  void _resetZoom() {
-    final controller = _getController(_currentIndex);
-    controller.value = Matrix4.identity();
-  }
-
-
-
   @override
   void dispose() {
     for (final c in _transformControllers.values) {
@@ -1166,88 +1327,43 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
           Positioned(
             top: MediaQuery.of(context).padding.top + 16,
             right: 16,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.6),
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 26),
-                onPressed: () => Navigator.pop(context),
-              ),
+            child: ShopCircleButton(
+              icon: Icons.close_rounded,
+              label: context.tr('shopd_back'),
+              onTap: () => Navigator.pop(context),
             ),
           ),
 
-          // Zoom toolbar and page counter at bottom
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 20,
-            left: 16,
-            right: 16,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Page counter
-                if (widget.imageUrls.length > 1)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(100),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                    ),
-                    child: Text(
-                      '${_currentIndex + 1} / ${widget.imageUrls.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  )
-                else
-                  const SizedBox(width: 40),
-
-                // Interactive Zoom Controls
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          // Page counter at bottom
+          if (widget.imageUrls.length > 1)
+            Positioned(
+              bottom: MediaQuery.of(context).padding.bottom + 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.65),
+                    color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(100),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.15)),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_rounded, color: Colors.white, size: 20),
-                        tooltip: 'Zoom Out',
-                        onPressed: _zoomOut,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      if (_isZoomed)
-                        IconButton(
-                          icon: const Icon(Icons.restart_alt_rounded, color: AppTheme.accentGreen, size: 20),
-                          tooltip: 'Reset Zoom',
-                          onPressed: _resetZoom,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      IconButton(
-                        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                        tooltip: 'Zoom In',
-                        onPressed: _zoomIn,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ],
+                  child: Text(
+                    '${_currentIndex + 1} / ${widget.imageUrls.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 }
-
-

@@ -1,3 +1,4 @@
+import 'package:cropsync/widgets/shop/shop_circle_button.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -56,7 +57,8 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
   String? _errorMessage;
   List<CropProblem> _allProblems = [];
   List<CropProblem> _filteredProblems = [];
-  String _selectedCategory = 'all'; // 'all', 'disease', 'pest', 'deficiency', 'other'
+  String _selectedCategory =
+      'all'; // 'all', 'disease', 'pest', 'deficiency', 'other'
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   Locale? _lastLocale;
@@ -189,7 +191,8 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
     if (_searchQuery.isNotEmpty) {
       list = list.where((p) {
         final nameMatch = p.name.toLowerCase().contains(_searchQuery);
-        final catMatch = (p.category ?? '').toLowerCase().contains(_searchQuery);
+        final catMatch =
+            (p.category ?? '').toLowerCase().contains(_searchQuery);
         return nameMatch || catMatch;
       }).toList();
     }
@@ -224,10 +227,16 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
   Color _getCategoryColor(String? category) {
     if (category == null) return AppTheme.textSecondary;
     final cat = category.toLowerCase();
-    if (cat.contains('fung') || cat.contains('disease') || cat.contains('bacter') || cat.contains('virus')) {
+    if (cat.contains('fung') ||
+        cat.contains('disease') ||
+        cat.contains('bacter') ||
+        cat.contains('virus')) {
       return const Color(0xFFDC2626); // Red
     }
-    if (cat.contains('insect') || cat.contains('pest') || cat.contains('worm') || cat.contains('borer')) {
+    if (cat.contains('insect') ||
+        cat.contains('pest') ||
+        cat.contains('worm') ||
+        cat.contains('borer')) {
       return const Color(0xFFEA580C); // Orange
     }
     if (cat.contains('nutrient') || cat.contains('deficiency')) {
@@ -279,20 +288,23 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: IconButton(
-              icon: const Icon(Icons.share_outlined, color: AppTheme.appBarText, size: 21),
-              tooltip: context.tr('share_button'),
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                ShareService.shareItem(
-                  context: context,
-                  type: 'advisory',
-                  crop: widget.cropName,
-                  title: '${widget.cropName} Crop Advisory',
-                  description: 'Complete pest, disease, and deficiency diagnosis guide for ${widget.cropName}.',
-                  imageUrl: widget.cropImageUrl,
-                );
-              },
+            child: Center(
+              child: ShopCircleButton(
+                icon: Icons.ios_share_rounded,
+                label: context.tr('share_button'),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  ShareService.shareItem(
+                    context: context,
+                    type: 'advisory',
+                    crop: widget.cropName,
+                    title: '${widget.cropName} Crop Advisory',
+                    description:
+                        'Complete pest, disease, and deficiency diagnosis guide for ${widget.cropName}.',
+                    imageUrl: widget.cropImageUrl,
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -369,7 +381,8 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
                                         color: Color(0xFF9CA3AF),
                                         size: 18,
                                       ),
-                                      onPressed: () => _searchController.clear(),
+                                      onPressed: () =>
+                                          _searchController.clear(),
                                     )
                                   : null,
                               suffixIconConstraints: const BoxConstraints(
@@ -401,15 +414,22 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
                         physics: const BouncingScrollPhysics(),
                         child: Row(
                           children: [
-                            _buildFilterChip('all', 'advisory_filter_all'.tr(), Icons.grid_view_rounded),
+                            _buildFilterChip('all', 'advisory_filter_all'.tr(),
+                                Icons.grid_view_rounded),
                             const SizedBox(width: 8),
-                            _buildFilterChip('disease', '🦠 ${'advisory_filter_disease'.tr()}', null),
+                            _buildFilterChip('disease',
+                                '🦠 ${'advisory_filter_disease'.tr()}', null),
                             const SizedBox(width: 8),
-                            _buildFilterChip('pest', '🐛 ${'advisory_filter_pest'.tr()}', null),
+                            _buildFilterChip('pest',
+                                '🐛 ${'advisory_filter_pest'.tr()}', null),
                             const SizedBox(width: 8),
-                            _buildFilterChip('deficiency', '🌿 ${'advisory_filter_deficiency'.tr()}', null),
+                            _buildFilterChip(
+                                'deficiency',
+                                '🌿 ${'advisory_filter_deficiency'.tr()}',
+                                null),
                             const SizedBox(width: 8),
-                            _buildFilterChip('other', '🌱 ${'advisory_filter_other'.tr()}', null),
+                            _buildFilterChip('other',
+                                '🌱 ${'advisory_filter_other'.tr()}', null),
                           ],
                         ),
                       ),
@@ -556,14 +576,20 @@ String _getLocalizedCategory(String? category) {
     return 'category_insect_pest'.tr();
   }
   if (cat.contains('bacter')) return 'category_bacterial_disease'.tr();
-  if (cat.contains('virus') || cat.contains('viral')) return 'category_viral_disease'.tr();
-  if (cat.contains('nutrient') || cat.contains('deficiency') || cat.contains('లోపం')) {
+  if (cat.contains('virus') || cat.contains('viral')) {
+    return 'category_viral_disease'.tr();
+  }
+  if (cat.contains('nutrient') ||
+      cat.contains('deficiency') ||
+      cat.contains('లోపం')) {
     return 'category_nutrient_deficiency'.tr();
   }
   if (cat.contains('abiotic')) return 'category_abiotic_disorder'.tr();
   if (cat.contains('nematode')) return 'category_nematode'.tr();
   if (cat.contains('weed')) return 'category_weed'.tr();
-  if (cat.contains('disease') || cat.contains('తెగులు') || cat.contains('रोग')) {
+  if (cat.contains('disease') ||
+      cat.contains('తెగులు') ||
+      cat.contains('रोग')) {
     return 'category_disease'.tr();
   }
   return category;
@@ -638,7 +664,8 @@ class _ProblemCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        errorWidget: (context, url, error) => _buildFallbackIcon(),
+                        errorWidget: (context, url, error) =>
+                            _buildFallbackIcon(),
                       )
                     else
                       _buildFallbackIcon(),
@@ -699,7 +726,8 @@ class _ProblemCard extends StatelessWidget {
                               id: problem.id.toString(),
                               crop: cropName,
                               title: '${problem.name} ($cropName)',
-                              description: _getLocalizedCategory(problem.category),
+                              description:
+                                  _getLocalizedCategory(problem.category),
                               imageUrl: problem.imageUrl1,
                             );
                           },
@@ -803,5 +831,3 @@ class _ProblemCard extends StatelessWidget {
     );
   }
 }
-
-

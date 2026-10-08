@@ -796,10 +796,286 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
       // enough room for taller Telugu text and larger text scales.
       final cardH =
           constraints.hasBoundedHeight ? constraints.maxHeight : 640.0;
-      final heroHeight = (cardH * 0.34).clamp(96.0, 235.0).toDouble();
+      final baseHeroHeight = (cardH * 0.34).clamp(96.0, 235.0).toDouble();
       final compact = cardH < 560;
-      return Container(
-        margin: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+      final w = constraints.maxWidth;
+      final wideRow = w >= 800 && w > cardH * 1.3;
+      final big = w >= 600;
+      final heroHeight = big && !wideRow
+          ? (cardH * 0.42).clamp(96.0, 520.0).toDouble()
+          : baseHeroHeight;
+      final scale = big ? 1.3 : 1.0;
+      final hero = SizedBox(
+        height: wideRow ? null : heroHeight,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (hasImage)
+              CachedNetworkImage(
+                imageUrl: widget.article.imageUrl!,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(
+                  color: const Color(0xFFF1F5F9),
+                ),
+                errorWidget: (_, __, ___) => _buildImageFallback(),
+              )
+            else
+              _buildImageFallback(),
+
+            // Subtle top gradient overlay for badge readability
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.50),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.40],
+                ),
+              ),
+            ),
+
+            // Top Badges Overlay (Category & Time)
+            Positioned(
+              top: 10,
+              left: 10,
+              right: 10,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Category Chip
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.60),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF10B981),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              widget.article.category,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: newsContentStyle(
+                                widget.article.category,
+                                GoogleFonts.googleSans(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  // Time Ago & Page Counter
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.60),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.schedule_rounded,
+                              size: 12, color: Colors.white70),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              timeAgo,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.googleSans(
+                                color: Colors.white,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                              ).copyWith(
+                                  fontFamilyFallback: AppTheme.fontFallbacks),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${widget.currentIndex}/${widget.totalCount}',
+                            maxLines: 1,
+                            style: GoogleFonts.googleSans(
+                              color: const Color(0xFF34D399),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ).copyWith(
+                                fontFamilyFallback: AppTheme.fontFallbacks),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+      final story = Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Micro Byline (Source & Author)
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    sourceLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: newsContentStyle(
+                      sourceLabel,
+                      GoogleFonts.googleSans(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF059669),
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ),
+                if (widget.article.author.isNotEmpty) ...[
+                  Text(
+                    ' • ',
+                    style: _fb(const TextStyle(
+                        color: Color(0xFF94A3B8), fontSize: 10)),
+                  ),
+                  Expanded(
+                    child: Text(
+                      widget.article.author,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: newsContentStyle(
+                        widget.article.author,
+                        GoogleFonts.googleSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 5),
+
+            // Headline (Bold, high impact)
+            Text(
+              currentTitle,
+              maxLines: compact ? 2 : (big ? 4 : 3),
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.start,
+              style: newsContentStyle(
+                  currentTitle,
+                  GoogleFonts.googleSans(
+                    fontSize: ((isTelugu || isHindi) ? 17.5 : 18) * scale,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0F172A),
+                    height: 1.3,
+                    letterSpacing: -0.3,
+                  )),
+            ),
+            const SizedBox(height: 8),
+
+            // Concise Story Body (Scrollable if long, clean reading pace)
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Text(
+                  displayBody,
+                  textAlign: TextAlign.justify,
+                  style: newsContentStyle(
+                      displayBody,
+                      GoogleFonts.googleSans(
+                        fontSize: ((isTelugu || isHindi) ? 14 : 14.5) * scale,
+                        fontWeight: FontWeight.w400,
+                        color: const Color(0xFF334155),
+                        height: 1.55,
+                      )),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // 3. SLEEK "READ FULL STORY" ACTION TILE
+            InkWell(
+              onTap: widget.onTapReadMore,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.menu_book_rounded,
+                      size: 14,
+                      color: Color(0xFF059669),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        readMoreLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: newsContentStyle(
+                          readMoreLabel,
+                          GoogleFonts.googleSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 14,
+                      color: Color(0xFF059669),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      final card = Container(
+        margin: EdgeInsets.fromLTRB(
+            10, 4, 10, 8 + MediaQuery.paddingOf(context).bottom),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -816,282 +1092,20 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 1. TOP HERO MEDIA FRAME (Balanced 235px height for optimum text breathing room)
-            SizedBox(
-              height: heroHeight,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (hasImage)
-                    CachedNetworkImage(
-                      imageUrl: widget.article.imageUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        color: const Color(0xFFF1F5F9),
-                      ),
-                      errorWidget: (_, __, ___) => _buildImageFallback(),
-                    )
-                  else
-                    _buildImageFallback(),
-
-                  // Subtle top gradient overlay for badge readability
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.50),
-                          Colors.transparent,
-                        ],
-                        stops: const [0.0, 0.40],
-                      ),
-                    ),
-                  ),
-
-                  // Top Badges Overlay (Category & Time)
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    right: 10,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Category Chip
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.60),
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF10B981),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Flexible(
-                                  child: Text(
-                                    widget.article.category,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: newsContentStyle(
-                                      widget.article.category,
-                                      GoogleFonts.googleSans(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(width: 8),
-
-                        // Time Ago & Page Counter
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 9, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.60),
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.schedule_rounded,
-                                    size: 12, color: Colors.white70),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Text(
-                                    timeAgo,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.googleSans(
-                                      color: Colors.white,
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w600,
-                                    ).copyWith(
-                                        fontFamilyFallback:
-                                            AppTheme.fontFallbacks),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '${widget.currentIndex}/${widget.totalCount}',
-                                  maxLines: 1,
-                                  style: GoogleFonts.googleSans(
-                                    color: const Color(0xFF34D399),
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w700,
-                                  ).copyWith(
-                                      fontFamilyFallback:
-                                          AppTheme.fontFallbacks),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // 2. STORY SECTION
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            if (wideRow)
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Micro Byline (Source & Author)
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            sourceLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: newsContentStyle(
-                              sourceLabel,
-                              GoogleFonts.googleSans(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF059669),
-                                letterSpacing: 0.4,
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (widget.article.author.isNotEmpty) ...[
-                          Text(
-                            ' • ',
-                            style: _fb(const TextStyle(
-                                color: Color(0xFF94A3B8), fontSize: 10)),
-                          ),
-                          Expanded(
-                            child: Text(
-                              widget.article.author,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: newsContentStyle(
-                                widget.article.author,
-                                GoogleFonts.googleSans(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-
-                    // Headline (Bold, high impact)
-                    Text(
-                      currentTitle,
-                      maxLines: compact ? 2 : 3,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.start,
-                      style: newsContentStyle(
-                          currentTitle,
-                          GoogleFonts.googleSans(
-                            fontSize: (isTelugu || isHindi) ? 17.5 : 18,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF0F172A),
-                            height: 1.3,
-                            letterSpacing: -0.3,
-                          )),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Concise Story Body (Scrollable if long, clean reading pace)
-                    Expanded(
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Text(
-                          displayBody,
-                          textAlign: TextAlign.justify,
-                          style: newsContentStyle(
-                              displayBody,
-                              GoogleFonts.googleSans(
-                                fontSize: (isTelugu || isHindi) ? 14 : 14.5,
-                                fontWeight: FontWeight.w400,
-                                color: const Color(0xFF334155),
-                                height: 1.55,
-                              )),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // 3. SLEEK "READ FULL STORY" ACTION TILE
-                    InkWell(
-                      onTap: widget.onTapReadMore,
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: const Color(0xFFE2E8F0), width: 1),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.menu_book_rounded,
-                              size: 14,
-                              color: Color(0xFF059669),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                readMoreLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: newsContentStyle(
-                                  readMoreLabel,
-                                  GoogleFonts.googleSans(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 14,
-                              color: Color(0xFF059669),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    Expanded(flex: 11, child: hero),
+                    Expanded(flex: 9, child: story),
                   ],
                 ),
-              ),
-            ),
+              )
+            else ...[
+              hero,
+              Expanded(child: story),
+            ],
 
             // Divider
             const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
@@ -1221,6 +1235,15 @@ class _InshortsNewsCardState extends State<_InshortsNewsCard> {
           ],
         ),
       );
+      if (big && !wideRow) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: card,
+          ),
+        );
+      }
+      return card;
     });
   }
 

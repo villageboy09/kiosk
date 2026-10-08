@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cropsync/widgets/shop/shop_circle_button.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
@@ -8,7 +9,6 @@ import 'package:cropsync/models/chc_operator.dart';
 import 'package:cropsync/services/api_service.dart';
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/utils/safe_parser.dart';
-
 
 class ManualOrderSheet extends StatefulWidget {
   final ChcOperator operator;
@@ -504,10 +504,10 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
               toolbarHeight: 64,
               leading: Padding(
                 padding: const EdgeInsets.only(left: 8.0),
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                      color: AppTheme.appBarText, size: 20),
-                  onPressed: () {
+                child: ShopCircleButton(
+                  icon: Icons.arrow_back_rounded,
+                  label: 'shopd_back'.tr(),
+                  onTap: () {
                     if (_currentStep > 1) {
                       _pageController.previousPage(
                           duration: const Duration(milliseconds: 300),
@@ -1055,7 +1055,8 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
                         curve: Curves.easeInOut);
                     setState(() {
                       _currentStep = 3;
-                      _amountPaidController.text = _finalAmount.toStringAsFixed(0);
+                      _amountPaidController.text =
+                          _finalAmount.toStringAsFixed(0);
                     });
                   }
                 },
@@ -1271,7 +1272,9 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
       return 'assets/chc_equipments/combined_harvester.webp';
     }
     if (name.contains('baler')) return 'assets/chc_equipments/balers.webp';
-    if (name.contains('sprayer') || name.contains('spray') || name.contains('boomer')) {
+    if (name.contains('sprayer') ||
+        name.contains('spray') ||
+        name.contains('boomer')) {
       return 'assets/chc_equipments/boom_sprayer.webp';
     }
     if (name.contains('seeder')) {
@@ -1520,14 +1523,38 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
 
   Widget _buildCropSuggestions(BuildContext context) {
     final langCode = context.locale.languageCode;
-    
+
     final List<String> suggestions;
     if (langCode == 'te') {
-      suggestions = ['వరి', 'పత్తి', 'మిర్చి', 'మొక్కజొన్న', 'శనగలు', 'వేరుశనగ', 'చెరకు'];
+      suggestions = [
+        'వరి',
+        'పత్తి',
+        'మిర్చి',
+        'మొక్కజొన్న',
+        'శనగలు',
+        'వేరుశనగ',
+        'చెరకు'
+      ];
     } else if (langCode == 'hi') {
-      suggestions = ['धान', 'कपास', 'मिर्च', 'मक्का', 'चना', 'मूंगफली', 'गन्ना'];
+      suggestions = [
+        'धान',
+        'कपास',
+        'मिर्च',
+        'मक्का',
+        'चना',
+        'मूंगफली',
+        'गन्ना'
+      ];
     } else {
-      suggestions = ['Paddy', 'Cotton', 'Chilli', 'Maize', 'Bengal Gram', 'Groundnut', 'Sugarcane'];
+      suggestions = [
+        'Paddy',
+        'Cotton',
+        'Chilli',
+        'Maize',
+        'Bengal Gram',
+        'Groundnut',
+        'Sugarcane'
+      ];
     }
 
     return SizedBox(
@@ -1566,5 +1593,3 @@ class _ManualOrderSheetState extends State<ManualOrderSheet> {
     );
   }
 }
-
-

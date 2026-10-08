@@ -94,7 +94,8 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Future<void> _loadCachedCrop() async {
-    final cached = await FarmerAnalyticsService.getCachedLastTappedCropName(lang: _getLocale());
+    final cached = await FarmerAnalyticsService.getCachedLastTappedCropName(
+        lang: _getLocale());
     if (cached != null && mounted && _lastTappedCrop == null) {
       setState(() {
         _lastTappedCrop = cached;
@@ -109,13 +110,15 @@ class _HomeTabState extends State<HomeTab> {
       final currentUser = await AuthService.getCurrentUser();
       if (currentUser != null && mounted) {
         setState(() {
-          _clientCode = widget.clientCode ?? currentUser.clientCode ?? _clientCode;
+          _clientCode =
+              widget.clientCode ?? currentUser.clientCode ?? _clientCode;
         });
       }
 
       final locale = _getLocale();
-      final cropName = await FarmerAnalyticsService.getLastTappedCropName(lang: locale)
-          .timeout(const Duration(seconds: 5));
+      final cropName =
+          await FarmerAnalyticsService.getLastTappedCropName(lang: locale)
+              .timeout(const Duration(seconds: 5));
 
       if (mounted) {
         setState(() {
@@ -136,22 +139,29 @@ class _HomeTabState extends State<HomeTab> {
   Widget build(BuildContext context) {
     return Container(
       color: AppTheme.background,
-      child: Center(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 600),
-              child: _ServicesGrid(
-                onTabSelected: widget.onTabSelected,
-                lastTappedCrop: _lastTappedCrop,
-                isLoadingCrop: _isLoadingCrop,
-                clientCode: _clientCode ?? widget.clientCode,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const vPad = 24.0;
+          return Center(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: vPad),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: _ServicesGrid(
+                    onTabSelected: widget.onTabSelected,
+                    lastTappedCrop: _lastTappedCrop,
+                    isLoadingCrop: _isLoadingCrop,
+                    clientCode: _clientCode ?? widget.clientCode,
+                    availableHeight: constraints.maxHeight - vPad * 2,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -163,12 +173,14 @@ class _ServicesGrid extends StatelessWidget {
   final String? lastTappedCrop;
   final bool isLoadingCrop;
   final String? clientCode;
+  final double availableHeight;
 
   const _ServicesGrid({
     required this.onTabSelected,
     this.lastTappedCrop,
     this.isLoadingCrop = false,
     this.clientCode,
+    required this.availableHeight,
   });
 
   bool get _shouldShowNewsCard {
@@ -179,72 +191,95 @@ class _ServicesGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 240,
-        crossAxisSpacing: 20,
-        mainAxisSpacing: 20,
-        childAspectRatio: 0.85,
-      ),
-      children: [
-        _ServiceCard(
-          title: 'home_feature_advisory_title'.tr(),
-          subtitle: (lastTappedCrop != null && lastTappedCrop!.isNotEmpty)
-              ? lastTappedCrop!
-              : 'home_feature_advisory_subtitle'.tr(),
-          imageUrl: 'https://kiosk.cropsync.in/Dashboard_images/cropadvisory.png',
-          imagePath: null,
-          color: AppTheme.primary,
-          onTap: () => onTabSelected(1),
+    final width = MediaQuery.of(context).size.width;
+    const itemCount = 6;
+    final maxGridWidth = (width - 40).clamp(0.0, 1200.0);
+
+    double cellFor(int cols, double spacing) {
+      final rows = (itemCount / cols).ceil();
+      final byWidth = (maxGridWidth - spacing * (cols - 1)) / cols;
+      final byHeight = (availableHeight - spacing * (rows - 1)) / rows;
+      return byHeight < byWidth ? byHeight : byWidth;
+    }
+
+    // Pick the column count that yields the largest square cards.
+    final cols = (width >= 700 && cellFor(3, 24) >= cellFor(2, 24)) ? 3 : 2;
+    final spacing = cols == 3 ? 24.0 : 16.0;
+    final cell = cellFor(cols, spacing).clamp(120.0, 420.0);
+    // Spread leftover horizontal room into the gaps so the grid fills the width.
+    final extra = maxGridWidth - cell * cols;
+    final hSpacing =
+        cols > 1 ? (extra / (cols - 1)).clamp(spacing, 96.0) : spacing;
+    return SizedBox(
+      width: cell * cols + hSpacing * (cols - 1),
+      child: GridView(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: cols,
+          crossAxisSpacing: hSpacing,
+          mainAxisSpacing: spacing,
+          childAspectRatio: 1,
         ),
-        _ServiceCard(
-          title: 'home_feature_weather_title'.tr(),
-          subtitle: 'home_feature_weather_subtitle'.tr(),
-          imagePath: 'assets/images/weather.jpg',
-          color: Colors.lightBlue,
-          onTap: () => _navigateTo(context, const WeatherScreen()),
-        ),
-        _ServiceCard(
-          title: 'home_feature_market_title'.tr(),
-          subtitle: 'home_feature_market_subtitle'.tr(),
-          imagePath: 'assets/images/market_prices.jpg',
-          color: AppTheme.accentOrange,
-          onTap: () => _navigateTo(context, const MarketPricesScreen()),
-        ),
-        _ServiceCard(
-          title: 'home_feature_shop_title'.tr(),
-          subtitle: 'home_feature_shop_subtitle'.tr(),
-          imagePath: 'assets/images/agri_shop.jpg',
-          color: AppTheme.accentBrown,
-          onTap: () => _navigateTo(context, const AgriShopScreen()),
-        ),
-        _ServiceCard(
-          title: 'home_feature_seeds_title'.tr(),
-          subtitle: 'home_feature_seeds_subtitle'.tr(),
-          imagePath: 'assets/images/seed_varieties.jpg',
-          color: AppTheme.accentBlue,
-          onTap: () => _navigateTo(context, const SeedVarietiesScreen()),
-        ),
-        if (_shouldShowNewsCard)
+        children: [
           _ServiceCard(
-            title: 'home_feature_news_title'.tr(),
-            subtitle: 'home_feature_news_subtitle'.tr(),
-            imageUrl: 'https://kiosk.cropsync.in/Dashboard_images/news.png',
+            title: 'home_feature_advisory_title'.tr(),
+            subtitle: (lastTappedCrop != null && lastTappedCrop!.isNotEmpty)
+                ? lastTappedCrop!
+                : 'home_feature_advisory_subtitle'.tr(),
+            imageUrl:
+                'https://kiosk.cropsync.in/Dashboard_images/cropadvisory.png',
             imagePath: null,
-            color: AppTheme.accentTeal,
-            onTap: () => onTabSelected(2),
-          )
-        else
-          _ServiceCard(
-            title: 'chc_title'.tr(),
-            subtitle: 'chc_book_now'.tr(),
-            imagePath: 'assets/images/custom_hiring_center.jpg',
-            color: AppTheme.accentPurple,
-            onTap: () => _navigateTo(context, const CHCBookingScreen()),
+            color: AppTheme.primary,
+            onTap: () => onTabSelected(1),
           ),
-      ],
+          _ServiceCard(
+            title: 'home_feature_weather_title'.tr(),
+            subtitle: 'home_feature_weather_subtitle'.tr(),
+            imagePath: 'assets/images/weather.jpg',
+            color: Colors.lightBlue,
+            onTap: () => _navigateTo(context, const WeatherScreen()),
+          ),
+          _ServiceCard(
+            title: 'home_feature_market_title'.tr(),
+            subtitle: 'home_feature_market_subtitle'.tr(),
+            imagePath: 'assets/images/market_prices.jpg',
+            color: AppTheme.accentOrange,
+            onTap: () => _navigateTo(context, const MarketPricesScreen()),
+          ),
+          _ServiceCard(
+            title: 'home_feature_shop_title'.tr(),
+            subtitle: 'home_feature_shop_subtitle'.tr(),
+            imagePath: 'assets/images/agri_shop.jpg',
+            color: AppTheme.accentBrown,
+            onTap: () => _navigateTo(context, const AgriShopScreen()),
+          ),
+          _ServiceCard(
+            title: 'home_feature_seeds_title'.tr(),
+            subtitle: 'home_feature_seeds_subtitle'.tr(),
+            imagePath: 'assets/images/seed_varieties.jpg',
+            color: AppTheme.accentBlue,
+            onTap: () => _navigateTo(context, const SeedVarietiesScreen()),
+          ),
+          if (_shouldShowNewsCard)
+            _ServiceCard(
+              title: 'home_feature_news_title'.tr(),
+              subtitle: 'home_feature_news_subtitle'.tr(),
+              imageUrl: 'https://kiosk.cropsync.in/Dashboard_images/news.png',
+              imagePath: null,
+              color: AppTheme.accentTeal,
+              onTap: () => onTabSelected(2),
+            )
+          else
+            _ServiceCard(
+              title: 'chc_title'.tr(),
+              subtitle: 'chc_book_now'.tr(),
+              imagePath: 'assets/images/custom_hiring_center.jpg',
+              color: AppTheme.accentPurple,
+              onTap: () => _navigateTo(context, const CHCBookingScreen()),
+            ),
+        ],
+      ),
     );
   }
 
@@ -346,15 +381,17 @@ class _ServiceCardState extends State<_ServiceCard>
                       CachedNetworkImage(
                         imageUrl: widget.imageUrl!,
                         fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(color: widget.color.withValues(alpha: 0.1)),
-                        errorWidget: (context, url, error) => Container(color: widget.color.withValues(alpha: 0.1)),
+                        placeholder: (context, url) => Container(
+                            color: widget.color.withValues(alpha: 0.1)),
+                        errorWidget: (context, url, error) => Container(
+                            color: widget.color.withValues(alpha: 0.1)),
                       )
                     else if (widget.imagePath != null)
                       Image.asset(
                         widget.imagePath!,
                         fit: BoxFit.cover,
                       ),
-      
+
                     // 2. Subtle Gradient Overlay
                     Container(
                       decoration: BoxDecoration(
@@ -370,7 +407,7 @@ class _ServiceCardState extends State<_ServiceCard>
                         ),
                       ),
                     ),
-      
+
                     // 3. Text Content
                     Padding(
                       padding: const EdgeInsets.all(AppTheme.spacingLg),
@@ -412,5 +449,3 @@ class _ServiceCardState extends State<_ServiceCard>
     );
   }
 }
-
-

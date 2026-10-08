@@ -1,5 +1,5 @@
+import 'package:cropsync/widgets/shop/shop_circle_button.dart';
 import 'package:cropsync/theme/app_text.dart';
-import 'package:cropsync/theme/app_theme.dart';
 import 'package:cropsync/widgets/shop/shop_filters.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -11,34 +11,11 @@ class ShopCircleBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 44px hit target around the 36px visual circle.
     return Center(
-      child: Semantics(
-        button: true,
+      child: ShopCircleButton(
+        icon: Icons.arrow_back_rounded,
         label: MaterialLocalizations.of(context).backButtonTooltip,
-        excludeSemantics: true,
         onTap: onPressed,
-        child: InkResponse(
-          onTap: onPressed,
-          radius: 22,
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: Center(
-              child: Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.textPrimary.withValues(alpha: 0.1),
-                ),
-                child: const Icon(Icons.arrow_back_ios_new,
-                    size: 20, color: AppTheme.textPrimary),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -84,7 +61,7 @@ SliverAppBar buildShopAppBar(
     elevation: 0,
     centerTitle: true,
     titleSpacing: 0,
-    leadingWidth: 56,
+    leadingWidth: 60,
     leading: ShopCircleBackButton(onPressed: onBack),
     title: ShopAppBarTitle(title),
     actions: [

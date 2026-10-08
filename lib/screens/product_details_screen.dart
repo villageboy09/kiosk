@@ -137,6 +137,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final heroH = (media.size.height * 0.42).clamp(260.0, 460.0);
     final scrollBottom = _barHeight + media.padding.bottom + 16;
 
+    if (media.size.width >= 900 && media.size.width > media.size.height) {
+      return _buildLandscape(media);
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -177,6 +181,47 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
+  /// Landscape tablets: image on the left, details + buy bar on the right.
+  Widget _buildLandscape(MediaQueryData media) {
+    final heroWidth = media.size.width * 0.5;
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: heroWidth,
+                height: media.size.height,
+                child: _buildHero(media.size.height, overlap: 0),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.only(top: media.padding.top),
+                        child: _buildContentCard(landscape: true),
+                      ),
+                    ),
+                    _buildBottomBar(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            width: heroWidth,
+            child: _buildTopBar(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTopBar() {
     final topPadding = MediaQuery.of(context).padding.top;
     return Padding(
@@ -210,7 +255,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  Widget _buildHero(double heroH) {
+  Widget _buildHero(double heroH, {double overlap = _overlap}) {
     final media = MediaQuery.of(context);
     final tint = _gradientFor(widget.product.category);
     final images = imageUrls;
@@ -233,7 +278,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         children: [
           if (showImages)
             Positioned(
-              bottom: _overlap + 20,
+              bottom: overlap + 20,
               left: 0,
               right: 0,
               child: Center(
@@ -262,14 +307,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 if (video && index == 0) {
                   return Padding(
                     padding: EdgeInsets.only(
-                        top: media.padding.top + 60, bottom: _overlap),
+                        top: media.padding.top + 60, bottom: overlap),
                     child: Chewie(controller: _chewieController!),
                   );
                 }
                 final imgIndex = video ? index - 1 : index;
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
-                      32, media.padding.top + 60, 32, _overlap + 30),
+                      32, media.padding.top + 60, 32, overlap + 30),
                   child: SafeNetworkImage(
                     imageUrl: images[imgIndex],
                     fit: BoxFit.contain,
@@ -284,7 +329,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           else
             Center(
               child: Padding(
-                padding: const EdgeInsets.only(bottom: _overlap),
+                padding: EdgeInsets.only(bottom: overlap),
                 child: Icon(Icons.eco_outlined,
                     color: Colors.white.withValues(alpha: 0.9), size: 84),
               ),
@@ -292,7 +337,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           if (pageCount > 1)
             Positioned(
               right: 16,
-              bottom: _overlap + 12,
+              bottom: overlap + 12,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -317,7 +362,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  Widget _buildContentCard() {
+  Widget _buildContentCard({bool landscape = false}) {
     final product = widget.product;
     final name = getLocalizedProductName(context, product.name);
     final category = getLocalizedCategory(context, product.category).trim();
@@ -328,9 +373,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(_overlap)),
+        borderRadius: landscape
+            ? BorderRadius.zero
+            : const BorderRadius.vertical(top: Radius.circular(_overlap)),
       ),
       padding: const EdgeInsets.fromLTRB(_gutter, 22, _gutter, 8),
       child: Align(

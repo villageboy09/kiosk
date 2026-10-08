@@ -1,5 +1,6 @@
 // lib/profile_screen.dart
 
+import 'package:cropsync/widgets/shop/shop_circle_button.dart';
 import 'package:cropsync/models/user.dart';
 import 'package:cropsync/services/auth_service.dart';
 import 'package:cropsync/welcome_screen.dart';
@@ -1016,68 +1017,133 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             final user = snapshot.data!;
 
-            return CustomScrollView(
-              controller: _scrollController,
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverAppBar(
-                  expandedHeight: 330,
-                  pinned: true,
-                  backgroundColor: AppTheme.appBarBg,
-                  elevation: 0,
-                  scrolledUnderElevation: 0,
-                  surfaceTintColor: Colors.transparent,
-                  automaticallyImplyLeading: false,
-                  title: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 300),
-                    opacity: _showTitle ? 1.0 : 0.0,
-                    child: Text(user.name, style: AppTheme.appBarTitle),
-                  ),
-                  centerTitle: false,
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      color: _showTitle ? AppTheme.appBarText : Colors.white,
-                      tooltip: 'Edit Profile',
-                      onPressed: () => _showEditProfileModal(user),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.share_rounded),
-                      color: _showTitle ? AppTheme.appBarText : Colors.white,
-                      onPressed: _shareApp,
-                    ),
-                    const SizedBox(width: 8),
+            final form = Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  if (user.isFarmer) ...[
+                    _buildCropAdvisoryFreeBanner(),
+                    const SizedBox(height: 16),
+                    _buildAiDoctorCreditsCard(user),
+                    const SizedBox(height: 24),
                   ],
-                  flexibleSpace: FlexibleSpaceBar(
-                    background: _buildProfileHeader(user),
-                    collapseMode: CollapseMode.pin,
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          if (user.isFarmer) ...[
-                            _buildCropAdvisoryFreeBanner(),
-                            const SizedBox(height: 16),
-                            _buildAiDoctorCreditsCard(user),
-                            const SizedBox(height: 24),
+                  _buildUserDetailsList(user),
+                  const SizedBox(height: 16),
+                  _buildMenuCard(user),
+                  const SizedBox(height: 16),
+                  _buildLogoutCard(),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            );
+
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth;
+                final landscape = w >= 900 && w > constraints.maxHeight;
+
+                if (landscape) {
+                  final top = MediaQuery.of(context).padding.top;
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: w * 0.36,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            _buildProfileHeader(user),
+                            Positioned(
+                              top: top + 8,
+                              right: 8,
+                              child: Row(
+                                children: [
+                                  ShopCircleButton(
+                                    icon: Icons.edit_outlined,
+                                    label: 'Edit Profile',
+                                    onTap: () => _showEditProfileModal(user),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ShopCircleButton(
+                                    icon: Icons.ios_share_rounded,
+                                    label: context.tr('shopd_share'),
+                                    onTap: _shareApp,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
-                          _buildUserDetailsList(user),
-                          const SizedBox(height: 16),
-                          _buildMenuCard(user),
-                          const SizedBox(height: 16),
-                          _buildLogoutCard(),
-                          const SizedBox(height: 40),
-                        ],
+                        ),
+                      ),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: EdgeInsets.fromLTRB(24, 20 + top, 24, 20),
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 720),
+                              child: form,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                final wide = w >= 600;
+                final sidePad = ((w - 720) / 2).clamp(20.0, 400.0);
+                return CustomScrollView(
+                  controller: _scrollController,
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    SliverAppBar(
+                      expandedHeight: wide ? 400 : 330,
+                      pinned: true,
+                      backgroundColor: AppTheme.appBarBg,
+                      elevation: 0,
+                      scrolledUnderElevation: 0,
+                      surfaceTintColor: Colors.transparent,
+                      automaticallyImplyLeading: false,
+                      title: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 300),
+                        opacity: _showTitle ? 1.0 : 0.0,
+                        child: Text(user.name, style: AppTheme.appBarTitle),
+                      ),
+                      centerTitle: false,
+                      actions: [
+                        Center(
+                          child: ShopCircleButton(
+                            icon: Icons.edit_outlined,
+                            label: 'Edit Profile',
+                            onTap: () => _showEditProfileModal(user),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Center(
+                          child: ShopCircleButton(
+                            icon: Icons.ios_share_rounded,
+                            label: context.tr('shopd_share'),
+                            onTap: _shareApp,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      flexibleSpace: FlexibleSpaceBar(
+                        background: _buildProfileHeader(user),
+                        collapseMode: CollapseMode.pin,
                       ),
                     ),
-                  ),
-                ),
-              ],
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: wide ? sidePad : 20, vertical: 20),
+                        child: form,
+                      ),
+                    ),
+                  ],
+                );
+              },
             );
           },
         ),

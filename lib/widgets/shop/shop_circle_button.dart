@@ -1,7 +1,8 @@
 import 'package:cropsync/theme/app_text.dart';
 import 'package:flutter/material.dart';
 
-/// Translucent white 46px circular icon button used on hero top bars.
+/// White 46px circular icon button with a hairline border and shadow, so it
+/// stays visible on photos, mint app bars and white surfaces alike.
 class ShopCircleButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -24,10 +25,12 @@ class ShopCircleButton extends StatelessWidget {
         message: label,
         textStyle: appStyle(context, size: 12, color: Colors.white),
         child: Material(
-          color: Colors.white.withValues(alpha: 0.82),
-          shape: const CircleBorder(),
-          elevation: 1.5,
-          shadowColor: Colors.black26,
+          color: Colors.white,
+          shape: const CircleBorder(
+            side: BorderSide(color: Color(0x1F0F172A), width: 1),
+          ),
+          elevation: 4,
+          shadowColor: Colors.black38,
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: onTap,
