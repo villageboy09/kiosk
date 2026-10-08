@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:cropsync/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -276,35 +277,46 @@ class _WeatherScreenState extends State<WeatherScreen>
   }
 
   String _mapGoogleWeatherConditionType(String? type) {
-    if (type == null) return 'clear-day';
-    switch (type) {
-      case 'CLEAR':
-        return 'clear-day';
-      case 'MOSTLY_CLEAR':
-        return 'clear-day';
-      case 'PARTLY_CLOUDY':
-        return 'partly-cloudy-day';
-      case 'MOSTLY_CLOUDY':
-        return 'cloudy';
-      case 'CLOUDY':
-        return 'cloudy';
-      case 'WINDY':
-        return 'wind';
-      case 'RAIN':
-        return 'rain';
-      case 'HEAVY_RAIN':
-        return 'rain';
-      case 'LIGHT_RAIN':
-        return 'rain';
-      case 'SNOW':
-        return 'snow';
-      case 'FOG':
-        return 'fog';
-      case 'THUNDERSTORM':
-        return 'rain';
-      default:
-        return 'clear-day';
+    final t = (type ?? '').toUpperCase();
+    final hour = DateTime.now().hour;
+    final night = hour < 6 || hour >= 19;
+    if (t.isEmpty) return night ? 'clear-night' : 'clear-day';
+    if (t.contains('TORNADO') ||
+        t.contains('HURRICANE') ||
+        t.contains('TYPHOON') ||
+        t.contains('CYCLONE')) {
+      return 'storm';
     }
+    if (t.contains('THUNDER')) {
+      return t.contains('HEAVY') || t.contains('EXTREME') ? 'storm' : 'thunder';
+    }
+    if (t.contains('HAIL')) return 'hail';
+    if (t.contains('SNOW') || t.contains('SLEET') || t.contains('WINTRY')) {
+      return 'snow';
+    }
+    if (t.contains('RAIN') || t.contains('SHOWER') || t.contains('DRIZZLE')) {
+      if (t.contains('HEAVY') || t.contains('MODERATE_TO_HEAVY')) {
+        return 'heavy-rain';
+      }
+      if (t.contains('LIGHT') ||
+          t.contains('CHANCE') ||
+          t.contains('SCATTERED') ||
+          t.contains('SHOWER')) {
+        return 'drizzle';
+      }
+      return 'rain';
+    }
+    if (t.contains('FOG') || t.contains('MIST')) return 'fog';
+    if (t.contains('HAZE') || t.contains('SMOKE') || t.contains('DUST')) {
+      return 'haze';
+    }
+    if (t.contains('WIND')) return 'wind';
+    if (t == 'PARTLY_CLOUDY') {
+      return night ? 'partly-cloudy-night' : 'partly-cloudy-day';
+    }
+    if (t == 'MOSTLY_CLOUDY') return 'overcast';
+    if (t.contains('CLOUDY')) return 'cloudy';
+    return night ? 'clear-night' : 'clear-day';
   }
 
   // Strategic AI Caching & Loader
@@ -376,35 +388,65 @@ class _WeatherScreenState extends State<WeatherScreen>
   }
 
   String _localizeCondition(String condition, String locale) {
+    if (locale != 'te' && locale != 'hi') return condition;
     final lower = condition.toLowerCase();
-    if (locale == 'te') {
-      if (lower.contains('thunder')) return 'ఉరుములతో కూడిన వర్షం';
-      if (lower.contains('rain') || lower.contains('shower')) return 'వర్షం';
-      if (lower.contains('partly cloudy') ||
-          lower.contains('partially cloudy')) {
-        return 'పాక్షికంగా మేఘావృతం';
-      }
-      if (lower.contains('overcast')) return 'దట్టమైన మేఘాలు';
-      if (lower.contains('cloud')) return 'మేఘావృతం';
-      if (lower.contains('clear')) return 'నిర్మలమైన ఆకాశం';
-      if (lower.contains('fog') || lower.contains('mist')) return 'పొగమంచు';
-      if (lower.contains('snow')) return 'మంచు కురవడం';
-      if (lower.contains('wind')) return 'గాలులతో కూడిన వాతావరణం';
-      return condition;
-    } else if (locale == 'hi') {
-      if (lower.contains('thunder')) return 'गरज के साथ बारिश';
-      if (lower.contains('rain') || lower.contains('shower')) return 'बारिश';
-      if (lower.contains('partly cloudy') ||
-          lower.contains('partially cloudy')) {
-        return 'आंशिक रूप से बादल';
-      }
-      if (lower.contains('overcast')) return 'घने बादल';
-      if (lower.contains('cloud')) return 'बादल छाए रहेंगे';
-      if (lower.contains('clear')) return 'साफ मौसम';
-      if (lower.contains('fog') || lower.contains('mist')) return 'कोहरा';
-      if (lower.contains('snow')) return 'बर्फबारी';
-      if (lower.contains('wind')) return 'तेज हवाएं';
-      return condition;
+    final te = locale == 'te';
+
+    // Ordered most specific first; the first rule whose words all appear wins.
+    // Each rule: [keywords (any of)], telugu, hindi.
+    const rules = <(List<String>, String, String)>[
+      (['thunder'], 'ఉరుములతో కూడిన వర్షం', 'गरज के साथ बारिश'),
+      (['hail'], 'వడగండ్ల వాన', 'ओलावृष्टि'),
+      (
+        ['sleet', 'wintry', 'rain and snow'],
+        'మంచుతో కూడిన వర్షం',
+        'बारिश और बर्फ'
+      ),
+      (['snow'], 'మంచు కురవడం', 'बर्फबारी'),
+      (
+        ['heavy rain', 'heavy shower', 'torrential'],
+        'భారీ వర్షం',
+        'भारी बारिश'
+      ),
+      (
+        ['drizzle', 'light rain', 'light shower'],
+        'తేలికపాటి వర్షం',
+        'हल्की बारिश'
+      ),
+      (
+        ['scattered shower', 'scattered rain', 'isolated'],
+        'అక్కడక్కడా జల్లులు',
+        'इक्का-दुक्का बौछारें'
+      ),
+      (
+        ['chance of rain', 'chance of shower', 'possible rain'],
+        'వర్షం పడే అవకాశం',
+        'बारिश की संभावना'
+      ),
+      (['shower'], 'జల్లులు', 'बौछारें'),
+      (['rain'], 'వర్షం', 'बारिश'),
+      (['fog', 'mist'], 'పొగమంచు', 'कोहरा'),
+      (['haze', 'smoke'], 'మసక వాతావరణం', 'धुंध'),
+      (['dust', 'sand'], 'దుమ్ము', 'धूल'),
+      (['partly sunny', 'partially sunny'], 'పాక్షికంగా ఎండ', 'आंशिक धूप'),
+      (['mostly sunny'], 'ఎక్కువగా ఎండ', 'ज्यादातर धूप'),
+      (['sunny', 'hot'], 'ఎండగా ఉంటుంది', 'धूप खिली रहेगी'),
+      (['mostly clear'], 'దాదాపు నిర్మలమైన ఆకాశం', 'लगभग साफ आसमान'),
+      (['clear'], 'నిర్మలమైన ఆకాశం', 'साफ मौसम'),
+      (
+        ['partly cloudy', 'partially cloudy'],
+        'పాక్షికంగా మేఘావృతం',
+        'आंशिक रूप से बादल'
+      ),
+      (['mostly cloudy'], 'ఎక్కువగా మేఘావృతం', 'ज्यादातर बादल'),
+      (['overcast'], 'దట్టమైన మేఘాలు', 'घने बादल'),
+      (['cloud'], 'మేఘావృతం', 'बादल छाए रहेंगे'),
+      (['wind', 'breez', 'gust'], 'గాలులతో కూడిన వాతావరణం', 'तेज हवाएं'),
+      (['cold', 'chilly', 'frost'], 'చలిగా ఉంటుంది', 'ठंड'),
+      (['humid'], 'తేమగా ఉంటుంది', 'उमस'),
+    ];
+    for (final r in rules) {
+      if (r.$1.any(lower.contains)) return te ? r.$2 : r.$3;
     }
     return condition;
   }
@@ -523,9 +565,19 @@ Format:
   IconData _getIcon(String iconName) {
     switch (iconName) {
       case 'snow':
+      case 'hail':
         return Icons.ac_unit_rounded;
+      case 'thunder':
+      case 'storm':
+        return Icons.thunderstorm_rounded;
       case 'rain':
+      case 'drizzle':
+      case 'heavy-rain':
         return Icons.water_drop_rounded;
+      case 'overcast':
+        return Icons.cloud_rounded;
+      case 'haze':
+        return Icons.blur_on_rounded;
       case 'fog':
         return Icons.foggy;
       case 'wind':
@@ -547,13 +599,20 @@ Format:
 
   @override
   Widget build(BuildContext context) {
+    return Theme(
+      data: AppTheme.localized(context),
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         leading: AppTheme.backButton(context, color: AppTheme.appBarText),
         title: Text(
           'nav_weather'.tr(),
-          style: AppTheme.appBarTitle,
+          style: AppTheme.appBarTitleOf(context),
         ),
         centerTitle: false,
         backgroundColor: Colors.white,
@@ -664,34 +723,37 @@ Format:
       isScrollControlled: true,
       constraints: const BoxConstraints(maxWidth: 720),
       backgroundColor: Colors.transparent,
-      builder: (context) => SafeArea(
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2))),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary),
+      builder: (sheetContext) => Theme(
+        data: AppTheme.localized(context),
+        child: SafeArea(
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2))),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary),
+                  ),
                 ),
-              ),
-              Flexible(child: content),
-            ],
+                Flexible(child: content),
+              ],
+            ),
           ),
         ),
       ),
@@ -705,61 +767,219 @@ Format:
     required Color color,
     required VoidCallback onTap,
   }) {
-    return Card(
+    final dark = HSLColor.fromColor(color)
+        .withLightness(
+            (HSLColor.fromColor(color).lightness - 0.12).clamp(0.0, 1.0))
+        .toColor();
+    return Material(
+      borderRadius: BorderRadius.circular(28),
       elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: color.withValues(alpha: 0.3), width: 1.5),
-      ),
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: _AnimatedIcon(
-                  child: Icon(icon, color: color, size: 28),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textSecondary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+        borderRadius: BorderRadius.circular(28),
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [color, dark],
+            ),
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.30),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: Stack(
+              children: [
+                // Oversized faint icon as decoration.
+                Positioned(
+                  right: -18,
+                  bottom: -18,
+                  child: Icon(icon,
+                      size: 130, color: Colors.white.withValues(alpha: 0.14)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.22),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(icon, color: Colors.white, size: 26),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              height: 1.2,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.9),
+                              height: 1.3,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------ new UI
+
+  List<Color> _skyColors(String icon) {
+    switch (icon) {
+      case 'storm':
+      case 'thunder':
+        return const [Color(0xFF5B21B6), Color(0xFF1E1B4B)];
+      case 'rain':
+      case 'heavy-rain':
+      case 'hail':
+        return const [Color(0xFF475569), Color(0xFF1E293B)];
+      case 'drizzle':
+        return const [Color(0xFF64748B), Color(0xFF334155)];
+      case 'snow':
+        return const [Color(0xFF7DD3FC), Color(0xFF3B82F6)];
+      case 'cloudy':
+      case 'overcast':
+      case 'fog':
+      case 'haze':
+        return const [Color(0xFF7C93AD), Color(0xFF4B6280)];
+      case 'clear-night':
+      case 'partly-cloudy-night':
+        return const [Color(0xFF312E81), Color(0xFF1E1B4B)];
+      case 'partly-cloudy-day':
+      case 'wind':
+        return const [Color(0xFF38BDF8), Color(0xFF3B82F6)];
+      default:
+        return const [Color(0xFFFBBF24), Color(0xFFF97316)];
+    }
+  }
+
+  Widget _buildHeroCard(_WeatherSummary weather, String condition) {
+    final colors = _skyColors(weather.icon);
+    const white = Colors.white;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 20, 18, 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: colors.last.withValues(alpha: 0.25),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: white.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.location_on_rounded,
+                          size: 14, color: white),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          weather.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: white),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  '${weather.temp.round()}°',
+                  style: const TextStyle(
+                      fontSize: 72,
+                      fontWeight: FontWeight.w300,
+                      color: white,
+                      height: 1.0),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  condition,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700, color: white),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${'weather_high_short'.tr()} ${weather.tempMax.round()}°  ·  ${'weather_low_short'.tr()} ${weather.tempMin.round()}°',
+                  style: TextStyle(
+                      fontSize: 14, color: white.withValues(alpha: 0.9)),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 120,
+            height: 120,
+            child: RepaintBoundary(
+              child: Lottie.asset(
+                _lottieAsset(weather.icon),
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) =>
+                    Icon(_getIcon(weather.icon), size: 84, color: white),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -772,105 +992,7 @@ Format:
     final localizedCondition = _localizeCondition(weather.conditions, locale);
 
     final topSection = <Widget>[
-      // Daily Summary Card
-      Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left Column
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'weather_today'.tr(),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      '${weather.temp.round()}°',
-                      style: const TextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.w200,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      localizedCondition,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${'weather_high_short'.tr()}: ${weather.tempMax.round()}°  ${'weather_low_short'.tr()}: ${weather.tempMin.round()}°',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-            // Right Column
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.location_on_rounded,
-                        size: 14, color: AppTheme.primary),
-                    const SizedBox(width: 4),
-                    Text(
-                      weather.location,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: 72,
-                  height: 72,
-                  child: RepaintBoundary(
-                    child: Lottie.network(
-                      _getLottieUrl(weather.icon),
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(_getIcon(weather.icon),
-                            size: 64, color: const Color(0xFFFBBF24));
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      _buildHeroCard(weather, localizedCondition),
       if (_aiAdvisory != null && _aiAdvisory!['today_overview'] != null) ...[
         const SizedBox(height: 16),
         Container(
@@ -943,7 +1065,11 @@ Format:
         final landscape = w >= 900 && w > h;
 
         if (landscape) {
-          const gridAspect = 1.2;
+          // 2x2 rounded squares sized to fit the right pane.
+          final paneW = (w - 60) * 6 / 11;
+          final cell = math.min((paneW - 14) / 2, (h - 54) / 2);
+          final gridW = cell * 2 + 14;
+          const gridAspect = 1.0;
           final grid = GridView.count(
             crossAxisCount: 2,
             crossAxisSpacing: 12,
@@ -1070,7 +1196,12 @@ Format:
                   flex: 6,
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
-                    child: grid,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(child: SizedBox(width: gridW, child: grid)),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1078,7 +1209,7 @@ Format:
           );
         }
 
-        final gridAspect = w >= 600 ? 1.5 : 0.95;
+        const gridAspect = 1.0;
         final grid = GridView.count(
           crossAxisCount: 2,
           crossAxisSpacing: 12,
@@ -1194,7 +1325,12 @@ Format:
                 children: [
                   ...topSection,
                   const SizedBox(height: 16),
-                  grid,
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: grid,
+                    ),
+                  ),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -1245,7 +1381,7 @@ Format:
         precipText = ' ఈ వారం వాతావరణం చాలావరకు పొడిగా ఉంటుంది.';
       }
       final locCondition = _localizeCondition(mostCommonCondition, 'te');
-      return 'రాబోయే వారం ప్రధానంగా $locConditionగా ఉండే అవకాశం ఉంది. సగటు గరిష్ట ఉష్ణోగ్రత ${avgMax.round()}°C మరియు కనిష్ట ఉష్ణోగ్రత ${avgMin.round()}°C గా నమోదవుతుంది.$precipText';
+      return 'రాబోయే వారంలో ప్రధాన వాతావరణం: $locCondition. సగటు గరిష్ట ఉష్ణోగ్రత ${avgMax.round()}°C, కనిష్ట ఉష్ణోగ్రత ${avgMin.round()}°C ఉండే అవకాశం ఉంది.$precipText';
     } else if (locale == 'hi') {
       String precipText = '';
       if (avgPrecip > 50) {
@@ -1257,7 +1393,7 @@ Format:
         precipText = ' इस सप्ताह मौसम अधिकांशतः शुष्क रहेगा।';
       }
       final locCondition = _localizeCondition(mostCommonCondition, 'hi');
-      return 'आगामी सप्ताह में मुख्य रूप से $locCondition रहने की संभावना है। औसत अधिकतम तापमान ${avgMax.round()}°C और न्यूनतम तापमान ${avgMin.round()}°C रहेगा।$precipText';
+      return 'आगामी सप्ताह का मुख्य मौसम: $locCondition। औसत अधिकतम तापमान ${avgMax.round()}°C और न्यूनतम तापमान ${avgMin.round()}°C रहने का अनुमान है।$precipText';
     }
 
     String precipText = '';
@@ -1270,7 +1406,7 @@ Format:
       precipText = ' The week looks mostly dry.';
     }
 
-    return 'The upcoming week is expected to be mostly ${mostCommonCondition.toLowerCase()} with average highs around ${avgMax.round()}°C and lows near ${avgMin.round()}°C.$precipText';
+    return 'Main weather this week: ${mostCommonCondition.toLowerCase()}. Average highs are around ${avgMax.round()}°C and lows near ${avgMin.round()}°C.$precipText';
   }
 
   Widget _buildAISettingsCard(_WeatherSummary weather) {
@@ -1470,75 +1606,224 @@ Format:
 
     final sowingDate = _getSowingDate(season.name, locale);
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 1.0,
-      ),
-      itemCount: activeCrops.length,
-      itemBuilder: (context, index) {
-        final crop = activeCrops[index];
-        return Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoCols = constraints.maxWidth >= 520;
+        final cards = [
+          for (var i = 0; i < activeCrops.length; i++)
+            _buildCropCard(activeCrops[i], i, sowingDate),
+        ];
+        final rows = <Widget>[];
+        if (twoCols) {
+          for (var i = 0; i < cards.length; i += 2) {
+            rows.add(IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: cards[i]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: i + 1 < cards.length
+                        ? cards[i + 1]
+                        : const SizedBox.shrink(),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0FDF4),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  crop.icon,
-                  style: const TextStyle(fontSize: 18),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                crop.name,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${'weather_sowing_label'.tr()}\n$sowingDate',
-                style: const TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.primary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+            ));
+            rows.add(const SizedBox(height: 12));
+          }
+        } else {
+          for (final c in cards) {
+            rows.add(c);
+            rows.add(const SizedBox(height: 12));
+          }
+        }
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+          child: Column(children: rows),
         );
       },
+    );
+  }
+
+  static const _cropAccents = <Color>[
+    Color(0xFF16A34A),
+    Color(0xFFF59E0B),
+    Color(0xFF0EA5E9),
+    Color(0xFF8B5CF6),
+    Color(0xFF14B8A6),
+    Color(0xFFEC4899),
+  ];
+
+  Widget _cropFact(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCropCard(_CropRecommendation crop, int index, String sowing) {
+    final accent = _cropAccents[index % _cropAccents.length];
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: accent.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Tinted header: emoji badge, name, sowing time.
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  accent.withValues(alpha: 0.20),
+                  accent.withValues(alpha: 0.05),
+                ],
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.25),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Text(crop.icon, style: const TextStyle(fontSize: 30)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        crop.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.textPrimary,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: accent,
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.event_available_rounded,
+                                size: 12, color: Colors.white),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                '${'weather_sowing_label'.tr()} $sowing'
+                                    .replaceAll('\n', ' '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _cropFact(Icons.schedule_rounded, crop.duration,
+                        const Color(0xFF0369A1)),
+                    _cropFact(Icons.landscape_rounded, crop.soilType,
+                        const Color(0xFFB45309)),
+                    _cropFact(Icons.water_drop_rounded, crop.waterReq,
+                        const Color(0xFF0891B2)),
+                  ],
+                ),
+                if (crop.description.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    crop.description,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.45,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2576,34 +2861,41 @@ class _AnimatedIconState extends State<_AnimatedIcon>
   }
 }
 
-String _getLottieUrl(String iconCode) {
+/// Bundled Lottie (Meteocons, MIT) for a weather icon code. Works offline.
+String _lottieAsset(String iconCode) {
+  const base = 'assets/lottie/weather/';
   switch (iconCode) {
-    case 'clear-day':
-      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/clear-day.json';
     case 'clear-night':
-      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/clear-night.json';
+      return '${base}clear-night.json';
     case 'partly-cloudy-day':
-      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/partly-cloudy-day.json';
+      return '${base}partly-cloudy-day.json';
     case 'partly-cloudy-night':
-      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/partly-cloudy-night.json';
+      return '${base}partly-cloudy-night.json';
     case 'cloudy':
-      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/cloudy.json';
+      return '${base}cloudy.json';
+    case 'overcast':
+      return '${base}overcast.json';
+    case 'drizzle':
+      return '${base}drizzle.json';
     case 'rain':
-    case 'showers-day':
-    case 'showers-night':
-      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/rain.json';
-    case 'thunder-rain':
-    case 'thunder-showers-day':
-    case 'thunder-showers-night':
-      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/thunderstorms-day.json';
+      return '${base}rain.json';
+    case 'heavy-rain':
+      return '${base}extreme-rain.json';
+    case 'thunder':
+      return '${base}thunderstorms-rain.json';
+    case 'storm':
+      return '${base}thunderstorms-extreme.json';
+    case 'hail':
+      return '${base}hail.json';
     case 'snow':
-    case 'snow-showers-day':
-    case 'snow-showers-night':
-      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/snow.json';
+      return '${base}snow.json';
     case 'fog':
-    case 'mist':
-      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/mist.json';
+      return '${base}fog.json';
+    case 'haze':
+      return '${base}haze.json';
+    case 'wind':
+      return '${base}wind.json';
     default:
-      return 'https://raw.githubusercontent.com/basmilius/weather-icons/master/production/lottie/clear-day.json';
+      return '${base}clear-day.json';
   }
 }

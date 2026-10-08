@@ -2,7 +2,7 @@ name: cropsync
 description: "A new Flutter project."
 publish_to: 'none' 
 
-version: 1.0.14+67
+version: 1.0.14+68
 
 
 environment:
@@ -80,3 +80,4 @@ flutter:
     - assets/images/
     - assets/translations/
     - assets/chc_equipments/
+    - assets/lottie/weather/

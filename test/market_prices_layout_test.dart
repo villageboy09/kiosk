@@ -138,16 +138,22 @@ void main() {
           t, _screen(FakeMarketService(mixed: true), scale: 1.3, lang: 'te'),
           size: size);
       expect(find.byType(TextField), findsOneWidget);
-      expect(find.byType(CommodityRailCard), findsWidgets);
-      await t.drag(find.byType(CustomScrollView), const Offset(0, -900));
+      final wide = size.width >= 900;
+      // Tablet landscape is master-detail: always the list, never rails.
+      expect(find.byType(wide ? CommodityListTile : CommodityRailCard),
+          findsWidgets);
+      await t.drag(find.byType(CustomScrollView).first, const Offset(0, -900));
       await t.pumpAndSettle();
-      await t.drag(find.byType(CustomScrollView), const Offset(0, 3000));
+      await t.drag(find.byType(CustomScrollView).first, const Offset(0, 3000));
       await t.pumpAndSettle();
-      await t.tap(find.byIcon(Icons.chevron_right_rounded).first);
-      await t.pumpAndSettle();
-      expect(find.byType(CommodityRow), findsWidgets);
+      if (!wide) {
+        await t.tap(find.byIcon(Icons.chevron_right_rounded).first);
+        await t.pumpAndSettle();
+      }
+      expect(find.byType(wide ? CommodityListTile : CommodityRow),
+          findsWidgets);
       expect(find.byType(TextField), findsOneWidget);
-      await t.drag(find.byType(CustomScrollView), const Offset(0, -600));
+      await t.drag(find.byType(CustomScrollView).first, const Offset(0, -600));
       await t.pumpAndSettle();
       expect(t.takeException(), isNull);
     });
@@ -234,7 +240,7 @@ void main() {
     await t.enterText(find.byType(TextField), 'cotton');
     await t.pumpAndSettle();
     expect(find.byType(CommodityRow), findsOneWidget);
-    await t.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await t.tap(find.byIcon(Icons.arrow_back_rounded));
     await t.pumpAndSettle();
     expect(find.byType(CommodityRailCard), findsWidgets);
     expect(find.byType(MarketPricesScreen), findsOneWidget);
@@ -727,8 +733,12 @@ void main() {
             .center
             .dx;
 
+        // Tablet landscape: the chip is centered in the left list pane.
+        final paneW = size.width >= 900
+            ? (size.width * 0.36).clamp(380.0, 480.0)
+            : size.width;
         // Loading.
-        expect(dx(), closeTo(size.width / 2, 0.5));
+        expect(dx(), closeTo(paneW / 2, 0.5));
         expect(
             find.descendant(
                 of: find.byType(MarketLocationChip),
@@ -736,7 +746,7 @@ void main() {
             findsWidgets);
         await t.pumpAndSettle();
         // Loaded.
-        expect(dx(), closeTo(size.width / 2, 0.5));
+        expect(dx(), closeTo(paneW / 2, 0.5));
       });
     }
 

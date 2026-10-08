@@ -137,6 +137,30 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).shortestSide < 600) {
+      // Phone: the original layout.
+      return Container(
+        color: AppTheme.background,
+        child: Center(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: _ServicesGrid(
+                  onTabSelected: widget.onTabSelected,
+                  lastTappedCrop: _lastTappedCrop,
+                  isLoadingCrop: _isLoadingCrop,
+                  clientCode: _clientCode ?? widget.clientCode,
+                  availableHeight: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Container(
       color: AppTheme.background,
       child: LayoutBuilder(
@@ -210,17 +234,27 @@ class _ServicesGrid extends StatelessWidget {
     final extra = maxGridWidth - cell * cols;
     final hSpacing =
         cols > 1 ? (extra / (cols - 1)).clamp(spacing, 96.0) : spacing;
+    // Phones keep the original home grid; the fitted square grid is for
+    // tablets (shortest side >= 600dp).
+    final phone = MediaQuery.sizeOf(context).shortestSide < 600;
     return SizedBox(
-      width: cell * cols + hSpacing * (cols - 1),
+      width: phone ? null : cell * cols + hSpacing * (cols - 1),
       child: GridView(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: cols,
-          crossAxisSpacing: hSpacing,
-          mainAxisSpacing: spacing,
-          childAspectRatio: 1,
-        ),
+        gridDelegate: phone
+            ? const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 240,
+                crossAxisSpacing: 20,
+                mainAxisSpacing: 20,
+                childAspectRatio: 0.85,
+              )
+            : SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: cols,
+                crossAxisSpacing: hSpacing,
+                mainAxisSpacing: spacing,
+                childAspectRatio: 1,
+              ),
         children: [
           _ServiceCard(
             title: 'home_feature_advisory_title'.tr(),

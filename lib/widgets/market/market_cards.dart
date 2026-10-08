@@ -440,6 +440,8 @@ class CommodityThumb extends StatelessWidget {
                 imageUrl: _absolute(url),
                 fit: BoxFit.contain,
                 memCacheWidth: memCacheWidth,
+                fadeInDuration: const Duration(milliseconds: 120),
+                fadeOutDuration: Duration.zero,
                 placeholder: (_, __) => bubble,
                 errorWidget: (_, __, ___) => bubble,
               ),
@@ -652,6 +654,181 @@ class CommodityRow extends StatelessWidget {
           ),
         );
       }),
+    );
+  }
+}
+
+// ------------------------------------------------------- tablet tiles
+
+String _tileSubtitle(BuildContext context, CommodityPrices c) {
+  final cat = marketCategoryLabel(context, c.category);
+  final markets = c.count > 1
+      ? context.tr('mktui_markets_count', namedArgs: {'count': '${c.count}'})
+      : '';
+  return [if (cat.isNotEmpty) cat, if (markets.isNotEmpty) markets].join(' · ');
+}
+
+/// Simple one-line list tile (photo, name, category): the master list of the
+/// tablet landscape layout. No prices; those live in the detail pane.
+class CommodityListTile extends StatelessWidget {
+  final CommodityPrices commodity;
+  final String displayName;
+  final bool selected;
+  final VoidCallback onTap;
+  final int memCacheWidth;
+
+  @visibleForTesting
+  final ImageProvider? debugImageProvider;
+
+  const CommodityListTile({
+    super.key,
+    required this.commodity,
+    required this.displayName,
+    required this.onTap,
+    this.selected = false,
+    this.memCacheWidth = 120,
+    this.debugImageProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final sub = _tileSubtitle(context, commodity);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: [displayName, if (sub.isNotEmpty) sub].join(', '),
+      child: Material(
+        color: selected ? const Color(0xFFE7F5EE) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected ? kShopGreen : const Color(0xFFE2E8F0),
+                width: selected ? 1.6 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                CommodityThumb(
+                  commodity: commodity,
+                  size: 52,
+                  memCacheWidth: memCacheWidth,
+                  debugImageProvider: debugImageProvider,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: appStyle(context,
+                            text: displayName,
+                            size: 15.5,
+                            weight: FontWeight.w700,
+                            color: kShopInk,
+                            height: 1.35),
+                      ),
+                      if (sub.isNotEmpty)
+                        Text(
+                          sub,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: appStyle(context,
+                              text: sub,
+                              size: 12.5,
+                              color: _kMuted,
+                              height: 1.4),
+                        ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded,
+                    color: selected ? kShopGreen : const Color(0xFFCBD5E1)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Big photo-first tile for the tablet portrait grid.
+class CommodityGridTile extends StatelessWidget {
+  final CommodityPrices commodity;
+  final String displayName;
+  final VoidCallback onTap;
+  final int memCacheWidth;
+
+  @visibleForTesting
+  final ImageProvider? debugImageProvider;
+
+  const CommodityGridTile({
+    super.key,
+    required this.commodity,
+    required this.displayName,
+    required this.onTap,
+    this.memCacheWidth = 240,
+    this.debugImageProvider,
+  });
+
+  /// Fixed tile height for [SliverGridDelegateWithFixedCrossAxisCount].
+  static double extent(double textScale) {
+    final s = textScale.clamp(1.0, kMarketRowMaxScale);
+    // +10 of slack: font metrics differ per script (Telugu/Hindi) and device.
+    return 12 + 96 + 10 + 15 * 1.3 * 2 * s + 2 + 12 * 1.4 * s + 12 + 10;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sub = _tileSubtitle(context, commodity);
+    return ShopCardShell(
+      onTap: onTap,
+      semanticsLabel: [displayName, if (sub.isNotEmpty) sub].join(', '),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            CommodityThumb(
+              commodity: commodity,
+              size: 96,
+              memCacheWidth: memCacheWidth,
+              debugImageProvider: debugImageProvider,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              displayName,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: appStyle(context,
+                  text: displayName,
+                  size: 15,
+                  weight: FontWeight.w700,
+                  color: kShopInk,
+                  height: 1.3),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              sub,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: appStyle(context,
+                  text: sub, size: 12, color: _kMuted, height: 1.4),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -228,6 +228,38 @@ class AppTheme {
         letterSpacing: -1,
       ).copyWith(fontFamilyFallback: _fallbacks);
 
+  /// Locale-aware AppBar title: Telugu uses Tiro Telugu directly (the
+  /// fallback list alone does not load the font) and no negative tracking,
+  /// which breaks Telugu conjuncts.
+  static TextStyle appBarTitleOf(BuildContext context,
+      {double fontSize = 22, FontWeight fontWeight = FontWeight.w700}) {
+    if (isTeluguLocale(context)) {
+      return GoogleFonts.tiroTelugu(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: appBarText,
+        height: 1.3,
+      ).copyWith(fontFamilyFallback: _fallbacks);
+    }
+    return GoogleFonts.googleSans(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: appBarText,
+      letterSpacing: -0.5,
+    ).copyWith(fontFamilyFallback: _fallbacks);
+  }
+
+  /// Current theme with the locale's body font applied (Telugu -> Tiro
+  /// Telugu), so plain `Text` widgets without an explicit family render in
+  /// the right script. Wrap a screen: `Theme(data: AppTheme.localized(ctx), ...)`.
+  static ThemeData localized(BuildContext context) {
+    final base = Theme.of(context);
+    final text = isTeluguLocale(context)
+        ? GoogleFonts.tiroTeluguTextTheme(base.textTheme)
+        : GoogleFonts.googleSansTextTheme(base.textTheme);
+    return base.copyWith(textTheme: text.apply(fontFamilyFallback: _fallbacks));
+  }
+
   /// Telugu text style helper — uses GoogleFonts.tiroTelugu directly
   static TextStyle teluguText({
     double fontSize = 14,

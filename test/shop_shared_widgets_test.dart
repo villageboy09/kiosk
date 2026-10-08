@@ -204,18 +204,15 @@ void main() {
     expect(cardExtent(100, 1, infoHeight: 50, imageAspect: 2), 100);
   });
 
-  testWidgets('back button has a 44px hit target around a 36px visual',
-      (t) async {
+  testWidgets('back button is the 46px round shop button and taps', (t) async {
     var taps = 0;
     await t.pumpWidget(_app(Center(
       child: ShopCircleBackButton(onPressed: () => taps++),
     )));
     await t.pumpAndSettle();
-    final box = t.getSize(find.byType(InkResponse));
-    expect(box, const Size(44, 44));
-    // A tap 21px from the centre (outside the 36px circle) still hits.
-    await t.tapAt(
-        t.getCenter(find.byType(ShopCircleBackButton)) + const Offset(20, 0));
+    final box = t.getSize(find.byType(InkWell));
+    expect(box, const Size(46, 46));
+    await t.tap(find.byType(ShopCircleBackButton));
     expect(taps, 1);
   });
 

@@ -205,7 +205,7 @@ class _CropStagesScreenState extends State<CropStagesScreen> {
               opacity: isCollapsed ? 1.0 : 0.0,
               child: Text(
                 widget.crop.cropName,
-                style: AppTheme.appBarTitle,
+                style: AppTheme.appBarTitleOf(context),
               ),
             ),
             background: Stack(

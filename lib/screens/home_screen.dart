@@ -163,7 +163,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final currentGreeting = _getGreeting();
     // Reels is a phone-only tab: hidden on tablets (shortest side >= 600dp).
-    final showReels = MediaQuery.sizeOf(context).shortestSide < 600;
+    final phone = MediaQuery.sizeOf(context).shortestSide < 600;
+    final showReels = phone;
     if (!showReels && _selectedIndex == 3) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _selectedIndex == 3) _onNavTap(0);
@@ -208,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       },
       child: Scaffold(
-        extendBody: true,
+        extendBody: !phone,
         backgroundColor:
             _selectedIndex == 3 ? Colors.black : AppTheme.background,
         extendBodyBehindAppBar: _selectedIndex == 3,
@@ -226,7 +227,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   children: screens,
                 ),
         ),
-        bottomNavigationBar: _buildBottomNav(showReels),
+        bottomNavigationBar:
+            phone ? _buildClassicNav() : _buildBottomNav(showReels),
       ),
     );
   }
@@ -288,6 +290,82 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         radius: 15,
         backgroundColor: Colors.white,
         backgroundImage: AssetImage('assets/images/logo.png'),
+      ),
+    );
+  }
+
+  Widget _buildClassicNav() {
+    return Container(
+      height: 72,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border:
+            const Border(top: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _ClassicNavItem(
+                    icon: Icons.home_outlined,
+                    activeIcon: Icons.home_rounded,
+                    label: 'home_bottom_nav_home'.tr(),
+                    isActive: _selectedIndex == 0,
+                    onTap: () => _onNavTap(0),
+                    activeColor: AppTheme.primary,
+                  ),
+                ),
+                Expanded(
+                  child: _ClassicNavItem(
+                    icon: Icons.eco_outlined,
+                    activeIcon: Icons.eco,
+                    label: 'home_bottom_nav_advisories'.tr(),
+                    isActive: _selectedIndex == 1,
+                    onTap: () => _onNavTap(1),
+                    activeColor: AppTheme.primary,
+                  ),
+                ),
+                Expanded(
+                  child: _AnimatedCameraTab(
+                    animationController: _pulseController,
+                    onTap: _openPlantDoctorScreen,
+                  ),
+                ),
+                Expanded(
+                  child: _ClassicNavItem(
+                    icon: Icons.newspaper_outlined,
+                    activeIcon: Icons.newspaper_rounded,
+                    label: 'home_bottom_nav_news'.tr(),
+                    isActive: _selectedIndex == 2,
+                    onTap: () => _onNavTap(2),
+                    activeColor: AppTheme.primary,
+                  ),
+                ),
+                Expanded(
+                  child: _ClassicNavItem(
+                    icon: Icons.video_library_outlined,
+                    activeIcon: Icons.video_library_rounded,
+                    label: 'home_bottom_nav_reels'.tr(),
+                    isActive: _selectedIndex == 3,
+                    onTap: () => _onNavTap(3),
+                    activeColor: AppTheme.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -478,6 +556,66 @@ class _NavItem extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClassicNavItem extends StatelessWidget {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+  final Color activeColor;
+
+  const _ClassicNavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+    required this.activeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: double.infinity,
+        height: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                isActive ? activeIcon : icon,
+                size: 24,
+                color: isActive ? activeColor : const Color(0xFF9CA3AF),
+              ),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+                    color: isActive ? activeColor : const Color(0xFF9CA3AF),
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

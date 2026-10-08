@@ -862,6 +862,7 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             try {
+            try {
                 $stmt = $pdo->prepare("INSERT INTO reels (creator_id, video_url, caption, music_title, phone_number, tags, crop, category, language, source_url, original_content_date, rights_declared, views_count, likes_count, saves_count, comments_count, is_active, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 'under_review', NOW())");
                 $stmt->execute([$creatorId, $videoUrl, $caption, $musicTitle, $phoneNumber, $tags, $crop, $category, $language, $sourceUrl, $originalContentDate, $rightsDeclared]);
                 $reelId = intval($pdo->lastInsertId());

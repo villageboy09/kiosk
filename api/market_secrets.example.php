@@ -7,5 +7,9 @@ if (!defined('DATA_GOV_IN_API_KEY')) {
     define('DATA_GOV_IN_API_KEY', 'PASTE-YOUR-data.gov.in-API-KEY-HERE');
 }
 
+if (!defined('MARKET_SHOW_LEGACY')) {
+    define('MARKET_SHOW_LEGACY', '1'); // Set to 1 to serve stored/fallback prices when gov API is down
+}
+
 // Optional: enables the web `sync_market_prices` action (X-Sync-Token header).
 // if (!defined('MARKET_SYNC_TOKEN')) { define('MARKET_SYNC_TOKEN', 'a-long-random-string'); }

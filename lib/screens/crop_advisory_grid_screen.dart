@@ -135,6 +135,13 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
     // Space for the floating bottom nav; content scrolls behind it.
     final navInset = MediaQuery.paddingOf(context).bottom;
 
+    return Theme(
+      data: AppTheme.localized(context),
+      child: _scaffold(context, isTablet, navInset),
+    );
+  }
+
+  Widget _scaffold(BuildContext context, bool isTablet, double navInset) {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -142,7 +149,7 @@ class _CropAdvisoryGridScreenState extends State<CropAdvisoryGridScreen> {
           'home_feature_advisory_title'.tr().isNotEmpty
               ? 'home_feature_advisory_title'.tr()
               : 'Crop Advisory',
-          style: AppTheme.appBarTitle,
+          style: AppTheme.appBarTitleOf(context),
         ),
         centerTitle: false,
         backgroundColor: AppTheme.appBarBg,

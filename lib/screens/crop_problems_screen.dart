@@ -268,7 +268,7 @@ class _CropProblemsScreenState extends State<CropProblemsScreen> {
               widget.cropName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTheme.appBarTitle.copyWith(
+              style: AppTheme.appBarTitleOf(context).copyWith(
                 fontSize: isTablet ? 18 : 16,
                 fontWeight: FontWeight.w800,
               ),

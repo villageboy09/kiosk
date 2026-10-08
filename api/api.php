@@ -5144,7 +5144,11 @@ function getReels($pdo) {
 
         $sql .= " FROM reels r
                 LEFT JOIN creators c ON r.creator_id = c.id
-                LEFT JOIN users u ON (c.user_id = u.user_id OR (c.phone_number = u.phone_number AND c.phone_number != '') OR (r.phone_number = u.phone_number AND r.phone_number != ''))
+                LEFT JOIN users u ON (
+                    c.user_id COLLATE utf8mb4_unicode_ci = u.user_id COLLATE utf8mb4_unicode_ci
+                    OR (c.phone_number COLLATE utf8mb4_unicode_ci = u.phone_number COLLATE utf8mb4_unicode_ci AND c.phone_number != '')
+                    OR (r.phone_number COLLATE utf8mb4_unicode_ci = u.phone_number COLLATE utf8mb4_unicode_ci AND r.phone_number != '')
+                )
                 WHERE r.is_active = 1 AND (r.status = 'approved' OR r.status IS NULL) AND c.id IS NOT NULL
                 ORDER BY r.id DESC
                 LIMIT :limit OFFSET :offset";

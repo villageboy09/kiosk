@@ -107,6 +107,13 @@ class _MarketPricesScreenState extends State<MarketPricesScreen>
   MarketFilters _filters = const MarketFilters();
   String _query = '';
   bool _forceGrid = false;
+
+  /// Tablet landscape: master-detail. [_wide] is refreshed on every build.
+  bool _wide = false;
+
+  /// Any tablet width (portrait or landscape): no price-heavy rows/rails.
+  bool _tablet = false;
+  String? _selectedKey;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -446,9 +453,14 @@ class _MarketPricesScreenState extends State<MarketPricesScreen>
 
   // ------------------------------------------------------------- derived
 
-  bool get _isDiscover => !_forceGrid && _filters.isDefault && _query.isEmpty;
+  bool get _isDiscover =>
+      !_tablet && !_forceGrid && _filters.isDefault && _query.isEmpty;
 
-  bool get _atHome => _isDiscover && _searchController.text.trim().isEmpty;
+  bool get _atHome =>
+      !_forceGrid &&
+      _filters.isDefault &&
+      _query.isEmpty &&
+      _searchController.text.trim().isEmpty;
 
   List<CommodityPrices> _visible() => applyMarketFilters(
         _all,
@@ -538,46 +550,103 @@ class _MarketPricesScreenState extends State<MarketPricesScreen>
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    _wide = size.width >= 900 && size.width > size.height;
+    _tablet = size.width >= 600;
     final items = _visible();
+
+    final list = RefreshIndicator(
+      color: kShopGreen,
+      backgroundColor: Colors.white,
+      onRefresh: _refresh,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        // Build ~1.5 screens ahead so images decode before they scroll in.
+        // ignore: deprecated_member_use
+        cacheExtent: 1200,
+        slivers: [
+          buildShopAppBar(
+            context,
+            title: context.tr('market_prices_title'),
+            onBack: _onBackPressed,
+            trailing: const LanguageButton.pill(color: kShopInk),
+          ),
+          SliverToBoxAdapter(
+            child: MarketLocationChip(
+              location: _loc,
+              detecting: _initializing || _gpsResolving,
+              onTap: _openLocationSheet,
+            ),
+          ),
+          ..._buildBanners(),
+          if (_all.isNotEmpty) SliverToBoxAdapter(child: _buildSearchRow()),
+          if (_categories.isNotEmpty) SliverToBoxAdapter(child: _buildChips()),
+          if (_filters.isActive)
+            SliverToBoxAdapter(child: _buildActiveFilters()),
+          ..._buildBody(items),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
+      ),
+    );
+
     return ShopBackGate(
       atHome: _atHome,
       onBackToHome: _backToDiscover,
       child: Scaffold(
         backgroundColor: Colors.white,
-        body: RefreshIndicator(
-          color: kShopGreen,
-          backgroundColor: Colors.white,
-          onRefresh: _refresh,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            slivers: [
-              buildShopAppBar(
-                context,
-                title: context.tr('market_prices_title'),
-                onBack: _onBackPressed,
-                trailing: const LanguageButton.pill(color: kShopInk),
+        body: _wide
+            ? Row(
+                children: [
+                  SizedBox(
+                    width: (size.width * 0.36).clamp(380.0, 480.0),
+                    child: list,
+                  ),
+                  const VerticalDivider(
+                      width: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+                  Expanded(child: _buildDetailPane(items)),
+                ],
+              )
+            : list,
+      ),
+    );
+  }
+
+  /// Right-hand pane of the tablet layout: the selected commodity's detail.
+  Widget _buildDetailPane(List<CommodityPrices> items) {
+    CommodityPrices? sel;
+    for (final c in items) {
+      if (c.key == _selectedKey) sel = c;
+    }
+    sel ??= items.isEmpty ? null : items.first;
+    if (sel == null) {
+      return ColoredBox(
+        color: const Color(0xFFF8FAFC),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.show_chart_rounded,
+                  size: 72, color: Color(0xFFCBD5E1)),
+              const SizedBox(height: 12),
+              Text(
+                context.tr('market_prices_title'),
+                style: appStyle(context,
+                    size: 18,
+                    weight: FontWeight.w700,
+                    color: const Color(0xFF94A3B8)),
               ),
-              SliverToBoxAdapter(
-                child: MarketLocationChip(
-                  location: _loc,
-                  detecting: _initializing || _gpsResolving,
-                  onTap: _openLocationSheet,
-                ),
-              ),
-              ..._buildBanners(),
-              if (_all.isNotEmpty) SliverToBoxAdapter(child: _buildSearchRow()),
-              if (_categories.isNotEmpty)
-                SliverToBoxAdapter(child: _buildChips()),
-              if (_filters.isActive)
-                SliverToBoxAdapter(child: _buildActiveFilters()),
-              ..._buildBody(items),
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
             ],
           ),
         ),
-      ),
+      );
+    }
+    return CommodityDetailScreen(
+      key: ValueKey('detail_${sel.key}'),
+      commodity: sel,
+      location: _loc,
+      embedded: true,
     );
   }
 
@@ -929,16 +998,44 @@ class _MarketPricesScreenState extends State<MarketPricesScreen>
     );
   }
 
-  Widget _rowFor(CommodityPrices c, int cache) => KeyedSubtree(
+  Widget _rowFor(CommodityPrices c, int cache) {
+    final name = commodityDisplayName(c.name, _lang);
+    if (_wide) {
+      return KeyedSubtree(
         key: ValueKey('row_${c.key}'),
-        child: CommodityRow(
+        child: CommodityListTile(
           commodity: c,
-          displayName: commodityDisplayName(c.name, _lang),
+          displayName: name,
+          selected: c.key == _selectedKey,
           memCacheWidth: cache,
+          debugImageProvider: widget.debugImageProvider,
+          onTap: () => setState(() => _selectedKey = c.key),
+        ),
+      );
+    }
+    if (_tablet) {
+      return KeyedSubtree(
+        key: ValueKey('row_${c.key}'),
+        child: CommodityGridTile(
+          commodity: c,
+          displayName: name,
+          memCacheWidth: (cache * 2).clamp(120, 400),
           debugImageProvider: widget.debugImageProvider,
           onTap: () => _openCommodity(c),
         ),
       );
+    }
+    return KeyedSubtree(
+      key: ValueKey('row_${c.key}'),
+      child: CommodityRow(
+        commodity: c,
+        displayName: name,
+        memCacheWidth: cache,
+        debugImageProvider: widget.debugImageProvider,
+        onTap: () => _openCommodity(c),
+      ),
+    );
+  }
 
   Widget _buildRows(List<CommodityPrices> items) {
     return SliverLayoutBuilder(
@@ -946,7 +1043,7 @@ class _MarketPricesScreenState extends State<MarketPricesScreen>
         final width = constraints.crossAxisExtent;
         final dpr = MediaQuery.devicePixelRatioOf(context);
         final cache = (88 * dpr).round().clamp(80, 300);
-        if (width <= 600) {
+        if (_wide || width <= 600) {
           return SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             sliver: SliverList(
@@ -956,13 +1053,14 @@ class _MarketPricesScreenState extends State<MarketPricesScreen>
                   child: _rowFor(items[i], cache),
                 ),
                 childCount: items.length,
+                addAutomaticKeepAlives: false,
               ),
             ),
           );
         }
         const pad = 16.0, gap = 12.0;
         final avail = width - pad * 2;
-        final cols = (avail ~/ 400).clamp(2, 3);
+        final cols = (avail ~/ 190).clamp(3, 5);
         final scale = MediaQuery.textScalerOf(context).scale(1);
         return SliverPadding(
           padding: const EdgeInsets.fromLTRB(pad, 8, pad, 0),
@@ -971,11 +1069,12 @@ class _MarketPricesScreenState extends State<MarketPricesScreen>
               crossAxisCount: cols,
               mainAxisSpacing: gap,
               crossAxisSpacing: gap,
-              mainAxisExtent: marketRowExtent(scale),
+              mainAxisExtent: CommodityGridTile.extent(scale),
             ),
             delegate: SliverChildBuilderDelegate(
               (context, i) => _rowFor(items[i], cache),
               childCount: items.length,
+              addAutomaticKeepAlives: false,
             ),
           ),
         );

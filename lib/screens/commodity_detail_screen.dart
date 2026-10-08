@@ -26,6 +26,9 @@ class CommodityDetailScreen extends StatefulWidget {
   final CommodityPrices commodity;
   final MarketLocation? location;
 
+  /// Shown inside the tablet master-detail pane: no back button.
+  final bool embedded;
+
   @visibleForTesting
   final MarketPricesService? service;
 
@@ -36,6 +39,7 @@ class CommodityDetailScreen extends StatefulWidget {
     super.key,
     required this.commodity,
     this.location,
+    this.embedded = false,
     @visibleForTesting this.service,
     @visibleForTesting this.debugImageProvider,
   });
@@ -300,6 +304,9 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded || MediaQuery.sizeOf(context).width >= 600) {
+      return _buildEmbedded();
+    }
     final media = MediaQuery.of(context);
     final heroH = (media.size.height * 0.36).clamp(250.0, 380.0);
     return Scaffold(
@@ -341,17 +348,129 @@ class _CommodityDetailScreenState extends State<CommodityDetailScreen> {
     );
   }
 
+  // ------------------------- tablet detail pane --------------------------
+
+  Widget _card(Widget child) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: child,
+      );
+
+  Widget _embeddedThumb() {
+    final st = _style;
+    final url = widget.commodity.imageUrl;
+    final debug = widget.debugImageProvider;
+    final placeholder = Center(
+      child: Icon(st.icon, size: 44, color: st.accent.withValues(alpha: 0.4)),
+    );
+    final Widget image = debug != null
+        ? Image(
+            image: debug,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => placeholder,
+          )
+        : (url.isEmpty
+            ? placeholder
+            : SafeNetworkImage(
+                imageUrl: url, fit: BoxFit.contain, placeholder: placeholder));
+    return Container(
+      width: 120,
+      height: 120,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: st.tint, width: 3),
+      ),
+      // Plain image (no blend-mode layer): keeps scrolling cheap.
+      child: SizedBox(
+        key: const ValueKey('market_hero_image'),
+        child: image,
+      ),
+    );
+  }
+
+  Widget _buildEmbedded() {
+    final varieties = _varieties;
+    final rows = _rows;
+    final priced = rows.where((r) => r.hasPrice).toList();
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        // Pre-build below the fold so cards don't pop in while scrolling.
+        padding: EdgeInsets.fromLTRB(
+            28, 24 + MediaQuery.of(context).padding.top, 28, bottom + 28),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 980),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (!widget.embedded) ...[
+                      ShopCircleButton(
+                        icon: Icons.arrow_back_rounded,
+                        label: context.tr('shopd_back'),
+                        onTap: () => Navigator.of(context).maybePop(),
+                      ),
+                      const SizedBox(width: 16),
+                    ],
+                    _embeddedThumb(),
+                    const SizedBox(width: 20),
+                    Expanded(child: _buildHeader(varieties.length)),
+                    ShopCircleButton(
+                      icon: Icons.ios_share_rounded,
+                      label: context.tr('shopd_share'),
+                      onTap: _share,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 5, child: _card(_buildPriceBlock(priced))),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 6, child: _card(_buildTrend())),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _card(_buildStats(priced)),
+                if (varieties.length >= 2) ...[
+                  const SizedBox(height: 16),
+                  _card(_buildVarietyChips(varieties)),
+                ],
+                const SizedBox(height: 16),
+                _card(_buildMarkets(rows, varieties.length >= 2)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTopBar() {
     final top = MediaQuery.of(context).padding.top;
     return Padding(
       padding: EdgeInsets.fromLTRB(12, top + 8, 12, 6),
       child: Row(
         children: [
-          ShopCircleButton(
-            icon: Icons.arrow_back_rounded,
-            label: context.tr('shopd_back'),
-            onTap: () => Navigator.of(context).maybePop(),
-          ),
+          if (!widget.embedded)
+            ShopCircleButton(
+              icon: Icons.arrow_back_rounded,
+              label: context.tr('shopd_back'),
+              onTap: () => Navigator.of(context).maybePop(),
+            ),
           const Spacer(),
           ShopCircleButton(
             icon: Icons.ios_share_rounded,
